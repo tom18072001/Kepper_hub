@@ -14,9 +14,11 @@ export function openCreateProject(onCreated) {
     <label class="field">Phòng ban<select name="departmentId" data-testid="project-department">${depts.map(d => `<option value="${d.id}"${d.id === store.me.departmentId ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>
     <label class="field">Ai được xem<select name="visibility" data-testid="project-visibility">${Object.entries(VISIBILITY).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label></div>
     <label class="field">Mô tả<textarea name="description" rows="2"></textarea></label>
-    <label class="field">Kiểu bảng<select name="template" data-testid="project-template">
+    <label class="field">Kiểu dự án<select name="template" data-testid="project-template">
+      <option value="MTL" selected>Theo Master Timeline — hạng mục theo tháng T, đường găng, mốc; dùng chung giữa các bộ phận</option>
       <option value="">Quy trình công việc — Tồn đọng → Cần làm → Đang làm → Chờ duyệt → Hoàn thành</option>
       <option value="WEEK">Lịch tuần — cột Thứ 2 … Cuối tuần, không duyệt (vd. ai ở / không ở văn phòng)</option></select></label>
+    <label class="field mtl-t0">Tháng T0 (bắt đầu Master Timeline)<input type="month" name="t0" data-testid="project-t0"></label>
     <fieldset class="approval-setup"><legend>Quy trình duyệt</legend>
       <label class="field">Số cấp duyệt<select name="tpl" data-testid="project-approval-template">
         <option value="1" selected>1 cấp — Trưởng phòng duyệt</option><option value="2">2 cấp — Trưởng phòng → Ban giám đốc</option><option value="0">Không cần duyệt</option></select></label>
@@ -27,17 +29,28 @@ export function openCreateProject(onCreated) {
       </div>
       <p class="muted xs">Mặc định "Chỉ cấp 1": việc quan trọng trưởng phòng chọn thêm cấp 2, hoặc đặt quy tắc tự động. Có thể đổi người duyệt, thêm quy tắc tự động (theo nhãn / mức ưu tiên) trong Cài đặt dự án; trưởng phòng chọn được mức duyệt cho từng việc.</p>
     </fieldset>
-    <p class="muted xs">Cột mặc định: Tồn đọng, Cần làm, Đang làm (giới hạn 5), Chờ duyệt, Hoàn thành, Huỷ.</p>
+    <p class="muted xs">Dự án MTL: cột Chưa bắt đầu, Đang thực hiện, Chờ duyệt, Hoàn thành, Tạm dừng, Huỷ; sau khi tạo, vào "Khác → Nhập MTL từ Excel". Dự án quy trình: Tồn đọng, Cần làm, Đang làm (giới hạn 5), Chờ duyệt, Hoàn thành, Huỷ.</p>
     <p class="error" id="projError"></p>
     <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Huỷ</button><button class="btn btn-primary" data-testid="project-save">Tạo dự án</button></div></form>`);
   const syncTpl = () => { const n = Number(modal.querySelector('[name=tpl]').value); $$('[data-lvl]', modal).forEach(el => el.classList.toggle('hidden', Number(el.dataset.lvl) > n)); };
   modal.querySelector('[name=tpl]').onchange = syncTpl; syncTpl();
   // Lịch tuần: các cột là ngày, không có luồng duyệt.
-  modal.querySelector('[name=template]').onchange = e => { const week = e.target.value === 'WEEK'; modal.querySelector('.approval-setup').hidden = week; if (week) { modal.querySelector('[name=tpl]').value = '0'; syncTpl(); } };
+  const syncKind = () => {
+    const v = modal.querySelector('[name=template]').value, noFlow = v === 'WEEK' || v === 'MTL';
+    modal.querySelector('.approval-setup').hidden = noFlow; if (noFlow) { modal.querySelector('[name=tpl]').value = '0'; syncTpl(); }
+    modal.querySelector('.mtl-t0').hidden = v !== 'MTL'; modal.querySelector('[name=t0]').required = v === 'MTL';
+    // Dự án MTL dùng chung: mặc định toàn công ty xem được.
+    const vis = modal.querySelector('[name=visibility]');
+    if (v === 'MTL' && !vis.dataset.touched) { vis.value = 'PUBLIC'; vis.dataset.auto = '1'; }
+    else if (v !== 'MTL' && vis.dataset.auto) { vis.value = 'DEPARTMENT'; delete vis.dataset.auto; }
+  };
+  modal.querySelector('[name=visibility]').addEventListener('change', e => { e.target.dataset.touched = '1'; delete e.target.dataset.auto; });
+  modal.querySelector('[name=template]').onchange = syncKind; syncKind();
   modal.querySelector('[data-close]').onclick = () => closeModal();
   modal.querySelector('form').onsubmit = async e => {
     e.preventDefault();
-    const { tpl, ap1, ap2, defaultLevels, ...f } = formData(e.target);
+    const { tpl, ap1, ap2, defaultLevels, t0, ...f } = formData(e.target);
+    if (f.template === 'MTL') Object.assign(f, { kind: 'MTL', t0Date: new Date(t0 + '-01T00:00:00+07:00').toISOString() });
     const step = (v, name) => v.startsWith('USER:') ? { approverType: 'USER', approverUserId: Number(v.slice(5)), name } : { approverType: v, name };
     const approvalSteps = [step(ap1, 'Trưởng phòng duyệt'), step(ap2, 'Giám đốc duyệt')].slice(0, Number(tpl));
     if (approvalSteps[0]?.approverType === 'PROJECT_LEAD') approvalSteps[0].name = 'Trưởng dự án duyệt';

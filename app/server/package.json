@@ -1,8 +1,8 @@
 {
-  "name": "workhub-server",
+  "name": "kepper-hub-server",
   "version": "0.2.0",
   "private": true,
-  "description": "WorkHub - quản lý công việc Kanban cho công ty/phòng ban (backend)",
+  "description": "Kepper Hub - theo dõi tiến độ dự án theo Master Timeline (backend)",
   "main": "src/server.js",
   "engines": {
     "node": ">=20"

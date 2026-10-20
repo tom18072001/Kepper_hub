@@ -2,9 +2,8 @@
 // Mặc định phiếu chờ lâu nhất lên trước (chuyển được sang "Hạn gần nhất"); chip Dự án / Phòng tự sinh khi có từ 2 nguồn trở lên.
 import { api } from '../api.js';
 import { store } from '../store.js';
-import { $, $$, esc, fmtDate, ago, prioChip, avatars, toast, errorMessage, confirmDialog, uiPref, replaceHashParams } from '../util.js';
+import { $, $$, esc, fmtDate, ago, prioChip, avatars, toast, errorMessage, confirmDialog, uiPref, replaceHashParams, scrollFade } from '../util.js';
 import { refreshCounters } from '../main.js';
-import { scrollFade } from './ops.js';
 
 const TABS = [['queue', 'Phiếu trình'], ['extensions', 'Đề nghị gia hạn'], ['proposals', 'Kiến nghị']];
 const DAY = 86_400_000;

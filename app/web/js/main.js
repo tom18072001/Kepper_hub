@@ -10,13 +10,9 @@ import { renderAdmin } from './views/admin.js';
 import { renderProjectSettings, openCreateProject } from './views/settings.js';
 import { openItem, closeItem, isItemOpen } from './views/item-panel.js';
 import { openPalette, closePalette } from './views/palette.js';
-import { renderSchedule } from './views/schedule.js';
-import { renderKpi } from './views/kpi.js';
+import { renderHome } from './views/home.js';
 import { renderTrash } from './views/trash.js';
-import { renderSummary } from './views/summary.js';
 import { renderCatalog } from './views/catalog.js';
-import { renderDept } from './views/dept.js';
-import { renderOps } from './views/ops.js';
 import { renderWork } from './views/work.js';
 import { current as projectState, reloadProject } from './views/project.js';
 import { reloadOpenItem, openItemId } from './views/item-panel.js';
@@ -88,31 +84,20 @@ async function enter() {
   await loadBasics();
   show('appShell');
   renderShell();
-  // Lãnh đạo (BGĐ, lãnh đạo phòng): trang chủ là Tổng quan; cán bộ: Việc của tôi.
-  const home = isItAdmin() ? '#/admin/users' : can('work.approve', 'operate') ? '#/ops' : '#/my';
+  // Trang chủ: Dashboard dự án (Master Timeline) cho mọi người dùng nghiệp vụ; admin IT: quản trị.
+  const home = isItAdmin() ? '#/admin/users' : '#/home';
   if (!location.hash || location.hash === '#/' || (isItAdmin() && !/^#\/(admin|catalog)/.test(location.hash))) location.hash = home; else route();
   refreshCounters();
   startRealtime();
 }
 
-// Ban Giám đốc (duyệt cấp toàn Trung tâm): trang chủ là Điều hành.
-const isDirector = () => store.me?.permissions?.['work.approve']?.operate === 'SYSTEM';
 
 function renderShell() {
   const me = store.me;
   $('#meAvatar').outerHTML = avatar(me).replace('class="avatar"', 'class="avatar" id="meAvatar"');
   $('#meName').textContent = me.fullName;
   $('#meDept').textContent = me.departmentName || (me.isRootAdmin ? 'Quản trị gốc' : '');
-  // Gọn thanh bên: lãnh đạo có Tổng quan (đã gồm việc chờ mình xử lý và link số liệu chi tiết) nên ẩn "Chờ tôi xử lý" và "Dashboard".
-  const lead = can('work.approve', 'operate');
-  $('#navDashboard').classList.toggle('hidden', lead || !can('reports.dashboard'));
-  $('#navApprovals').classList.toggle('hidden', lead);
-  $('#navKpi').classList.toggle('hidden', !can('reports.kpi'));
-  $('#navSummary').classList.toggle('hidden', !can('reports.summary'));
-  // Lãnh đạo phòng: hộp việc phòng được giao; Ban Giám đốc: chỉ dùng để uỷ quyền.
-  $('#navDept').classList.toggle('hidden', !can('work.approve', 'operate'));
-  $('#navDeptText').textContent = isDirector() ? 'Uỷ quyền' : 'Việc phòng được giao';
-  $('#navOps').classList.toggle('hidden', !can('work.approve', 'operate'));
+  $('#navDashboard').classList.toggle('hidden', !can('reports.dashboard'));
   // Tổng thể công việc (mọi dự án, theo người / phòng): BGĐ và lãnh đạo phòng; cán bộ xem việc mình ở "Việc của tôi".
   $('#navWork').classList.toggle('hidden', !['SYSTEM', 'UNIT'].includes(workScope()));
   // Admin IT: chỉ thấy phần quản trị, không thấy công việc / dự án / báo cáo.
@@ -156,8 +141,7 @@ export async function refreshCounters() {
     dot.classList.toggle('hidden', !notif.unread);
     const badge = $('#approvalBadge');
     badge.textContent = counts.total; badge.classList.toggle('hidden', !counts.total);
-    badge.title = `${counts.queue} phiếu trình · ${counts.extensions} đề nghị gia hạn · ${counts.proposals} kiến nghị`;
-    const ob = $('#opsBadge'); ob.textContent = counts.total; ob.classList.toggle('hidden', !counts.total); ob.title = badge.title;
+    badge.title = `${counts.queue} chờ duyệt · ${counts.extensions} đề nghị gia hạn`;
     store.counts = counts;
     store.notifications = notif;
   } catch { /* bỏ qua lỗi đếm */ } finally { countersBusy = false; }
@@ -265,18 +249,12 @@ export async function route({ background = false } = {}) {
       }
       if (params.get('item')) openItem(Number(params.get('item'))); else closeItem();
     } else if (parts[0] === 'approvals') { await renderApprovals(view, params, setCrumbs); syncPanel(); }
-    else if (parts[0] === 'requests') { location.replace('#/schedule'); return; } // "Gửi yêu cầu" đã bỏ khỏi giao diện
-    else if (parts[0] === 'schedule') { closeItem(); await renderSchedule(view, params, setCrumbs); }
+    else if (['requests', 'schedule', 'ops', 'dept', 'summary', 'kpi'].includes(parts[0])) { location.replace('#/home'); return; } // nghiệp vụ NQ57 đã bỏ (Kepper)
+    else if (parts[0] === 'home') { await renderHome(view, params, setCrumbs); syncPanel(); }
     else if (parts[0] === 'dashboard') { closeItem(); await renderDashboard(view, params, setCrumbs); }
-    else if (parts[0] === 'kpi') { closeItem(); await renderKpi(view, params, setCrumbs); }
     else if (parts[0] === 'trash') { closeItem(); await renderTrash(view, setCrumbs); }
-    else if (parts[0] === 'summary') { closeItem(); await renderSummary(view, params, setCrumbs); }
     else if (parts[0] === 'catalog') { closeItem(); await renderCatalog(view, setCrumbs); }
     else if (parts[0] === 'work') { await renderWork(view, params, setCrumbs); syncPanel(); }
-    else if (parts[0] === 'dept' || parts[0] === 'ops') {
-      await (parts[0] === 'dept' ? renderDept : renderOps)(view, params, setCrumbs, { background });
-      syncPanel();
-    }
     else if (parts[0] === 'admin') { closeItem(); await renderAdmin(view, parts[1] || 'users', params, setCrumbs); }
     else { await renderMyWork(view, params, setCrumbs); syncPanel(); }
   } catch (error) {

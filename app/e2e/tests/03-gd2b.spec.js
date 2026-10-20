@@ -172,15 +172,12 @@ test('12. Admin IT chỉ quản trị: không thấy dự án, công việc, das
 
   const director = await (await browser.newContext()).newPage();
   await login(director, 'giamdoc');
-  await director.getByTestId('nav-kpi').click();
-  await expect(director.getByTestId('kpi-departments')).toContainText('Phòng Kinh doanh');
-  await expect(director.getByTestId('kpi-people')).toContainText('Phạm Văn An');
-  await director.getByTestId('kpi-quarter').click();
-  await expect(director.getByTestId('kpi-people')).toBeVisible();
+  // KPI tổng hợp (API) chỉ Ban lãnh đạo; KPI tiến độ theo dự án nằm ở Tổng quan dự án MTL.
+  const kpi = await (await apiAs(director, '/api/kpi')).json();
+  expect(kpi.byDepartment.some(r => r.name === 'Phòng Kinh doanh')).toBe(true);
 
   const manager = await (await browser.newContext()).newPage();
   await login(manager, 'tp.kinhdoanh');
-  await expect(manager.getByTestId('nav-kpi')).toBeHidden();
   expect((await apiAs(manager, '/api/kpi')).status()).toBe(403);
 
   const staff = await (await browser.newContext()).newPage();

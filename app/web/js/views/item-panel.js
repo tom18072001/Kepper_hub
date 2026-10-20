@@ -9,6 +9,7 @@ import { openCycleForm } from './project-extra.js';
 import { icon } from '../icons.js';
 import { dispatchParts, progressParts, documentsParts, ratingPick, handleDispatchClick, bindDispatchInputs, summaryBar, actionZone, stagePill, countdownPill, acceptDialog } from './dispatch-panel.js';
 import { sec, compact, bindSectionMemory, resetSectionMemory } from './sections.js';
+import { mtlPanelBlock, rebaselineDialog } from './mtl.js';
 import { help as showShortcuts } from '../shortcuts.js';
 
 let openId = null, data = null, project = null;
@@ -180,6 +181,7 @@ const ACT_TEXT = {
   DISPATCHED: d => d?.direct ? 'giao trực tiếp cán bộ (phòng vẫn duyệt trước khi trình)' : 'giao về phòng chủ trì', DISPATCH_ACCEPTED: d => 'tiếp nhận và phân công' + (d?.onBehalfOf ? ` (thay ${esc(d.onBehalfOf)})` : '') + (d?.internalDueDate ? `, hạn nộp phòng ${fmtDate(d.internalDueDate)}` : '') + (d?.note ? ': ' + esc(d.note) : ''), DISPATCH_REASSIGNED: () => 'phân công lại',
   PROGRESS_REPORT: d => (d.asSupporter ? `báo cáo phần phối hợp ${d.progress}%` : `báo cáo tiến độ ${d.progress}%`) + (d.hasProposal ? ' (có kiến nghị)' : ''), PROPOSAL_ANSWERED: () => 'trả lời kiến nghị',
   PROPOSAL_FORWARDED: () => 'trình kiến nghị lên Ban Giám đốc',
+  REBASELINE: d => 'điều chỉnh kế hoạch gốc' + (d?.reason ? ': ' + esc(d.reason) : ''),
   EXTENSION_REQUESTED: () => 'đề nghị gia hạn', EXTENSION_APPROVED: () => 'đồng ý gia hạn', EXTENSION_REJECTED: () => 'không đồng ý gia hạn',
   CHILDREN_BULK: d => `chia ${d.count} việc nhánh`, SUPPORT_STAFF: () => 'cử cán bộ phối hợp', HANDOVER: d => 'bàn giao: cán bộ nghỉ việc được gỡ khỏi việc' + (d?.reset ? ', trả về phòng để phân công lại' : ''),
   DOCUMENT_ADDED: d => 'thêm văn bản ' + esc(d.number || ''), DOCUMENT_REMOVED: d => 'gỡ văn bản ' + esc(d.number || ''), APPROVAL_REJECTED: d => 'trả lại: ' + esc(d.comment || ''), APPROVAL_CANCELLED: () => 'huỷ yêu cầu duyệt', ARCHIVED: () => 'đã xoá việc (vào thùng rác)', RESTORED: () => 'đã khôi phục việc từ thùng rác',
@@ -341,6 +343,7 @@ function render() {
         ${d.archivedAt ? `<div class="approval-box" data-testid="item-deleted">Việc đang ở trong thùng rác (xoá lúc ${fmtDateTime(d.archivedAt)}), sẽ bị xoá hẳn sau 7 ngày.${r.canDelete ? ' <button class="btn btn-ghost btn-sm" data-act="restore" data-testid="restore-item">Khôi phục</button>' : ''}</div>` : ''}
         <textarea class="ip-title" id="ipTitle" rows="1" ${fe ? '' : 'readonly'} aria-label="Tiêu đề" data-testid="item-title" maxlength="300">${esc(d.title)}</textarea>
         ${summaryBar(d, { review: project.states.find(s => s.category === 'REVIEW'), editable })}
+        ${mtlPanelBlock(d, project, fe)}
         ${zone ? `<div class="action-zone" data-testid="action-zone" aria-label="Cần bạn xử lý">${zone}</div>` : ''}
         ${descEmpty && fe ? `<div class="section sec-compact desc-add"><button type="button" class="link-btn" data-act="add-desc">+ Thêm mô tả</button><div class="hidden" id="descWrap">${descBody}</div></div>`
           : descEmpty ? '' : sec('desc', { title: 'Mô tả', open: plan.desc, body: descBody })}
@@ -360,7 +363,7 @@ function render() {
         <div class="ip-core">
         <label class="${project.visibility === 'ASSIGNED' ? 'lite-hide' : ''}">Trạng thái<select id="ipState" ${fe ? '' : 'disabled'} data-testid="item-state" title="Trạng thái (S)">${states.map(s => { const locked = s.id !== d.stateId && ((needsApproval && s.category === 'COMPLETED') || (s.category === 'CANCELLED' && (d.dispatchStatus || project.visibility === 'ASSIGNED') && !(r.canManage || d.can?.isAssigner || d.reporterId === store.me.id))); return `<option value="${s.id}"${s.id === d.stateId ? ' selected' : ''}${locked ? ' disabled' : ''}>${stateLabel(s)}${locked ? (s.category === 'CANCELLED' ? ' (người giao)' : ' (qua duyệt)') : ''}</option>`; }).join('')}</select></label>
         <label class="lite-hide">Ưu tiên<select id="ipPriority" ${fe ? '' : 'disabled'} data-testid="item-priority" title="Ưu tiên (P)">${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}"${k === d.priority ? ' selected' : ''}>${v.label}</option>`).join('')}</select></label>
-        <label class="lite-hide">Tiến độ (%)<span class="row progress-edit"><input type="range" min="0" max="100" step="5" id="ipProgressRange" value="${d.progress}" ${progEdit ? '' : 'disabled'} aria-label="Tiến độ"><input type="number" min="0" max="100" id="ipProgress" value="${d.progress}" ${progEdit ? '' : 'disabled'} data-testid="item-progress" style="width:72px" aria-label="Tiến độ %"></span>${editable && d.can?.progress === false ? '<span class="muted xs">Do người chủ trì cập nhật</span>' : ''}</label>
+        <label class="${project.kind === 'MTL' ? '' : 'lite-hide'}">Tiến độ (%)<span class="row progress-edit"><input type="range" min="0" max="100" step="5" id="ipProgressRange" value="${d.progress}" ${progEdit ? '' : 'disabled'} aria-label="Tiến độ"><input type="number" min="0" max="100" id="ipProgress" value="${d.progress}" ${progEdit ? '' : 'disabled'} data-testid="item-progress" style="width:72px" aria-label="Tiến độ %"></span>${editable && d.can?.progress === false ? '<span class="muted xs">Do người chủ trì cập nhật</span>' : ''}</label>
         <div><label>Người chủ trì</label>${fe ? multiSelect('assignees', users.map(u => ({ id: u.id, label: u.fullName })), d.assignees.map(a => a.id), 'Chưa giao') : `<div>${d.assignees.map(a => avatar(a) + ' ' + personLink(a)).join('<br>') || '—'}</div>`}</div>
         <div class="${(d.supporters || []).length ? '' : 'lite-hide'}"><label>Người phối hợp</label>${fe ? multiSelect('supporters', users.map(u => ({ id: u.id, label: u.fullName })), (d.supporters || []).map(a => a.id), 'Không') : `<div>${(d.supporters || []).map(a => personLink(a)).join(', ') || '—'}</div>`}</div>
         <label>Hạn hoàn thành<input type="date" id="ipDue" value="${dateInput(d.dueDate)}" ${fe && dueEditable(d) ? '' : 'disabled'} data-testid="item-due" title="Hạn (D)">${d.dueDate ? `<span class="muted xs">${countdownPill(d)}</span>` : ''}${fe && !dueEditable(d) ? '<span class="muted xs">Hạn do người giao đặt — dùng "Xin gia hạn"</span>' : ''}</label>
@@ -427,6 +430,7 @@ function bind(editable) {
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act === 'close') return closeItem(true);
     if (act === 'reload-panel') return load();
+    if (act === 'rebaseline') { rebaselineDialog(data, project, refresh); return; }
     if (act === 'toggle-full') { uiPref('ip:full', uiPref('ip:full') === true ? null : true); lastRendered = null; render(); return; }
     if (act === 'reset-layout') { resetSectionMemory(SEC_KEYS); lastRendered = null; render(); toast('Đã về bố cục mặc định', 'ok'); return; }
     if (act === 'shortcuts') { e.target.closest('details')?.removeAttribute('open'); return showShortcuts(); }
@@ -493,6 +497,9 @@ function bind(editable) {
   on('#ipPriority', e => patch({ priority: e.target.value }));
   on('#ipStart', e => patch({ startDate: fromDateInput(e.target.value) }));
   on('#ipDue', e => patch({ dueDate: fromDateInput(e.target.value) }));
+  on('#ipForecast', e => patch({ forecastEnd: e.target.value ? new Date(e.target.value + 'T23:59:59+07:00').toISOString() : null }));
+  on('#ipCritical', e => patch({ critical: e.target.checked }));
+  on('#ipMilestone', e => patch({ milestone: e.target.checked }));
   on('#ipEstimate', e => patch({ estimate: e.target.value === '' ? null : Number(e.target.value) }));
   on('#ipCycle', e => {
     const v = e.target.value; e.target.blur();

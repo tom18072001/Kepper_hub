@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>WorkHub · Quản lý công việc</title>
+  <title>Kepper Hub · Tiến độ dự án</title>
   <meta name="theme-color" content="#0a4d8c">
   <meta name="color-scheme" content="light">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
@@ -15,15 +15,16 @@
   <link rel="stylesheet" href="css/register2.css">
   <link rel="stylesheet" href="css/filters.css">
   <link rel="stylesheet" href="css/lists.css">
+  <link rel="stylesheet" href="css/kepper.css">
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
   <!-- Đăng nhập -->
   <section id="loginPage" class="auth-page hidden" aria-label="Đăng nhập">
     <form id="loginForm" class="auth-card" autocomplete="on">
-      <div class="brand-mark" aria-hidden="true">W</div>
-      <h1>WorkHub</h1>
-      <p class="muted">Quản lý công việc cho các phòng ban</p>
+      <div class="brand-mark" aria-hidden="true">K</div>
+      <h1>Kepper Hub</h1>
+      <p class="muted">Theo dõi tiến độ dự án theo Master Timeline</p>
       <label class="field">Tài khoản<input id="loginUser" name="username" autocomplete="username" required data-testid="login-username"></label>
       <label class="field">Mật khẩu<input id="loginPass" name="password" type="password" autocomplete="current-password" required data-testid="login-password"></label>
       <button class="btn btn-primary btn-block" type="submit" data-testid="login-submit">Đăng nhập</button>
@@ -49,19 +50,15 @@
   <div id="appShell" class="shell hidden">
     <aside class="sidebar" id="sidebar">
       <div class="sb-head">
-        <div class="brand-mark sm" aria-hidden="true">W</div>
-        <div><b>WorkHub</b><div class="muted xs" id="sbOrg">Quản lý công việc</div></div>
+        <div class="brand-mark sm" aria-hidden="true">K</div>
+        <div><b>Kepper Hub</b><div class="muted xs" id="sbOrg">Tiến độ dự án</div></div>
       </div>
       <nav class="sb-nav" id="workNav" aria-label="Điều hướng chính">
-        <a href="#/ops" data-nav="ops" data-testid="nav-ops" id="navOps" class="hidden"><span data-icon="dashboard"></span>Tổng quan<span class="badge hidden" id="opsBadge"></span></a>
-        <a href="#/work" data-nav="work" data-testid="nav-work" id="navWork" class="hidden"><span data-icon="users"></span>Tổng thể công việc</a>
+        <a href="#/home" data-nav="home" data-testid="nav-home" id="navHome"><span data-icon="dashboard"></span>Dashboard dự án</a>
         <a href="#/my" data-nav="my" data-testid="nav-my"><span data-icon="target"></span>Việc của tôi</a>
-        <a href="#/approvals" data-nav="approvals" data-testid="nav-approvals" id="navApprovals"><span data-icon="approve"></span>Chờ tôi xử lý<span class="badge hidden" id="approvalBadge"></span></a>
-        <a href="#/dept" data-nav="dept" data-testid="nav-dept" id="navDept" class="hidden"><span data-icon="inbox"></span><span id="navDeptText">Việc phòng được giao</span></a>
-        <a href="#/schedule" data-nav="schedule" data-testid="nav-schedule"><span data-icon="calendar"></span>Lịch công tác</a>
-        <a href="#/dashboard" data-nav="dashboard" data-testid="nav-dashboard" id="navDashboard"><span data-icon="dashboard"></span>Dashboard</a>
-        <a href="#/kpi" data-nav="kpi" data-testid="nav-kpi" id="navKpi" class="hidden"><span data-icon="chart"></span>KPI</a>
-        <a href="#/summary" data-nav="summary" data-testid="nav-summary" id="navSummary" class="hidden"><span data-icon="table"></span>Tổng hợp giao việc</a>
+        <a href="#/work" data-nav="work" data-testid="nav-work" id="navWork" class="hidden"><span data-icon="users"></span>Tổng thể công việc</a>
+        <a href="#/approvals" data-nav="approvals" data-testid="nav-approvals" id="navApprovals"><span data-icon="approve"></span>Chờ tôi duyệt<span class="badge hidden" id="approvalBadge"></span></a>
+        <a href="#/dashboard" data-nav="dashboard" data-testid="nav-dashboard" id="navDashboard"><span data-icon="chart"></span>Số liệu công việc</a>
         <a href="#/trash" data-nav="trash" data-testid="nav-trash"><span data-icon="trash"></span>Thùng rác</a>
         <a href="#/catalog" data-nav="catalog" data-testid="nav-catalog"><span data-icon="list"></span>Danh mục</a>
       </nav>

@@ -124,6 +124,16 @@ async function registerFields(tx, input, ctx = null) {
   if (input.refCode !== undefined) out.refCode = text(input.refCode, 'Mã CV', { max: 40 }) || null;
   for (const [key, label, max] of [['period', 'Thời gian', 200], ['location', 'Địa điểm', 300], ['supervisorText', 'Lãnh đạo phụ trách', 200], ['planCode', 'Số thứ tự kế hoạch', 20], ['planSection', 'Nhóm nhiệm vụ', 300]])
     if (input[key] !== undefined) out[key] = text(input[key], label, { max }) || null;
+  // Kepper: hạng mục Master Timeline (kế hoạch gốc chỉ đổi qua "Điều chỉnh kế hoạch gốc").
+  for (const key of ['critical', 'milestone']) if (input[key] !== undefined) out[key] = !!input[key];
+  if (input.forecastEnd !== undefined) out.forecastEnd = optionalDate(input.forecastEnd, 'Dự báo hoàn thành') ?? null;
+  if (input.ownerText !== undefined) out.ownerText = text(input.ownerText, 'Đầu mối', { max: 200 }) || '';
+  if (input.externalParty !== undefined) out.externalParty = text(input.externalParty, 'Cơ quan / đơn vị ngoài', { max: 200 }) || '';
+  if (input.weight !== undefined) {
+    out.weight = input.weight === null || input.weight === '' ? null : Number(input.weight);
+    if (out.weight != null && (!Number.isFinite(out.weight) || out.weight <= 0)) fail(422, 'Trọng số phải lớn hơn 0');
+  }
+  if (input.progress !== undefined) out.progressAt = new Date();
   if (input.budget !== undefined) {
     out.budget = input.budget === null || input.budget === '' ? null : Number(input.budget);
     if (out.budget != null && (!Number.isFinite(out.budget) || out.budget < 0)) fail(422, 'Kinh phí không hợp lệ');
@@ -183,9 +193,11 @@ async function createWorkItem(tx, { project, user, rights, input, reporterId = u
   if (leadDepartmentId == null && project.visibility === 'ASSIGNED' && assigneeIds.length)
     leadDepartmentId = (await tx.user.findUnique({ where: { id: assigneeIds[0] }, select: { departmentId: true } }))?.departmentId ?? null;
   // Giao về phòng khác chỉ dùng trong sổ giao việc của đơn vị (quyền xem theo việc); dự án thường thì phòng của dự án là phòng chủ trì.
-  if (project.visibility !== 'ASSIGNED' && input.leadDepartmentId != null && leadDepartmentId != null && leadDepartmentId !== project.departmentId)
+  // Dự án dùng chung (MTL): mọi bộ phận chủ trì / phối hợp hạng mục trong cùng dự án.
+  const shared = project.visibility === 'ASSIGNED' || project.kind === 'MTL';
+  if (!shared && input.leadDepartmentId != null && leadDepartmentId != null && leadDepartmentId !== project.departmentId)
     fail(422, 'Giao về phòng khác chỉ dùng trong sổ giao việc của đơn vị', 'DISPATCH_NOT_ALLOWED');
-  const supportDepartmentIds = project.visibility === 'ASSIGNED' ? ((await departmentIds(tx, input.supportDepartmentIds)) || []).filter(id => id !== leadDepartmentId) : [];
+  const supportDepartmentIds = shared ? ((await departmentIds(tx, input.supportDepartmentIds)) || []).filter(id => id !== leadDepartmentId) : [];
   const taskType = oneOf(input.taskType, TASK_TYPES, 'Loại nhiệm vụ') || parent?.taskType || (input.source === 'Kế hoạch năm' ? 'PLAN' : 'ADHOC');
   const dispatched = !parent && leadDepartmentId != null && project.visibility === 'ASSIGNED';
   const cycleId = await cycleOf(tx, project.id, input.cycleId);

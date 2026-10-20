@@ -1,5 +1,5 @@
 // Dự án, cột trạng thái (WIP), thành viên, quy trình duyệt nhiều cấp.
-const { fail, intParam, optionalInt, text, oneOf } = require('../lib/http');
+const { fail, intParam, optionalInt, optionalDate, text, oneOf } = require('../lib/http');
 const { loadProject, projectRights, visibleProjectsWhere, canCreateProjectIn } = require('../services/access');
 const { APPROVER_TYPES, approverIds } = require('../services/approval');
 
@@ -19,6 +19,15 @@ const DEFAULT_STATES = [
   { name: 'Đang làm', category: 'STARTED', color: '#2563eb', wipLimit: 5 },
   { name: 'Chờ duyệt', category: 'REVIEW', color: '#d97706' },
   { name: 'Hoàn thành', category: 'COMPLETED', color: '#16a34a' },
+  { name: 'Huỷ', category: 'CANCELLED', color: '#9ca3af' },
+];
+// Dự án theo Master Timeline: cột theo tình trạng hạng mục (tiến độ tính theo % và kế hoạch gốc, không theo cột).
+const MTL_STATES = [
+  { name: 'Chưa bắt đầu', category: 'UNSTARTED', color: '#64748b' },
+  { name: 'Đang thực hiện', category: 'STARTED', color: '#2563eb' },
+  { name: 'Chờ duyệt', category: 'REVIEW', color: '#d97706' },
+  { name: 'Hoàn thành', category: 'COMPLETED', color: '#16a34a' },
+  { name: 'Tạm dừng', category: 'OTHER', color: '#9333ea' },
   { name: 'Huỷ', category: 'CANCELLED', color: '#9ca3af' },
 ];
 const VISIBILITY = ['DEPARTMENT', 'PRIVATE', 'PUBLIC', 'ASSIGNED'];
@@ -86,12 +95,17 @@ module.exports = function mountProjects(app, { prisma, auth, audit }) {
     const steps = req.body.approvalSteps === undefined ? [] : parseSteps(req.body.approvalSteps);
     await checkApprovers(prisma, steps);
     const defaultApprovalLevels = defaultLevelsInput(req.body.defaultApprovalLevels) ?? null;
+    const mtl = req.body.kind === 'MTL' || req.body.template === 'MTL';
+    const t0 = mtl ? optionalDate(req.body.t0Date, 'Ngày T0') : null;
+    if (mtl && !t0) fail(422, 'Nhập ngày T0 (tháng bắt đầu của Master Timeline)', 'T0_REQUIRED');
     const project = await prisma.$transaction(async tx => {
       const created = await tx.project.create({ data: {
         key: keyOf(req.body.key), name: text(req.body.name, 'Tên dự án', { required: true, max: 160 }),
         description: text(req.body.description, 'Mô tả', { max: 2000 }) || null, departmentId, leadId,
-        visibility: oneOf(req.body.visibility, VISIBILITY, 'Phạm vi') || 'DEPARTMENT', createdById: req.user.id, defaultApprovalLevels,
-        states: { create: (req.body.template === 'WEEK' && !steps.length ? WEEK_STATES : DEFAULT_STATES).map((s, position) => ({ ...s, position })) },
+        // MTL: dự án dùng chung — mặc định toàn công ty xem được; T0 bắt buộc để quy đổi tháng T.
+        visibility: oneOf(req.body.visibility, VISIBILITY, 'Phạm vi') || (mtl ? 'PUBLIC' : 'DEPARTMENT'), createdById: req.user.id,
+        kind: mtl ? 'MTL' : 'BOARD', t0Date: mtl ? t0 : null, defaultApprovalLevels: mtl && defaultApprovalLevels == null ? 0 : defaultApprovalLevels,
+        states: { create: (mtl ? MTL_STATES : req.body.template === 'WEEK' && !steps.length ? WEEK_STATES : DEFAULT_STATES).map((s, position) => ({ ...s, position })) },
         approvalSteps: { create: steps },
       } });
       const memberIds = [...new Set([req.user.id, leadId])];
@@ -217,3 +231,4 @@ module.exports = function mountProjects(app, { prisma, auth, audit }) {
   });
 };
 module.exports.DEFAULT_STATES = DEFAULT_STATES;
+module.exports.MTL_STATES = MTL_STATES;

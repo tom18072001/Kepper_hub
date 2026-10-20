@@ -37,20 +37,13 @@ function pages() {
     ...(can('admin.audit') ? [{ label: 'Nhật ký hệ thống', href: '#/admin/audit', nav: 'nav-admin-audit' }] : []),
     { label: 'Danh mục', href: '#/catalog', nav: 'nav-catalog' },
   ];
-  const ops = can('work.approve', 'operate');
   return [
-    ...(ops ? [{ label: 'Tổng quan', href: '#/ops', nav: 'nav-ops', words: 'dieu hanh tong quan cho toi xu ly' }] : []),
+    { label: 'Dashboard dự án', hint: 'Master Timeline: tiến độ, SPI, KPI, cảnh báo', href: '#/home', nav: 'nav-home', words: 'dashboard tong quan du an mtl tien do' },
     { label: 'Việc của tôi', href: '#/my', nav: 'nav-my' },
     { label: 'Ghi chú của tôi', href: '#/my?mode=notes', keys: hasKey('G N') ? 'G N' : '', words: 'ghi chu ca nhan' },
-    { label: 'Chờ tôi xử lý', hint: 'Duyệt, gia hạn, kiến nghị', href: '#/approvals', nav: 'nav-approvals', words: 'duyet gia han kien nghi phieu trinh' },
-    ...(ops ? [isDirector()
-      ? { label: 'Uỷ quyền', href: '#/dept', nav: 'nav-dept', words: 'uy quyen duyet thay' }
-      : { label: 'Việc phòng được giao', href: '#/dept', nav: 'nav-dept', words: 'tiep nhan phan cong uy quyen' }] : []),
-    ...(store.projects.some(x => x.visibility === 'ASSIGNED') ? [{ label: 'Sổ giao việc của đơn vị', href: `#/projects/${store.projects.find(x => x.visibility === 'ASSIGNED').id}?view=register`, keys: hasKey('G S') ? 'G S' : '', words: 'so giao viec theo doi' }] : []),
-    { label: 'Lịch công tác', hint: 'Lịch tuần Trung tâm, các phòng; ai vắng hôm nay', href: '#/schedule', nav: 'nav-schedule', keys: hasKey('G L') ? 'G L' : '', words: 'lich cong tac tuan vang di cong tac nghi phep hop' },
-    ...(can('reports.dashboard') ? [{ label: 'Dashboard', href: '#/dashboard', nav: 'nav-dashboard', words: 'so lieu bao cao tuan' }] : []),
-    ...(can('reports.kpi') ? [{ label: 'KPI phòng ban & cá nhân', href: '#/kpi', nav: 'nav-kpi', words: 'kpi diem dung han' }] : []),
-    ...(can('reports.summary') ? [{ label: 'Tổng hợp giao việc', href: '#/summary', nav: 'nav-summary', words: 'giao ban thong ke' }] : []),
+    { label: 'Tổng thể công việc', hint: 'Mọi việc theo người / bộ phận', href: '#/work', nav: 'nav-work', words: 'tong the theo nguoi bo phan' },
+    { label: 'Chờ tôi duyệt', hint: 'Duyệt, gia hạn', href: '#/approvals', nav: 'nav-approvals', words: 'duyet gia han' },
+    ...(can('reports.dashboard') ? [{ label: 'Số liệu công việc', href: '#/dashboard', nav: 'nav-dashboard', words: 'so lieu bao cao tuan' }] : []),
     { label: 'Thùng rác', href: '#/trash', nav: 'nav-trash', words: 'khoi phuc da xoa' },
     { label: 'Danh mục', href: '#/catalog', nav: 'nav-catalog' },
     ...(can('admin.users') ? [{ label: 'Quản trị tài khoản', href: '#/admin/users', nav: 'nav-admin-users' }] : []),

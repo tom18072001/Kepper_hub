@@ -1,0 +1,85 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const M = require('./mtl');
+
+// Dữ liệu GIẢ, cùng cấu trúc cột với bảng Master Timeline.
+const ROWS = [
+  ['MASTER TIMELINE — DỰ ÁN MẪU (giả)'],
+  ['Bước', 'Hạng mục công việc', 'Đầu mối', 'Bắt đầu (T)', 'Kết thúc (T)', 'Thời lượng (tháng)', 'Đường găng', 'Mốc'],
+  [1, 'Hạng mục A (giả)', 'CT/PL', 0, 2, 3, 'ĐƯỜNG GĂNG', ''],
+  [2, 'Hạng mục B (giả)', 'Tài chính', 0, 1, 2, '', ''],
+  [3, 'Hạng mục C (giả)', 'PL/Sở TC-KH', 2, 4, 3, 'ĐƯỜNG GĂNG', '60 ngày'],
+  [4, 'Văn bản chấp thuận (giả)', 'UBND TP', 5, 5, 1, 'ĐƯỜNG GĂNG', '◆'],
+  ['PHẦN II — PHÂN KỲ 2 (giả)'],
+  ['II.1', 'Hạng mục phân kỳ 2 (giả)', 'Thiết kế/PL', 3, 6, 4, '', ''],
+  ['Ghi chú: dòng ghi chú (giả)'],
+];
+const DEPTS = [{ id: 1, code: 'BLD', name: 'Ban lãnh đạo' }, { id: 2, code: 'PL', name: 'Pháp lý' }, { id: 3, code: 'TC', name: 'Tài chính' }, { id: 4, code: 'TK', name: 'Thiết kế' }];
+
+test('đọc bảng MTL: bước, đầu mối, tháng T, đường găng, mốc, phần', () => {
+  const p = M.parseMtlRows(ROWS);
+  assert.equal(p.items.length, 5);
+  const [a, , c, d, e] = p.items;
+  assert.deepEqual([a.step, a.startT, a.endT, a.critical, a.milestone], ['1', 0, 2, true, false]);
+  assert.equal(c.milestone, false); assert.equal(c.milestoneNote, '60 ngày');
+  assert.equal(d.milestone, true);
+  assert.equal(e.step, 'II.1'); assert.match(e.section, /PHẦN II/);
+  assert.equal(M.parseMtlRows([['a', 'b'], ['c']]), null);
+});
+
+test('MTL bộ phận: ngày cụ thể và cột "Thuộc bước"', () => {
+  const p = M.parseMtlRows([
+    ['STT', 'Hạng mục', 'Phụ trách', 'Bắt đầu', 'Kết thúc', 'Thuộc bước'],
+    ['1.1', 'Soạn hồ sơ (giả)', 'Pháp lý', '05/01/2027', '20/01/2027', '1'],
+    ['1.2', 'Sai ngày (giả)', 'Pháp lý', '20/01/2027', '05/01/2027', '1'],
+  ]);
+  assert.equal(p.items.length, 1);
+  assert.equal(p.items[0].parentStep, '1');
+  assert.ok(p.items[0].startDate instanceof Date && p.items[0].startT == null);
+  assert.equal(p.warnings.length, 1);
+});
+
+test('quy đổi T → ngày (giờ Việt Nam), thời lượng khớp cột tháng', () => {
+  const t0 = new Date('2027-01-10T03:00:00Z');
+  const { start, end } = M.tToDates(t0, 0, 2);
+  assert.equal(M.vnDay(start), M.vnDay(new Date('2027-01-01T00:00:00+07:00')));
+  assert.equal(M.vnDay(end), M.vnDay(new Date('2027-03-31T12:00:00+07:00')));
+  const y = M.tToDates(t0, 12, 13);
+  assert.equal(M.vnDay(y.start), M.vnDay(new Date('2028-01-01T00:00:00+07:00')));
+  assert.equal(M.currentT(t0, new Date('2027-04-15T00:00:00+07:00')), 3);
+});
+
+test('đầu mối → bộ phận chủ trì / phối hợp / cơ quan ngoài', () => {
+  assert.deepEqual(M.splitOwner('CT/GĐĐH/PL', DEPTS), { leadDepartmentId: 1, supportDepartmentIds: [2], externalParty: '' });
+  assert.deepEqual(M.splitOwner('PL/Sở TC-KH', DEPTS), { leadDepartmentId: 2, supportDepartmentIds: [], externalParty: 'Sở TC-KH' });
+  assert.deepEqual(M.splitOwner('UBND TP', DEPTS), { leadDepartmentId: null, supportDepartmentIds: [], externalParty: 'UBND TP' });
+  assert.equal(M.splitOwner('Thiết kế/PL', DEPTS).leadDepartmentId, 4);
+});
+
+test('tiến độ kế hoạch, trạng thái nhanh / chậm / trễ, rollup, SPI, KPI', () => {
+  const day = new Date('2027-02-15T05:00:00Z');
+  const base = (id, s, e, extra = {}) => ({ id, parentId: null, state: { category: 'STARTED' }, progress: 0, baselineStart: new Date(s + 'T00:00:00+07:00'), baselineEnd: new Date(e + 'T23:59:59+07:00'), ...extra });
+  const a = base(1, '2027-01-01', '2027-03-31', { progress: 10, critical: true });   // kế hoạch ~51% → chậm
+  const b = base(2, '2027-01-01', '2027-01-31', { progress: 80 });                   // quá hạn
+  const c = base(3, '2027-02-01', '2027-02-28', { progress: 90 });                   // vượt
+  const d = base(4, '2027-03-01', '2027-03-31');                                     // chưa đến kỳ
+  const e = base(5, '2027-01-01', '2027-01-20', { state: { category: 'COMPLETED' }, completedAt: new Date('2027-01-19T10:00:00+07:00') });
+  assert.equal(M.statusOf(a, 10, day).code, 'BEHIND');
+  assert.equal(M.statusOf(b, 80, day).code, 'OVERDUE');
+  assert.equal(M.statusOf(b, 80, day).lateDays, 15);
+  assert.equal(M.statusOf(c, 90, day).code, 'AHEAD');
+  assert.equal(M.statusOf(d, 0, day).code, 'NOT_DUE');
+  assert.equal(M.statusOf(e, 100, day).code, 'DONE_ON_TIME');
+  assert.equal(M.statusOf(base(6, '2027-02-01', '2027-02-28'), 0, day).code, 'LATE_START');
+  // Rollup: cha lấy bình quân gia quyền (theo thời lượng) của con.
+  const parent = base(10, '2027-01-01', '2027-03-31', { progress: 0 });
+  const k1 = base(11, '2027-01-01', '2027-01-31', { parentId: 10, progress: 100 }), k2 = base(12, '2027-02-01', '2027-03-02', { parentId: 10, progress: 0 });
+  const act = M.rollup([parent, k1, k2]);
+  assert.equal(act.get(10), 50.8);
+  const all = [a, b, c, d, e], actualOf = i => (M.isDone(i) ? 100 : i.progress);
+  const s = M.spiOf(all, actualOf, day);
+  assert.ok(s.spi > 0 && s.spi < 2);
+  const k = M.kpiOf(all, actualOf, day);
+  assert.equal(k.overdue, 1); assert.equal(k.behind, 1); assert.equal(k.ahead, 1); assert.equal(k.criticalLate, 1);
+  assert.ok(k.score >= 0 && k.score <= 100);
+});

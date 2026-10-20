@@ -81,6 +81,10 @@ model Project {
   nextNumber    Int      @default(1)
   intakeEnabled Boolean  @default(false) // cho phép phòng ban khác gửi yêu cầu vào dự án
   defaultApprovalLevels Int? // số cấp duyệt mặc định cho việc mới; null = đủ các cấp, 0 = không cần duyệt
+  // ---- Kepper: dự án theo Master Timeline ----
+  kind          String   @default("BOARD") // BOARD = bảng công việc | MTL = dự án theo Master Timeline (tháng T từ T0)
+  t0Date        DateTime? // ngày T0 của MTL (đầu tháng T0)
+  alertConfig   Json?    // ngưỡng cảnh báo: { behindPct, aheadPct, startSoonDays, dueSoonDays, staleDays }
   archivedAt    DateTime?
   deletedAt     DateTime? // đã xoá (thùng rác): khôi phục được trong 7 ngày, sau đó xoá hẳn
   deletedById   Int?
@@ -97,6 +101,8 @@ model Project {
   labels        Label[]
   approvalRules ApprovalRule[]
   plans         Plan[]
+  alerts        ProgressAlert[]
+  snapshots     ProgressSnapshot[]
 
   @@index([departmentId])
 }
@@ -187,6 +193,19 @@ model WorkItem {
   location        String?   // địa điểm
   budget          Float?    // kinh phí (triệu đồng)
   supervisorText  String?   // lãnh đạo phụ trách
+  // ---- Kepper: hạng mục Master Timeline ----
+  critical        Boolean   @default(false) // thuộc đường găng
+  milestone       Boolean   @default(false) // mốc ◆
+  milestoneNote   String?   // ghi chú cột "Mốc" (vd. "60 ngày")
+  ownerText       String    @default("") // cột "Đầu mối" nguyên văn (vd. "PL/Sở TC-KH")
+  externalParty   String    @default("") // cơ quan / đơn vị ngoài công ty trong đầu mối (vd. "UBND TP")
+  startT          Float?    // bắt đầu theo tháng T (từ T0)
+  endT            Float?    // kết thúc theo tháng T
+  baselineStart   DateTime? // kế hoạch gốc: ngày bắt đầu
+  baselineEnd     DateTime? // kế hoạch gốc: ngày kết thúc
+  forecastEnd     DateTime? // dự báo hoàn thành (người chủ trì cập nhật)
+  weight          Float?    // trọng số khi tính tiến độ / SPI (null = theo thời lượng)
+  progressAt      DateTime? // lần cập nhật tiến độ gần nhất
   // ---- GĐ3a: điều hành hai chiều BGĐ → phòng → cán bộ ----
   taskType        String    @default("ADHOC") // PLAN = theo Kế hoạch năm | ADHOC = đột xuất (công việc khác theo chỉ đạo)
   leadDepartmentId Int?     // đơn vị chủ trì khi giao về phòng
@@ -220,6 +239,8 @@ model WorkItem {
   progressReports ProgressReport[]
   extensions      DueExtension[]
   documents       WorkItemDocument[]
+
+  alerts          ProgressAlert[]
 
   @@unique([projectId, number])
   @@index([leadDepartmentId])
@@ -325,6 +346,10 @@ model Plan {
   project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name        String
   year        Int
+  kind        String    @default("ANNUAL") // ANNUAL (cũ) | MASTER = MTL tổng | DEPARTMENT = MTL bộ phận
+  departmentId Int?     // MTL bộ phận: bộ phận sở hữu
+  sheetName   String?
+  fileHash    String?   // SHA-256 của tệp nguồn (truy vết nguồn nhập)
   fileName    String?
   createdById Int?
   createdAt   DateTime  @default(now())
@@ -649,4 +674,52 @@ model ScheduleParticipant {
 
   @@id([eventId, userId])
   @@index([userId])
+}
+
+// ---------- Kepper: cảnh báo tiến độ, ảnh chụp tiến độ, Viber ----------
+// Một lần cảnh báo cho một hạng mục (chống lặp theo loại và chu kỳ nhắc). Không lưu nội dung tài liệu.
+model ProgressAlert {
+  id         Int      @id @default(autoincrement())
+  projectId  Int
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItemId Int
+  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  kind       String   // START_SOON | LATE_START | DUE_SOON | BEHIND | AHEAD | OVERDUE | STALE
+  level      String   // INFO | WARN | DANGER
+  day        DateTime @db.Date
+  variance   Float?   // % thực tế − % kế hoạch lúc cảnh báo
+  lateDays   Int?
+  recipients Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@unique([workItemId, kind, day])
+  @@index([projectId, day])
+  @@index([workItemId, kind, createdAt])
+}
+
+// Ảnh chụp tiến độ hằng ngày (toàn dự án: departmentId = null; hoặc theo bộ phận) — vẽ đường cong S thực tế.
+model ProgressSnapshot {
+  id           Int      @id @default(autoincrement())
+  projectId    Int
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  departmentId Int?
+  day          DateTime @db.Date
+  plannedPct   Float
+  actualPct    Float
+  spi          Float?
+
+  @@unique([projectId, departmentId, day])
+  @@index([projectId, day])
+}
+
+// Liên kết tài khoản với Viber (chỉ khi người dùng tự liên kết và đồng ý; mặc định tính năng tắt).
+model ViberLink {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @unique
+  viberId   String?   @unique
+  code      String?   @unique // mã liên kết một lần
+  codeExpiresAt DateTime?
+  consentAt DateTime?
+  linkedAt  DateTime?
+  createdAt DateTime  @default(now())
 }

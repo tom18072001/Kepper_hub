@@ -8,10 +8,9 @@ import { store } from './store.js';
 
 // G + chữ → trang (chỉ khi mục menu tương ứng đang hiện với người dùng).
 const GO = [
-  ['o', 'nav-ops', 'Tổng quan'], ['m', 'nav-my', 'Việc của tôi'], ['a', 'nav-approvals', 'Chờ tôi xử lý'], ['d', 'nav-dept', 'Việc phòng được giao / Uỷ quyền'],
-  ['b', 'nav-dashboard', 'Dashboard'], ['k', 'nav-kpi', 'KPI'], ['t', 'nav-summary', 'Tổng hợp giao việc'], ['r', 'nav-trash', 'Thùng rác'], ['l', 'nav-schedule', 'Lịch công tác'],
+  ['o', 'nav-home', 'Dashboard dự án'], ['m', 'nav-my', 'Việc của tôi'], ['a', 'nav-approvals', 'Chờ tôi duyệt'], ['w', 'nav-work', 'Tổng thể công việc'],
+  ['b', 'nav-dashboard', 'Số liệu công việc'], ['r', 'nav-trash', 'Thùng rác'],
   ['n', null, 'Ghi chú của tôi', () => '#/my?mode=notes'],
-  ['s', null, 'Sổ giao việc của đơn vị', () => { const p = store.projects.find(x => x.visibility === 'ASSIGNED'); return p ? `#/projects/${p.id}?view=register` : null; }],
 ];
 const HELP_PANEL = ['Trong panel việc', [['J / K', 'Việc sau / trước trong danh sách'], ['V', 'Tới vùng "Cần bạn xử lý" (ý kiến duyệt, trả lời, gia hạn)'], ['S', 'Đổi trạng thái'], ['P', 'Đổi ưu tiên'],
   ['A', 'Tiếp nhận & phân công / chọn người chủ trì'], ['D', 'Sửa hạn'], ['E', 'Xin gia hạn'], ['R', 'Báo cáo tiến độ'], ['L', 'Nhãn'], ['M', 'Viết bình luận'], ['Ctrl Enter', 'Gửi bình luận / báo cáo / trả lời, lưu hộp thoại'], ['Ctrl S', 'Lưu mô tả (khi đang soạn)']]];

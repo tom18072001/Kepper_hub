@@ -158,9 +158,9 @@ export async function renderMyWork(root, params, setCrumbs) {
 
     if (!items.length) {
       // Không có việc giao trực tiếp: chỉ sang nơi đang có việc chờ (phiếu duyệt, việc phòng) thay vì một trang trống.
-      const c = store.counts || {}, hasDept = !$('#navDept')?.classList.contains('hidden');
+      const c = store.counts || {};
       const next = [c.total ? `<a class="btn btn-primary" href="#/approvals" data-testid="my-empty-approvals">Chờ tôi xử lý · ${c.total}</a>` : '',
-        hasDept ? `<a class="btn" href="#/dept">${esc($('#navDeptText')?.textContent || 'Việc phòng được giao')}</a>` : ''].filter(Boolean).join(' ');
+        '<a class="btn" href="#/home">Dashboard dự án</a>'].filter(Boolean).join(' ');
       body.innerHTML = `<div class="card empty"><p>Không có việc nào giao trực tiếp cho bạn đang mở.</p>${next ? `<p class="mw-empty-next">${next}</p>` : ''}<p class="muted xs">Ghi nhanh việc cá nhân ở tab <a href="#/my?mode=notes">Ghi chú của tôi</a>.</p></div>`;
       return;
     }
