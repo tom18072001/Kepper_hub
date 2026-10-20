@@ -12,7 +12,7 @@ export const CATEGORY = {
   OTHER: 'Cột tự do',
 };
 export const ROLE_LABEL = { admin: 'Quản trị hệ thống', director: 'Ban giám đốc', manager: 'Trưởng phòng', deputy: 'Phó phòng', member: 'Nhân viên' };
-export const VISIBILITY = { DEPARTMENT: 'Cả phòng ban', PRIVATE: 'Chỉ thành viên', PUBLIC: 'Toàn tổ chức', ASSIGNED: 'Sổ giao việc của đơn vị — mỗi người thấy việc liên quan đến mình' };
+export const VISIBILITY = { DEPARTMENT: 'Cả phòng ban', PRIVATE: 'Chỉ thành viên', PUBLIC: 'Toàn công ty (dùng chung)' };
 export const APPROVER = { PROJECT_LEAD: 'Trưởng dự án', DEPARTMENT_MANAGER: 'Trưởng phòng', DIRECTOR: 'Ban giám đốc', SUPERVISOR: 'Người giao / PGĐ phụ trách', USER: 'Người được chỉ định' };
 
 const DAY = 86_400_000;
@@ -289,4 +289,17 @@ function filterMulti(box) {
     create.classList.toggle('hidden', !q || exact);
     create.innerHTML = `+ Tạo nhãn mới “${esc(box.querySelector('.multi-search').value.trim())}”`;
   }
+}
+
+// Mép mờ cho hàng chip / phân đoạn cuộn ngang: báo còn nội dung ở phía nào.
+export function scrollFade(el) {
+  if (!el) return;
+  const upd = () => {
+    const max = el.scrollWidth - el.clientWidth;
+    el.classList.toggle('fade-r', max > 2 && el.scrollLeft < max - 2);
+    el.classList.toggle('fade-l', max > 2 && el.scrollLeft > 2);
+  };
+  el.addEventListener('scroll', upd, { passive: true });
+  if (typeof ResizeObserver === 'function') new ResizeObserver(upd).observe(el); else upd();
+  upd();
 }

@@ -3,7 +3,7 @@
 #   docker compose up -d --build                      # Postgres + app, tệp lưu trên volume
 #   docker compose --profile full up -d --build       # thêm MinIO + bộ xem trước Word (LibreOffice)
 # Mở http://localhost:4000 — mọi cổng chỉ bind 127.0.0.1.
-name: workhub
+name: kepper
 
 services:
   postgres:
@@ -27,14 +27,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: workhub-app:0.2.0
+    image: kepper-app:0.1.0
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://workhub:${POSTGRES_PASSWORD}@postgres:5432/workhub
       JWT_SECRET: ${JWT_SECRET:?Đặt JWT_SECRET trong .env}
-      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:4000}
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:4100}
       TRUST_PROXY: ${TRUST_PROXY:-loopback, linklocal, uniquelocal}
       ROOT_ADMIN_USERNAME: ${ROOT_ADMIN_USERNAME:-admin}
       ROOT_ADMIN_PASSWORD: ${ROOT_ADMIN_PASSWORD:?Đặt ROOT_ADMIN_PASSWORD trong .env}
@@ -48,10 +48,14 @@ services:
       MINIO_BUCKET: workhub-attachments
       PREVIEW_URL: ${PREVIEW_URL:-}
       PREVIEW_TOKEN: ${PREVIEW_TOKEN:-}
+      # Kepper: Viber bot (mặc định tắt — xem docs/data-protection-assessment.md)
+      VIBER_ENABLED: ${VIBER_ENABLED:-0}
+      VIBER_AUTH_TOKEN: ${VIBER_AUTH_TOKEN:-}
+      VIBER_BOT_NAME: ${VIBER_BOT_NAME:-Kepper Hub}
     volumes:
       - uploads:/data/uploads
     ports:
-      - "127.0.0.1:${APP_PORT:-4000}:4000"
+      - "127.0.0.1:${APP_PORT:-4100}:4000"
     restart: unless-stopped
     networks: [default, preview-net]
 

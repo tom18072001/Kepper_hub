@@ -47,7 +47,9 @@ function createApp({ prisma, config }) {
     skip: req => req.path.startsWith('/auth/') || req.path === '/stream',
     message: { error: 'Quá nhiều yêu cầu, vui lòng thử lại sau', code: 'RATE_LIMITED' },
   }));
-  app.use(express.json({ limit: '2mb' }));
+  // Webhook Viber cần body thô để kiểm chữ ký: bỏ qua bộ đọc JSON chung cho đường này.
+  const json = express.json({ limit: '2mb' });
+  app.use((req, res, next) => (req.path === '/api/viber/webhook' ? next() : json(req, res, next)));
 
   const auth = createAuth(prisma, config.jwtSecret);
   const audit = auditFor(prisma);
@@ -64,8 +66,9 @@ function createApp({ prisma, config }) {
   });
   for (const mount of [
     require('./routes/auth'), require('./routes/admin'), require('./routes/labels'), require('./routes/projects'), require('./routes/items'), require('./routes/trash'),
-    require('./routes/attachments'), require('./routes/approvals'), require('./routes/me'), require('./routes/notes'), require('./routes/dashboard'), require('./routes/kpi'), require('./routes/register'), require('./routes/dispatch'), require('./routes/ops'), require('./routes/excel'),
-    require('./routes/intake'), require('./routes/cycles'), require('./routes/recurring'), require('./routes/views'), require('./routes/reports'), require('./routes/schedule'), require('./routes/work'), require('./routes/realtime'),
+    require('./routes/attachments'), require('./routes/approvals'), require('./routes/me'), require('./routes/notes'), require('./routes/dashboard'), require('./routes/kpi'), require('./routes/register'), require('./routes/dispatch'), require('./routes/excel'),
+    require('./routes/cycles'), require('./routes/recurring'), require('./routes/views'), require('./routes/reports'), require('./routes/work'), require('./routes/search'),
+    require('./routes/mtl'), require('./routes/viber'), require('./routes/realtime'),
   ]) mount(app, ctx);
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'Không tìm thấy API', code: 'NOT_FOUND' }));

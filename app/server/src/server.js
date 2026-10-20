@@ -40,6 +40,9 @@ async function start() {
   const app = createApp({ prisma, config });
   if (config.enableCron) {
     cron.schedule('0 8 * * *', () => remindDueSoon(prisma).catch(crash('cron_failed')), { timezone: 'Asia/Ho_Chi_Minh' });
+    // Kepper: cảnh báo tiến độ Master Timeline + ảnh chụp tiến độ, 07:30 hằng ngày giờ Việt Nam.
+    cron.schedule('30 7 * * *', () => require('./services/alerts').runAllAlerts(prisma).then(r => console.log(JSON.stringify({ level: 'info', msg: 'mtl_alerts', alerts: r.reduce((n, x) => n + x.alerts, 0) })))
+      .catch(error => console.error(JSON.stringify({ level: 'error', msg: 'mtl_alerts_failed', error: error.message }))), { timezone: 'Asia/Ho_Chi_Minh' });
     // Việc lặp lại: kiểm tra mỗi 15 phút (quy tắc chạy lúc 07:00 giờ Việt Nam).
     const runRecurring = () => runDue(prisma).catch(error => console.error(JSON.stringify({ level: 'error', msg: 'recurring_cron_failed', error: error.message })));
     cron.schedule('*/15 * * * *', runRecurring, { timezone: 'Asia/Ho_Chi_Minh' });

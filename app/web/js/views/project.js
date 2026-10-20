@@ -12,8 +12,11 @@ import { isLive } from '../realtime.js';
 import { drawGantt } from './gantt.js';
 import { stagePill } from './dispatch-panel.js';
 import { calendarHtml, calState, bindCalendar } from './calendar-view.js';
+import { drawMtlOverview, drawMtlPlan, mtlActions, bindMtlActions, invalidateMtl } from './mtl.js';
 
 const VIEWS = [['board', 'Bảng'], ['register', 'Sổ giao việc'], ['list', 'Danh sách'], ['calendar', 'Lịch'], ['timeline', 'Tiến độ kế hoạch'], ['cycles', 'Chu kỳ'], ['intake', 'Tiếp nhận']];
+// Dự án theo Master Timeline: Tổng quan (Dashboard) + Kế hoạch & Gantt đứng đầu; Kanban / danh sách / lịch để cowork theo hạng mục.
+const MTL_VIEWS = [['mtl', 'Tổng quan dự án'], ['plan', 'Kế hoạch & Gantt'], ['board', 'Bảng'], ['list', 'Danh sách'], ['calendar', 'Lịch']];
 const VIEW_LABEL = Object.fromEntries(VIEWS);
 const ITEM_VIEWS = ['board', 'register', 'list', 'calendar', 'timeline'];
 // Khoá bộ lọc → tham số URL. Chỉ id và mã (riêng q là từ khoá tìm); không chứa nội dung việc.
@@ -70,8 +73,9 @@ export async function renderProject(root, id, params, setCrumbs, stillCurrent) {
   const showIntake = false; // "Gửi yêu cầu / Tiếp nhận" đã bỏ khỏi giao diện (GĐ3f)
   // Bảng toàn cột tự do (lịch tuần, theo chủ đề…): bỏ các kiểu xem theo quy trình / sổ giao việc.
   const freeBoard = project.visibility !== 'ASSIGNED' && project.states.every(s => s.category === 'OTHER');
-  const tabs = VIEWS.filter(([k]) => (k !== 'intake' || showIntake) && !(freeBoard && ['register', 'timeline', 'cycles'].includes(k)));
-  const view = tabs.some(([k]) => k === params.get('view')) ? params.get('view') : 'board';
+  const mtl = project.kind === 'MTL';
+  const tabs = mtl ? MTL_VIEWS : VIEWS.filter(([k]) => (k !== 'intake' || showIntake) && k !== 'register' && !(freeBoard && ['timeline', 'cycles'].includes(k)));
+  const view = tabs.some(([k]) => k === params.get('view')) ? params.get('view') : mtl ? 'mtl' : 'board';
   const itemView = ITEM_VIEWS.includes(view);
   setCrumbs(`<span class="muted">${esc(project.department.name)} /</span> ${esc(project.name)} <span class="code">${esc(project.key)}</span>`);
   const r = project.rights;
@@ -82,9 +86,8 @@ export async function renderProject(root, id, params, setCrumbs, stillCurrent) {
       <div class="ph-title"><h1>${esc(project.name)}</h1><span class="live hidden" id="liveDot" title="Đang cập nhật trực tiếp">Trực tiếp</span></div>
       <div class="ph-actions">
         ${(() => { const items = `${r.canManage ? `<a class="menu-item" href="#/projects/${id}/settings" data-testid="project-settings" title="Cài đặt dự án">${icon('settings')}<span>Cài đặt</span></a>` : ''}
-        ${canCreate ? `<button class="menu-item" id="importBtn" data-testid="import-excel" title="Nhập sổ giao việc / kế hoạch năm / danh sách">${icon('upload')}<span>Nhập</span></button>` : ''}
-        ${!freeBoard && (can('reports.export', 'operate') || r.canManage || (project.visibility === 'ASSIGNED' && r.memberRole)) ? `<button class="menu-item" id="exportBtn" data-testid="export-excel" title="Xuất sổ giao việc ra Excel (kèm bảng Tổng hợp)">${icon('download')}<span>Xuất sổ Excel</span></button>` : ''}
-        ${project.visibility === 'ASSIGNED' && r.canEdit && (r.canManage || r.memberRole) ? `<button class="menu-item" id="bulkDispatchBtn" data-testid="bulk-dispatch" title="Nhập nhiều chỉ đạo một lần (sau giao ban)">${icon('list')}<span>Giao nhiều việc</span></button>` : ''}`.trim(); return items ? `<details class="ph-more-menu"><summary class="btn btn-ghost" data-testid="ph-more" aria-label="Thao tác khác" title="Giao nhiều việc, nhập / xuất Excel, cài đặt">${icon('menu')}<span class="t">Khác</span></summary><div class="ph-menu" role="menu">${items}</div></details>` : ''; })()}
+        ${mtl ? mtlActions(project) : ''}
+        ${canCreate && !mtl ? `<button class="menu-item" id="importBtn" data-testid="import-excel" title="Nhập danh sách việc từ Excel">${icon('upload')}<span>Nhập</span></button>` : ''}`.trim(); return items ? `<details class="ph-more-menu"><summary class="btn btn-ghost" data-testid="ph-more" aria-label="Thao tác khác" title="Giao nhiều việc, nhập / xuất Excel, cài đặt">${icon('menu')}<span class="t">Khác</span></summary><div class="ph-menu" role="menu">${items}</div></details>` : ''; })()}
         ${canCreate ? `<button class="btn btn-primary" id="newItemBtn" data-testid="new-item" title="Tạo việc (C)" aria-keyshortcuts="C">${icon('plus')}Tạo việc</button>` : ''}
       </div>
     </div>
@@ -104,6 +107,7 @@ export async function renderProject(root, id, params, setCrumbs, stillCurrent) {
   $('#bulkDispatchBtn', root)?.addEventListener('click', () => openBulkDispatch());
   $('#exportBtn', root)?.addEventListener('click', () => exportRegister(project));
   $('#importBtn', root)?.addEventListener('click', openImportChooser);
+  if (mtl) bindMtlActions($('.proj', root), project, () => reloadProject());
   // Bộ lọc lấy từ bộ nhớ / mặc định / bộ lọc đã lưu: ghi lên URL để sao chép, tải lại vẫn giữ.
   if (itemView) writeUrl(); else writtenKey = hashKey();
   drawBody();
@@ -587,6 +591,7 @@ export async function reloadProject({ realtime = false, ids = null } = {}) {
   if (!current.project || !document.body.contains(current.root) || !location.hash.startsWith(`#/projects/${current.project.id}`) || location.hash.includes('/settings')) return;
   if (realtime && userBusy()) { deferredReload = true; return; }
   deferredReload = false;
+  invalidateMtl();
   const id = current.project.id;
   if (ids?.length) {
     // Cập nhật thời gian thực vài việc: tải đúng các việc đó, thay vào danh sách (việc đã xoá / không còn được xem thì bỏ ra).
@@ -615,6 +620,11 @@ function drawBodyPass() {
   if (ITEM_VIEWS.includes(view)) {
     syncControls();
     if (isActive() && !filtered().length) { body.innerHTML = emptyHtml(); return; }
+  }
+  if (view === 'mtl' || view === 'plan') {
+    const p = view === 'mtl' ? drawMtlOverview(body, current.project) : drawMtlPlan(body, current.project, current.params || new URLSearchParams(location.hash.split('?')[1] || ''));
+    p.catch(error => { body.innerHTML = `<div class="card empty">${esc(errorMessage(error))}</div>`; });
+    return;
   }
   if (view === 'list') drawList(body);
   else if (view === 'register') drawRegister(body, current, { filtered, openItemHash, reload: reloadProject });

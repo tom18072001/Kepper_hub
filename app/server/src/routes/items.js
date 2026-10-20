@@ -2,6 +2,7 @@
 const { fail, intParam, optionalInt, optionalDate, text, oneOf } = require('../lib/http');
 const { sanitizeHtml, htmlToText, mentions } = require('../lib/rich-text');
 const { permissionScope } = require('../lib/permissions');
+const MTL = require('../services/mtl');
 const { loadProject, loadItem, projectRights, itemVisibleWhere, isDeptLeader, canSeeItem, isRegisterWriter, ITEM_ACCESS_SELECT } = require('../services/access');
 const { activity, notify } = require('../services/events');
 const approval = require('../services/approval');
@@ -93,7 +94,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
     const item = await prisma.workItem.findUnique({ where: { id: intParam(req.params.id) }, include: {
       ...BOARD_INCLUDE, state: true,
       progressReports: { orderBy: { id: 'desc' }, take: 100 }, extensions: { orderBy: { id: 'desc' } }, documents: { orderBy: { id: 'asc' } }, parent: { select: { id: true, number: true, title: true } }, cycle: true,
-      children: { where: { archivedAt: null }, select: { id: true, number: true, title: true, dueDate: true, internalDueDate: true, progress: true, completedAt: true, returnedAt: true, dispatchStatus: true,
+      children: { where: { archivedAt: null }, select: { id: true, number: true, title: true, dueDate: true, baselineStart: true, baselineEnd: true, weight: true, startedAt: true, internalDueDate: true, progress: true, completedAt: true, returnedAt: true, dispatchStatus: true,
         state: { select: { name: true, category: true } }, assignees: { select: { user: { select: { id: true, fullName: true } } } }, approvals: { where: { status: 'PENDING' }, select: { currentLevel: true } } }, orderBy: { id: 'asc' } },
       plan: { select: { id: true, name: true, year: true } },
       checklist: { orderBy: [{ position: 'asc' }, { id: 'asc' }] },
@@ -163,6 +164,13 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
         myRole: isAssignee ? 'LEAD' : isSupporter ? 'SUPPORT' : isLeadLeader ? 'LEADER' : isAssigner ? 'ASSIGNER' : null,
       },
       stage: stageOf({ ...item, pendingApproval: pending }, allSteps),
+      // Kepper: tình trạng so với kế hoạch gốc (hạng mục có con: % thực tế = bình quân gia quyền của con).
+      mtl: project.kind === 'MTL' ? (() => {
+        const kids = item.children.map(c => ({ ...c, parentId: item.id }));
+        const act = MTL.rollup([{ ...item, parentId: null }, ...kids]).get(item.id);
+        const st = MTL.statusOf(item, act, new Date(), MTL.alertConfigOf(project));
+        return { actual: act, planned: st.planned ?? MTL.plannedPct(item), status: st.code, statusLabel: MTL.STATUS[st.code], variance: st.variance ?? null, lateDays: st.lateDays ?? null };
+      })() : null,
       submitRounds: item.approvals.length,
       children: item.children.map(c => ({ ...c, assignees: c.assignees.map(a => a.user), stage: stageOf({ ...c, pendingApproval: c.approvals[0] }, allSteps) })),
       // Người duyệt thực tế từng bước của RIÊNG việc này (việc giao về phòng: lãnh đạo phòng chủ trì, PGĐ phụ trách…).
@@ -218,7 +226,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
         if (body.taskType !== undefined) data.taskType = oneOf(body.taskType, W.TASK_TYPES, 'Loại nhiệm vụ') || item.taskType;
         if (body.leadDepartmentId !== undefined) {
           data.leadDepartmentId = await W.departmentIdOf(tx, body.leadDepartmentId, 'Đơn vị chủ trì');
-          if (project.visibility !== 'ASSIGNED' && data.leadDepartmentId != null && data.leadDepartmentId !== project.departmentId)
+          if (project.visibility !== 'ASSIGNED' && project.kind !== 'MTL' && data.leadDepartmentId != null && data.leadDepartmentId !== project.departmentId)
             fail(422, 'Giao về phòng khác chỉ dùng trong sổ giao việc của đơn vị', 'DISPATCH_NOT_ALLOWED');
           // Việc nhánh đi theo đơn vị chủ trì mới (quyền xem, cấp duyệt "Trưởng phòng").
           if (data.leadDepartmentId !== item.leadDepartmentId) await tx.workItem.updateMany({ where: { parentId: id, leadDepartmentId: item.leadDepartmentId }, data: { leadDepartmentId: data.leadDepartmentId } });
@@ -229,7 +237,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
         }
       }
       const supportDepartmentIds = await W.departmentIds(tx, body.supportDepartmentIds);
-      if (supportDepartmentIds && project.visibility !== 'ASSIGNED') fail(422, 'Đơn vị phối hợp chỉ dùng trong sổ giao việc của đơn vị', 'DISPATCH_NOT_ALLOWED');
+      if (supportDepartmentIds && project.visibility !== 'ASSIGNED' && project.kind !== 'MTL') fail(422, 'Đơn vị phối hợp chỉ dùng trong sổ giao việc của đơn vị', 'DISPATCH_NOT_ALLOWED');
       if (supportDepartmentIds) {
         if (!(rights.canManage || item.assignedById === req.user.id)) fail(403, 'Chỉ người giao việc hoặc người quản lý được đổi đơn vị phối hợp', 'FORBIDDEN');
         const before = (await tx.workItemDepartment.findMany({ where: { workItemId: id } })).map(d => d.departmentId);
@@ -269,6 +277,18 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       }
       for (const key of Object.keys(data)) if (String(item[key] ?? '') !== String(data[key] ?? '')) changed[key] = key === 'descriptionHtml' || key === 'descriptionText' ? true : data[key];
       let moved = null;
+      // Kepper (MTL): cập nhật % tự chuyển cột — > 0% từ "Chưa bắt đầu" sang "Đang thực hiện"; 100% (không cần duyệt) sang "Hoàn thành".
+      if (project.kind === 'MTL' && data.progress !== undefined && body.stateId === undefined) {
+        const cat = item.state.category;
+        const want = data.progress >= 100 ? 'COMPLETED' : data.progress > 0 && ['BACKLOG', 'UNSTARTED'].includes(cat) ? 'STARTED' : null;
+        if (want && want !== cat) {
+          const target = await tx.workflowState.findFirst({ where: { projectId: project.id, category: want }, orderBy: { position: 'asc' } });
+          if (target) {
+            const steps = await approval.stepsForItem(tx, project, item);
+            if (!(want === 'COMPLETED' && steps.length)) body.stateId = target.id;
+          }
+        }
+      }
       if (body.stateId !== undefined && Number(body.stateId) !== item.stateId) {
         const toState = await tx.workflowState.findFirst({ where: { id: intParam(body.stateId, 'Trạng thái'), projectId: project.id } });
         if (!toState) fail(422, 'Trạng thái không hợp lệ', 'INVALID_STATE');
