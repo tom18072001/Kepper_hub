@@ -11,6 +11,7 @@ import { renderProjectSettings, openCreateProject } from './views/settings.js';
 import { openItem, closeItem, isItemOpen } from './views/item-panel.js';
 import { openPalette, closePalette } from './views/palette.js';
 import { renderHome } from './views/home.js';
+import { renderQuick } from './views/quick.js';
 import { renderTrash } from './views/trash.js';
 import { renderCatalog } from './views/catalog.js';
 import { renderWork } from './views/work.js';
@@ -251,6 +252,7 @@ export async function route({ background = false } = {}) {
     } else if (parts[0] === 'approvals') { await renderApprovals(view, params, setCrumbs); syncPanel(); }
     else if (['requests', 'schedule', 'ops', 'dept', 'summary', 'kpi'].includes(parts[0])) { location.replace('#/home'); return; } // nghiệp vụ NQ57 đã bỏ (Kepper)
     else if (parts[0] === 'home') { await renderHome(view, params, setCrumbs); syncPanel(); }
+    else if (parts[0] === 'sprint') { await renderQuick(view, params, setCrumbs); syncPanel(); }
     else if (parts[0] === 'dashboard') { closeItem(); await renderDashboard(view, params, setCrumbs); }
     else if (parts[0] === 'trash') { closeItem(); await renderTrash(view, setCrumbs); }
     else if (parts[0] === 'catalog') { closeItem(); await renderCatalog(view, setCrumbs); }

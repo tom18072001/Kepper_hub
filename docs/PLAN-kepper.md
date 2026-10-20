@@ -111,3 +111,19 @@ Giữ lại: dự án, Kanban, danh sách, lịch, việc con, duyệt nhiều c
   - bỏ màn hình NQ57;
   - dữ liệu mẫu giả.
 - **GĐ2**: Viber bot (sau khi có hồ sơ chuyển DLCN ra nước ngoài), điều chỉnh kế hoạch gốc có duyệt, so sánh phương án overall / fast-track, báo cáo tuần Word / Excel theo MTL.
+
+## GĐ2a — Sprint theo tháng T, cập nhật nhanh, MTL bộ phận điền sẵn (nhánh `kepper/gd2a-sprint`)
+
+Phản hồi của chủ dự án (20/10/2026): nhìn Kế hoạch & Gantt 62 cột không rõ "tháng này mỗi ban phải xong gì"; cần thao tác đơn giản.
+Chốt: **mỗi tháng T là một sprint** (khớp MTL), không tạo sprint tay.
+
+| Hạng mục | Cách làm |
+|---|---|
+| Sprint | Tính từ T0 (`sprintOf`, `sprintLane`, `sprintTarget` trong `services/mtl.js`), không thêm bảng. Làn: **DUE** = kế hoạch gốc kết thúc trong sprint (sprint hiện tại thêm việc trễ chưa xong, ghi "chuyển từ Tk"); **RUNNING** = chạy qua sprint, kết thúc sau (bỏ việc đã xong trước sprint); **NEXT** = bắt đầu ở sprint sau. Chỉ lấy hạng mục lá. Mục tiêu % = % kế hoạch gốc ở đầu / cuối sprint |
+| Tab Sprint | Mặc định của dự án MTL. Dải sprint (đã qua: xanh = xong đúng hạn hết, vàng = có xong trễ, đỏ = còn chưa xong; ◆ = có mốc), lọc ban (nhớ theo người), tổng kết theo ban. Sprint đã qua: "đã xong" = xong trước khi sprint kết thúc, SPI = ảnh chụp tiến độ ngày cuối sprint |
+| Gantt | Khung 12 sprint quanh hiện tại (mặc định khi dự án > 18 tháng), lùi / tới 6 sprint, "Toàn bộ dự án"; dải xen kẽ theo sprint, cột sprint hiện tại tô nền, đầu cột mở tab Sprint |
+| Cập nhật nhanh | `GET /api/my/sprint`; cập nhật qua `PATCH /api/items/:id` sẵn có (tự chuyển cột), ghi chú qua bình luận. Nhắc 15:00 thứ Sáu (`runWeeklyUpdateReminder`), chỉ trong ứng dụng |
+| MTL bộ phận | `GET /api/projects/:id/mtl-template.xlsx?departmentId=`: PMO mọi bộ phận, lãnh đạo bộ phận cho bộ phận mình. Nhập MTL bộ phận: lãnh đạo bộ phận được tự nhập (chỉ `DEPARTMENT`, đúng bộ phận, không `rebaseline`, không đổi tên kế hoạch). Không ghi tên kế hoạch → bộ phận đã có đúng một kế hoạch thì cập nhật kế hoạch đó. Tên kế hoạch trùng kế hoạch khác loại / bộ phận → từ chối. Dòng con đầu tiên của bước tổng đang làm dở nhận % của bước tổng |
+
+Còn mở: Viber (tin tổng hợp 1 tin/người/ngày, màn hình liên kết, tin chào mừng, biến địa chỉ liên kết riêng) — làm sau khi có hợp đồng Rakuten Viber và hồ sơ chuyển DLCN ra nước ngoài.
+

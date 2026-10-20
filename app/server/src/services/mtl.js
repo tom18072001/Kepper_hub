@@ -242,7 +242,36 @@ function plannedCurve(items, t0Date, months) {
   return out;
 }
 
+// ---------- Sprint = một tháng T ----------
+// Sprint T chạy từ 00:00 ngày 1 tới 23:59:59.999 ngày cuối của tháng (T0 + T), giờ Việt Nam — khớp cách quy đổi tháng T của MTL.
+function sprintOf(t0Date, t) {
+  const start = monthStart(t0Date, t), end = new Date(monthStart(t0Date, t + 1).getTime() - 1);
+  return { t, start, end, days: vnDay(end) - vnDay(start) + 1 };
+}
+const sprintState = (sprint, day = new Date()) => (day.getTime() < sprint.start.getTime() ? 'FUTURE' : day.getTime() > sprint.end.getTime() ? 'PAST' : 'CURRENT');
+const ms = v => (v == null ? null : new Date(v).getTime());
+// Hạng mục nằm ở làn nào của sprint:
+// - DUE: kế hoạch gốc kết thúc trong sprint; với sprint hiện tại thêm hạng mục trễ từ sprint trước mà chưa xong (chuyển sang);
+// - RUNNING: đang chạy qua sprint và kết thúc ở sprint sau (đã xong trước khi sprint bắt đầu thì không tính);
+// - NEXT: bắt đầu ở sprint kế tiếp (chuẩn bị).
+// null = không thuộc sprint.
+function sprintLane(item, sprint, next = null, { current = false } = {}) {
+  const s = ms(item.baselineStart), e = ms(item.baselineEnd);
+  if (s == null || e == null) return null;
+  const done = isDone(item), doneAt = ms(item.completedAt);
+  const a = sprint.start.getTime(), b = sprint.end.getTime();
+  if (e >= a && e <= b) return 'DUE';
+  if (current && !done && e < a) return 'DUE';
+  if (done && doneAt != null && doneAt < a) return null;
+  if (s <= b && e > b) return 'RUNNING';
+  if (next && !done && s >= next.start.getTime() && s <= next.end.getTime()) return 'NEXT';
+  return null;
+}
+// Mục tiêu % của hạng mục ở đầu và cuối sprint (theo kế hoạch gốc).
+const sprintTarget = (item, sprint) => ({ from: plannedPct(item, new Date(sprint.start.getTime() - 1)), to: plannedPct(item, sprint.end) });
+
 module.exports = {
   DEFAULT_ALERTS, alertConfigOf, STATUS, vnDay, vnMidnight, monthStart, tToDates, currentT, timeValue, parseMtlRows, splitOwner,
   plannedPct, durationDays, weightOf, rollup, statusOf, spiOf, leavesOf, kpiOf, plannedCurve, isDone, isCancelled,
+  sprintOf, sprintState, sprintLane, sprintTarget,
 };

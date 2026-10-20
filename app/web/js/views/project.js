@@ -13,10 +13,11 @@ import { drawGantt } from './gantt.js';
 import { stagePill } from './dispatch-panel.js';
 import { calendarHtml, calState, bindCalendar } from './calendar-view.js';
 import { drawMtlOverview, drawMtlPlan, mtlActions, bindMtlActions, invalidateMtl } from './mtl.js';
+import { drawMtlSprint } from './sprint.js';
 
 const VIEWS = [['board', 'Bảng'], ['register', 'Sổ giao việc'], ['list', 'Danh sách'], ['calendar', 'Lịch'], ['timeline', 'Tiến độ kế hoạch'], ['cycles', 'Chu kỳ'], ['intake', 'Tiếp nhận']];
 // Dự án theo Master Timeline: Tổng quan (Dashboard) + Kế hoạch & Gantt đứng đầu; Kanban / danh sách / lịch để cowork theo hạng mục.
-const MTL_VIEWS = [['mtl', 'Tổng quan dự án'], ['plan', 'Kế hoạch & Gantt'], ['board', 'Bảng'], ['list', 'Danh sách'], ['calendar', 'Lịch']];
+const MTL_VIEWS = [['sprint', 'Sprint'], ['mtl', 'Tổng quan dự án'], ['plan', 'Kế hoạch & Gantt'], ['board', 'Bảng'], ['list', 'Danh sách'], ['calendar', 'Lịch']];
 const VIEW_LABEL = Object.fromEntries(VIEWS);
 const ITEM_VIEWS = ['board', 'register', 'list', 'calendar', 'timeline'];
 // Khoá bộ lọc → tham số URL. Chỉ id và mã (riêng q là từ khoá tìm); không chứa nội dung việc.
@@ -75,7 +76,7 @@ export async function renderProject(root, id, params, setCrumbs, stillCurrent) {
   const freeBoard = project.visibility !== 'ASSIGNED' && project.states.every(s => s.category === 'OTHER');
   const mtl = project.kind === 'MTL';
   const tabs = mtl ? MTL_VIEWS : VIEWS.filter(([k]) => (k !== 'intake' || showIntake) && k !== 'register' && !(freeBoard && ['timeline', 'cycles'].includes(k)));
-  const view = tabs.some(([k]) => k === params.get('view')) ? params.get('view') : mtl ? 'mtl' : 'board';
+  const view = tabs.some(([k]) => k === params.get('view')) ? params.get('view') : mtl ? 'sprint' : 'board';
   const itemView = ITEM_VIEWS.includes(view);
   setCrumbs(`<span class="muted">${esc(project.department.name)} /</span> ${esc(project.name)} <span class="code">${esc(project.key)}</span>`);
   const r = project.rights;
@@ -621,8 +622,9 @@ function drawBodyPass() {
     syncControls();
     if (isActive() && !filtered().length) { body.innerHTML = emptyHtml(); return; }
   }
-  if (view === 'mtl' || view === 'plan') {
-    const p = view === 'mtl' ? drawMtlOverview(body, current.project) : drawMtlPlan(body, current.project, current.params || new URLSearchParams(location.hash.split('?')[1] || ''));
+  if (view === 'mtl' || view === 'plan' || view === 'sprint') {
+    const params = current.params || new URLSearchParams(location.hash.split('?')[1] || '');
+    const p = view === 'mtl' ? drawMtlOverview(body, current.project) : view === 'sprint' ? drawMtlSprint(body, current.project, params) : drawMtlPlan(body, current.project, params);
     p.catch(error => { body.innerHTML = `<div class="card empty">${esc(errorMessage(error))}</div>`; });
     return;
   }

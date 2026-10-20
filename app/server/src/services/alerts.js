@@ -109,4 +109,34 @@ async function runAllAlerts(prisma, day = new Date()) {
   return out;
 }
 
-module.exports = { KIND_LABEL, REPEAT, LEVEL, kindsFor, shouldSend, runProjectAlerts, runAllAlerts };
+// Nhắc cập nhật tiến độ hằng tuần (chiều thứ Sáu): mỗi người MỘT thông báo trong ứng dụng — số việc trong sprint hiện tại
+// đã tới ngày bắt đầu mà chưa cập nhật từ 5 ngày trở lên — mở "Cập nhật nhanh". Người nhận: người phụ trách;
+// hạng mục chưa giao người → lãnh đạo bộ phận chủ trì. Chỉ thông báo trong ứng dụng (không qua Viber).
+async function runWeeklyUpdateReminder(prisma, day = new Date(), { staleDays = 5 } = {}) {
+  const projects = await prisma.project.findMany({ where: { kind: 'MTL', archivedAt: null, deletedAt: null, t0Date: { not: null } } });
+  const count = new Map(), leaderCache = new Map();
+  for (const p of projects) {
+    const t = M.currentT(p.t0Date, day);
+    if (t == null || t < 0) continue;
+    const sprint = M.sprintOf(p.t0Date, t);
+    const rows = await prisma.workItem.findMany({ where: { projectId: p.id, archivedAt: null },
+      select: { id: true, parentId: true, baselineStart: true, baselineEnd: true, progressAt: true, startedAt: true, completedAt: true, leadDepartmentId: true, state: { select: { category: true } }, assignees: { select: { userId: true } } } });
+    for (const r of M.leavesOf(rows)) {
+      if (M.isDone(r) || M.isCancelled(r) || !r.baselineStart || r.baselineStart > day) continue;
+      if (!['DUE', 'RUNNING'].includes(M.sprintLane(r, sprint, null, { current: true }))) continue;
+      const last = r.progressAt || r.startedAt;
+      if (last && M.vnDay(day) - M.vnDay(last) < staleDays) continue;
+      let to = r.assignees.map(a => a.userId);
+      if (!to.length) {
+        if (!leaderCache.has(r.leadDepartmentId)) leaderCache.set(r.leadDepartmentId, await approval.deptLeaderIds(prisma, r.leadDepartmentId));
+        to = leaderCache.get(r.leadDepartmentId);
+      }
+      for (const u of new Set(to)) count.set(u, (count.get(u) || 0) + 1);
+    }
+  }
+  let sent = 0;
+  for (const [userId, n] of count) sent += await notify(prisma, [userId], { type: 'MTL_UPDATE_REMINDER', title: `Cập nhật tiến độ tuần này: ${n} việc trong sprint chưa cập nhật`, body: 'Mở "Cập nhật nhanh" và bấm % hoàn thành cho từng việc.', link: '#/sprint' });
+  return { users: count.size, sent };
+}
+
+module.exports = { KIND_LABEL, REPEAT, LEVEL, kindsFor, shouldSend, runProjectAlerts, runAllAlerts, runWeeklyUpdateReminder };
