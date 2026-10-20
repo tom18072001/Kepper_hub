@@ -108,7 +108,8 @@ Soát lại với Công báo trước khi trích dẫn trong hồ sơ chính th�
 **Kết luận cổng: ĐẠT CÓ ĐIỀU KIỆN** — điều kiện chỉ còn các mục Bắt buộc đã nêu ở GĐ1 (GOV-02, PRI-04, RES-01, RES-03) và ban hành quy chế ai nhập MTL bộ phận (GOV-01).
 
 Thay đổi về dữ liệu so với GĐ1:
-- Sprint là **dữ liệu suy ra** từ T0 và kế hoạch gốc — không thêm bảng, không thêm trường.
+- Sprint (giai đoạn) lưu ở **một trường mới `Project.sprintPlan`** (JSON: tên giai đoạn, khoảng bước, mục tiêu) — nhãn **Bảo mật** như MTL, không có dữ liệu cá nhân; chỉ PMO (người quản lý dự án) sửa, mỗi lần sửa ghi nhật ký `MTL_SPRINT_PLAN`. Tiến độ sprint / tháng là dữ liệu suy ra.
+- Thang tiến độ theo đầu việc và tiến độ theo checklist: đổi cách tính, không thêm dữ liệu; cập nhật % từ checklist ghi vào nhật ký hoạt động của hạng mục.
 - **Xuất tệp mới**: mẫu Excel MTL bộ phận chứa hạng mục MTL (Bảo mật) và **họ tên nhân viên** của bộ phận (danh sách chọn người phụ trách).
 - **Mở quyền**: lãnh đạo bộ phận tự nhập MTL của bộ phận mình (trước đây chỉ PMO).
 - Thông báo nhắc cập nhật thứ Sáu: chỉ trong ứng dụng, không qua Viber.
@@ -117,7 +118,7 @@ Thay đổi về dữ liệu so với GĐ1:
 
 | Tập dữ liệu | Nhãn nội bộ | Phân loại pháp lý | Số chủ thể | Cấp độ HTTT |
 |---|---|---|---|---|
-| Sprint, làn, mục tiêu %, tổng kết theo ban (suy ra từ MTL) | **Bảo mật** | Dữ liệu khác, dùng riêng | — | Như GĐ1 |
+| Thiết lập sprint (`Project.sprintPlan`); tiến độ sprint / tháng, tổng kết theo ban (suy ra từ MTL) | **Bảo mật** | Dữ liệu khác, dùng riêng | — | Như GĐ1 |
 | Tệp "MTL bộ phận" xuất ra (hạng mục, ngày, đường găng, mốc, tên người phụ trách, danh sách tên nhân viên bộ phận) | **Bảo mật** | Dữ liệu khác + DLCN cơ bản (họ tên) | Nhân viên một bộ phận | — |
 | Danh sách "Cập nhật nhanh" của từng người | Nội bộ | DLCN cơ bản (việc được giao) | < 500 | — |
 
@@ -144,7 +145,7 @@ Thay đổi về dữ liệu so với GĐ1:
 | PRE-05 | Một phần | Tệp MTL bộ phận chỉ lưu trong thư mục dùng chung nội bộ của bộ phận; không gửi qua email / chat ngoài. Khi có DLP: chặn tệp `MTL-bo-phan-*.xlsx` ra ngoài miền công ty | Nên có |
 | PRE-06 | Một phần | Phản hồi tải tệp `Cache-Control: no-store`; lãnh đạo bộ phận không đặt lại kế hoạch gốc, không đổi tên kế hoạch, không nhập MTL tổng / bộ phận khác; tên kế hoạch trùng kế hoạch khác loại bị từ chối | Bắt buộc |
 | PRE-07 | Đầy đủ | API sprint chỉ trả trường hiển thị trên thẻ | Bắt buộc |
-| DET-01 | Một phần | Thêm hành động nhật ký `MTL_TEMPLATE_EXPORT` (bộ phận, số dòng) và `MTL_IMPORT` có `byDepartmentLeader`; giữ ≥ 12 tháng | Bắt buộc |
+| DET-01 | Một phần | Thêm hành động nhật ký `MTL_TEMPLATE_EXPORT` (bộ phận, số dòng), `MTL_SPRINT_PLAN` (trước / sau) và `MTL_IMPORT` có `byDepartmentLeader`; giữ ≥ 12 tháng | Bắt buộc |
 | DET-02 | N/A | Quy mô nhỏ | — |
 | DET-03 | Nâng cao | Có thể cảnh báo khi một tài khoản tải mẫu MTL nhiều lần trong ngày | Nâng cao |
 | DET-04 | Một phần | Không đổi | Nên có |

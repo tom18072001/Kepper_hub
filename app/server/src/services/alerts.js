@@ -81,11 +81,11 @@ async function runProjectAlerts(prisma, project, day = new Date()) {
       await viber.sendToUsers(prisma, to, `Kepper Hub — ${KIND_LABEL[kind]}: ${code}. Mở: ${viber.appLink(link)}`).catch(() => {});
     }
   }
-  // Ảnh chụp tiến độ hôm nay: toàn dự án + từng bộ phận (đường cong S thực tế).
+  // Ảnh chụp tiến độ hôm nay: toàn dự án + từng bộ phận (đường cong S thực tế), tiến độ theo cây đầu việc như Dashboard.
   const leaves = rows.filter(r => !parents.has(r.id));
   const actualOf = i => actual.get(i.id) ?? i.progress;
   const snap = async (departmentId, list) => {
-    const s = M.spiOf(list, actualOf, day);
+    const s = M.treeProgress(list, actualOf, day);
     if (s.plannedPct == null) return;
     await prisma.progressSnapshot.upsert({ where: { projectId_departmentId_day: { projectId: project.id, departmentId, day: dayDate } },
       create: { projectId: project.id, departmentId, day: dayDate, plannedPct: s.plannedPct, actualPct: s.actualPct, spi: s.spi },
@@ -97,8 +97,8 @@ async function runProjectAlerts(prisma, project, day = new Date()) {
       else await prisma.progressSnapshot.create({ data: { projectId: project.id, departmentId: null, day: dayDate, plannedPct: s.plannedPct, actualPct: s.actualPct, spi: s.spi } });
     });
   };
-  await snap(null, leaves);
-  for (const d of new Set(leaves.map(r => r.leadDepartmentId).filter(Boolean))) await snap(d, leaves.filter(r => r.leadDepartmentId === d));
+  await snap(null, rows);
+  for (const d of new Set(leaves.map(r => r.leadDepartmentId).filter(Boolean))) await snap(d, rows.filter(r => r.leadDepartmentId === d));
   return { project: project.id, alerts, notified };
 }
 

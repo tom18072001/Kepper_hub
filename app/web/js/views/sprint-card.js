@@ -1,4 +1,4 @@
-// Kepper — thẻ hạng mục trong sprint (màn hình Sprint của dự án và trang "Cập nhật nhanh") + nút cập nhật % một chạm.
+// Kepper — thẻ hạng mục (màn hình Sprint, Theo tháng, trang "Cập nhật nhanh") + nút cập nhật một chạm: "✓ Xong" hoặc % khi đang làm dở.
 // Cập nhật % dùng PATCH /api/items/:id (máy chủ tự chuyển cột: > 0% → Đang thực hiện, 100% → Hoàn thành); ghi chú = bình luận của hạng mục.
 import { api } from '../api.js';
 import { personLink } from '../store.js';
@@ -17,29 +17,37 @@ function dueText(i) {
   return left < 0 ? `hạn ${fmtDate(i.baselineEnd)} · trễ ${-left} ngày` : left === 0 ? `hạn hôm nay` : `hạn ${fmtDate(i.baselineEnd)} · còn ${left} ngày`;
 }
 
-// Thanh tiến độ: phần tô = % thực tế; vạch = mục tiêu % cuối sprint theo kế hoạch gốc.
-function progressBar(i, t) {
-  const a = Math.max(0, Math.min(100, i.actual || 0)), g = Math.max(0, Math.min(100, i.targetTo ?? 0));
+// Thanh tiến độ: phần tô = % thực tế; vạch = kế hoạch (hôm nay, hoặc cuối tháng T ở chế độ "Theo tháng").
+function progressBar(i, { t, goal = 'month' }) {
+  const g0 = goal === 'today' ? i.planned : i.targetTo;
+  const a = Math.max(0, Math.min(100, i.actual || 0)), g = Math.max(0, Math.min(100, g0 ?? 0));
   const short = !i.done && a + 0.5 < g;
-  return `<div class="sc-prog" title="Thực tế ${num(a, 1)}% · mục tiêu cuối T${t} ${num(g, 1)}%">
+  const label = goal === 'today' ? 'kế hoạch hôm nay' : `mục tiêu cuối T${t}`;
+  return `<div class="sc-prog" title="Thực tế ${num(a, 1)}% · ${label} ${num(g, 1)}%">
     <div class="sc-track"><i class="sc-fill ${i.done ? 'ok' : short ? (TONE[i.status] || 'warn') : 'ok'}" style="width:${a}%"></i><b class="sc-goal" style="left:${g}%"></b></div>
-    <span class="sc-nums"><b>${num(a, 1)}%</b><span class="muted"> / mục tiêu ${num(g, 1)}%</span></span></div>`;
+    <span class="sc-nums"><b>${num(a, 1)}%</b><span class="muted"> / ${goal === 'today' ? 'KH' : 'mục tiêu'} ${num(g, 1)}%</span></span></div>`;
 }
 
 // Nút cập nhật nhanh: 25 / 50 / 75 / Xong + ô số; ghi chú gửi thành bình luận.
 function quickControls(i) {
   const a = Math.round(i.actual || 0);
   return `<div class="qk" data-qk="${i.id}" data-code="${esc(i.code)}">
-    <span class="qk-seg" role="group" aria-label="Cập nhật tiến độ ${esc(i.code)}">${STEPS.map(v => `<button type="button" class="qk-b${a === v ? ' on' : ''}" data-qv="${v}" data-testid="qk-${esc(i.code)}-${v}">${v}%</button>`).join('')}<button type="button" class="qk-b qk-done" data-qv="100" data-testid="qk-${esc(i.code)}-100">Xong</button></span>
+    <button type="button" class="btn btn-sm qk-xong" data-qv="100" data-testid="qk-${esc(i.code)}-100" title="Đánh dấu việc này đã xong">✓ Xong</button>
+    <span class="qk-seg" role="group" aria-label="Đang làm dở: cập nhật % ${esc(i.code)}">${STEPS.map(v => `<button type="button" class="qk-b${a === v ? ' on' : ''}" data-qv="${v}" data-testid="qk-${esc(i.code)}-${v}">${v}%</button>`).join('')}</span>
     <label class="qk-n-wrap" title="Nhập % khác rồi bấm Enter"><input type="number" class="qk-n" min="0" max="100" step="5" value="${a}" aria-label="Tiến độ % khác ${esc(i.code)}" data-testid="qk-${esc(i.code)}-n">%</label>
     <button type="button" class="link-btn qk-note-btn" data-qnote aria-expanded="false">Ghi chú</button>
     <form class="qk-note" hidden><textarea rows="2" maxlength="2000" placeholder="Vướng mắc, kết quả, cần ai hỗ trợ… (gửi thành bình luận của hạng mục)" aria-label="Ghi chú ${esc(i.code)}"></textarea><button class="btn btn-sm">Gửi</button></form>
   </div>`;
 }
 
-// Một thẻ. opts: { t (số sprint), href(i) → liên kết mở hạng mục, canEdit, showDept, showProject }.
-export function sprintCard(i, { t, href, canEdit = false, showDept = true } = {}) {
+// Một thẻ. opts: { t (tháng T), goal ('month' | 'today'), href(i) → liên kết mở hạng mục, canEdit, showDept, showSprint }.
+// Việc có checklist: tiến độ tự tính theo số mục đã xong — vẫn bấm được "Xong" / % khi không dùng checklist.
+export function sprintCard(i, { t, goal = 'month', href, canEdit = false, showDept = true, showSprint = false, compactDone = false } = {}) {
   const tone = i.done ? 'ok' : TONE[i.status] || '';
+  // Việc đã xong: một dòng gọn, để mắt dồn vào việc còn lại.
+  if (i.done && compactDone) return `<article class="sc sc-ok sc-isdone sc-compact" data-id="${i.id}" data-testid="sc-${esc(i.code)}">
+    <span class="ok-t">✓</span><a class="code" href="${href(i)}">${esc(i.code)}</a>${i.planCode ? `<span class="muted xs">Bước ${esc(i.planCode)}</span>` : ''}
+    <a class="sc-title" href="${href(i)}">${esc(i.title)}</a><span class="grow"></span><span class="muted xs">${showDept && i.leadDepartmentName ? esc(i.leadDepartmentName) + ' · ' : ''}${dueText(i)}</span></article>`;
   const who = i.assignees?.length ? i.assignees.map(u => personLink(u)).join(', ') : '<span class="muted">chưa giao người</span>';
   return `<article class="sc ${tone ? 'sc-' + tone : ''}${i.done ? ' sc-isdone' : ''}" data-id="${i.id}" data-testid="sc-${esc(i.code)}">
     <div class="sc-top"><a class="code" href="${href(i)}">${esc(i.code)}</a>${i.planCode ? `<span class="muted xs">Bước ${esc(i.planCode)}</span>` : ''}
@@ -48,8 +56,9 @@ export function sprintCard(i, { t, href, canEdit = false, showDept = true } = {}
     <a class="sc-title" href="${href(i)}">${esc(i.title)}</a>
     ${i.parentCode && i.parentTitle ? `<div class="muted xs sc-parent">thuộc bước ${esc(i.parentCode)} · ${esc(i.parentTitle.slice(0, 70))}</div>` : ''}
     <div class="sc-meta muted xs">${showDept && i.leadDepartmentName ? `<span>${esc(i.leadDepartmentName)}</span>` : ''}<span>${who}</span><span class="${!i.done && vnDay(i.baselineEnd) < vnDay(Date.now()) ? 'danger-t' : ''}">${dueText(i)}</span>
-      ${i.carriedFrom != null ? `<span class="pill danger sc-carry" title="Phải xong ở sprint T${i.carriedFrom} nhưng chưa xong">chuyển từ T${i.carriedFrom}</span>` : ''}</div>
-    ${progressBar(i, t)}
+      ${i.carriedFrom != null ? `<span class="pill danger sc-carry" title="Phải xong trong tháng T${i.carriedFrom} nhưng chưa xong">trễ từ T${i.carriedFrom}</span>` : ''}
+      ${showSprint && i.sprintName ? `<span class="pill info sc-sprint" title="Sprint">${esc(i.sprintName)}</span>` : ''}</div>
+    ${progressBar(i, { t, goal })}
     ${!i.done && i.progressAt ? `<div class="muted xs">cập nhật ${ago(i.progressAt)}</div>` : !i.done && !i.actual ? '<div class="muted xs">chưa cập nhật tiến độ</div>' : ''}
     ${canEdit && !i.done ? quickControls(i) : ''}
   </article>`;

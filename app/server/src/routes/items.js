@@ -365,33 +365,66 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
   });
 
   // ---------- Checklist ----------
+  // Kepper (MTL): việc lá có checklist → tiến độ = số mục đã xong / tổng số mục (không phải tự khai %).
+  // 100% tự chuyển "Hoàn thành" (nếu không cần duyệt); bỏ đánh dấu khi đã hoàn thành → mở lại "Đang thực hiện".
+  async function syncChecklistProgress(req, project, rights, itemId) {
+    if (project.kind !== 'MTL') return;
+    await prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'item:' + itemId}))`;
+      const item = await tx.workItem.findUnique({ where: { id: itemId }, include: { state: true, checklist: { select: { done: true } }, _count: { select: { children: { where: { archivedAt: null } } } } } });
+      if (!item || item.archivedAt || item._count.children || !item.checklist.length || item.state.category === 'CANCELLED') return;
+      const pct = Math.round(item.checklist.filter(c => c.done).length / item.checklist.length * 100);
+      const cat = item.state.category;
+      if (pct === item.progress && !(cat === 'COMPLETED' && pct < 100)) return;
+      const data = { progress: pct, progressAt: new Date() };
+      const want = pct >= 100 ? 'COMPLETED' : cat === 'COMPLETED' || (pct > 0 && ['BACKLOG', 'UNSTARTED'].includes(cat)) ? 'STARTED' : null;
+      let moved = null;
+      if (want && want !== cat) {
+        const target = await tx.workflowState.findFirst({ where: { projectId: project.id, category: want }, orderBy: { position: 'asc' } });
+        const steps = await approval.stepsForItem(tx, project, item);
+        if (target && !(want === 'COMPLETED' && steps.length)) {
+          const t = await W.transition(tx, { project, rights, item, toState: target });
+          Object.assign(data, t.data, { progress: pct, position: await W.endPosition(tx, target.id) });
+          moved = { ...t, toState: target };
+        }
+      }
+      const updated = await tx.workItem.update({ where: { id: itemId }, data });
+      await activity(tx, itemId, req.user.id, 'UPDATED', { progress: pct });
+      if (moved) await W.afterTransition(tx, { user: req.user, project, item: updated, fromState: item.state, toState: moved.toState, steps: moved.steps });
+    });
+  }
   app.post('/api/items/:id/checklist', auth, async (req, res) => {
     const id = intParam(req.params.id);
-    const { project } = await loadItem(prisma, req.user, id, 'edit');
+    const { project, rights } = await loadItem(prisma, req.user, id, 'edit');
     const count = await prisma.checklistItem.count({ where: { workItemId: id } });
     if (count >= 100) fail(422, 'Tối đa 100 mục checklist');
     const row = await prisma.checklistItem.create({ data: { workItemId: id, title: text(req.body.title, 'Nội dung', { required: true, max: 300 }), position: count } });
     await activity(prisma, id, req.user.id, 'CHECKLIST_ADDED', { title: row.title });
+    await syncChecklistProgress(req, project, rights, id);
     bus.item(project.id, id, req.user.id);
     res.status(201).json(row);
   });
   app.patch('/api/checklist/:id', auth, async (req, res) => {
     const row = await prisma.checklistItem.findUnique({ where: { id: intParam(req.params.id) } });
     if (!row) fail(404, 'Không tìm thấy mục checklist', 'NOT_FOUND');
-    const { project } = await loadItem(prisma, req.user, row.workItemId, 'edit');
+    const { project, rights } = await loadItem(prisma, req.user, row.workItemId, 'edit');
     const data = {};
     if (req.body.title !== undefined) data.title = text(req.body.title, 'Nội dung', { required: true, max: 300 });
     if (req.body.done !== undefined) data.done = !!req.body.done;
     const updated = await prisma.checklistItem.update({ where: { id: row.id }, data });
-    if (data.done !== undefined && data.done !== row.done) await activity(prisma, row.workItemId, req.user.id, data.done ? 'CHECKLIST_DONE' : 'CHECKLIST_UNDONE', { title: row.title });
+    if (data.done !== undefined && data.done !== row.done) {
+      await activity(prisma, row.workItemId, req.user.id, data.done ? 'CHECKLIST_DONE' : 'CHECKLIST_UNDONE', { title: row.title });
+      await syncChecklistProgress(req, project, rights, row.workItemId);
+    }
     bus.item(project.id, row.workItemId, req.user.id);
     res.json(updated);
   });
   app.delete('/api/checklist/:id', auth, async (req, res) => {
     const row = await prisma.checklistItem.findUnique({ where: { id: intParam(req.params.id) } });
     if (!row) fail(404, 'Không tìm thấy mục checklist', 'NOT_FOUND');
-    const { project } = await loadItem(prisma, req.user, row.workItemId, 'edit');
+    const { project, rights } = await loadItem(prisma, req.user, row.workItemId, 'edit');
     await prisma.checklistItem.delete({ where: { id: row.id } });
+    await syncChecklistProgress(req, project, rights, row.workItemId);
     bus.item(project.id, row.workItemId, req.user.id);
     res.json({ ok: true });
   });

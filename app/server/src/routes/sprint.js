@@ -1,14 +1,19 @@
-// Kepper — Sprint theo tháng T của Master Timeline (mỗi tháng T là một sprint, tự sinh từ T0, không ai phải tạo tay):
-// - màn hình Sprint của dự án: phải xong trong sprint / đang chạy (mục tiêu % cuối sprint) / chuẩn bị sprint sau, tổng kết theo ban;
-// - "Cập nhật nhanh": việc của tôi (và việc chưa giao người của ban tôi, nếu tôi là lãnh đạo ban) trong sprint hiện tại;
+// Kepper — Sprint của dự án Master Timeline. Sprint = một giai đoạn gồm một nhóm bước MTL tổng, có tên
+// (vd. "Chuyển nhượng dự án (B1–9)", "Đề xuất NƠXH → CTĐT | 10-12"), PMO thiết lập; chưa thiết lập thì gợi ý theo mốc ◆.
+// - Sprint của dự án: lộ trình các sprint (tiến độ theo đầu việc, tình trạng, mốc) + chi tiết sprint chọn (bước + MTL bộ phận);
+// - Theo tháng: trong tháng T phải xong gì / đang chạy / chuẩn bị tháng sau, tổng kết theo ban;
+// - "Cập nhật nhanh": việc của tôi (và việc chưa giao người của ban tôi, nếu tôi là lãnh đạo ban) đang trong kỳ thực hiện;
 // - mẫu Excel MTL bộ phận điền sẵn (tải → sửa → nhập lại bằng "Nhập MTL bộ phận").
 const ExcelJS = require('exceljs');
 const { fail, intParam } = require('../lib/http');
 const { isItAdmin } = require('../lib/permissions');
+const { Prisma } = require('@prisma/client');
+const bus = require('../services/bus');
 const { loadProject, visibleProjectsWhere } = require('../services/access');
 const approval = require('../services/approval');
 const M = require('../services/mtl');
 const MP = require('../services/mtl-project');
+const S = require('../services/mtl-sprints');
 
 const ATTN = ['OVERDUE', 'BEHIND', 'LATE_START'];
 // Thứ tự trong một làn: chưa xong trước; trễ / chậm trước; đường găng, mốc; rồi theo hạn kế hoạch.
@@ -17,7 +22,7 @@ const byRank = (a, b) => { const x = rank(a), y = rank(b); for (let k = 0; k < x
 const vnDate = d => { if (!d) return null; const x = new Date(new Date(d).getTime() + 7 * 3_600_000); return `${String(x.getUTCDate()).padStart(2, '0')}/${String(x.getUTCMonth() + 1).padStart(2, '0')}/${x.getUTCFullYear()}`; };
 
 // Một hạng mục trên thẻ sprint: chỉ trường cần hiển thị.
-function card(i, { sprint, project, deptName, byId }) {
+function card(i, { sprint, project, deptName, byId, sprintNameOf }) {
   const parent = i.parentId ? byId.get(i.parentId) : null;
   const target = M.sprintTarget(i, sprint);
   const done = M.isDone(i);
@@ -27,9 +32,16 @@ function card(i, { sprint, project, deptName, byId }) {
     actual: i.actual, planned: i.planned, status: i.status, statusLabel: i.statusLabel, variance: i.variance, lateDays: i.lateDays, daysLeft: i.daysLeft,
     progressAt: i.progressAt, completedAt: i.completedAt, done, targetFrom: target.from, targetTo: target.to,
     carriedFrom: !done && i.baselineEnd < sprint.start ? M.currentT(project.t0Date, i.baselineEnd) : null,
-    parentCode: parent?.planCode || null, parentTitle: parent?.title || null,
+    parentCode: parent?.planCode || null, parentTitle: parent?.title || null, sprintName: sprintNameOf ? sprintNameOf(i) : null,
   };
 }
+// Một dòng trong chi tiết sprint (bước tổng và dòng con MTL bộ phận).
+const row = (i, depth, deptName) => ({
+  id: i.id, code: i.code, planCode: i.planCode, title: i.title, depth, children: i.children, parentId: i.parentId,
+  leadDepartmentId: i.leadDepartmentId, leadDepartmentName: deptName[i.leadDepartmentId] || '', assignees: i.assignees, critical: i.critical, milestone: i.milestone,
+  startT: i.startT, endT: i.endT, baselineStart: i.baselineStart, baselineEnd: i.baselineEnd, actual: i.actual, planned: i.planned, status: i.status, statusLabel: i.statusLabel,
+  variance: i.variance, lateDays: i.lateDays, daysLeft: i.daysLeft, progressAt: i.progressAt, completedAt: i.completedAt, done: M.isDone(i),
+});
 
 module.exports = function mountSprint(app, { prisma, auth, audit }) {
   const departmentsMap = async () => {
@@ -38,16 +50,71 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
   };
   const isDeptLeader = async (user, departmentId) => departmentId != null && (await approval.deptLeaderIds(prisma, departmentId)).includes(user.id);
 
-  // ---------- Sprint của một dự án ----------
-  // ?t= số tháng T của sprint (mặc định: sprint hiện tại).
-  app.get('/api/projects/:id/mtl-sprint', auth, async (req, res) => {
+  // ---------- Sprint (giai đoạn) của một dự án ----------
+  // ?s= số thứ tự sprint (0…). Mặc định: sprint đang làm.
+  app.get('/api/projects/:id/mtl-sprints', auth, async (req, res) => {
+    const { project, rights } = await loadProject(prisma, req.user, intParam(req.params.id));
+    if (project.kind !== 'MTL') fail(422, 'Dự án này không theo Master Timeline', 'NOT_MTL');
+    res.setHeader('Cache-Control', 'private, no-store');
+    const now = new Date();
+    const { items, cfg, actualOf } = await MP.computeProject(prisma, project, req.user, now);
+    const sp = S.buildSprints(project, items, actualOf, now, cfg);
+    const curT = project.t0Date ? M.currentT(project.t0Date, now) : null;
+    const lastT = project.t0Date ? Math.max(0, curT, ...items.map(i => (i.baselineEnd ? M.currentT(project.t0Date, i.baselineEnd) : 0))) : 0;
+    const asked = req.query.s == null || req.query.s === '' ? null : Number(req.query.s);
+    const k = sp.list.length ? (Number.isInteger(asked) && asked >= 0 && asked < sp.list.length ? asked : sp.current ?? 0) : null;
+    const dept = await departmentsMap();
+    // Chi tiết sprint chọn: bước tổng theo thứ tự bước, mỗi bước kèm các dòng con (MTL bộ phận) ngay dưới.
+    const rows = [];
+    let byDepartment = [];
+    if (k != null) {
+      const members = items.filter(i => sp.indexOf.get(i.id) === k);
+      const ids = new Set(members.map(i => i.id)), kids = new Map();
+      for (const i of members) if (i.parentId && ids.has(i.parentId)) { if (!kids.has(i.parentId)) kids.set(i.parentId, []); kids.get(i.parentId).push(i); }
+      const order = (a, b) => S.compareSteps(a.planCode || '', b.planCode || '') || a.id - b.id;
+      const walk = (list, depth) => { for (const i of [...list].sort(order)) { rows.push(row(i, depth, dept.name)); walk(kids.get(i.id) || [], depth + 1); } };
+      walk(members.filter(i => !(i.parentId && ids.has(i.parentId))), 0);
+      byDepartment = dept.rows.map(d => {
+        const mine = members.filter(i => i.leadDepartmentId === d.id);
+        return mine.length ? { id: d.id, name: d.name, code: d.code, ...M.kpiOf(mine, actualOf, now, cfg) } : null;
+      }).filter(Boolean);
+    }
+    res.json({
+      project: { id: project.id, key: project.key, name: project.name, t0Date: project.t0Date, currentT: curT, totalT: lastT },
+      configured: sp.configured, text: S.sprintText(sp.plan), unassigned: sp.unassigned, errors: sp.configured ? sp.errors : [],
+      sprints: sp.list, current: sp.current, selected: k, rows, byDepartment, canEdit: rights.canEdit, canManage: rights.canManage, generatedAt: now,
+    });
+  });
+
+  // Thiết lập sprint (PMO): mỗi dòng "Tên | các bước | mục tiêu" hoặc "Tên (B1–9)". Để trống = bỏ thiết lập (quay về gợi ý theo mốc).
+  app.put('/api/projects/:id/mtl-sprints', auth, async (req, res) => {
+    const { project } = await loadProject(prisma, req.user, intParam(req.params.id), 'manage');
+    if (project.kind !== 'MTL') fail(422, 'Dự án này không theo Master Timeline', 'NOT_MTL');
+    const raw = String(req.body?.text ?? '');
+    if (raw.length > 10_000) fail(422, 'Thiết lập sprint quá dài', 'TOO_LONG');
+    const { sprints, errors } = S.parseSprintText(raw);
+    if (errors.length) fail(422, errors.slice(0, 5).join(' · '), 'SPRINT_INVALID');
+    const all = await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null }, select: { id: true, planCode: true, parentId: true } });
+    const check = S.assignSprints(all, sprints);
+    if (check.errors.length) fail(422, check.errors.slice(0, 5).join(' · '), 'SPRINT_INVALID');
+    const value = sprints.length ? sprints : null;
+    await prisma.project.update({ where: { id: project.id }, data: { sprintPlan: value ?? Prisma.DbNull } });
+    await audit(req, 'MTL_SPRINT_PLAN', 'Project', project.id, { sprintPlan: project.sprintPlan }, { sprintPlan: value });
+    bus.project(project.id, req.user.id);
+    res.json({ ok: true, sprints: sprints.length, unassigned: check.unassigned });
+  });
+
+  // ---------- Theo tháng: tháng T của một dự án ----------
+  // ?t= số tháng T (mặc định: tháng hiện tại).
+  app.get('/api/projects/:id/mtl-month', auth, async (req, res) => {
     const { project, rights } = await loadProject(prisma, req.user, intParam(req.params.id));
     if (project.kind !== 'MTL') fail(422, 'Dự án này không theo Master Timeline', 'NOT_MTL');
     res.setHeader('Cache-Control', 'private, no-store');
     const base = { id: project.id, key: project.key, name: project.name, t0Date: project.t0Date };
     if (!project.t0Date) return res.json({ project: { ...base, currentT: null, totalT: 0 }, sprint: null, sprints: [], lanes: { due: [], running: [], next: [] }, milestones: [], byDepartment: [], canEdit: rights.canEdit, empty: true });
     const now = new Date();
-    const { items, actualOf } = await MP.computeProject(prisma, project, req.user, now);
+    const { items, actualOf, cfg } = await MP.computeProject(prisma, project, req.user, now);
+    const sprintNameOf = S.buildSprints(project, items, actualOf, now, cfg).nameOf;
     const curT = M.currentT(project.t0Date, now);
     const lastT = Math.max(0, curT, ...items.map(i => (i.baselineEnd ? M.currentT(project.t0Date, i.baselineEnd) : 0)));
     const asked = req.query.t == null || req.query.t === '' ? null : Number(req.query.t);
@@ -57,7 +124,7 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
     const dept = await departmentsMap();
     const byId = new Map(items.map(i => [i.id, i]));
     const leaves = M.leavesOf(items).filter(i => i.status !== 'CANCELLED');
-    const ctx = { sprint, project, deptName: dept.name, byId };
+    const ctx = { sprint, project, deptName: dept.name, byId, sprintNameOf };
     const lanes = { due: [], running: [], next: [] };
     for (const i of leaves) {
       const lane = M.sprintLane(i, sprint, next, { current: state === 'CURRENT' });
@@ -100,7 +167,7 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
     });
   });
 
-  // ---------- Cập nhật nhanh: việc của tôi trong sprint hiện tại (mọi dự án MTL) ----------
+  // ---------- Cập nhật nhanh: việc của tôi đang trong kỳ thực hiện — tháng hiện tại hoặc trễ chưa xong (mọi dự án MTL) ----------
   // Gồm: hạng mục lá tôi là người phụ trách; lãnh đạo ban thêm hạng mục của ban chưa giao người. Bỏ việc đã xong trước sprint.
   app.get('/api/my/sprint', auth, async (req, res) => {
     if (isItAdmin(req.user)) fail(403, 'Tài khoản quản trị hệ thống không có số liệu công việc', 'FORBIDDEN');
@@ -111,11 +178,11 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
     const out = [];
     for (const p of projects) {
       const { rights } = await loadProject(prisma, req.user, p.id);
-      const { items } = await MP.computeProject(prisma, p, req.user, now);
+      const { items, actualOf, cfg } = await MP.computeProject(prisma, p, req.user, now);
       const t = Math.max(0, M.currentT(p.t0Date, now));
       const sprint = M.sprintOf(p.t0Date, t), next = M.sprintOf(p.t0Date, t + 1);
       const byId = new Map(items.map(i => [i.id, i]));
-      const ctx = { sprint, project: p, deptName: dept.name, byId };
+      const ctx = { sprint, project: p, deptName: dept.name, byId, sprintNameOf: S.buildSprints(p, items, actualOf, now, cfg).nameOf };
       const rows = [];
       for (const i of M.leavesOf(items)) {
         if (i.status === 'CANCELLED') continue;

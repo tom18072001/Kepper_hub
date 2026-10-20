@@ -178,3 +178,55 @@
 @media (max-width:560px){.qk-list{grid-template-columns:1fr}.qk-b{padding:6px 9px}}
 .qk-done-list summary{cursor:pointer;margin:4px 0}
 .hm-quick{margin-left:auto}
+/* Sprint theo giai đoạn: chế độ xem, lộ trình, chi tiết sprint */
+.sp-modes{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sp-modes .chips{flex:1}
+.sp-modes a.chip{text-decoration:none}
+.sp-note{display:flex;gap:10px;align-items:flex-start;padding:10px 14px!important;background:var(--brand-050);border-color:var(--brand-100);font-size:.88rem}
+.sp-note.warn{background:var(--warn-soft);border-color:var(--warn-line,var(--border))}
+.sp-note code,.modal code{background:var(--surface-3);padding:1px 5px;border-radius:4px;font-size:.84em}
+.rd{display:flex;flex-direction:column}
+.rd-row{display:grid;grid-template-columns:minmax(200px,300px) minmax(0,1fr) 150px;gap:12px;align-items:center;padding:7px 6px;border-radius:var(--radius-sm);text-decoration:none;color:inherit;border-bottom:1px solid var(--border)}
+.rd-row:not(.rd-head):hover{background:var(--surface-2)}
+.rd-row.sel{background:var(--brand-050);box-shadow:inset 3px 0 0 var(--brand)}
+.rd-head{border-bottom:1px solid var(--border-strong);padding-top:0}
+.rd-name{display:flex;flex-direction:column;gap:1px;min-width:0}
+.rd-name b{font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rd-track{position:relative;height:22px}
+.rd-axis{height:16px;font-size:10px;color:var(--muted)}
+.rd-axis span{position:absolute;top:0;transform:translateX(-2px);white-space:nowrap}
+.rd-bar{position:absolute;top:3px;height:16px;border-radius:5px;background:var(--surface-3);border:1px solid var(--border-strong);overflow:visible;display:block}
+.rd-bar.ok{border-color:var(--ok)} .rd-bar.warn{border-color:var(--warn)} .rd-bar.danger{border-color:var(--danger)}
+.rd-fill{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--brand);display:block}
+.rd-bar.ok .rd-fill{background:var(--ok)} .rd-bar.warn .rd-fill{background:var(--warn)} .rd-bar.danger .rd-fill{background:var(--danger)}
+.rd-goal{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--text);transform:translateX(-1px)}
+.rd-ms{position:absolute;top:2px;transform:translateX(-50%);font-size:12px;color:var(--brand-700);line-height:18px}
+.rd-ms.done{color:var(--ok)}
+.rd-today{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--danger);opacity:.75}
+.rd-num{display:flex;align-items:center;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.rd-num b{font-size:.95rem}
+@media (max-width:760px){.rd-row{grid-template-columns:1fr;gap:4px}.rd-head{display:none}.rd-num{justify-content:flex-start}}
+.sp-goal{margin:0;font-size:.9rem}
+.sp-ms{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
+.sp-ms-i{color:inherit;text-decoration:none;font-weight:600}
+.sp-steps{display:flex;flex-direction:column;gap:10px}
+.sp-step{display:flex;flex-direction:column;gap:8px}
+.sp-step.leaf>.sc{max-width:none}
+.sc-parent{background:var(--surface-2)}
+.sp-kids{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:8px;padding-left:22px;border-left:2px solid var(--border);margin-left:10px}
+@media (max-width:560px){.sp-kids{grid-template-columns:1fr;padding-left:10px;margin-left:4px}}
+.sc-sprint{font-size:.72rem}
+.qk-xong{color:var(--ok);border-color:var(--ok);font-weight:700}
+.qk-xong:hover{background:var(--ok-soft)}
+.sp-text{width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.86rem;line-height:1.55}
+/* Kế hoạch & Gantt: hàng đầu nhóm sprint */
+.mtl-ptable tr.mp-sprint td{background:var(--surface-3);border-top:2px solid var(--border-strong);cursor:pointer}
+.mtl-ptable tr.mp-sprint:hover td{background:var(--brand-050)}
+.mp-fold{border:none;background:none;font:inherit;cursor:pointer;color:var(--muted);width:20px;padding:0}
+.g-bar.g-sprint{height:14px;top:2px;border-radius:3px;border:2px solid var(--brand-700);background:var(--brand-050)}
+.g-bar.g-sprint i{background:var(--brand)}
+.hm-sprint{font-size:.86rem;padding:6px 8px;border-radius:var(--radius-sm);background:var(--surface-2);text-decoration:none;color:inherit;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.rd-row,.rd-row:hover,.rd-row *{text-decoration:none!important}
+.sc-compact{flex-direction:row;align-items:center;gap:8px;padding:6px 12px;flex-wrap:wrap}
+.sc-compact .sc-title{font-weight:500}
+.sp-kids{align-items:start}

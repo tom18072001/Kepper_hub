@@ -71,11 +71,22 @@ test('tiến độ kế hoạch, trạng thái nhanh / chậm / trễ, rollup, S
   assert.equal(M.statusOf(d, 0, day).code, 'NOT_DUE');
   assert.equal(M.statusOf(e, 100, day).code, 'DONE_ON_TIME');
   assert.equal(M.statusOf(base(6, '2027-02-01', '2027-02-28'), 0, day).code, 'LATE_START');
-  // Rollup: cha lấy bình quân gia quyền (theo thời lượng) của con.
+  // Rollup: cha = bình quân các việc con, mỗi việc con một phần bằng nhau (trọng số MTL ghi đè).
   const parent = base(10, '2027-01-01', '2027-03-31', { progress: 0 });
   const k1 = base(11, '2027-01-01', '2027-01-31', { parentId: 10, progress: 100 }), k2 = base(12, '2027-02-01', '2027-03-02', { parentId: 10, progress: 0 });
-  const act = M.rollup([parent, k1, k2]);
-  assert.equal(act.get(10), 50.8);
+  assert.equal(M.rollup([parent, k1, k2]).get(10), 50);
+  assert.equal(M.rollup([parent, { ...k1, weight: 3 }, k2]).get(10), 75);
+  // Đầu mục có 5 việc con, xong 1 việc → 20%; xong thêm 1 việc và 1 việc 50% → 50%.
+  const big = base(20, '2027-01-01', '2027-03-31');
+  const five = [1, 2, 3, 4, 5].map(n => base(20 + n, '2027-01-01', '2027-03-31', { parentId: 20 }));
+  const doneSt = { state: { category: 'COMPLETED' } };
+  assert.equal(M.rollup([big, { ...five[0], ...doneSt }, ...five.slice(1)]).get(20), 20);
+  assert.equal(M.rollup([big, { ...five[0], ...doneSt }, { ...five[1], ...doneSt }, { ...five[2], progress: 50 }, five[3], five[4]]).get(20), 50);
+  // Theo cây: dự án 2 bước tổng — bước A có 4 việc con (xong 2), bước B không có con (0%) → (50 + 0) / 2 = 25%.
+  const A = base(30, '2027-01-01', '2027-01-31'), B = base(35, '2027-01-01', '2027-01-31');
+  const four = [1, 2, 3, 4].map(n => base(30 + n, '2027-01-01', '2027-01-31', { parentId: 30, ...(n <= 2 ? doneSt : {}) }));
+  const tp = M.treeProgress([A, ...four, B], i => (M.isDone(i) ? 100 : i.progress), day);
+  assert.equal(tp.actualPct, 25); assert.equal(tp.plannedPct, 100); assert.equal(tp.spi, 0.25);
   const all = [a, b, c, d, e], actualOf = i => (M.isDone(i) ? 100 : i.progress);
   const s = M.spiOf(all, actualOf, day);
   assert.ok(s.spi > 0 && s.spi < 2);

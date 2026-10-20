@@ -10,6 +10,7 @@ const { permissionScope, isItAdmin } = require('../lib/permissions');
 const { verifyUpload } = require('../lib/files');
 const { loadProject, loadItem, visibleProjectsWhere, itemVisibleWhere } = require('../services/access');
 const MP = require('../services/mtl-project');
+const S = require('../services/mtl-sprints');
 const { activity } = require('../services/events');
 const { matchPeople } = require('../services/people');
 const approval = require('../services/approval');
@@ -154,11 +155,13 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
     const deptName = Object.fromEntries(departments.map(d => [d.id, d.name]));
     const leaves = M.leavesOf(items);
     const totalT = Math.max(0, ...items.map(i => i.endT ?? 0), project.t0Date ? M.currentT(project.t0Date, items.reduce((m, i) => (i.baselineEnd && i.baselineEnd > m ? i.baselineEnd : m), now)) ?? 0 : 0);
-    const summary = M.kpiOf(leaves, actualOf, now, cfg);
-    const byDepartment = departments.map(d => ({ id: d.id, name: d.name, code: d.code, ...M.kpiOf(leaves.filter(i => i.leadDepartmentId === d.id), actualOf, now, cfg) })).filter(r => r.items);
+    // Tiến độ theo cây đầu việc (mỗi việc con chia đều phần của việc cha); đếm chậm / trễ trên việc lá.
+    const summary = M.kpiOf(items, actualOf, now, cfg);
+    const byDepartment = departments.map(d => ({ id: d.id, name: d.name, code: d.code, ...M.kpiOf(items.filter(i => i.leadDepartmentId === d.id), actualOf, now, cfg) })).filter(r => r.items);
+    const sp = S.buildSprints(project, items, actualOf, now, cfg);
     const milestones = items.filter(i => i.milestone).map(i => ({ id: i.id, code: i.code, step: i.planCode, title: i.title, baselineEnd: i.baselineEnd, forecastEnd: i.forecastEnd, completedAt: i.completedAt, status: i.status, statusLabel: i.statusLabel, critical: i.critical }));
     const nextMilestone = milestones.filter(m => !m.completedAt && m.baselineEnd).sort((a, b) => a.baselineEnd - b.baselineEnd)[0] || null;
-    const curve = project.t0Date ? M.plannedCurve(leaves, project.t0Date, totalT) : [];
+    const curve = project.t0Date ? M.plannedCurve(items, project.t0Date, totalT) : [];
     const snaps = await prisma.progressSnapshot.findMany({ where: { projectId: project.id, departmentId: null }, orderBy: { day: 'asc' }, select: { day: true, plannedPct: true, actualPct: true, spi: true } });
     const alerts = await prisma.progressAlert.findMany({ where: { projectId: project.id, workItem: { archivedAt: null, AND: [itemVisibleWhere(req.user)] } }, orderBy: { createdAt: 'desc' }, take: 40,
       select: { id: true, kind: true, level: true, day: true, variance: true, lateDays: true, workItem: { select: { id: true, number: true, title: true, leadDepartmentId: true } } } });
@@ -166,7 +169,8 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
     res.json({
       project: { id: project.id, key: project.key, name: project.name, t0Date: project.t0Date, currentT: M.currentT(project.t0Date, now), totalT, alertConfig: cfg },
       generatedAt: now, summary, byDepartment, milestones, nextMilestone, curve, actualCurve: snaps,
-      items: items.map(i => ({ ...i, leadDepartmentName: deptName[i.leadDepartmentId] || '' })),
+      items: items.map(i => ({ ...i, leadDepartmentName: deptName[i.leadDepartmentId] || '', sprint: sp.indexOf.get(i.id) ?? null })),
+      sprints: sp.list, sprintConfigured: sp.configured, currentSprint: sp.current,
       alerts: alerts.map(a => ({ ...a, label: A.KIND_LABEL[a.kind], item: { id: a.workItem.id, code: `${project.key}-${a.workItem.number}`, title: a.workItem.title, department: deptName[a.workItem.leadDepartmentId] || '' }, workItem: undefined })),
       plans: await prisma.plan.findMany({ where: { projectId: project.id }, select: { id: true, name: true, kind: true, departmentId: true, sheetName: true, fileName: true, createdAt: true }, orderBy: { id: 'asc' } }),
     });
@@ -263,8 +267,10 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
       const leaves = M.leavesOf(items);
       const mine = leaves.filter(i => i.assignees.some(a => a.id === req.user.id) || (req.user.departmentId != null && i.leadDepartmentId === req.user.departmentId));
       const next = items.filter(i => i.milestone && !i.completedAt && i.baselineEnd).sort((a, b) => a.baselineEnd - b.baselineEnd)[0];
+      const sp = S.buildSprints(p, items, actualOf, now, cfg), cs = sp.current != null ? sp.list[sp.current] : null;
       out.push({ id: p.id, key: p.key, name: p.name, t0Date: p.t0Date, currentT: M.currentT(p.t0Date, now), totalT: Math.max(0, ...items.map(i => i.endT ?? 0)),
-        summary: M.kpiOf(leaves, actualOf, now, cfg), mine: M.kpiOf(mine, actualOf, now, cfg),
+        summary: M.kpiOf(items, actualOf, now, cfg), mine: M.kpiOf(mine, actualOf, now, cfg),
+        currentSprint: cs ? { index: cs.index, name: cs.name, stepsLabel: cs.stepsLabel, plannedPct: cs.plannedPct, actualPct: cs.actualPct, status: cs.status, statusLabel: cs.statusLabel, stepsDone: cs.stepsDone, steps: cs.steps, count: sp.list.length, configured: sp.configured } : null,
         attention: items.filter(i => ['OVERDUE', 'BEHIND', 'LATE_START'].includes(i.status) && (i.critical || i.milestone || mine.includes(i))).slice(0, 12)
           .map(i => ({ id: i.id, code: i.code, title: i.title, status: i.status, statusLabel: i.statusLabel, variance: i.variance, lateDays: i.lateDays, critical: i.critical, milestone: i.milestone, leadDepartmentId: i.leadDepartmentId })),
         nextMilestone: next ? { id: next.id, code: next.code, title: next.title, baselineEnd: next.baselineEnd, status: next.status, statusLabel: next.statusLabel } : null });

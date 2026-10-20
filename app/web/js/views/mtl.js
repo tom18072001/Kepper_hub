@@ -71,8 +71,8 @@ export async function drawMtlOverview(body, project) {
   const tile = (label, value, sub, tone, href, testid) => `<a class="mtl-tile ${tone || ''}" href="${href}" data-testid="${testid}"><span class="mtl-tl">${label}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ''}</a>`;
   const nm = d.nextMilestone;
   const tiles = `<div class="mtl-tiles">
-    ${tile('Sprint hiện tại', p.currentT == null ? '—' : `T${p.currentT}<span class="muted">/${p.totalT}</span>`, p.t0Date ? `mỗi tháng T là một sprint · T0 = ${fmtDate(p.t0Date).slice(3)}` : 'Chưa đặt T0', '', `#/projects/${project.id}?view=sprint`, 'mtl-tile-t')}
-    ${tile('Kế hoạch / thực tế', `${pct(s.plannedPct)} <span class="muted">/</span> ${pct(s.actualPct)}`, 'tiến độ có trọng số (thời lượng)', '', planLink(project), 'mtl-tile-progress')}
+    ${(() => { const cs = d.currentSprint != null ? d.sprints[d.currentSprint] : null; return tile('Sprint đang làm', cs ? `${cs.index + 1}<span class="muted">/${d.sprints.length}</span>` : '—', cs ? `${esc(cs.name)} · ${pct(cs.actualPct)}` : p.t0Date ? `T${p.currentT}/${p.totalT}` : 'Chưa đặt T0', cs ? TONE[cs.status] || '' : '', `#/projects/${project.id}?view=sprint`, 'mtl-tile-t'); })()}
+    ${tile('Kế hoạch / thực tế', `${pct(s.plannedPct)} <span class="muted">/</span> ${pct(s.actualPct)}`, 'theo đầu việc: việc con chia đều phần của việc cha', '', planLink(project), 'mtl-tile-progress')}
     ${tile('SPI', s.spi == null ? '—' : num(s.spi, 2), s.spi == null ? 'chưa có hạng mục tới kỳ' : s.spi >= 1 ? 'đúng / vượt kế hoạch' : 'chậm so với kế hoạch', spiTone(s.spi), planLink(project), 'mtl-tile-spi')}
     ${tile('KPI tiến độ', s.score == null ? '—' : s.score, s.onTimeRate == null ? '' : `đúng hạn ${s.onTimeRate}%`, scoreTone(s.score), '#mtlDepts', 'mtl-tile-kpi')}
     ${tile('Chậm tiến độ', s.behind, 'gồm chậm khởi động', s.behind ? 'warn' : '', planLink(project, { st: 'attn' }), 'mtl-tile-behind')}
@@ -93,7 +93,12 @@ export async function drawMtlOverview(body, project) {
       <section class="card mtl-curve"><div class="mtl-h"><h3>Đường cong S — kế hoạch / thực tế</h3><span class="muted xs">% tích luỹ theo tháng T</span></div>${curveSvg(d)}</section>
       <section class="card"><div class="mtl-h"><h3>Cảnh báo gần đây</h3><span class="muted xs">tự động 07:30 hằng ngày</span></div><div class="mtl-alerts" data-testid="mtl-alerts">${alerts || '<p class="muted sm">Chưa có cảnh báo.</p>'}</div></section>
     </div>
-    <section class="card" id="mtlDepts"><div class="mtl-h"><h3>Theo bộ phận chủ trì</h3><span class="muted xs">KPI = 50% SPI + 30% đúng hạn + 20% đường găng không trễ · tính trên kế hoạch gốc</span></div>
+    ${d.sprints?.length ? `<section class="card"><div class="mtl-h"><h3>Theo sprint (giai đoạn)</h3><span class="muted xs">${d.sprintConfigured ? 'do PMO thiết lập' : 'gợi ý theo mốc ◆ — PMO thiết lập ở tab Sprint'} · tiến độ theo đầu việc: mỗi việc con chia đều phần của bước</span></div>
+      <div class="tbl-scroll"><table class="table" data-testid="mtl-sprints"><thead><tr><th>Sprint</th><th>Bước</th><th>Thời gian</th><th class="num">% KH</th><th class="num">% TT</th><th class="num">SPI</th><th>Tình trạng</th><th>Mốc</th></tr></thead>
+      <tbody>${d.sprints.map(x => `<tr class="clickable" data-href="#/projects/${project.id}?view=sprint&s=${x.index}"><td><b>${x.index + 1}. ${esc(x.name)}</b>${x.index === d.currentSprint ? ' <span class="pill info">đang làm</span>' : ''}</td><td class="nowrap">${esc(x.stepsLabel || '')}</td>
+        <td class="nowrap">${x.startT != null ? `T${x.startT}–T${x.endT}` : '—'}</td><td class="num">${pct(x.plannedPct)}</td><td class="num"><b>${pct(x.actualPct)}</b></td><td class="num"><span class="pill ${spiTone(x.spi)}">${x.spi == null ? '—' : num(x.spi, 2)}</span></td>
+        <td>${statusPill({ status: x.status, statusLabel: x.statusLabel })}</td><td class="sm">${x.milestones.length ? `◆ ${esc(x.milestones[x.milestones.length - 1].title.slice(0, 50))}` : '—'}</td></tr>`).join('')}</tbody></table></div></section>` : ''}
+    <section class="card" id="mtlDepts"><div class="mtl-h"><h3>Theo bộ phận chủ trì</h3><span class="muted xs">KPI = 50% SPI + 30% đúng hạn + 20% đường găng không trễ · tính trên kế hoạch gốc · tiến độ theo đầu việc</span></div>
       <div class="tbl-scroll"><table class="table mtl-depts" data-testid="mtl-departments"><thead><tr><th>Bộ phận</th><th class="num">Hạng mục</th><th class="num">% KH</th><th class="num">% TT</th><th class="num">SPI</th><th class="num">Chậm</th><th class="num">Trễ</th><th class="num">Găng trễ</th><th class="num">KPI</th></tr></thead><tbody>${deptRows || '<tr><td colspan="9" class="muted">—</td></tr>'}</tbody></table></div></section>
     <section class="card" id="mtlPeople" hidden></section>
     <section class="card"><div class="mtl-h"><h3>Mốc chính ◆</h3></div><div class="tbl-scroll"><table class="table" data-testid="mtl-milestones"><thead><tr><th>Bước</th><th>Mốc</th><th>Kế hoạch</th><th>Thực tế / dự báo</th><th>Trạng thái</th></tr></thead><tbody>${ms || '<tr><td colspan="5" class="muted">—</td></tr>'}</tbody></table></div></section>
@@ -135,12 +140,13 @@ function curveSvg(d) {
 // ---------- Kế hoạch & Gantt ----------
 export async function drawMtlPlan(body, project, params) {
   const d = await load(project);
-  const f = { dept: params.get('dept') || '', st: params.get('st') || '', plan: params.get('plan') || '', q: params.get('q') || '', gz: params.get('gz') || '', gw: params.get('gw') || '' };
+  const f = { dept: params.get('dept') || '', st: params.get('st') || '', plan: params.get('plan') || '', q: params.get('q') || '', gz: params.get('gz') || '', gw: params.get('gw') || '', sp: params.get('sp') || '' };
   const T = Math.max(1, d.project.totalT), cur = d.project.currentT;
   const byParent = new Map();
   for (const i of d.items) { const k = i.parentId && d.items.some(x => x.id === i.parentId) ? i.parentId : 0; if (!byParent.has(k)) byParent.set(k, []); byParent.get(k).push(i); }
   const matches = i => (!f.dept || String(i.leadDepartmentId) === f.dept || (i.supportDepartmentIds || []).map(String).includes(f.dept))
     && (!f.plan || String(i.planId) === f.plan)
+    && (!f.sp || String(i.sprint ?? 'none') === f.sp)
     && (!f.st || (f.st === 'attn' ? ATTN.includes(i.status) : f.st === 'critical' ? i.critical : f.st === 'milestone' ? i.milestone : i.status === f.st))
     && (!f.q || (i.title + ' ' + (i.planCode || '') + ' ' + i.code).toLowerCase().includes(f.q.toLowerCase()));
   const keep = new Set();
@@ -150,7 +156,7 @@ export async function drawMtlPlan(body, project, params) {
   const add = (list, depth) => { for (const i of list) { if (!keep.has(i.id)) continue; rows.push([i, depth]); add(byParent.get(i.id) || [], depth + 1); } };
   add(byParent.get(0) || [], 0);
   const dayT = (day) => { if (!day) return null; const a = new Date(new Date(day).getTime() + 7 * 3_600_000), b = new Date(new Date(d.project.t0Date).getTime() + 7 * 3_600_000); return (a.getUTCFullYear() - b.getUTCFullYear()) * 12 + a.getUTCMonth() - b.getUTCMonth() + (a.getUTCDate() - 1) / 30.5; };
-  // Khung Gantt theo sprint (mỗi tháng T là một sprint): "near" = 12 sprint quanh sprint hiện tại (mặc định khi dự án dài), "all" = toàn bộ.
+  // Khung Gantt theo tháng T: "near" = 12 tháng quanh tháng hiện tại (mặc định khi dự án dài), "all" = toàn bộ.
   const SPAN = 12;
   const gz = ['near', 'all'].includes(f.gz) ? f.gz : T + 1 > 18 && cur != null && cur >= 0 ? 'near' : 'all';
   let w0 = 0, w1 = T;
@@ -170,43 +176,60 @@ export async function drawMtlPlan(body, project, params) {
       ${i.milestone ? `<span class="g-ms" style="left:${x(e)}%" title="Mốc">◆</span>` : ''}`;
   };
   const step = gz === 'near' ? 1 : T > 40 ? 6 : T > 20 ? 3 : 1;
-  const sprintLink = t => `#/projects/${project.id}?view=sprint${t === cur ? '' : `&t=${t}`}`;
+  const monthLink = t => `#/projects/${project.id}?view=sprint&mode=month${t === cur ? '' : `&t=${t}`}`;
   const curBand = cur != null && cur >= w0 && cur <= w1 ? `<span class="g-cur" style="left:${x(cur)}%;width:${col}%" aria-hidden="true"></span>` : '';
-  const head = curBand + Array.from({ length: w1 - w0 + 1 }, (_, k) => w0 + k).map(t => `<a href="${sprintLink(t)}" class="g-h${t === cur ? ' now' : ''}" style="left:${x(t)}%;width:${col}%" title="Sprint T${t} — mở màn hình Sprint" data-testid="g-head-${t}">${(t - w0) % step === 0 || t === cur ? `T${t}` : ''}</a>`).join('');
+  const head = curBand + Array.from({ length: w1 - w0 + 1 }, (_, k) => w0 + k).map(t => `<a href="${monthLink(t)}" class="g-h${t === cur ? ' now' : ''}" style="left:${x(t)}%;width:${col}%" title="Tháng T${t} — xem việc trong tháng" data-testid="g-head-${t}">${(t - w0) % step === 0 || t === cur ? `T${t}` : ''}</a>`).join('');
   const now = dayT(new Date());
   const deptOpts = [...new Map(d.items.map(i => [i.leadDepartmentId, i.leadDepartmentName])).entries()].filter(([id]) => id).sort((a, b) => a[1].localeCompare(b[1], 'vi'));
   const sel = (id, label, opts, value, testid) => `<label class="field fx-field mtl-f">${label}<select id="${id}" data-testid="${testid}"${value ? ' class="set"' : ''}>${opts.map(([v, t]) => `<option value="${esc(v)}"${String(v) === String(value) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
-  body.innerHTML = `<div class="mtl">
-    <div class="mtl-pf" role="search" aria-label="Lọc kế hoạch">
-      <label class="search-field lf-search">${icon('search')}<input type="search" id="mtlQ" value="${esc(f.q)}" placeholder="Tìm bước, hạng mục…" data-testid="mtl-q"></label>
-      ${sel('mtlDept', 'Bộ phận', [['', 'Tất cả'], ...deptOpts], f.dept, 'mtl-f-dept')}
-      ${sel('mtlSt', 'Tình trạng', [['', 'Tất cả'], ['attn', 'Cần chú ý (chậm / trễ)'], ['OVERDUE', 'Trễ hạn'], ['BEHIND', 'Chậm tiến độ'], ['LATE_START', 'Chậm khởi động'], ['AHEAD', 'Vượt tiến độ'], ['ON_TRACK', 'Đúng tiến độ'], ['NOT_DUE', 'Chưa đến kỳ'], ['critical', 'Đường găng'], ['milestone', 'Mốc ◆']], f.st, 'mtl-f-status')}
-      ${d.plans.length > 1 ? sel('mtlPlan', 'Kế hoạch', [['', 'Tất cả'], ...d.plans.map(p => [p.id, p.name])], f.plan, 'mtl-f-plan') : ''}
-      <span class="lf-count">${rows.length}/${d.items.length} hạng mục</span>
-      <div class="mtl-gz" role="group" aria-label="Khung Gantt theo sprint">
-        <button type="button" class="chip${gz === 'near' ? ' on' : ''}" data-gz="near" aria-pressed="${gz === 'near'}" data-testid="gz-near">${SPAN} sprint quanh hiện tại</button>
-        <button type="button" class="chip${gz === 'all' ? ' on' : ''}" data-gz="all" aria-pressed="${gz === 'all'}" data-testid="gz-all">Toàn bộ dự án</button>
-        ${gz === 'near' ? `<button type="button" class="btn btn-ghost btn-sm" data-gw="${Math.max(0, w0 - 6)}" ${w0 === 0 ? 'disabled' : ''} aria-label="Lùi 6 sprint" data-testid="gz-back">${icon('left')}</button><span class="muted xs nowrap" data-testid="gz-range">T${w0}–T${w1}</span><button type="button" class="btn btn-ghost btn-sm" data-gw="${w0 + 6}" ${w1 >= T ? 'disabled' : ''} aria-label="Tới 6 sprint" data-testid="gz-fwd">${icon('right')}</button>` : ''}
-      </div>
-    </div>
-    <div class="card mtl-plan"><div class="tbl-scroll"><table class="table mtl-ptable" data-testid="mtl-plan">
-      <thead><tr><th class="mp-step">Bước</th><th class="mp-title">Hạng mục</th><th class="mp-owner">Đầu mối</th><th class="mp-t">Kế hoạch</th><th class="num">% KH</th><th class="num">% TT</th><th>Tình trạng</th><th class="mp-gantt"><div class="g-head">${head}</div></th></tr></thead>
-      <tbody>${rows.map(([i, depth]) => `<tr class="clickable${depth ? ' mp-child' : ''}${i.children ? ' mp-parent' : ''}" data-href="${itemLink(project, i.id)}" data-testid="mtl-row-${esc(i.planCode || i.code)}">
+  // Hàng: nhóm theo sprint (giai đoạn) — đầu nhóm có tên, các bước, thời gian, % và thanh tổng của sprint; bấm để thu gọn.
+  const rowHtml = ([i, depth]) => `<tr class="clickable${depth ? ' mp-child' : ''}${i.children ? ' mp-parent' : ''}" data-href="${itemLink(project, i.id)}" data-testid="mtl-row-${esc(i.planCode || i.code)}">
         <td class="code mp-step">${esc(i.planCode || '')}</td>
         <td class="mp-title" style="padding-left:${10 + depth * 18}px">${i.critical ? '<span class="crit" title="Đường găng">●</span> ' : ''}${esc(i.title)}${i.milestone ? ' <span class="ms" title="Mốc">◆</span>' : ''}${i.assignees.length ? `<span class="muted xs mp-who">${i.assignees.map(u => personLink(u)).join(', ')}</span>` : ''}</td>
         <td class="mp-owner muted sm">${esc(i.ownerText || i.leadDepartmentName)}${i.externalParty ? '' : ''}</td>
         <td class="mp-t nowrap"><span>${tLabel(i)}</span><span class="muted xs">${fmtDate(i.baselineStart)} – ${fmtDate(i.baselineEnd)}</span></td>
         <td class="num">${pct(i.planned)}</td><td class="num"><b>${pct(i.actual)}</b></td><td>${statusPill(i)}${i.variance != null && ['BEHIND', 'AHEAD', 'ON_TRACK'].includes(i.status) ? `<span class="muted xs"> ${i.variance > 0 ? '+' : ''}${num(i.variance)}</span>` : ''}</td>
-        <td class="mp-gantt"><div class="g-track" style="--gcol:${col}%">${curBand}${inWin(now) ? `<span class="g-today" style="left:${x(now)}%"></span>` : ''}${bar(i)}</div></td></tr>`).join('') || '<tr><td colspan="8" class="muted">Không có hạng mục khớp bộ lọc.</td></tr>'}</tbody></table></div>
-      <div class="mtl-legend"><span><i class="lg-bar"></i>Kế hoạch gốc (tô đậm = % thực tế)</span><span><i class="lg-crit"></i>Đường găng</span><span>◆ Mốc</span><span><i class="lg-fc"></i>Dự báo trễ</span><span><i class="lg-today"></i>Hôm nay</span><span><i class="lg-cur"></i>Sprint hiện tại</span><span>Mỗi cột = 1 sprint (tháng T) · bấm T5… để mở sprint</span></div></div>
+        <td class="mp-gantt"><div class="g-track" style="--gcol:${col}%">${curBand}${inWin(now) ? `<span class="g-today" style="left:${x(now)}%"></span>` : ''}${bar(i)}</div></td></tr>`;
+  const foldKey = `proj:${project.id}:planFold`, fold = new Set(uiPref(foldKey) || []);
+  const sprintHead = (sp, list) => {
+    const s0 = sp ? dayT(sp.start) : null, e0 = sp ? dayT(sp.end) : null, key = sp ? String(sp.index) : 'none', closed = fold.has(key);
+    const gbar = sp && s0 != null ? `<span class="g-bar g-sprint ${TONE[sp.status] || ''}" style="left:${x(s0)}%;width:${Math.max(0.6, (e0 - s0) * col)}%" title="${esc(`Sprint ${sp.index + 1} · ${sp.name}: ${fmtDate(sp.start)} → ${fmtDate(sp.end)}, thực tế ${num(sp.actualPct)}%`)}"><i style="width:${Math.min(100, sp.actualPct || 0)}%"></i></span>` : '';
+    return `<tr class="mp-sprint${closed ? ' closed' : ''}" data-fold="${key}" data-testid="mtl-sprint-${key}"><td colspan="4"><button type="button" class="mp-fold" aria-expanded="${!closed}" aria-label="${closed ? 'Mở' : 'Thu gọn'} sprint">${closed ? '▸' : '▾'}</button>
+        ${sp ? `<b>Sprint ${sp.index + 1} · ${esc(sp.name)}</b> <span class="muted sm">${esc(sp.stepsLabel || '')}${sp.startT != null ? ` · T${sp.startT}–T${sp.endT}` : ''} · ${list.filter(([, dp]) => !dp).length} bước</span>` : '<b>Chưa xếp sprint</b>'}</td>
+      <td class="num">${sp ? pct(sp.plannedPct) : ''}</td><td class="num"><b>${sp ? pct(sp.actualPct) : ''}</b></td><td>${sp ? statusPill({ status: sp.status, statusLabel: sp.statusLabel }) : ''}</td>
+      <td class="mp-gantt"><div class="g-track" style="--gcol:${col}%">${curBand}${inWin(now) ? `<span class="g-today" style="left:${x(now)}%"></span>` : ''}${gbar}</div></td></tr>`;
+  };
+  const groups = d.sprints?.length ? [...d.sprints.map(sp => [sp, rows.filter(([i]) => i.sprint === sp.index)]), [null, rows.filter(([i]) => i.sprint == null)]].filter(([, list]) => list.length) : [[undefined, rows]];
+  const tbody = rows.length ? groups.map(([sp, list]) => (sp === undefined ? list.map(rowHtml).join('') : sprintHead(sp, list) + (fold.has(sp ? String(sp.index) : 'none') ? '' : list.map(rowHtml).join('')))).join('')
+    : '<tr><td colspan="8" class="muted">Không có hạng mục khớp bộ lọc.</td></tr>';
+  body.innerHTML = `<div class="mtl">
+    <div class="mtl-pf" role="search" aria-label="Lọc kế hoạch">
+      <label class="search-field lf-search">${icon('search')}<input type="search" id="mtlQ" value="${esc(f.q)}" placeholder="Tìm bước, hạng mục…" data-testid="mtl-q"></label>
+      ${sel('mtlDept', 'Bộ phận', [['', 'Tất cả'], ...deptOpts], f.dept, 'mtl-f-dept')}
+      ${sel('mtlSt', 'Tình trạng', [['', 'Tất cả'], ['attn', 'Cần chú ý (chậm / trễ)'], ['OVERDUE', 'Trễ hạn'], ['BEHIND', 'Chậm tiến độ'], ['LATE_START', 'Chậm khởi động'], ['AHEAD', 'Vượt tiến độ'], ['ON_TRACK', 'Đúng tiến độ'], ['NOT_DUE', 'Chưa đến kỳ'], ['critical', 'Đường găng'], ['milestone', 'Mốc ◆']], f.st, 'mtl-f-status')}
+      ${d.sprints?.length ? sel('mtlSp', 'Sprint', [['', 'Tất cả'], ...d.sprints.map(x => [String(x.index), `${x.index + 1}. ${x.name}`]), ...(d.items.some(i => i.sprint == null && !i.parentId) ? [['none', 'Chưa xếp sprint']] : [])], f.sp, 'mtl-f-sprint') : ''}
+      ${d.plans.length > 1 ? sel('mtlPlan', 'Kế hoạch', [['', 'Tất cả'], ...d.plans.map(p => [p.id, p.name])], f.plan, 'mtl-f-plan') : ''}
+      <span class="lf-count">${rows.length}/${d.items.length} hạng mục</span>
+      <div class="mtl-gz" role="group" aria-label="Khung Gantt theo tháng">
+        <button type="button" class="chip${gz === 'near' ? ' on' : ''}" data-gz="near" aria-pressed="${gz === 'near'}" data-testid="gz-near">${SPAN} tháng quanh hiện tại</button>
+        <button type="button" class="chip${gz === 'all' ? ' on' : ''}" data-gz="all" aria-pressed="${gz === 'all'}" data-testid="gz-all">Toàn bộ dự án</button>
+        ${gz === 'near' ? `<button type="button" class="btn btn-ghost btn-sm" data-gw="${Math.max(0, w0 - 6)}" ${w0 === 0 ? 'disabled' : ''} aria-label="Lùi 6 tháng" data-testid="gz-back">${icon('left')}</button><span class="muted xs nowrap" data-testid="gz-range">T${w0}–T${w1}</span><button type="button" class="btn btn-ghost btn-sm" data-gw="${w0 + 6}" ${w1 >= T ? 'disabled' : ''} aria-label="Tới 6 tháng" data-testid="gz-fwd">${icon('right')}</button>` : ''}
+      </div>
+    </div>
+    <div class="card mtl-plan"><div class="tbl-scroll"><table class="table mtl-ptable" data-testid="mtl-plan">
+      <thead><tr><th class="mp-step">Bước</th><th class="mp-title">Hạng mục</th><th class="mp-owner">Đầu mối</th><th class="mp-t">Kế hoạch</th><th class="num">% KH</th><th class="num">% TT</th><th>Tình trạng</th><th class="mp-gantt"><div class="g-head">${head}</div></th></tr></thead>
+      <tbody>${tbody}</tbody></table></div>
+      <div class="mtl-legend"><span><i class="lg-bar"></i>Kế hoạch gốc (tô đậm = % thực tế)</span><span><i class="lg-crit"></i>Đường găng</span><span>◆ Mốc</span><span><i class="lg-fc"></i>Dự báo trễ</span><span><i class="lg-today"></i>Hôm nay</span><span><i class="lg-cur"></i>Tháng hiện tại</span><span>Hàng xám = sprint (giai đoạn), bấm để thu gọn · mỗi cột = 1 tháng T</span></div></div>
   </div>`;
   const setP = (k, v) => { replaceHashParams({ [k]: v || null }); f[k] = v; drawMtlPlan(body, project, new URLSearchParams(location.hash.split('?')[1] || '')); };
-  body.onchange = e => { const m = { mtlDept: 'dept', mtlSt: 'st', mtlPlan: 'plan' }[e.target.id]; if (m) setP(m, e.target.value); };
+  body.onchange = e => { const m = { mtlDept: 'dept', mtlSt: 'st', mtlPlan: 'plan', mtlSp: 'sp' }[e.target.id]; if (m) setP(m, e.target.value); };
   let t = null;
   body.oninput = e => { if (e.target.id === 'mtlQ') { clearTimeout(t); t = setTimeout(() => { setP('q', e.target.value.trim()); const q = $('#mtlQ', body); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 250); } };
   body.onclick = e => {
     const z = e.target.closest('[data-gz]'); if (z) { replaceHashParams({ gw: null }); f.gw = ''; setP('gz', z.dataset.gz); return; }
     const w = e.target.closest('[data-gw]'); if (w) { setP('gw', w.dataset.gw); return; }
+    const fd = e.target.closest('tr[data-fold]');
+    if (fd && !e.target.closest('a')) { const k = fd.dataset.fold; if (fold.has(k)) fold.delete(k); else fold.add(k); uiPref(foldKey, [...fold]); drawMtlPlan(body, project, new URLSearchParams(location.hash.split('?')[1] || '')); return; }
     const r = e.target.closest('tr[data-href]'); if (r && !e.target.closest('a,[data-person],[data-dept-link]')) location.hash = r.dataset.href;
   };
 }

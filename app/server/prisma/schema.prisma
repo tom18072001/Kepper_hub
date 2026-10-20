@@ -85,6 +85,7 @@ model Project {
   kind          String   @default("BOARD") // BOARD = bảng công việc | MTL = dự án theo Master Timeline (tháng T từ T0)
   t0Date        DateTime? // ngày T0 của MTL (đầu tháng T0)
   alertConfig   Json?    // ngưỡng cảnh báo: { behindPct, aheadPct, startSoonDays, dueSoonDays, staleDays }
+  sprintPlan    Json?    // Kepper: sprint = nhóm bước MTL theo thứ tự [{ name, steps: "1-9", goal }] — PMO thiết lập
   archivedAt    DateTime?
   deletedAt     DateTime? // đã xoá (thùng rác): khôi phục được trong 7 ngày, sau đó xoá hẳn
   deletedById   Int?

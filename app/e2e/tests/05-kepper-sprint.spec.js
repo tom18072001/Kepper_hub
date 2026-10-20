@@ -1,5 +1,5 @@
-// Kepper GĐ2a — sprint theo tháng T (dữ liệu GIẢ của dự án mẫu DA, T0 = 10 tháng trước → sprint hiện tại luôn là T10):
-// màn hình Sprint (mặc định của dự án MTL, làn phải xong / đang chạy / chuẩn bị, lọc ban, chuyển sprint), Gantt theo sprint,
+// Kepper GĐ2a — sprint = giai đoạn gồm nhóm bước MTL (dữ liệu GIẢ của dự án mẫu DA, T0 = 10 tháng trước → tháng hiện tại luôn là T10):
+// tab Sprint (lộ trình, thiết lập sprint, tiến độ theo đầu việc con, checklist), Kế hoạch & Gantt gom theo sprint, Theo tháng,
 // "Cập nhật nhanh" một chạm + ghi chú, mẫu MTL bộ phận điền sẵn do lãnh đạo ban tự tải / nhập lại (giữ tiến độ, không đặt lại kế hoạch gốc).
 const path = require('node:path');
 const os = require('node:os');
@@ -10,43 +10,69 @@ const { login, apiAs, toast } = require('./helpers');
 
 test.describe.configure({ mode: 'serial' });
 
-test('19. Sprint theo tháng T: màn hình Sprint, Gantt theo sprint, cập nhật nhanh, MTL bộ phận do lãnh đạo ban tự nhập', async ({ browser }) => {
+test('19. Sprint theo giai đoạn: lộ trình, thiết lập sprint, tiến độ theo đầu việc, Gantt gom sprint, theo tháng, cập nhật nhanh, MTL bộ phận', async ({ browser }) => {
   test.setTimeout(180_000);
   const pmo = await (await browser.newContext()).newPage();
   await login(pmo, 'pmo');
   const project = (await (await apiAs(pmo, '/api/projects')).json()).find(p => p.key === 'DA');
   const PL = (await (await apiAs(pmo, '/api/departments')).json()).find(d => d.code === 'PL');
 
-  // 1) Mở dự án MTL → mặc định là màn hình Sprint của sprint hiện tại.
+  // 1) Mở dự án MTL → mặc định tab Sprint theo giai đoạn: lộ trình 5 sprint của dự án mẫu, chọn sẵn sprint đang làm.
   await pmo.goto(`/#/projects/${project.id}`);
   await expect(pmo.getByTestId('sprint-view')).toBeVisible();
-  await expect(pmo.getByTestId('sp-title')).toHaveText('Sprint T10');
-  const api = await (await apiAs(pmo, `/api/projects/${project.id}/mtl-sprint`)).json();
-  expect(api.sprint.state).toBe('CURRENT');
-  // Bước 5 kết thúc T7, chưa xong → nằm ở "Phải xong" của sprint hiện tại, ghi "chuyển từ T7".
-  await expect(pmo.getByTestId('sp-lane-due').getByTestId('sc-DA-5')).toContainText('chuyển từ T7');
-  // Sprint T2 đã qua: bước 1, 2 (T0–T2) phải xong và đã xong đúng hạn.
-  const t2 = await (await apiAs(pmo, `/api/projects/${project.id}/mtl-sprint?t=2`)).json();
-  expect(t2.sprint.state).toBe('PAST'); expect(t2.sprint.due).toBe(2); expect(t2.sprint.done).toBe(2);
-  expect(api.sprints[2]).toMatchObject({ due: 2, doneInTime: 2, open: 0 });
+  await expect(pmo.getByTestId('sp-title')).toHaveText('Sprint 1 · Chuyển nhượng dự án (mẫu)');
+  await expect(pmo.getByTestId('sp-road').locator('.rd-row:not(.rd-head)')).toHaveCount(5);
+  const api = await (await apiAs(pmo, `/api/projects/${project.id}/mtl-sprints`)).json();
+  expect(api.configured).toBe(true); expect(api.current).toBe(0);
+  expect(api.sprints.map(x => x.stepsLabel)).toEqual(['B1–7', 'B8–9', 'B10–14', 'B15–16', 'II.1–II.2']);
 
-  // 2) Lọc ban Pháp lý: chỉ còn thẻ của Ban Pháp lý; nhớ lựa chọn.
-  await pmo.getByTestId(`sp-dept-${PL.id}`).click();
-  const plDue = api.lanes.due.filter(i => i.leadDepartmentId === PL.id).length;
-  await expect(pmo.getByTestId('sp-lane-due').locator('.sc')).toHaveCount(plDue);
-  await pmo.getByTestId('sp-depts').getByText('Tất cả ban').click();
-  await expect(pmo.getByTestId('sp-lane-due').locator('.sc')).toHaveCount(api.lanes.due.length);
+  // 2) Thiết lập sprint (PMO): lỗi bước không có → báo ngay; thiếu Phân kỳ 2 → còn bước chưa xếp; khôi phục.
+  await pmo.getByTestId('sp-setup').click();
+  await pmo.getByTestId('sp-setup-text').fill('Chuyển nhượng DA (B1–7)\nSai bước | 8-99');
+  await pmo.getByTestId('sp-setup-save').click();
+  await expect(pmo.locator('#spErr')).toContainText('không có bước 99');
+  await pmo.getByTestId('sp-setup-text').fill('Chuyển nhượng DA (B1–7)\nĐề xuất → CTĐT | 8-9 | Có QĐ chấp thuận (giả)\nThiết kế → GPXD | 10-14\nThi công → mở bán | 15-16');
+  await pmo.getByTestId('sp-setup-save').click();
+  await toast(pmo, 'Đã lưu 4 sprint — còn 2 bước chưa xếp');
+  await expect(pmo.getByTestId('sprint-view')).toContainText('Bước chưa thuộc sprint nào: II.1, II.2');
+  await pmo.getByTestId('sp-setup').click();
+  await pmo.getByTestId('sp-setup-text').fill(api.text);
+  await pmo.getByTestId('sp-setup-save').click();
+  await toast(pmo, 'Đã lưu 5 sprint');
 
-  // 3) Chuyển sprint: trước / về hiện tại / bấm ô trên dải sprint.
-  await pmo.getByTestId('sp-prev').click();
-  await expect(pmo.getByTestId('sp-title')).toHaveText('Sprint T9');
-  await pmo.getByTestId('sp-now').click();
-  await expect(pmo.getByTestId('sp-title')).toHaveText('Sprint T10');
-  await pmo.getByTestId('sp-cell-12').click();
-  await expect(pmo.getByTestId('sp-title')).toHaveText('Sprint T12');
+  // 3) Sprint 2: bước 8 có 4 việc con (MTL Ban Pháp lý) → tiến độ bước = số việc con xong / 4; bấm "✓ Xong" một việc con → +25%.
+  await pmo.getByTestId('sp-road-1').click();
+  await expect(pmo.getByTestId('sp-title')).toHaveText('Sprint 2 · Đề xuất dự án → chấp thuận chủ trương (mẫu)');
+  await expect(pmo.getByTestId('sp-kids-8')).toContainText('1/4 việc con đã xong');
+  const step8 = async () => (await (await apiAs(pmo, `/api/projects/${project.id}/mtl`)).json()).items.find(i => i.planCode === '8');
+  const b8 = await step8();
+  await pmo.getByTestId('qk-DA-21-100').click();
+  await toast(pmo, 'DA-21: đã xong');
+  await expect(pmo.getByTestId('sp-kids-8')).toContainText('2/4 việc con đã xong');
+  expect((await step8()).actual).toBe(b8.actual + 25);
+  // Checklist: việc lá có checklist → % = số mục đã xong / tổng (không phải tự khai); đủ mục → Hoàn thành.
+  const id22 = (await (await apiAs(pmo, `/api/projects/${project.id}/mtl`)).json()).items.find(i => i.code === 'DA-22').id;
+  const c1 = await (await apiAs(pmo, `/api/items/${id22}/checklist`, { method: 'POST', data: { title: 'Soạn tờ trình (giả)' } })).json();
+  const c2 = await (await apiAs(pmo, `/api/items/${id22}/checklist`, { method: 'POST', data: { title: 'Trình ký (giả)' } })).json();
+  await apiAs(pmo, `/api/checklist/${c1.id}`, { method: 'PATCH', data: { done: true } });
+  expect((await (await apiAs(pmo, `/api/items/${id22}`)).json()).progress).toBe(50);
+  await apiAs(pmo, `/api/checklist/${c2.id}`, { method: 'PATCH', data: { done: true } });
+  const i22 = await (await apiAs(pmo, `/api/items/${id22}`)).json();
+  expect(i22.progress).toBe(100); expect(i22.state.category).toBe('COMPLETED');
+  expect((await step8()).actual).toBe(b8.actual + 50); // 8.3 xong (+25) và 8.4 xong qua checklist (+25)
 
-  // 4) Gantt theo sprint: mặc định 12 sprint quanh hiện tại (T8–T19), đầu cột mở màn hình Sprint; "Toàn bộ dự án" bỏ khung.
+  // 4) Kế hoạch & Gantt: hàng gom theo sprint, thu gọn / mở; lọc theo sprint; khung 12 tháng; đầu cột mở "Theo tháng".
   await pmo.goto(`/#/projects/${project.id}?view=plan`);
+  await expect(pmo.getByTestId('mtl-sprint-0')).toContainText('Sprint 1 · Chuyển nhượng dự án (mẫu)');
+  await expect(pmo.getByTestId('mtl-row-3')).toBeVisible();
+  await pmo.getByTestId('mtl-sprint-0').click();
+  await expect(pmo.getByTestId('mtl-row-3')).toHaveCount(0);
+  await pmo.getByTestId('mtl-sprint-0').click();
+  await expect(pmo.getByTestId('mtl-row-3')).toBeVisible();
+  await pmo.getByTestId('mtl-f-sprint').selectOption('4');
+  await expect(pmo.getByTestId('mtl-row-II.1')).toBeVisible();
+  await expect(pmo.getByTestId('mtl-row-3')).toHaveCount(0);
+  await pmo.getByTestId('mtl-f-sprint').selectOption('');
   await expect(pmo.getByTestId('gz-range')).toHaveText('T8–T19');
   await pmo.getByTestId('gz-fwd').click();
   await expect(pmo.getByTestId('gz-range')).toHaveText('T14–T25');
@@ -54,7 +80,19 @@ test('19. Sprint theo tháng T: màn hình Sprint, Gantt theo sprint, cập nh�
   await expect(pmo.getByTestId('gz-range')).toHaveCount(0);
   await pmo.getByTestId('gz-near').click();
   await pmo.getByTestId('g-head-10').click();
-  await expect(pmo.getByTestId('sp-title')).toHaveText('Sprint T10');
+  await expect(pmo.getByTestId('mo-title')).toHaveText('Tháng T10');
+  // Theo tháng: bước 5 kết thúc T7, chưa xong → "Phải xong" của tháng hiện tại, ghi "trễ từ T7"; thẻ ghi tên sprint.
+  const sc5 = pmo.getByTestId('sp-lane-due').getByTestId('sc-DA-5');
+  await expect(sc5).toContainText('trễ từ T7'); await expect(sc5).toContainText('Chuyển nhượng dự án (mẫu)');
+  await pmo.getByTestId('mo-prev').click();
+  await expect(pmo.getByTestId('mo-title')).toHaveText('Tháng T9');
+  await pmo.getByTestId('mo-now').click();
+  await expect(pmo.getByTestId('mo-title')).toHaveText('Tháng T10');
+  const t2 = await (await apiAs(pmo, `/api/projects/${project.id}/mtl-month?t=2`)).json();
+  expect(t2.sprint.state).toBe('PAST'); expect(t2.sprint.due).toBe(2); expect(t2.sprint.done).toBe(2);
+  // Tổng quan có bảng theo sprint.
+  await pmo.goto(`/#/projects/${project.id}?view=mtl`);
+  await expect(pmo.getByTestId('mtl-sprints')).toContainText('Phân kỳ 2 (mẫu)');
 
   // 5) Cập nhật nhanh (nhân viên): chỉ việc của mình trong sprint; bấm 50% → lưu; ghi chú → bình luận của hạng mục.
   const staff = await (await browser.newContext()).newPage();
@@ -64,6 +102,7 @@ test('19. Sprint theo tháng T: màn hình Sprint, Gantt theo sprint, cập nh�
   const mine = await (await apiAs(staff, '/api/my/sprint')).json();
   const first = mine.projects.find(g => g.project.key === 'DA').items.find(i => !i.done);
   expect(first.assignees.some(a => a.fullName)).toBe(true);
+  await expect(staff.getByTestId(`sc-${first.code}`)).toContainText(first.sprintName);
   await staff.getByTestId(`qk-${first.code}-50`).click();
   await toast(staff, `${first.code}: đã cập nhật 50%`);
   expect((await (await apiAs(staff, `/api/items/${first.id}`)).json()).progress).toBe(50);

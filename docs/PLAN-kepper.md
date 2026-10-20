@@ -112,18 +112,20 @@ Giữ lại: dự án, Kanban, danh sách, lịch, việc con, duyệt nhiều c
   - dữ liệu mẫu giả.
 - **GĐ2**: Viber bot (sau khi có hồ sơ chuyển DLCN ra nước ngoài), điều chỉnh kế hoạch gốc có duyệt, so sánh phương án overall / fast-track, báo cáo tuần Word / Excel theo MTL.
 
-## GĐ2a — Sprint theo tháng T, cập nhật nhanh, MTL bộ phận điền sẵn (nhánh `kepper/gd2a-sprint`)
+## GĐ2a — Sprint theo giai đoạn, thang tiến độ theo đầu việc, Cập nhật nhanh, MTL bộ phận điền sẵn (nhánh `kepper/gd2a-sprint`)
 
-Phản hồi của chủ dự án (20/10/2026): nhìn Kế hoạch & Gantt 62 cột không rõ "tháng này mỗi ban phải xong gì"; cần thao tác đơn giản.
-Chốt: **mỗi tháng T là một sprint** (khớp MTL), không tạo sprint tay.
+Phản hồi của chủ dự án (20/10/2026): màn hình Kế hoạch & Gantt không rõ các sprint; cần thao tác đơn giản.
+Chốt (sau khi làm rõ): **sprint = một giai đoạn gồm một nhóm bước MTL tổng**, vd. "Chuyển nhượng DA (B1–9)", "Đề xuất NƠXH → CTĐT".
+**Thang tiến độ theo đầu việc**: đầu mục có 5 việc con → xong 1 việc = 20%, giảm việc phải tự khai %.
 
 | Hạng mục | Cách làm |
 |---|---|
-| Sprint | Tính từ T0 (`sprintOf`, `sprintLane`, `sprintTarget` trong `services/mtl.js`), không thêm bảng. Làn: **DUE** = kế hoạch gốc kết thúc trong sprint (sprint hiện tại thêm việc trễ chưa xong, ghi "chuyển từ Tk"); **RUNNING** = chạy qua sprint, kết thúc sau (bỏ việc đã xong trước sprint); **NEXT** = bắt đầu ở sprint sau. Chỉ lấy hạng mục lá. Mục tiêu % = % kế hoạch gốc ở đầu / cuối sprint |
-| Tab Sprint | Mặc định của dự án MTL. Dải sprint (đã qua: xanh = xong đúng hạn hết, vàng = có xong trễ, đỏ = còn chưa xong; ◆ = có mốc), lọc ban (nhớ theo người), tổng kết theo ban. Sprint đã qua: "đã xong" = xong trước khi sprint kết thúc, SPI = ảnh chụp tiến độ ngày cuối sprint |
-| Gantt | Khung 12 sprint quanh hiện tại (mặc định khi dự án > 18 tháng), lùi / tới 6 sprint, "Toàn bộ dự án"; dải xen kẽ theo sprint, cột sprint hiện tại tô nền, đầu cột mở tab Sprint |
-| Cập nhật nhanh | `GET /api/my/sprint`; cập nhật qua `PATCH /api/items/:id` sẵn có (tự chuyển cột), ghi chú qua bình luận. Nhắc 15:00 thứ Sáu (`runWeeklyUpdateReminder`), chỉ trong ứng dụng |
-| MTL bộ phận | `GET /api/projects/:id/mtl-template.xlsx?departmentId=`: PMO mọi bộ phận, lãnh đạo bộ phận cho bộ phận mình. Nhập MTL bộ phận: lãnh đạo bộ phận được tự nhập (chỉ `DEPARTMENT`, đúng bộ phận, không `rebaseline`, không đổi tên kế hoạch). Không ghi tên kế hoạch → bộ phận đã có đúng một kế hoạch thì cập nhật kế hoạch đó. Tên kế hoạch trùng kế hoạch khác loại / bộ phận → từ chối. Dòng con đầu tiên của bước tổng đang làm dở nhận % của bước tổng |
+| Sprint (giai đoạn) | `Project.sprintPlan` (JSON `[{ name, steps, goal }]`), PMO thiết lập bằng ô chữ: `Tên \| 1-9 \| mục tiêu` hoặc `Tên (B1–9)`; khoảng bước theo thứ tự tự nhiên (1…n, rồi II.1…). Kiểm tra bước không có / bước nằm ở hai sprint; báo bước chưa xếp. Chưa thiết lập → gợi ý cắt theo mốc ◆ đường găng. Việc con (MTL bộ phận) thuộc sprint của bước tổng. Hàm thuần: `services/mtl-sprints.js`. Nhật ký `MTL_SPRINT_PLAN` |
+| Tab Sprint | Lộ trình các sprint trên trục tháng T (thanh kế hoạch, % thực tế, vạch kế hoạch hôm nay, mốc ◆, hôm nay) → chi tiết sprint: tiến độ, SPI, bước xong, chậm / trễ, mốc; các bước theo thứ tự, bước có việc con hiện "x/y việc con đã xong"; cập nhật một chạm; theo ban |
+| Theo tháng | Chế độ phụ của tab Sprint: tháng T phải xong gì (kèm việc trễ từ tháng trước) / đang chạy (mục tiêu % cuối tháng) / chuẩn bị tháng sau, tổng kết theo ban (`/api/projects/:id/mtl-month`) |
+| Gantt | Hàng gom theo sprint (đầu nhóm có thanh tổng sprint, bấm để thu gọn), lọc theo sprint; khung 12 tháng quanh hiện tại; đầu cột mở "Theo tháng" |
+| Thang tiến độ | `weightOf` mặc định 1 (cột "Trọng số" ghi đè): việc cha = bình quân việc con. Dự án / ban / sprint tính theo cây (`treeProgress`), KPI đếm chậm / trễ trên việc lá. Việc lá có checklist: % = mục đã xong / tổng, đủ mục tự Hoàn thành |
+| Cập nhật nhanh | `GET /api/my/sprint`: việc của tôi trong tháng hiện tại hoặc trễ chưa xong, kèm tên sprint; "✓ Xong" là thao tác chính. Nhắc 15:00 thứ Sáu trong ứng dụng |
+| MTL bộ phận | Như trước: mẫu Excel điền sẵn, lãnh đạo bộ phận tự nhập MTL của bộ phận mình |
 
-Còn mở: Viber (tin tổng hợp 1 tin/người/ngày, màn hình liên kết, tin chào mừng, biến địa chỉ liên kết riêng) — làm sau khi có hợp đồng Rakuten Viber và hồ sơ chuyển DLCN ra nước ngoài.
-
+Còn mở: Viber / kênh tin nhắn (Viber bot, Viber Business Messages qua Infobip, Zalo ZBS/ZNS) — chọn kênh, hợp đồng, hồ sơ chuyển DLCN; tin tổng hợp 1 tin/người/ngày theo mẫu.
