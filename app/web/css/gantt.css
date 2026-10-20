@@ -1,0 +1,139 @@
+/* ---------- Tiến độ kế hoạch (Gantt) — views/gantt.js ---------- */
+.gantt{--gantt-name-w:340px;--gantt-row-h:34px;--gantt-tier-h:22px;min-width:0;max-width:100%}
+.gantt-print-head{display:none}
+
+/* Thanh công cụ */
+.gantt-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:12px}
+.gantt-zoom button{padding:5px 13px;font-size:.86rem}
+.gantt-range{font-size:.87rem;font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.gantt-stats{font-size:.85rem;color:var(--muted)}
+.gantt-stats b{color:var(--danger);font-weight:600}
+.gantt-tools{display:inline-flex;gap:6px;margin-left:auto}
+
+/* Khung cuộn: đầu cột dính trên, cột tên dính trái */
+.gantt-scroll{position:relative;overflow:auto;max-height:max(380px,calc(100vh - 300px));background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--shadow);scrollbar-gutter:stable;overscroll-behavior-x:contain}
+.gantt-scroll:focus-visible{outline:3px solid var(--brand-200);outline-offset:2px}
+.g-head{position:sticky;top:0;z-index:3;display:grid;grid-template-columns:var(--gantt-name-w) var(--gantt-canvas-w);width:calc(var(--gantt-name-w) + var(--gantt-canvas-w));
+  background:var(--surface-2);border-bottom:1px solid var(--border-strong)}
+.g-corner{position:sticky;left:0;z-index:2;display:flex;align-items:flex-end;background:var(--surface-2);border-right:1px solid var(--border-strong)}
+.g-cols{flex:1;display:grid;grid-template-columns:24px var(--code-w,6ch) minmax(0,1fr) 6.5em 2.8em;gap:0 6px;align-items:center;padding:0 8px 0 4px;
+  height:var(--gantt-tier-h);font-size:.75rem;font-weight:600;color:var(--muted);white-space:nowrap}
+.g-cols>span:last-child{text-align:right}
+.g-count{display:inline-block;margin-left:4px;font-weight:700;color:var(--text-2);font-variant-numeric:tabular-nums}
+.g-scale{position:relative}
+.g-tier{position:relative;height:var(--gantt-tier-h)}
+.g-tier+.g-tier{border-top:1px solid var(--border)}
+.g-cell{position:absolute;top:0;bottom:0;border-left:1px solid var(--border);overflow:clip;white-space:nowrap;font-size:.72rem;line-height:var(--gantt-tier-h);color:var(--muted);font-variant-numeric:tabular-nums}
+.g-cell>b{position:sticky;left:calc(var(--gantt-name-w) + 6px);padding:0 6px;font-weight:600}
+.g-cell.n{text-align:center}
+.g-cell.n>b{position:static;padding:0;font-size:.68rem}
+.g-tier.q .g-cell{color:var(--text-2);border-left-color:var(--faint)}
+.g-tier.q .g-cell>b{font-weight:700}
+.g-tier.m .g-cell{color:var(--text-2);border-left-color:var(--border-strong)}
+.g-tier.d .g-cell{text-align:center}.g-tier.d .g-cell>b{position:static;padding:0}
+.g-tier.d .g-cell.we{background:var(--surface-3)}
+.g-flag{position:absolute;bottom:3px;z-index:1;transform:translateX(-50%);padding:0 6px;border-radius:4px;background:var(--warn);color:var(--surface);
+  font-size:.68rem;font-weight:700;line-height:16px;white-space:nowrap;pointer-events:none}
+
+/* Dòng việc */
+.g-rows{position:relative;width:calc(var(--gantt-name-w) + var(--gantt-canvas-w))}
+.g-grid{position:absolute;top:0;bottom:0;left:var(--gantt-name-w);width:var(--gantt-canvas-w);pointer-events:none}
+.g-we{position:absolute;top:0;bottom:0;background:var(--surface-2)}
+.g-line{position:absolute;top:0;bottom:0;width:1px;background:var(--border)}
+.g-line.m{background:var(--border-strong)}.g-line.q{background:var(--faint)}
+.g-row{display:grid;grid-template-columns:var(--gantt-name-w) var(--gantt-canvas-w);height:var(--gantt-row-h);cursor:pointer;
+  content-visibility:auto;contain-intrinsic-size:auto var(--gantt-row-h)}
+.g-row>*{border-bottom:1px solid var(--border)}
+.g-row:last-child>*{border-bottom-color:transparent}
+.g-name{position:sticky;left:0;display:grid;grid-template-columns:24px var(--code-w,6ch) minmax(0,1fr) 6.5em 2.8em;
+  grid-template-areas:"tog code open who pct";gap:0 6px;align-items:center;min-width:0;padding:0 8px 0 calc(4px + var(--d,0) * 16px);z-index:2;
+  background:var(--surface);border-right:1px solid var(--border-strong);font-size:.86rem}
+.g-row:hover .g-name{background:var(--brand-050)}
+.g-row:hover .g-track{background:color-mix(in srgb,var(--brand-050) 55%,transparent)}
+.g-tog{grid-area:tog;width:24px;height:24px;display:grid;place-items:center;padding:0;border:0;border-radius:6px;background:none;color:var(--muted);cursor:pointer}
+.g-tog::before{content:'';width:6px;height:6px;margin-left:-2px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .12s ease-out}
+.g-tog[aria-expanded="true"]::before{margin:-3px 0 0;transform:rotate(45deg)}
+.g-tog:hover{background:var(--brand-100);color:var(--brand)}
+.g-name>.code{grid-area:code;overflow:hidden;text-overflow:ellipsis}
+.g-open{grid-area:open;display:flex;align-items:center;gap:6px;min-width:0;min-height:28px;margin:0;padding:0;border:0;background:none;
+  font:inherit;color:var(--text);text-align:left;cursor:pointer}
+.g-open .t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.g-open:hover .t{color:var(--brand)}
+.is-parent .g-open .t{font-weight:700}
+.g-tog:focus-visible,.g-open:focus-visible{outline:2px solid var(--brand);outline-offset:-2px;border-radius:6px}
+.g-kids{flex:none;padding:0 6px;border-radius:999px;background:var(--surface-3);color:var(--muted);font-size:.72rem;font-weight:700;line-height:18px;font-variant-numeric:tabular-nums}
+.g-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.g-who{grid-area:who;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem;color:var(--text-2)}
+.g-pct{grid-area:pct;text-align:right;font-size:.82rem;font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums}
+.g-row.st-overdue .g-pct{color:var(--danger)}.g-row.st-done .g-pct{color:var(--ok)}
+.g-row.st-cancelled .g-open .t{color:var(--muted);text-decoration:line-through}
+
+/* Thanh, mốc, nhãn */
+.g-track{position:relative;display:flex;align-items:center;min-width:0}
+.has-now .g-track::after{content:'';position:absolute;z-index:1;top:0;bottom:-1px;left:var(--now-x);width:2px;margin-left:-1px;background:var(--warn);pointer-events:none}
+.g-bar{position:absolute;top:calc(50% - 8px);height:16px;min-width:4px;overflow:hidden;border:1px solid var(--brand);border-radius:4px;background:var(--brand-100)}
+.g-bar>i{display:block;height:100%;background:var(--brand)}
+.is-child .g-bar{top:calc(50% - 6px);height:12px;border-radius:3px}
+.g-bar.st-overdue,.lg-bar.st-overdue{border-color:var(--danger);background:var(--danger-soft)}
+.g-bar.st-overdue>i,.lg-bar.st-overdue>i{background:var(--danger)}
+.g-bar.st-done,.lg-bar.st-done{border-color:var(--ok);background:var(--ok)}
+.g-bar.st-cancelled,.lg-bar.st-cancelled{border-color:var(--border-strong);background:var(--surface-3)}
+.g-ms{position:absolute;top:calc(50% - 6px);width:12px;height:12px;margin-left:-6px;border-radius:2px;background:var(--brand);transform:rotate(45deg)}
+.g-ms.st-overdue{background:var(--danger)}.g-ms.st-done{background:var(--ok)}.g-ms.st-cancelled{background:var(--faint)}
+.g-idue{position:absolute;top:calc(50% - 10px);width:4px;height:20px;margin-left:-2px;border:1px solid var(--surface);border-radius:2px;background:var(--text);pointer-events:none}
+.g-lab{position:absolute;top:50%;transform:translateY(-50%);font-size:.74rem;color:var(--muted);white-space:nowrap;pointer-events:none;font-variant-numeric:tabular-nums}
+.g-lab.late{color:var(--danger);font-weight:600}
+.g-nodue{position:sticky;left:calc(var(--gantt-name-w) + 8px);padding:0 8px;border:1px dashed var(--border-strong);border-radius:999px;background:var(--surface);
+  font-size:.75rem;font-style:italic;line-height:20px;color:var(--muted);white-space:nowrap}
+
+/* Chú thích */
+.gantt-legend{margin-top:10px;font-size:.8rem}
+.lg{display:inline-block;flex:none}
+.lg-bar{width:28px;height:12px;overflow:hidden;border:1px solid var(--brand);border-radius:3px;background:var(--brand-100)}
+.lg-bar>i{display:block;width:55%;height:100%;background:var(--brand)}
+.lg-ms{width:10px;height:10px;margin:0 3px;border-radius:2px;background:var(--brand);transform:rotate(45deg)}
+.lg-idue{width:4px;height:14px;border-radius:2px;background:var(--text)}
+.lg-now{width:2px;height:14px;background:var(--warn)}
+
+@media (min-width:1400px){.gantt{--gantt-name-w:400px}}
+@media (max-width:900px){.gantt{--gantt-name-w:280px}.g-cols,.g-name{grid-template-columns:24px var(--code-w,6ch) minmax(0,1fr) 5em 2.6em}}
+@media (max-width:600px){
+  .gantt{--gantt-name-w:150px;--gantt-row-h:46px}
+  .gantt-bar{gap:8px}
+  .gantt-zoom{width:100%}
+  .gantt-zoom button{flex:1;padding:6px 8px}
+  .gantt-range{font-size:.82rem}
+  .gantt-stats{font-size:.8rem}
+  .gantt-tools [data-print]{display:none}
+  .gantt-scroll{max-height:calc(100dvh - 130px)}
+  .g-cols{grid-template-columns:minmax(0,1fr);padding-left:8px}
+  .g-cols>span:not(:nth-child(3)){display:none}
+  .g-name{grid-template-columns:20px auto minmax(0,1fr) auto;grid-template-areas:"tog open open open" "tog code who pct";gap:0 5px;
+    align-content:center;padding:0 6px 0 calc(2px + var(--d,0) * 9px);font-size:.82rem;line-height:1.3}
+  .g-tog{width:20px;height:28px}
+  .g-open{min-height:0}
+  .g-name>.code,.g-who,.g-pct{font-size:.72rem}
+  .g-kids{line-height:16px;padding:0 5px}
+}
+
+/* In: chỉ biểu đồ, khổ A4 ngang, không cuộn */
+@media print{
+  @page gantt{size:A4 landscape;margin:10mm}
+  body:has(.gantt) :is(.sidebar,.topbar,.page-head,.ph-desc,.viewbar,.filters,.toasts){display:none!important}
+  body:has(.gantt){background:var(--surface)}
+  body:has(.gantt) .view{padding:0}
+  .gantt{page:gantt;--gantt-name-w:420px;--gantt-row-h:26px;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .gantt-print-head{display:block;margin:0 0 8px;font-size:.9rem;color:var(--text)}
+  .gantt-bar{display:none}
+  .gantt-scroll{max-height:none;overflow:visible;border:1px solid var(--border-strong);border-radius:0;box-shadow:none}
+  .g-head,.g-corner,.g-name,.g-nodue,.g-cell>b{position:static}
+  .g-head{break-after:avoid}
+  .g-row{content-visibility:visible;break-inside:avoid;height:auto;min-height:var(--gantt-row-h)}
+  .g-cols,.g-name{grid-template-columns:8px var(--code-w,6ch) minmax(0,1fr) 6.5em 2.8em}
+  .g-name{padding-top:3px;padding-bottom:3px;font-size:.8rem}
+  .g-open .t{white-space:normal}
+  .g-row:hover .g-name{background:var(--surface)}.g-row:hover .g-track{background:none}
+  .g-tog{visibility:hidden;width:8px}
+  .gantt-legend{break-inside:avoid}
+}

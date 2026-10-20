@@ -1,0 +1,125 @@
+/* ---------- Số liệu: Dashboard (thẻ bấm được), KPI (bảng gom cột, công thức), dải "Số liệu của tôi" ---------- */
+
+/* Thẻ số liệu bấm được */
+.kpi-link{display:block;width:100%;text-align:left;font:inherit;color:inherit;text-decoration:none;cursor:pointer;
+  transition:border-color .12s ease-out,background-color .12s ease-out}
+.kpi-link:hover{border-color:var(--brand-200);background:var(--brand-050);text-decoration:none}
+.kpi-link:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.kpi-link .l::after{content:"\00a0→";color:var(--faint)}
+.kpi-link:hover .l::after{color:var(--brand)}
+.st-flash{animation:st-flash 1.2s ease-out}
+@keyframes st-flash{0%{background:var(--brand-050);border-color:var(--brand-200)}100%{background:var(--surface);border-color:var(--border)}}
+.st-report{flex-wrap:wrap}
+.st-dash>*{min-width:0} /* thẻ co theo màn hình hẹp; bảng rộng cuộn ngang trong .tbl-scroll */
+
+/* KPI: bảng gom cột theo nhóm chỉ số */
+.st-kpi th,.st-kpi td{padding:8px 10px;font-size:.85rem}
+.st-kpi thead th{vertical-align:bottom}
+.st-kpi th.st-group{text-align:center;color:var(--text-2);background:var(--surface-3)}
+.st-kpi .st-sep{border-left:1px solid var(--border)}
+.st-kpi td.st-name{position:sticky;left:0;z-index:1;background:var(--surface);min-width:170px}
+.st-kpi thead tr:first-child th:first-child{position:sticky;left:0;z-index:2}
+.st-kpi tbody tr.clickable:hover td.st-name{background:var(--brand-050)}
+.st-score{display:inline-block;min-width:44px;text-align:center;padding:2px 8px;border-radius:999px;background:var(--surface-3);font-variant-numeric:tabular-nums}
+.st-score.good{background:var(--ok-soft)}.st-score.mid{background:var(--warn-soft)}.st-score.bad{background:var(--danger-soft)}
+.kpi .v .st-of{font-size:1.1rem;color:var(--muted);font-weight:600}
+
+/* KPI: công thức điểm tổng hợp */
+.st-formula{margin-bottom:16px}
+.st-formula h3{margin-bottom:8px}
+.st-eq{display:inline-block;margin:0 0 10px;padding:8px 12px;border-radius:var(--radius-sm);background:var(--surface-2);border:1px solid var(--border);
+  font-variant-numeric:tabular-nums;color:var(--text)}
+.st-eq b{color:var(--brand)}
+.st-terms{margin:0;padding-left:18px;color:var(--text-2);font-size:.88rem;line-height:1.55}
+.st-terms li+li{margin-top:2px}
+
+/* Dải "Số liệu của tôi" (đầu trang Việc của tôi) */
+.mk{padding:14px 16px;margin:0 0 16px}
+.mk-head{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;margin-bottom:10px}
+.mk-head h3{margin:0;flex:1;min-width:140px;font-size:1rem}
+.mk-seg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-2)}
+.mk-seg button{border:none;background:transparent;border-radius:7px;padding:5px 12px;font:inherit;font-size:.82rem;font-weight:600;color:var(--muted);cursor:pointer}
+.mk-seg button:hover{color:var(--brand)}
+.mk-seg button.on{background:var(--surface);color:var(--brand);box-shadow:var(--shadow-sm)}
+.mk-seg button:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.mk-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px}
+.mk-t{display:flex;flex-direction:column;gap:2px;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-2);min-width:0}
+.mk-t b{font-size:1.35rem;line-height:1.15;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.mk-t span{font-size:.78rem;color:var(--muted);font-weight:500}
+.mk-t small{font-size:.72rem;color:var(--faint)}
+.mk-t.ok b{color:var(--ok)}.mk-t.warn b{color:var(--warn)}.mk-t.bad b{color:var(--danger)}
+.mk-score{background:var(--brand-050);border-color:var(--brand-100)}
+.mk-score b{color:var(--brand)}
+.mk-how{margin-top:10px;font-size:.82rem;color:var(--muted)}
+.mk-how summary{cursor:pointer;font-weight:600;color:var(--text-2);width:max-content}
+.mk-how p{margin:6px 0 0;line-height:1.5}
+
+@media (max-width:600px){
+  .mk-strip{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .st-kpi td.st-name{min-width:130px}
+}
+@media (prefers-reduced-motion:reduce){.st-flash{animation:none}}
+
+/* ---------- GĐ3c · Bảng lệnh (Ctrl+K): nhóm, gợi ý phím, chỉ một dòng sáng ---------- */
+.palette-list a{min-height:42px}
+.palette-list a:not(.sel):hover{background:transparent;color:var(--text)}
+.palette-list a.sel{background:var(--brand-050);color:var(--brand)}
+.pal-group{padding:12px 12px 4px;font-size:.78rem;font-weight:600;color:var(--muted)}
+.palette-list>[role=group]:first-child>.pal-group{padding-top:4px}
+.pal-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pal-hint{flex:none;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pal-keys{flex:none;display:inline-flex;gap:3px}
+.pal-keys kbd{min-width:22px;text-align:center}
+.palette-list a.sel .pal-keys kbd{border-color:var(--brand-200);color:var(--brand)}
+.pal-note{padding:6px 12px 10px}
+@media (max-width:600px){.pal-hint{display:none}}
+@media (hover:none) and (pointer:coarse){.pal-keys{display:none}}
+
+/* ---------- GĐ3c · Kỳ nhanh và bộ lọc trên URL (Dashboard / KPI / Tổng hợp) ---------- */
+.st-filters{gap:8px 12px}
+.st-field{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%}
+.st-lbl{font-size:.82rem;font-weight:600;color:var(--muted);white-space:nowrap}
+.st-filters .st-field select,.st-scope select{max-width:300px}
+.st-scope select{width:auto;min-height:38px;padding-top:7px;padding-bottom:7px;font-size:.88rem}
+.st-seg{position:relative;display:inline-flex;gap:2px;padding:3px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-2);
+  max-width:100%;min-width:0;overflow-x:auto;scrollbar-width:none}
+.st-seg::-webkit-scrollbar{display:none}
+.st-seg button{flex:none;border:none;background:transparent;border-radius:7px;padding:5px 12px;min-height:30px;font:inherit;font-size:.85rem;font-weight:600;
+  color:var(--muted);cursor:pointer;white-space:nowrap;transition:color .12s ease-out,background-color .12s ease-out}
+.st-seg button:hover{color:var(--brand)}
+.st-seg button[aria-pressed=true]{background:var(--surface);color:var(--brand);box-shadow:var(--shadow-sm)}
+.st-seg button:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+.st-seg.st-more{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)}
+.st-seg.st-less{-webkit-mask-image:linear-gradient(to left,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to left,#000 calc(100% - 28px),transparent)}
+.st-seg.st-less.st-more{-webkit-mask-image:linear-gradient(to right,transparent,#000 28px,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,transparent,#000 28px,#000 calc(100% - 28px),transparent)}
+.st-custom{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.st-date{display:inline-flex;align-items:center;gap:6px;font-size:.87rem;color:var(--text-2);font-weight:500}
+.st-date input{width:auto;min-height:36px;padding:6px 10px}
+.st-range{white-space:nowrap;font-variant-numeric:tabular-nums}
+.st-bad{color:var(--danger)}
+.st-clear{display:inline-flex;align-items:center;gap:4px;border:none;background:none;padding:6px 8px;border-radius:var(--radius-sm);font:inherit;font-size:.87rem;
+  font-weight:600;color:var(--brand);cursor:pointer;white-space:nowrap}
+.st-clear:hover{background:var(--brand-050)}
+.st-clear:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.st-clear svg.i{width:15px;height:15px}
+.st-push{margin-left:auto}
+.st-report{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;margin-left:auto;min-width:0}
+.st-body{transition:opacity .15s ease-out}
+.st-busy{opacity:.55;pointer-events:none}
+.st-rowlink{border:none;background:none;padding:0;font:inherit;font-weight:700;color:var(--text);cursor:pointer;text-align:left}
+.st-rowlink:hover{color:var(--brand);text-decoration:underline;text-underline-offset:3px}
+.st-rowlink:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:4px}
+.st-kpi tbody tr.st-picked td,.st-kpi tbody tr.st-picked td.st-name{background:var(--brand-050)}
+.st-kpi tbody tr.st-picked .st-rowlink{color:var(--brand)}
+
+@media (max-width:720px){
+  .st-filters select{flex:1 1 150px;max-width:none}
+  .st-seg button{padding:5px 10px}
+  .st-field{width:100%}
+  .st-field select{flex:1}
+  .st-report{margin-left:0;width:100%}
+  .st-scope{width:100%}.st-scope select{flex:1;max-width:none}
+  .st-reportbar .st-push{margin-left:0}
+  .st-push{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){.st-body,.st-seg button{transition:none}}

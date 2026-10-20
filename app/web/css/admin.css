@@ -1,0 +1,77 @@
+/* ---------- GĐ3b: Quản trị (tài khoản, phòng ban, nhật ký) ----------
+   Gắn sau styles.css trong index.html: <link rel="stylesheet" href="css/admin.css"> */
+.adm-block{display:block}
+
+/* Hộp xác nhận nằm trong form (đổi vai trò, khoá tài khoản, khoá phòng) */
+.admin-box{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-2);padding:12px 14px;margin:6px 0 14px;
+  display:flex;flex-direction:column;gap:8px}
+.admin-box.warn{border-color:var(--warn-line);background:var(--warn-soft)}
+.admin-box h4{color:var(--text)}
+.admin-box p{margin:0}
+.admin-box .check{font-size:.9rem}
+.admin-box>.btn{align-self:flex-start}
+#permState{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;font-size:.88rem}
+
+/* Số đếm khối lượng (chỉ số, không nội dung việc) */
+.admin-counts{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:8px}
+.admin-counts>div{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;display:flex;flex-direction:column;gap:1px}
+.admin-counts b{font-size:1.25rem;line-height:1.2;font-variant-numeric:tabular-nums;color:var(--text)}
+
+/* Bảng khác biệt quyền / trước – sau */
+table.diff-table{box-shadow:none;border-radius:var(--radius-sm)}
+.diff-table th,.diff-table td{padding:7px 10px;font-size:.86rem;vertical-align:top}
+.diff-table td:first-child{width:1%;white-space:nowrap}
+.diff-table s{color:var(--muted)}
+.audit-json{font-size:.78rem;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text-2)}
+.perm-grid td.perm-changed{background:var(--brand-050)}
+.perm-grid td.perm-changed select{border-color:var(--brand)}
+.admin-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--radius)}
+
+/* Bảng tài khoản trên màn hình rộng: cột tên / phòng không bị ép quá hẹp bởi cột nút */
+/* Màn hình vừa: bảng cuộn trong khung (không tràn cả trang), tiêu đề cột và nút được xuống dòng */
+.admin-scroll>table.table{min-width:100%}
+@media (min-width:1401px){.adm-users td.adm-name{min-width:150px}}
+@media (max-width:1400px){
+  .admin-cards th{white-space:normal}
+  .adm-users td.actions{white-space:normal;min-width:178px}
+  .adm-users td.actions>.btn{margin:3px 0 3px 6px}
+}
+
+/* Nhật ký */
+.audit-code{font-size:.72rem;color:var(--faint);letter-spacing:.02em;margin-top:3px;overflow-wrap:anywhere}
+.audit-date{display:inline-flex;align-items:center;gap:6px}
+.audit-date>span{min-width:24px}
+.audit-date input{width:auto;min-height:38px;padding-top:6px;padding-bottom:6px;font-size:.88rem}
+.audit-table td{vertical-align:top}
+
+/* Điện thoại: bảng tài khoản / phòng ban / nhật ký thành thẻ, không tràn ngang; nút Sửa / Reset luôn thấy */
+@media (max-width:720px){
+  table.admin-cards{display:block;background:transparent;border:none;box-shadow:none;border-radius:0;overflow:visible}
+  .admin-cards thead{display:none}
+  .admin-cards tbody{display:flex;flex-direction:column;gap:10px}
+  .admin-cards tbody tr{display:block;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:6px 14px}
+  .admin-cards td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:6px 0;border-bottom:1px solid var(--border);text-align:right;min-width:0;overflow-wrap:anywhere}
+  .admin-cards td::before{content:attr(data-label);flex:none;max-width:45%;text-align:left;color:var(--muted);font-size:.8rem;font-weight:600}
+  .admin-cards td>span{min-width:0}
+  .admin-scroll{overflow:visible}
+  .diff-table thead{display:none}
+  .diff-table tbody tr{display:grid;grid-template-columns:92px minmax(0,1fr);column-gap:10px;row-gap:2px;padding:8px 10px;border-bottom:1px solid var(--border)}
+  .diff-table tbody tr:last-child{border-bottom:none}
+  .diff-table td,.diff-table tbody tr:last-child td{border:none;padding:0}
+  .diff-table td:nth-child(n+3){grid-column:2}
+  .diff-table td[data-label]::before{content:attr(data-label) ": ";color:var(--muted);font-size:.8rem}
+  .admin-cards td.card-title{justify-content:flex-start;text-align:left;font-size:1rem;padding-top:8px}
+  .admin-cards td.card-title::before{display:none}
+  .admin-cards td.code{width:auto}
+  .admin-cards td.actions{width:auto;justify-content:flex-start;flex-wrap:wrap;gap:6px;border-bottom:none;padding:10px 0 8px;white-space:normal}
+  .admin-cards td.actions::before{display:none}
+  .admin-cards td.actions:empty{display:none}
+  .admin-cards td.actions>*+*,.admin-cards td.actions>.btn{margin:0}
+  .admin-cards td.empty{justify-content:center}
+  .admin-cards td.empty::before{display:none}
+  .admin-cards tr>td:nth-last-child(2){border-bottom:none}
+  .audit-table td.actions{padding-top:4px}
+  #auditFilters select{max-width:none;flex:1 1 100%}
+  #auditFilters .audit-date{flex:1 1 140px}
+  #auditFilters .audit-date input{flex:1;min-width:0}
+}

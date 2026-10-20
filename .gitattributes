@@ -1,0 +1,3 @@
+# Script shell phải luôn LF, nếu không shebang hỏng khi chạy trong container Alpine
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf

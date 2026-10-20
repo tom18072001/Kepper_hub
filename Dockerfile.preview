@@ -1,0 +1,20 @@
+# Worker chuyển DOC/DOCX sang PDF để xem trước (LibreOffice headless, không mở cổng ra ngoài).
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends libreoffice-writer fontconfig fonts-crosextra-carlito fonts-crosextra-caladea fonts-dejavu-core fonts-liberation fonts-noto-core nodejs npm ca-certificates \
+    && fc-cache -f >/dev/null && rm -rf /var/lib/apt/lists/* && useradd --create-home --uid 10001 preview
+
+COPY app/server/package.json app/server/package-lock.json /tmp/deps/
+RUN cd /tmp/deps && npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
+    && mkdir -p /srv/preview/node_modules && cp -a node_modules/pizzip /srv/preview/node_modules/ \
+    && (cp -a node_modules/pako /srv/preview/node_modules/ 2>/dev/null || cp -a node_modules/pizzip/node_modules/pako /srv/preview/node_modules/) && rm -rf /tmp/deps
+
+# Tắt macro với tệp người dùng tải lên.
+RUN mkdir -p /etc/libreoffice/registry && printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?><oor:data xmlns:oor="http://openoffice.org/2001/registry"><dependency file="main"/><oor:component-data oor:name="Common" oor:package="org.openoffice.Office"><node oor:name="Security"><node oor:name="Scripting"><prop oor:name="MacroSecurityLevel"><value>3</value></prop></node></node></oor:component-data></oor:data>' > /etc/libreoffice/registry/workhub-security.xcd
+
+WORKDIR /srv/preview
+COPY app/server/src/lib/document-preview.js app/server/src/lib/preview-worker.js ./
+USER preview
+ENV HOME=/tmp/home PREVIEW_PORT=4100 OFFICE_BIN=/usr/bin/soffice
+EXPOSE 4100
+CMD ["node", "preview-worker.js"]

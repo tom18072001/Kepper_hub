@@ -1,0 +1,12 @@
+{
+  "name": "workhub-e2e",
+  "private": true,
+  "description": "Kiểm thử end-to-end WorkHub bằng Playwright (Chromium)",
+  "scripts": {
+    "test": "playwright test",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.0"
+  }
+}

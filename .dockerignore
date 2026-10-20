@@ -1,0 +1,13 @@
+# Không đưa vào image
+**/node_modules
+**/.env
+**/.env.*
+!**/.env.example
+app/server/uploads/*
+app/e2e
+docs
+.git
+*.log
+**/*.docx
+**/*.pdf
+**/*.xlsx

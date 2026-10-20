@@ -1,0 +1,143 @@
+# WorkHub — chạy trên máy cá nhân / máy chủ nội bộ.
+#   cp .env.example .env   (sửa mật khẩu, JWT_SECRET)
+#   docker compose up -d --build                      # Postgres + app, tệp lưu trên volume
+#   docker compose --profile full up -d --build       # thêm MinIO + bộ xem trước Word (LibreOffice)
+# Mở http://localhost:4000 — mọi cổng chỉ bind 127.0.0.1.
+name: workhub
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: workhub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Đặt POSTGRES_PASSWORD trong .env}
+      POSTGRES_DB: workhub
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5434}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workhub -d workhub"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: workhub-app:0.2.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://workhub:${POSTGRES_PASSWORD}@postgres:5432/workhub
+      JWT_SECRET: ${JWT_SECRET:?Đặt JWT_SECRET trong .env}
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:4000}
+      TRUST_PROXY: ${TRUST_PROXY:-loopback, linklocal, uniquelocal}
+      ROOT_ADMIN_USERNAME: ${ROOT_ADMIN_USERNAME:-admin}
+      ROOT_ADMIN_PASSWORD: ${ROOT_ADMIN_PASSWORD:?Đặt ROOT_ADMIN_PASSWORD trong .env}
+      SEED_DEMO: ${SEED_DEMO:-false}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_USE_SSL: "false"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-}
+      MINIO_BUCKET: workhub-attachments
+      PREVIEW_URL: ${PREVIEW_URL:-}
+      PREVIEW_TOKEN: ${PREVIEW_TOKEN:-}
+    volumes:
+      - uploads:/data/uploads
+    ports:
+      - "127.0.0.1:${APP_PORT:-4000}:4000"
+    restart: unless-stopped
+    networks: [default, preview-net]
+
+  # Sao lưu hằng ngày: CSDL + tệp đính kèm vào thư mục ./backups trên máy (giữ BACKUP_KEEP_DAYS ngày).
+  # Nên chép thêm ./backups sang ổ/máy khác (quy tắc 3-2-1). Khôi phục: xem README.
+  backup:
+    image: postgres:16-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: workhub
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: workhub
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_HOUR: ${BACKUP_HOUR:-02}
+      TZ: ICT-7   # chuỗi POSIX (UTC+7), không cần gói tzdata trong image alpine
+    volumes:
+      - ./deploy:/deploy:ro
+      - ${BACKUP_PATH:-./backups}:/backups
+      - uploads:/data/uploads:ro
+    entrypoint: ["sh", "/deploy/backup.sh"]
+    restart: unless-stopped
+
+  # Khôi phục (chạy tay): docker compose stop app
+  #   docker compose --profile restore run --rm -e RESTORE_FROM=/backups/<thư-mục> restore
+  restore:
+    profiles: ["restore"]
+    image: postgres:16-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: workhub
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: workhub
+    volumes:
+      - ./deploy:/deploy:ro
+      - ${BACKUP_PATH:-./backups}:/backups:ro
+      - uploads:/data/uploads
+    entrypoint: ["sh", "/deploy/restore.sh"]
+    restart: "no"
+
+  # ---- Tuỳ chọn (profile "full") ----
+  minio:
+    profiles: ["full"]
+    # Kiểm tra tag còn tồn tại trên Docker Hub trước khi dùng; MinIO đã ngừng phát hành bản cộng đồng mới từ cuối 2025.
+    image: minio/minio:RELEASE.2025-10-15T17-29-55Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-workhub-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-minio-password}
+    volumes:
+      - miniodata:/data
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    restart: unless-stopped
+
+  office-preview:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: Dockerfile.preview
+    image: workhub-office-preview:0.2.0
+    environment:
+      PREVIEW_TOKEN: ${PREVIEW_TOKEN:-}
+      PREVIEW_TIMEOUT_MS: 60000
+      PREVIEW_MAX_QUEUE: 4
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 1g
+    networks: [preview-net]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  uploads:
+  miniodata:
+
+networks:
+  preview-net:
+    internal: true

@@ -1,0 +1,47 @@
+{
+  "name": "workhub-server",
+  "version": "0.2.0",
+  "private": true,
+  "description": "WorkHub - quản lý công việc Kanban cho công ty/phòng ban (backend)",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test \"src/**/*.test.js\" \"src/**/*.test.mjs\"",
+    "migrate": "prisma migrate deploy",
+    "seed": "node src/seed.js",
+    "seed:showcase": "node src/seed-showcase.js",
+    "setup": "prisma migrate deploy && node src/seed.js",
+    "audit": "npm audit --omit=dev --audit-level=high",
+    "tidy:demo": "node src/tidy-demo.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^2.4.3",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "docx": "^9.11.0",
+    "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "minio": "^8.0.7",
+    "multer": "^2.0.2",
+    "node-cron": "^4.2.1",
+    "pizzip": "^3.2.0",
+    "sanitize-html": "^2.17.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "^11.1.1"
+    }
+  }
+}

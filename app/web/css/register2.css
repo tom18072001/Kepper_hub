@@ -1,0 +1,65 @@
+/* GĐ3b — Tổng hợp giao việc (theo phòng chủ trì, dòng cộng theo phòng) và Danh mục (mẫu có hạn tương đối, trọng số KPI).
+   Dùng token màu của styles.css (:root). Gắn sau styles.css trong index.html. */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* ---------- Tổng hợp giao việc ---------- */
+.sum-section{margin-bottom:16px}
+.sum-head{display:flex;align-items:baseline;gap:6px 14px;flex-wrap:wrap;margin-bottom:12px}
+.sum-head h3{margin:0}
+.table.sum-table th,.table.sum-table th.num{white-space:normal;vertical-align:bottom;line-height:1.3}
+.table.sum-table th,.table.sum-table td{padding:10px 9px}
+.table.sum-table th:first-child,.table.sum-table td:first-child{min-width:180px}
+.table.sum-table th.num{min-width:58px;max-width:96px}
+.sum-table th .th-sub{display:block;font-weight:500;font-size:.72rem;color:var(--faint);letter-spacing:0}
+.sum-table td.num .pill{font-variant-numeric:tabular-nums}
+.sum-share{display:inline-flex;flex-direction:column;align-items:flex-end;gap:0;font-variant-numeric:tabular-nums}
+.sum-share .frac{white-space:nowrap}
+.sum-share b{font-weight:700;color:var(--text)}
+.sum-share .bar-mini{width:56px;margin-top:4px}
+.sum-link{border:none;background:none;padding:0;font:inherit;font-weight:600;color:var(--brand);cursor:pointer;text-align:left}
+.sum-link:hover{text-decoration:underline;text-underline-offset:3px}
+.sum-table tr.sum-sub td{background:var(--surface-2);font-weight:600;color:var(--text-2);border-bottom:1px solid var(--border-strong)}
+.sum-table tr.sum-sub td:first-child{padding-left:22px}
+.sum-note{margin:12px 0 0;max-width:110ch}
+
+/* ---------- Danh mục ---------- */
+.catalog-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);align-items:start}
+.kpi-weights{border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 14px 4px;margin:0 0 16px}
+.kpi-weights legend{font-weight:700;font-size:.85rem;color:var(--text-2);padding:0 6px}
+.kw-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.kw-grid .field{margin-bottom:8px}
+.kw-grid input{max-width:110px}
+.kw-sum{margin:0 0 10px;font-weight:600;font-variant-numeric:tabular-nums}
+.kw-sum.ok{color:var(--ok)}.kw-sum.bad{color:var(--danger)}
+.kw-formula{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:12px;color:var(--text-2)}
+.kw-formula p{margin:0 0 6px}
+.kw-formula ul{margin:0 0 8px;padding-left:18px}
+.kw-formula li{margin-bottom:4px}
+.kw-formula [data-w]{font-weight:700;font-variant-numeric:tabular-nums;color:var(--brand)}
+.tpl-title{margin:0 0 12px}
+.tpl-help{margin-top:-6px;max-width:80ch}
+.tpl-card{margin-bottom:12px}
+.tpl-card .tbl-scroll{position:relative} /* giữ nhãn ẩn (.sr-only) trong vùng cuộn, không làm tràn trang trên điện thoại */
+.tpl-owner{margin-top:6px}
+.tpl-table{margin:10px 0 8px;min-width:560px}
+.tpl-table td{vertical-align:top;padding:8px 10px}
+.tpl-table th.num,.tpl-table td.num{width:36px;padding-top:16px}
+.tpl-table td.actions{padding-top:12px}
+.tpl-main{min-width:220px}
+.tpl-main input{min-height:36px;padding:6px 10px}
+.tpl-main .tpl-deliv{margin-top:6px;font-size:.86rem;color:var(--text-2);background:var(--surface-2)}
+.tpl-off{width:1%;white-space:nowrap}
+.offset-edit{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.offset-edit select{width:auto;min-width:176px;padding-top:6px;padding-bottom:6px;min-height:36px;font-size:.86rem}
+.offset-n{display:inline-flex;align-items:center;gap:6px}
+.offset-n input{width:84px;min-height:36px;padding:6px 8px}
+
+@media (max-width:900px){
+  .catalog-grid{grid-template-columns:minmax(0,1fr)}
+  .kw-grid{grid-template-columns:1fr 1fr 1fr}
+}
+@media (max-width:560px){
+  .table.sum-table th:first-child,.table.sum-table td:first-child{min-width:140px}
+  .kw-grid{grid-template-columns:1fr}
+  .kw-grid input{max-width:none}
+}

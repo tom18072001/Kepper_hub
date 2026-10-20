@@ -1,0 +1,43 @@
+# ---- Bí mật / cấu hình môi trường ----
+.env
+.env.*
+!.env.example
+
+# ---- Phụ thuộc ----
+node_modules/
+
+# ---- Cơ sở dữ liệu SQLite (dev) ----
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# ---- Tệp minh chứng người dùng tải lên ----
+app/server/uploads/*
+!app/server/uploads/.gitkeep
+
+# ---- Log & tạm ----
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+~$*.docx
+login-admin-result.png
+
+# ---- IDE / công cụ cục bộ ----
+.vscode/
+.idea/
+.claude/settings.local.json
+.claude/settings.json
+.claude/worktrees/
+
+# ---- Kết quả kiểm thử E2E (tạo lại mỗi lần chạy) ----
+app/e2e/test-results/
+app/e2e/playwright-report/
+
+# ---- Bản sao lưu (chứa dữ liệu thật) ----
+backups/
+
+# Bản sao lưu thủ công trên máy vận hành (có dữ liệu thật) — không bao giờ đưa vào git
+backups-manual/
+*.dump
