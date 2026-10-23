@@ -44,3 +44,5 @@ backups-manual/
 
 # ---- Tiện ích Claude Desktop (build trong Docker) ----
 app/web/downloads/*.mcpb
+# Logo công ty thật: chỉ trên máy chạy
+branding/

@@ -1,0 +1,166 @@
+/* Khung giao diện theo nhận diện công ty (navy #09334C + vàng đồng #B28A33, quỹ đạo elip và "hành tinh" vàng của logo),
+   bố cục kiểu bộ phần mềm văn phòng (1Office…): thanh đầu trang trắng có "Ứng dụng", tìm nhanh, thông báo, tài khoản;
+   sidebar navy chia nhóm theo phân hệ, thu gọn thành dải icon. Nạp sau cùng — ghi đè khung cũ (styles.css, weekly.css). */
+:root{
+  --appbar:60px; --topbar:60px; --sidebar:256px; --rail:66px;
+  --navy:#09334C; --navy-900:#06263A; --navy-ink:#dbe5ed; --navy-mute:#8fa8bc; --navy-line:rgba(255,255,255,.12);
+  --gold:#B28A33; --gold-ink:#8A6A24; --gold-soft:#f5eedd;
+  /* Tông chung của ứng dụng theo logo */
+  --brand:#09334C; --brand-600:#072a3f; --brand-700:#051f2f; --brand-050:#eaf0f4; --brand-100:#d3e0e8; --brand-200:#a9c0cf;
+  --bg:#F3F5F8;
+}
+:focus-visible{outline-color:var(--gold)}
+
+/* ---------- Thanh đầu trang (trắng, viền vàng mảnh như dòng "value by design") ---------- */
+.shell{display:flex;flex-direction:column;min-height:100vh}
+.appbar{position:sticky;top:0;z-index:50;height:var(--appbar);display:flex;align-items:center;gap:10px;padding:0 16px 0 10px;
+  background:#fff;color:var(--navy);box-shadow:0 2px 0 var(--gold)}
+.ab-btn{border:none;background:transparent;color:#4b6274;width:40px;height:40px;border-radius:10px;display:inline-grid;place-items:center;cursor:pointer;position:relative;flex:none}
+.ab-btn:hover,.ab-btn[aria-expanded="true"]{background:var(--brand-050);color:var(--navy)}
+.ab-btn:focus-visible,.ab-apps:focus-visible,.ab-search:focus-visible,.ab-user:focus-visible,.ab-brand:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.ab-brand{display:flex;align-items:center;gap:11px;color:var(--navy);text-decoration:none;padding:4px 10px 4px 4px;border-radius:10px;min-width:0}
+.ab-brand:hover{text-decoration:none;background:var(--surface-2)}
+.ab-brand .brand-mark{flex:none;background:var(--navy);color:#fff;width:36px;height:36px;border-radius:10px;font-size:1.05rem;position:relative}
+.ab-brand .brand-mark::after{content:'';position:absolute;right:6px;bottom:6px;width:7px;height:7px;border-radius:50%;background:var(--gold)}
+.ab-logo{height:34px;width:auto;flex:none;display:block}
+.ab-name{display:flex;flex-direction:column;line-height:1.15;min-width:0;padding-left:11px;border-left:1px solid var(--border)}
+.ab-name b{font-size:1rem;font-weight:700;letter-spacing:-.005em;white-space:nowrap;color:var(--navy)}
+.ab-name span{font-size:.74rem;font-weight:600;color:var(--gold-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.ab-pop{position:relative}
+.ab-apps{display:flex;align-items:center;gap:8px;height:38px;padding:0 14px 0 11px;border-radius:10px;border:1px solid var(--border-strong);
+  background:#fff;color:var(--navy);font-weight:600;font-size:.88rem;cursor:pointer;white-space:nowrap}
+.ab-apps svg.i{color:var(--gold)}
+.ab-apps:hover,.ab-apps[aria-expanded="true"]{background:var(--brand-050);border-color:var(--brand-200)}
+.ab-search{flex:1;max-width:540px;margin:0 auto;display:flex;align-items:center;gap:10px;height:40px;padding:0 10px 0 13px;border-radius:10px;
+  border:1px solid transparent;background:#eef2f6;color:#5d7284;cursor:pointer;font-size:.9rem;min-width:0}
+.ab-search:hover{background:#e6ecf2;color:var(--navy)}
+.ab-search .lbl{flex:1;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ab-right{display:flex;align-items:center;gap:4px;margin-left:auto}
+.appbar .dot{border-color:#fff}
+.ab-user{display:flex;align-items:center;gap:9px;height:46px;padding:0 8px 0 4px;border:none;border-radius:12px;background:transparent;color:var(--navy);cursor:pointer;max-width:260px}
+.ab-user:hover,.ab-user[aria-expanded="true"]{background:var(--brand-050)}
+.ab-user .avatar{width:36px;height:36px;font-size:.8rem;box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--gold)}
+.ab-user .who{display:flex;flex-direction:column;align-items:flex-start;line-height:1.2;min-width:0}
+.ab-user .who b{font-size:.87rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
+.ab-user .who span{font-size:.74rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
+.ab-user svg.i{color:var(--faint)}
+
+/* Bảng "Ứng dụng" */
+.launcher{position:absolute;left:0;top:calc(100% + 10px);width:min(660px,calc(100vw - 24px));max-height:calc(100vh - 84px);overflow:auto;z-index:80;
+  background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-lg);padding:16px 18px 18px}
+.la-head{font-weight:700;font-size:1.02rem;color:var(--navy);margin:0 0 8px;display:flex;align-items:center;gap:8px}
+.la-head::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--gold)}
+.la-group+.la-group{border-top:1px solid var(--border);margin-top:10px;padding-top:10px}
+.la-name{font-size:.8rem;font-weight:600;color:var(--muted);margin:2px 0 8px}
+.la-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.la-app{display:grid;grid-template-columns:40px 1fr;grid-template-rows:auto auto;column-gap:11px;align-items:center;padding:8px;border-radius:10px;color:var(--text);text-decoration:none}
+.la-app:hover,.la-app:focus-visible{background:var(--surface-2);text-decoration:none;outline:none;box-shadow:inset 0 0 0 1px var(--border)}
+.la-app .tile{grid-row:1/3}
+.la-t{font-weight:600;font-size:.88rem;line-height:1.25;color:var(--navy)}
+.la-d{font-size:.75rem;color:var(--muted);line-height:1.3}
+
+/* Ô icon màu theo phân hệ */
+.tile{--g:#09334C;width:24px;height:24px;border-radius:7px;display:inline-grid;place-items:center;flex:none;background:var(--g);color:#fff}
+.tile svg.i{width:14px;height:14px;stroke-width:2}
+.tile.lg{width:40px;height:40px;border-radius:11px}
+.tile.lg svg.i{width:20px;height:20px;stroke-width:1.9}
+
+/* Menu tài khoản */
+.user-pop{width:280px;top:calc(100% + 10px);padding:6px;color:var(--text)}
+.um-head{display:flex;flex-direction:column;padding:10px 10px 9px;border-bottom:1px solid var(--border);margin-bottom:4px}
+.um-head b{font-size:.92rem;color:var(--navy)}
+.user-pop .menu-item{width:100%;text-decoration:none}
+.user-pop .menu-item svg.i{color:var(--faint)}
+.user-pop .menu-item:hover svg.i{color:inherit}
+.um-sep{height:1px;background:var(--border);margin:4px 0}
+
+/* ---------- Sidebar navy ---------- */
+.frame{display:flex;flex:1;min-height:0}
+#sidebar.sidebar{width:var(--sidebar);flex:none;position:sticky;top:var(--appbar);height:calc(100vh - var(--appbar));overflow:hidden;
+  background:var(--navy);border-right:none;color:var(--navy-ink);display:flex;flex-direction:column;transition:width .18s ease-out}
+.sb-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 10px 20px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent}
+.sb-group{--g:#09334C;margin-bottom:8px}
+.sb-gh{display:flex;align-items:center;gap:4px}
+.sb-gt{flex:1;min-width:0;display:flex;align-items:center;gap:10px;border:none;background:none;padding:7px 8px;border-radius:9px;cursor:pointer;
+  color:#f1f5f8;font:600 .9rem/1.2 var(--font);text-align:left}
+.sb-gt:hover{background:rgba(255,255,255,.06)}
+.sb-gt:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+.sb-gt .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-gt .chev{width:7px;height:7px;border-right:1.75px solid var(--navy-mute);border-bottom:1.75px solid var(--navy-mute);transform:rotate(45deg);margin:0 4px 3px;transition:transform .15s ease-out;flex:none}
+.sb-group.shut .chev{transform:rotate(-45deg);margin-bottom:0}
+.sb-gt .badge{margin-left:0}
+.sb-group:not(.shut) .sb-gt .badge{display:none}
+#sidebar .sb-add{width:30px;height:30px;color:var(--navy-mute)}
+#sidebar .sb-add:hover{background:rgba(255,255,255,.08);color:#fff}
+.sb-items{margin:2px 0 4px 19px;padding-left:9px;border-left:1px solid var(--navy-line);display:flex;flex-direction:column;gap:1px}
+.sb-group.shut .sb-items{display:none}
+#sidebar .sb-items a{position:relative;display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;color:var(--navy-ink);font-weight:500;font-size:.9rem;
+  text-decoration:none;box-shadow:none;background:none;transition:background-color .12s ease-out,color .12s ease-out}
+#sidebar .sb-items a svg.i{width:17px;height:17px;color:var(--navy-mute);flex:none}
+#sidebar .sb-items a .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#sidebar .sb-items a:hover{background:rgba(255,255,255,.06);color:#fff}
+#sidebar .sb-items a:hover svg.i{color:#cfdbe5}
+/* Mục đang mở: nền sáng hơn, icon vàng, "hành tinh" vàng trên đường dẫn nhóm (như chấm vàng của logo). */
+#sidebar .sb-items a.active{background:rgba(255,255,255,.11);color:#fff;font-weight:600}
+#sidebar .sb-items a.active svg.i{color:var(--gold)}
+#sidebar .sb-items a.active::before{content:'';position:absolute;left:-14px;top:50%;width:9px;height:9px;margin-top:-4.5px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 3px var(--navy)}
+#sidebar .sb-items a:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+#sidebar .sb-items .badge{margin-left:auto}
+/* Dự án: theo phòng, mã dự án */
+.sb-projects{display:flex;flex-direction:column;gap:1px}
+#sidebar .sb-dept{padding:8px 10px 2px;font-size:.76rem;font-weight:600;color:var(--navy-mute)}
+#sidebar .sb-projects .key{flex:none;font-size:.7rem;font-weight:700;background:rgba(255,255,255,.1);border-radius:5px;padding:1px 6px;color:#e6eef4;letter-spacing:.02em;min-width:30px;text-align:center}
+#sidebar .sb-projects a.active .key{background:var(--gold);color:var(--navy)}
+#sidebar .sb-none{padding:6px 10px;color:var(--navy-mute)}
+
+/* ---------- Vùng nội dung ---------- */
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.crumbs{flex:none;padding:14px 28px 0;font-size:.84rem;font-weight:500;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crumbs:empty{display:none}
+.view{padding:12px 28px 32px}
+
+/* ---------- Sidebar thu gọn (máy tính) ---------- */
+body.nav-collapsed #sidebar.sidebar{width:var(--rail)}
+body.nav-collapsed .sb-scroll{padding:12px 8px}
+body.nav-collapsed .sb-gh{justify-content:center}
+body.nav-collapsed .sb-gt{flex:none;justify-content:center;padding:7px;position:relative}
+body.nav-collapsed .sb-gt .t,body.nav-collapsed .sb-gt .chev,body.nav-collapsed #sidebar .sb-add,body.nav-collapsed #sidebar .sb-items a .t,body.nav-collapsed #sidebar .sb-dept,body.nav-collapsed #sidebar .sb-none{display:none}
+body.nav-collapsed .sb-gt .badge{position:absolute;margin:0;transform:translate(12px,-10px);display:inline-block}
+body.nav-collapsed .sb-group.shut .sb-items{display:flex}
+body.nav-collapsed .sb-items{margin:2px 0 8px;padding:0 0 8px;border-left:none;border-bottom:1px solid var(--navy-line);align-items:center}
+body.nav-collapsed #sidebar .sb-items a{justify-content:center;padding:9px;width:44px}
+body.nav-collapsed #sidebar .sb-items a.active::before{left:-7px}
+body.nav-collapsed #sidebar .sb-items a .badge{position:absolute;top:1px;right:-2px;min-width:18px;line-height:16px;padding:0 4px;font-size:.66rem}
+body.nav-collapsed #sidebar .sb-projects .key{min-width:34px}
+
+/* ---------- Đăng nhập: nền navy, quỹ đạo elip + hành tinh vàng của logo ---------- */
+.auth-page{position:relative;overflow:hidden;background:var(--navy) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1000' preserveAspectRatio='xMidYMid slice'><g fill='none' stroke='%23B28A33' stroke-width='2'><ellipse cx='800' cy='500' rx='760' ry='300' transform='rotate(-11 800 500)' stroke-opacity='.45'/><ellipse cx='800' cy='500' rx='560' ry='210' transform='rotate(-11 800 500)' stroke-opacity='.16'/></g><circle cx='100' cy='507' r='44' fill='%23B28A33' fill-opacity='.14'/><circle cx='100' cy='507' r='26' fill='%23B28A33'/></svg>") center/cover no-repeat}
+.auth-card{position:relative;z-index:1;box-shadow:inset 0 3px 0 var(--gold),0 2px 4px rgba(0,0,0,.08),0 24px 56px rgba(0,0,0,.32)}
+.auth-card .brand-mark{background:var(--navy);color:#fff;position:relative}
+.auth-card .brand-mark::after{content:'';position:absolute;right:8px;bottom:8px;width:9px;height:9px;border-radius:50%;background:var(--gold)}
+.auth-card h1{color:var(--navy)}
+.auth-logo{display:block;width:180px;height:auto;margin:0 0 6px}
+.auth-card.branded h1{font-size:1.25rem;margin-top:14px}
+
+/* ---------- Màn hình hẹp ---------- */
+@media (max-width:1100px){
+  .ab-apps .t,.ab-user .who{display:none}
+  .ab-search{max-width:360px}
+}
+@media (max-width:900px){
+  .ab-search .lbl,.ab-search kbd,.ab-name span,.appbar .kbd-btn{display:none}
+  .ab-search{flex:none;width:40px;padding:0;justify-content:center;margin:0 0 0 auto;background:transparent}
+  .ab-right{margin-left:0}
+  #sidebar.sidebar{position:fixed;left:0;top:var(--appbar);z-index:70;width:min(300px,86vw);transform:translateX(-100%);transition:transform .2s ease-out}
+  #sidebar.sidebar.open{transform:none;box-shadow:var(--shadow-lg)}
+  .sb-scrim{position:fixed;inset:var(--appbar) 0 0 0;background:rgba(6,30,45,.4);z-index:65}
+  .crumbs{padding:12px 16px 0}
+  .view{padding:10px 16px 24px}
+}
+@media (max-width:560px){
+  .ab-name{display:none}
+  .launcher{position:fixed;left:12px;right:12px;top:calc(var(--appbar) + 6px);width:auto}
+  .la-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .user-pop{position:fixed;right:12px;top:calc(var(--appbar) + 6px)}
+}
+@media print{.appbar,#sidebar,.sb-scrim{display:none!important}}

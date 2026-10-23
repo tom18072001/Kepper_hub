@@ -77,6 +77,20 @@ function createApp({ prisma, config }) {
     await prisma.$queryRaw`SELECT 1`;
     res.json({ ok: true });
   });
+  // Nhận diện công ty (tên, logo) — đặt trên máy chạy (ORG_NAME, thư mục BRANDING_DIR), không nằm trong mã nguồn.
+  // Công khai (trang đăng nhập cần), chỉ 4 tệp ảnh cố định, không liệt kê thư mục.
+  const BRAND_FILES = ['logo.png', 'logo-light.png', 'mark.png', 'mark-light.png'];
+  const fsSync = require('node:fs');
+  const brandHas = f => !!config.brandingDir && fsSync.existsSync(path.join(config.brandingDir, f));
+  app.get('/api/brand', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.json({ name: config.orgName || '', files: BRAND_FILES.filter(brandHas) });
+  });
+  app.get('/branding/:file', (req, res) => {
+    if (!BRAND_FILES.includes(req.params.file) || !brandHas(req.params.file)) return res.status(404).end();
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.sendFile(req.params.file, { root: config.brandingDir, dotfiles: 'deny' });
+  });
   for (const mount of [
     require('./routes/auth'), require('./routes/admin'), require('./routes/labels'), require('./routes/projects'), require('./routes/items'), require('./routes/trash'),
     require('./routes/attachments'), require('./routes/approvals'), require('./routes/me'), require('./routes/notes'), require('./routes/dashboard'), require('./routes/kpi'), require('./routes/register'), require('./routes/dispatch'), require('./routes/excel'),
@@ -130,6 +144,9 @@ function loadConfig(env = process.env) {
     enableCron: env.ENABLE_CRON !== 'false',
     // Module tuỳ chọn (playground): MODULES=crm,hrm. Mặc định tắt — bản chạy thật không có CRM / HRM cho tới khi Ban GĐ quyết.
     modules: String(env.MODULES || '').split(',').map(s => s.trim().toLowerCase()).filter(m => ['crm', 'hrm'].includes(m)),
+    // Tên công ty hiện trên thanh đầu trang (đặt trong .env của máy chạy — không ghi tên thật vào mã nguồn).
+    orgName: String(env.ORG_NAME || '').trim().slice(0, 60),
+    brandingDir: env.BRANDING_DIR ? path.resolve(env.BRANDING_DIR) : '',
   };
 }
 
