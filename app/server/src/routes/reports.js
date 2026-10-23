@@ -94,6 +94,8 @@ async function buildWeekly(prisma, user, { projectId, departmentId, from, to }) 
   const scope = permissionScope(user, 'reports.export', 'OPERATE');
   if (!scope) fail(403, 'Bạn không có quyền xuất báo cáo', 'FORBIDDEN');
   const where = { ...visibleProjectsWhere(user), archivedAt: null };
+  // Dự án MTL (Bảo mật): xuất theo quy định mtl.plan · export — báo cáo Word cũ chỉ Ban GĐ mới gồm MTL.
+  if (user.role !== 'director') where.kind = { not: 'MTL' };
   if (projectId) where.id = projectId;
   const projects = await prisma.project.findMany({ where, select: { id: true, key: true, name: true, departmentId: true }, orderBy: { name: 'asc' } });
   if (projectId && !projects.length) fail(404, 'Không tìm thấy dự án trong phạm vi được xuất', 'NOT_FOUND');
@@ -173,6 +175,7 @@ async function buildWeekly(prisma, user, { projectId, departmentId, from, to }) 
 
 module.exports = function mountReports(app, { prisma, auth, audit }) {
   app.get('/api/reports/weekly.docx', auth, async (req, res) => {
+    require('../lib/tokens').assertNotVia(req);
     const week = defaultWeek();
     const from = dayOf(req.query.from, week.from), to = dayOf(req.query.to, week.to);
     if (to < from || (to - from) / DAY > MAX_DAYS - 1) fail(422, `Khoảng thời gian không hợp lệ (tối đa ${MAX_DAYS} ngày)`, 'INVALID_RANGE');

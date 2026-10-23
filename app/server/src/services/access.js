@@ -16,7 +16,11 @@ function projectRights(user, project, member) {
     || (!!editScope && project.visibility === 'ASSIGNED')
     || (editScope === 'UNIT' && sameDept && project.visibility !== 'PRIVATE'));
   const manageScope = permissionScope(user, 'projects.manage', 'OPERATE');
-  const canManage = manageScope === 'SYSTEM' || (manageScope === 'UNIT' && sameDept) || (isMember && !isItAdmin(user) && member.role === 'OWNER');
+  // Dự án MTL (kế hoạch chính thức dùng chung): người quản lý = quyền quản lý toàn công ty, chủ dự án (OWNER) hoặc trưởng dự án —
+  // không mở cho mọi trưởng / phó của phòng sở hữu dự án (họ là lãnh đạo bộ phận chủ trì phần của mình, xem lib/policy.js).
+  const mtl = project.kind === 'MTL';
+  const canManage = manageScope === 'SYSTEM' || (manageScope === 'UNIT' && sameDept && !mtl)
+    || (!isItAdmin(user) && ((isMember && member.role === 'OWNER') || (mtl && project.leadId === user.id)));
   const deleteScope = permissionScope(user, 'work.delete', 'OPERATE');
   const canDelete = canEdit && (deleteScope === 'SYSTEM' || (deleteScope === 'UNIT' && sameDept) || canManage);
   return { canView, canEdit, canManage, canDelete, memberRole: member ? member.role : null };

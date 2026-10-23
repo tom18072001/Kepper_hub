@@ -71,15 +71,61 @@ test('tiến độ kế hoạch, trạng thái nhanh / chậm / trễ, rollup, S
   assert.equal(M.statusOf(d, 0, day).code, 'NOT_DUE');
   assert.equal(M.statusOf(e, 100, day).code, 'DONE_ON_TIME');
   assert.equal(M.statusOf(base(6, '2027-02-01', '2027-02-28'), 0, day).code, 'LATE_START');
-  // Rollup: cha lấy bình quân gia quyền (theo thời lượng) của con.
+  // Rollup: cha = bình quân các việc con, mỗi việc con một phần bằng nhau (trọng số MTL ghi đè).
   const parent = base(10, '2027-01-01', '2027-03-31', { progress: 0 });
   const k1 = base(11, '2027-01-01', '2027-01-31', { parentId: 10, progress: 100 }), k2 = base(12, '2027-02-01', '2027-03-02', { parentId: 10, progress: 0 });
-  const act = M.rollup([parent, k1, k2]);
-  assert.equal(act.get(10), 50.8);
+  assert.equal(M.rollup([parent, k1, k2]).get(10), 50);
+  assert.equal(M.rollup([parent, { ...k1, weight: 3 }, k2]).get(10), 75);
+  // Đầu mục có 5 việc con, xong 1 việc → 20%; xong thêm 1 việc và 1 việc 50% → 50%.
+  const big = base(20, '2027-01-01', '2027-03-31');
+  const five = [1, 2, 3, 4, 5].map(n => base(20 + n, '2027-01-01', '2027-03-31', { parentId: 20 }));
+  const doneSt = { state: { category: 'COMPLETED' } };
+  assert.equal(M.rollup([big, { ...five[0], ...doneSt }, ...five.slice(1)]).get(20), 20);
+  assert.equal(M.rollup([big, { ...five[0], ...doneSt }, { ...five[1], ...doneSt }, { ...five[2], progress: 50 }, five[3], five[4]]).get(20), 50);
+  // Theo cây: dự án 2 bước tổng — bước A có 4 việc con (xong 2), bước B không có con (0%) → (50 + 0) / 2 = 25%.
+  const A = base(30, '2027-01-01', '2027-01-31'), B = base(35, '2027-01-01', '2027-01-31');
+  const four = [1, 2, 3, 4].map(n => base(30 + n, '2027-01-01', '2027-01-31', { parentId: 30, ...(n <= 2 ? doneSt : {}) }));
+  const tp = M.treeProgress([A, ...four, B], i => (M.isDone(i) ? 100 : i.progress), day);
+  assert.equal(tp.actualPct, 25); assert.equal(tp.plannedPct, 100); assert.equal(tp.spi, 0.25);
   const all = [a, b, c, d, e], actualOf = i => (M.isDone(i) ? 100 : i.progress);
   const s = M.spiOf(all, actualOf, day);
   assert.ok(s.spi > 0 && s.spi < 2);
   const k = M.kpiOf(all, actualOf, day);
   assert.equal(k.overdue, 1); assert.equal(k.behind, 1); assert.equal(k.ahead, 1); assert.equal(k.criticalLate, 1);
   assert.ok(k.score >= 0 && k.score <= 100);
+});
+
+test('sprint theo tháng T: khung ngày, trạng thái, làn phải xong / đang chạy / chuẩn bị, mục tiêu %', () => {
+  const t0 = M.vnMidnight(2026, 0, 1); // T0 = 01/2026
+  const sp = M.sprintOf(t0, 5); // T5 = 06/2026
+  assert.equal(sp.start.toISOString(), '2026-05-31T17:00:00.000Z');
+  assert.equal(sp.end.toISOString(), '2026-06-30T16:59:59.999Z');
+  assert.equal(sp.days, 30);
+  assert.equal(M.sprintState(sp, new Date('2026-06-15T03:00:00Z')), 'CURRENT');
+  assert.equal(M.sprintState(sp, new Date('2026-07-01T03:00:00Z')), 'PAST');
+  assert.equal(M.sprintState(sp, new Date('2026-05-31T16:00:00Z')), 'FUTURE');
+  const next = M.sprintOf(t0, 6);
+  const item = (s, e, extra = {}) => { const d = M.tToDates(t0, s, e); return { baselineStart: d.start, baselineEnd: d.end, progress: 0, ...extra }; };
+  const done = { state: { category: 'COMPLETED' } };
+  // Kết thúc trong sprint → DUE; kéo qua sprint → RUNNING; bắt đầu sprint sau → NEXT; không liên quan → null.
+  assert.equal(M.sprintLane(item(3, 5), sp, next), 'DUE');
+  assert.equal(M.sprintLane(item(5, 5), sp, next), 'DUE');
+  assert.equal(M.sprintLane(item(4, 8), sp, next), 'RUNNING');
+  assert.equal(M.sprintLane(item(6, 7), sp, next), 'NEXT');
+  assert.equal(M.sprintLane(item(7, 9), sp, next), null);
+  assert.equal(M.sprintLane(item(1, 2), sp, next), null);
+  // Trễ từ sprint trước, chưa xong: chỉ sprint hiện tại nhận về làn "phải xong"; đã xong thì không.
+  assert.equal(M.sprintLane(item(1, 3), sp, next, { current: true }), 'DUE');
+  assert.equal(M.sprintLane(item(1, 3, { ...done, completedAt: M.vnMidnight(2026, 3, 20) }), sp, next, { current: true }), null);
+  // Đang chạy nhưng đã xong trước khi sprint bắt đầu → không còn trong sprint; xong trong sprint → vẫn hiện.
+  assert.equal(M.sprintLane(item(4, 8, { ...done, completedAt: M.vnMidnight(2026, 4, 10) }), sp, next), null);
+  assert.equal(M.sprintLane(item(4, 8, { ...done, completedAt: M.vnMidnight(2026, 5, 10) }), sp, next), 'RUNNING');
+  // Phải xong trong sprint nhưng đã xong sớm: vẫn ở làn DUE (đã xong).
+  assert.equal(M.sprintLane(item(3, 5, { ...done, completedAt: M.vnMidnight(2026, 2, 10) }), sp, next), 'DUE');
+  assert.equal(M.sprintLane({ baselineStart: null, baselineEnd: null }, sp, next), null);
+  // Mục tiêu: hạng mục T4–T5 (61 ngày) → đầu T5 ≈ 50%, cuối T5 = 100%; hạng mục T5–T6 → 0% → ≈ 49%.
+  const tg = M.sprintTarget(item(4, 5), sp);
+  assert.equal(tg.to, 100); assert.ok(tg.from > 48 && tg.from < 52, String(tg.from));
+  const tg2 = M.sprintTarget(item(5, 6), sp);
+  assert.equal(tg2.from, 0); assert.ok(tg2.to > 47 && tg2.to < 51, String(tg2.to));
 });

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kepper Hub · Tiến độ dự án</title>
-  <meta name="theme-color" content="#0a4d8c">
+  <meta name="theme-color" content="#17324A">
   <meta name="color-scheme" content="light">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/fonts/be-vietnam-pro.css">
@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="css/filters.css">
   <link rel="stylesheet" href="css/lists.css">
   <link rel="stylesheet" href="css/kepper.css">
+  <link rel="stylesheet" href="css/weekly.css">
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
@@ -54,13 +55,21 @@
         <div><b>Kepper Hub</b><div class="muted xs" id="sbOrg">Tiến độ dự án</div></div>
       </div>
       <nav class="sb-nav" id="workNav" aria-label="Điều hướng chính">
-        <a href="#/home" data-nav="home" data-testid="nav-home" id="navHome"><span data-icon="dashboard"></span>Dashboard dự án</a>
-        <a href="#/my" data-nav="my" data-testid="nav-my"><span data-icon="target"></span>Việc của tôi</a>
-        <a href="#/work" data-nav="work" data-testid="nav-work" id="navWork" class="hidden"><span data-icon="users"></span>Tổng thể công việc</a>
-        <a href="#/approvals" data-nav="approvals" data-testid="nav-approvals" id="navApprovals"><span data-icon="approve"></span>Chờ tôi duyệt<span class="badge hidden" id="approvalBadge"></span></a>
-        <a href="#/dashboard" data-nav="dashboard" data-testid="nav-dashboard" id="navDashboard"><span data-icon="chart"></span>Số liệu công việc</a>
-        <a href="#/trash" data-nav="trash" data-testid="nav-trash"><span data-icon="trash"></span>Thùng rác</a>
-        <a href="#/catalog" data-nav="catalog" data-testid="nav-catalog"><span data-icon="list"></span>Danh mục</a>
+        <a href="#/tuan" data-nav="tuan" data-testid="nav-tuan"><span data-icon="calendar"></span>Báo cáo tuần</a>
+        <a href="#/home" data-nav="home" data-testid="nav-home" id="navHome"><span data-icon="dashboard"></span>Tiến độ dự án</a>
+        <a href="#/sprint" data-nav="sprint" data-testid="nav-sprint"><span data-icon="checklist"></span>Cập nhật nhanh</a>
+        <details class="sb-more" id="navMore">
+          <summary data-testid="nav-more"><span data-icon="list"></span>Công cụ khác<span class="badge hidden" id="moreBadge"></span></summary>
+          <div>
+            <a href="#/my" data-nav="my" data-testid="nav-my"><span data-icon="target"></span>Việc của tôi</a>
+            <a href="#/work" data-nav="work" data-testid="nav-work" id="navWork" class="hidden"><span data-icon="users"></span>Tổng thể công việc</a>
+            <a href="#/approvals" data-nav="approvals" data-testid="nav-approvals" id="navApprovals"><span data-icon="approve"></span>Chờ tôi duyệt<span class="badge hidden" id="approvalBadge"></span></a>
+            <a href="#/dashboard" data-nav="dashboard" data-testid="nav-dashboard" id="navDashboard"><span data-icon="chart"></span>Số liệu công việc</a>
+            <a href="#/trash" data-nav="trash" data-testid="nav-trash"><span data-icon="trash"></span>Thùng rác</a>
+            <a href="#/claude" data-nav="claude" data-testid="nav-claude"><span data-icon="send"></span>Kết nối Claude</a>
+            <a href="#/catalog" data-nav="catalog" data-testid="nav-catalog"><span data-icon="list"></span>Danh mục</a>
+          </div>
+        </details>
       </nav>
       <div class="sb-section" id="projectSection">
         <div class="sb-title"><span>Dự án</span><button class="icon-btn" id="newProjectBtn" title="Tạo dự án" aria-label="Tạo dự án" data-testid="new-project"><span data-icon="plus"></span></button></div>
@@ -73,6 +82,7 @@
         <a href="#/admin/labels" data-nav="admin-labels" data-perm="admin.labels"><span data-icon="tag"></span>Nhãn</a>
         <a href="#/catalog" data-nav="catalog" data-perm="admin.departments"><span data-icon="list"></span>Danh mục</a>
         <a href="#/admin/audit" data-nav="admin-audit" data-perm="admin.audit" data-testid="nav-admin-audit"><span data-icon="history"></span>Nhật ký hệ thống</a>
+        <a href="#/admin/tokens" data-nav="admin-tokens" data-perm="admin.users" data-testid="nav-admin-tokens"><span data-icon="send"></span>Token Claude</a>
       </nav>
       <div class="sb-foot">
         <div class="me"><span class="avatar" id="meAvatar"></span><div class="who"><b id="meName"></b><div class="muted xs" id="meDept"></div></div>

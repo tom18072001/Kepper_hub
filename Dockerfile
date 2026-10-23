@@ -1,5 +1,14 @@
 # ---- WorkHub app (Node + Express + Prisma) ----
 # Build context = thư mục gốc repo. Giữ cấu trúc app/server + app/web như khi chạy cục bộ.
+# ---- Tiện ích Kepper cho Claude Desktop (.mcpb): MCP chạy trên máy người dùng, tải ở trang "Kết nối Claude" ----
+FROM node:22-bookworm-slim AS mcpb
+RUN npm install -g --no-audit --no-fund @anthropic-ai/mcpb@1.2.0
+WORKDIR /mcp
+COPY app/mcp/package.json app/mcp/package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund --fetch-retries=5
+COPY app/mcp/server.js app/mcp/manifest.json app/mcp/.mcpbignore ./
+RUN mkdir -p /out && mcpb pack . /out/kepper-claude.mcpb
+
 FROM node:22-bookworm-slim
 
 RUN apt-get update \
@@ -13,6 +22,7 @@ RUN npm ci --no-audit --no-fund --fetch-retries=5 --fetch-retry-mintimeout=20000
 COPY app/server/ ./
 RUN npx prisma generate
 COPY app/web/ /app/web/
+COPY --from=mcpb /out/kepper-claude.mcpb /app/web/downloads/kepper-claude.mcpb
 
 # Chạy bằng tài khoản không phải root; thư mục tệp đính kèm là volume.
 RUN mkdir -p /data/uploads && chown -R node:node /data /app/server/node_modules/.prisma && chmod +x docker-entrypoint.sh

@@ -1,5 +1,6 @@
 // Xuất / nhập Excel danh sách công việc của một dự án.
 const path = require('node:path');
+const MG = require('../services/mtl-guard');
 const fs = require('node:fs/promises');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
@@ -47,8 +48,11 @@ module.exports = function mountExcel(app, { prisma, auth, audit, config }) {
   const upload = multer({ dest: path.join(config.uploadTmpDir, 'workhub-import'), limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
 
   app.get('/api/projects/:id/export.xlsx', auth, async (req, res) => {
-    const { project } = await loadProject(prisma, req.user, intParam(req.params.id));
-    if (!canExport(req.user, project)) fail(403, 'Bạn không có quyền xuất Excel dự án này', 'FORBIDDEN');
+    require('../lib/tokens').assertNotVia(req);
+    const { project, rights } = await loadProject(prisma, req.user, intParam(req.params.id));
+    // MTL: quy định xuất riêng (người quản lý dự án / Ban GĐ — lib/policy.js); dự án khác: quyền xuất Excel thường.
+    if (project.kind === 'MTL') MG.mtlExportGuard(req.user, project, rights);
+    else if (!canExport(req.user, project)) fail(403, 'Bạn không có quyền xuất Excel dự án này', 'FORBIDDEN');
     const items = await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, AND: [itemVisibleWhere(req.user)] }, orderBy: { number: 'asc' },
       include: { state: true, assignees: { include: { user: true } }, labels: { include: { label: true } } } });
     const wb = new ExcelJS.Workbook();
@@ -70,6 +74,7 @@ module.exports = function mountExcel(app, { prisma, auth, audit, config }) {
   });
 
   app.get('/api/projects/:id/import-template.xlsx', auth, async (req, res) => {
+    require('../lib/tokens').assertNotVia(req);
     const { project } = await loadProject(prisma, req.user, intParam(req.params.id), 'edit');
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Cong viec');
@@ -81,6 +86,7 @@ module.exports = function mountExcel(app, { prisma, auth, audit, config }) {
 
   app.post('/api/projects/:id/import', auth, async (req, res, next) => {
     req.projectCtx = await loadProject(prisma, req.user, intParam(req.params.id), 'edit');
+    MG.mtlBulkGuard(req.user, req.projectCtx.project, req.projectCtx.rights); // MTL: nhập hàng loạt chỉ người quản lý dự án
     if (req.projectCtx.project.visibility === 'ASSIGNED' && !req.projectCtx.rights.canManage && !req.projectCtx.member)
       fail(403, 'Chỉ Ban Giám đốc / người quản lý sổ được nhập việc vào sổ giao việc của đơn vị', 'FORBIDDEN');
     next();

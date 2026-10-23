@@ -81,32 +81,68 @@ async function runProjectAlerts(prisma, project, day = new Date()) {
       await viber.sendToUsers(prisma, to, `Kepper Hub — ${KIND_LABEL[kind]}: ${code}. Mở: ${viber.appLink(link)}`).catch(() => {});
     }
   }
-  // Ảnh chụp tiến độ hôm nay: toàn dự án + từng bộ phận (đường cong S thực tế).
+  // Ảnh chụp tiến độ hôm nay: toàn dự án + từng bộ phận (đường cong S thực tế), tiến độ theo cây đầu việc như Dashboard.
   const leaves = rows.filter(r => !parents.has(r.id));
   const actualOf = i => actual.get(i.id) ?? i.progress;
   const snap = async (departmentId, list) => {
-    const s = M.spiOf(list, actualOf, day);
+    const s = M.treeProgress(list, actualOf, day);
     if (s.plannedPct == null) return;
     await prisma.progressSnapshot.upsert({ where: { projectId_departmentId_day: { projectId: project.id, departmentId, day: dayDate } },
       create: { projectId: project.id, departmentId, day: dayDate, plannedPct: s.plannedPct, actualPct: s.actualPct, spi: s.spi },
       update: { plannedPct: s.plannedPct, actualPct: s.actualPct, spi: s.spi } }).catch(async e => {
       // Prisma không upsert được khoá có null (departmentId = null) → cập nhật / tạo tay.
       if (departmentId !== null) throw e;
-      const ex = await prisma.progressSnapshot.findFirst({ where: { projectId: project.id, departmentId: null, day: dayDate } });
-      if (ex) await prisma.progressSnapshot.update({ where: { id: ex.id }, data: { plannedPct: s.plannedPct, actualPct: s.actualPct, spi: s.spi } });
-      else await prisma.progressSnapshot.create({ data: { projectId: project.id, departmentId: null, day: dayDate, plannedPct: s.plannedPct, actualPct: s.actualPct, spi: s.spi } });
+      // Khoá theo dự án: bấm "Chạy ngay" trùng lúc job chạy không tạo hai điểm cùng ngày trên đường cong S.
+      await prisma.$transaction(async tx => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'snapshot:' + project.id}))`;
+        const ex = await tx.progressSnapshot.findFirst({ where: { projectId: project.id, departmentId: null, day: dayDate } });
+        if (ex) await tx.progressSnapshot.update({ where: { id: ex.id }, data: { plannedPct: s.plannedPct, actualPct: s.actualPct, spi: s.spi } });
+        else await tx.progressSnapshot.create({ data: { projectId: project.id, departmentId: null, day: dayDate, plannedPct: s.plannedPct, actualPct: s.actualPct, spi: s.spi } });
+      });
     });
   };
-  await snap(null, leaves);
-  for (const d of new Set(leaves.map(r => r.leadDepartmentId).filter(Boolean))) await snap(d, leaves.filter(r => r.leadDepartmentId === d));
+  await snap(null, rows);
+  for (const d of new Set(leaves.map(r => r.leadDepartmentId).filter(Boolean))) await snap(d, rows.filter(r => r.leadDepartmentId === d));
   return { project: project.id, alerts, notified };
 }
 
 async function runAllAlerts(prisma, day = new Date()) {
   const projects = await prisma.project.findMany({ where: { kind: 'MTL', archivedAt: null, deletedAt: null, t0Date: { not: null } } });
-  const out = [];
-  for (const p of projects) out.push(await runProjectAlerts(prisma, p, day));
+  const out = [], failed = [];
+  // Một dự án lỗi không chặn cảnh báo của các dự án khác; cuối vòng báo lỗi tổng hợp để lịch chạy thử lại.
+  for (const p of projects) { try { out.push(await runProjectAlerts(prisma, p, day)); } catch (error) { failed.push(`${p.key}: ${error.message}`); } }
+  if (failed.length) throw new Error(`Cảnh báo MTL lỗi ở ${failed.length} dự án — ${failed.join('; ').slice(0, 200)}`);
   return out;
 }
 
-module.exports = { KIND_LABEL, REPEAT, LEVEL, kindsFor, shouldSend, runProjectAlerts, runAllAlerts };
+// Nhắc cập nhật tiến độ hằng tuần (chiều thứ Sáu): mỗi người MỘT thông báo trong ứng dụng — số việc trong sprint hiện tại
+// đã tới ngày bắt đầu mà chưa cập nhật từ 5 ngày trở lên — mở "Cập nhật nhanh". Người nhận: người phụ trách;
+// hạng mục chưa giao người → lãnh đạo bộ phận chủ trì. Chỉ thông báo trong ứng dụng (không qua Viber).
+async function runWeeklyUpdateReminder(prisma, day = new Date(), { staleDays = 5 } = {}) {
+  const projects = await prisma.project.findMany({ where: { kind: 'MTL', archivedAt: null, deletedAt: null, t0Date: { not: null } } });
+  const count = new Map(), leaderCache = new Map();
+  for (const p of projects) {
+    const t = M.currentT(p.t0Date, day);
+    if (t == null || t < 0) continue;
+    const sprint = M.sprintOf(p.t0Date, t);
+    const rows = await prisma.workItem.findMany({ where: { projectId: p.id, archivedAt: null },
+      select: { id: true, parentId: true, baselineStart: true, baselineEnd: true, progressAt: true, startedAt: true, completedAt: true, leadDepartmentId: true, state: { select: { category: true } }, assignees: { select: { userId: true } } } });
+    for (const r of M.leavesOf(rows)) {
+      if (M.isDone(r) || M.isCancelled(r) || !r.baselineStart || r.baselineStart > day) continue;
+      if (!['DUE', 'RUNNING'].includes(M.sprintLane(r, sprint, null, { current: true }))) continue;
+      const last = r.progressAt || r.startedAt;
+      if (last && M.vnDay(day) - M.vnDay(last) < staleDays) continue;
+      let to = r.assignees.map(a => a.userId);
+      if (!to.length) {
+        if (!leaderCache.has(r.leadDepartmentId)) leaderCache.set(r.leadDepartmentId, await approval.deptLeaderIds(prisma, r.leadDepartmentId));
+        to = leaderCache.get(r.leadDepartmentId);
+      }
+      for (const u of new Set(to)) count.set(u, (count.get(u) || 0) + 1);
+    }
+  }
+  let sent = 0;
+  for (const [userId, n] of count) sent += await notify(prisma, [userId], { type: 'MTL_UPDATE_REMINDER', title: `Cập nhật tiến độ tuần này: ${n} việc trong sprint chưa cập nhật`, body: 'Mở "Cập nhật nhanh" và bấm % hoàn thành cho từng việc.', link: '#/sprint' });
+  return { users: count.size, sent };
+}
+
+module.exports = { KIND_LABEL, REPEAT, LEVEL, kindsFor, shouldSend, runProjectAlerts, runAllAlerts, runWeeklyUpdateReminder };

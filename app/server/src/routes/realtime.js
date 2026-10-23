@@ -12,7 +12,8 @@ module.exports = function mountRealtime(app, { prisma, auth }) {
     });
     res.write('retry: 5000\n\n');
     const client = bus.add(res, req.user);
-    const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
+    // Mỗi lần ping cũng kiểm lại phiên (tối đa một truy vấn / phút / kết nối).
+    const ping = setInterval(() => { bus.sessionValid(client).then(ok => { if (ok) res.write(': ping\n\n'); }).catch(() => bus.close(client)); }, 25_000);
     const expire = setTimeout(() => res.end(), MAX_AGE_MS);
     req.on('close', () => { clearInterval(ping); clearTimeout(expire); bus.remove(client); });
   });

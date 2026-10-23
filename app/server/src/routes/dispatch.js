@@ -10,6 +10,8 @@ const bus = require('../services/bus');
 const W = require('../services/workitems');
 const { getSettings, deadlineStatus } = require('../services/register');
 const { stageOf } = require('../services/stage');
+const MG = require('../services/mtl-guard');
+const { setProgress } = require('../services/mtl-progress');
 
 const DOC_KINDS = { BASIS: 'Căn cứ giao việc', OUTPUT: 'Sản phẩm tham mưu', ISSUED: 'Văn bản đã phát hành' };
 const DAY = 86_400_000;
@@ -126,6 +128,7 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
     const { project, rights } = await loadItem(prisma, req.user, id, 'edit');
     const body = req.body || {};
     const row = await prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'item:' + id}))`;
       const item = await itemWithProject(tx, id);
       if (!(await canWorkOn(tx, req.user, rights, item, { supporters: true }))) fail(403, 'Chỉ người thực hiện hoặc lãnh đạo phòng chủ trì được báo cáo tiến độ', 'FORBIDDEN');
       if (['COMPLETED', 'CANCELLED'].includes(item.state.category)) fail(409, 'Việc đã kết thúc', 'CLOSED');
@@ -137,7 +140,13 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
       const difficulties = text(body.difficulties, 'Khó khăn', { max: 2000 }) || '';
       const proposals = text(body.proposals, 'Kiến nghị', { max: 2000 }) || '';
       const r = await tx.progressReport.create({ data: { workItemId: id, authorId: req.user.id, progress, content, difficulties, proposals, asSupporter } });
-      if (!asSupporter) await tx.workItem.update({ where: { id }, data: { progress, ...(difficulties || proposals ? { resultNote: [difficulties && 'Khó khăn: ' + difficulties, proposals && 'Kiến nghị: ' + proposals].filter(Boolean).join('\n') } : {}) } });
+      const resultNote = difficulties || proposals ? { resultNote: [difficulties && 'Khó khăn: ' + difficulties, proposals && 'Kiến nghị: ' + proposals].filter(Boolean).join('\n') } : {};
+      if (!asSupporter && project.kind === 'MTL') {
+        // MTL: cùng quy định và cùng đường ghi % như Cập nhật nhanh (policy mtl.progress, một nguồn %, tự chuyển trạng thái).
+        await MG.mtlGuard(tx, req.user, project, rights, id, { progress: true, manualPct: progress !== item.progress });
+        if (progress !== item.progress) await setProgress(tx, { user: req.user, project, rights, item, pct: progress, via: 'PROGRESS_REPORT' });
+        if (resultNote.resultNote) await tx.workItem.update({ where: { id }, data: resultNote });
+      } else if (!asSupporter) await tx.workItem.update({ where: { id }, data: { progress, ...resultNote } });
       await activity(tx, id, req.user.id, 'PROGRESS_REPORT', { reportId: r.id, progress, hasProposal: !!proposals, asSupporter });
       const supervisor = proposals ? await supervisorOf(tx, item.leadDepartmentId) : null;
       const watchers = [item.assignedById, ...(await leadersOf(tx, item)), ...(asSupporter ? item.assignees.map(a => a.userId) : []), supervisor].filter(x => x && x !== req.user.id);
@@ -240,6 +249,7 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
       // Người giao việc quyết định; việc không có người giao khác thì lãnh đạo phòng chủ trì / người quản lý quyết định.
       const allowed = item.assignedById === req.user.id || rights.canManage || (!item.assignedById || item.assignedById === current.requestedById) && (await leadersOf(tx, item)).includes(req.user.id);
       if (!allowed) fail(403, 'Chỉ người giao việc được duyệt gia hạn', 'FORBIDDEN');
+      if (decision === 'APPROVE') await MG.mtlGuard(tx, req.user, project, rights, item.id, { plan: true }); // MTL: hạn là kế hoạch
       const x = await tx.dueExtension.update({ where: { id: ext.id }, data: { status: decision === 'APPROVE' ? 'APPROVED' : 'REJECTED', decidedById: req.user.id, decidedAt: new Date(), decisionNote: note || null } });
       if (decision === 'APPROVE') await tx.workItem.update({ where: { id: item.id }, data: { dueDate: current.newDue, originalDueDate: item.originalDueDate ?? current.oldDue } });
       await activity(tx, item.id, req.user.id, decision === 'APPROVE' ? 'EXTENSION_APPROVED' : 'EXTENSION_REJECTED', { extensionId: ext.id, newDue: current.newDue, note });
@@ -316,6 +326,7 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
     const created = await prisma.$transaction(async tx => {
       const parent = await itemWithProject(tx, id);
       if (parent.parentId) fail(422, 'Chỉ thêm việc nhánh cho việc gốc');
+      const g = await MG.mtlCreateGuard(tx, req.user, project, rights, { parentId: id }); // MTL: quản lý dự án / lãnh đạo bộ phận chủ trì
       const leaders = await leadersOf(tx, parent);
       if (!(rights.canManage || parent.assignedById === req.user.id || leaders.includes(req.user.id) || parent.assignees.some(a => a.userId === req.user.id)))
         fail(403, 'Chỉ lãnh đạo phòng chủ trì, người chủ trì hoặc người giao được chia việc nhánh', 'FORBIDDEN');
@@ -326,6 +337,8 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
         const item = await W.createWorkItem(tx, { project, user: req.user, rights, source: 'BULK', input: {
           title: r.title, parentId: id, assigneeIds: r.assigneeIds || parent.assignees.map(a => a.userId), dueDate, priority: parent.priority, assignedById: req.user.id,
           deliverable: r.deliverable || '', overrideWip: 'bulk',
+          // MTL: việc con đầu tiên của bước đang làm dở nhận % hiện tại của bước (tiến độ bước không tụt).
+          ...(project.kind === 'MTL' && !out.length && g.progress ? { progress: g.progress } : {}),
         } });
         out.push({ id: item.id, code: code(project, item), title: item.title, dueDate: item.dueDate });
       }

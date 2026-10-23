@@ -4,6 +4,7 @@ const { projectRights } = require('./access');
 
 const DELAY_MS = 150;
 const RIGHTS_TTL_MS = 60_000;
+const SESSION_TTL_MS = 60_000; // kiểm lại phiên mỗi phút: khoá tài khoản / đổi mật khẩu → đóng luồng ngay, không chờ 30 phút
 const clients = new Set();
 let prismaRef = null;
 
@@ -12,12 +13,26 @@ function init(prisma) { prismaRef = prisma; }
 function send(client, event, data) {
   try { client.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch { remove(client); }
 }
+const MAX_PER_USER = 5; // nhiều tab hơn: đóng luồng cũ nhất (giới hạn số kết nối giữ mở trên máy chủ)
 function add(res, user) {
-  const client = { res, user, rights: new Map() };
+  const mine = [...clients].filter(c => c.user.id === user.id);
+  for (const old of mine.slice(0, Math.max(0, mine.length - MAX_PER_USER + 1))) close(old);
+  const client = { res, user, rights: new Map(), sessionAt: Date.now() };
   clients.add(client);
   return client;
 }
 function remove(client) { clients.delete(client); }
+function close(client) { remove(client); try { client.res.end(); } catch { /* đã đóng */ } }
+
+// Phiên còn hiệu lực: tài khoản còn hoạt động và sessionVersion không đổi (khoá / reset / đổi mật khẩu đều tăng).
+async function sessionValid(client) {
+  if (Date.now() - client.sessionAt < SESSION_TTL_MS) return true;
+  const u = await prismaRef.user.findUnique({ where: { id: client.user.id }, select: { isActive: true, sessionVersion: true } });
+  const ok = !!u && u.isActive && Number(u.sessionVersion || 0) === Number(client.user.sessionVersion || 0);
+  if (!ok) { close(client); return false; }
+  client.sessionAt = Date.now();
+  return true;
+}
 
 async function canView(client, projectId) {
   const cached = client.rights.get(projectId);
@@ -32,6 +47,7 @@ async function canView(client, projectId) {
 async function deliver(event) {
   for (const client of [...clients]) {
     try {
+      if (!(await sessionValid(client))) continue;
       if (event.type === 'notify') { if (event.userIds.includes(client.user.id)) send(client, 'notify', {}); continue; }
       if (await canView(client, event.projectId)) send(client, event.type, { projectId: event.projectId, itemId: event.itemId || null, actorId: event.actorId || null });
     } catch { remove(client); }
@@ -61,4 +77,4 @@ function notified(userIds) {
   notifyTimer.unref?.();
 }
 
-module.exports = { init, add, remove, item, project, notified, count: () => clients.size };
+module.exports = { closeAll: () => { for (const c of [...clients]) close(c); }, sessionValid, close, init, add, remove, item, project, notified, count: () => clients.size };

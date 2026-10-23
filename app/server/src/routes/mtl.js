@@ -9,23 +9,14 @@ const { fail, intParam, optionalInt, optionalDate, text } = require('../lib/http
 const { permissionScope, isItAdmin } = require('../lib/permissions');
 const { verifyUpload } = require('../lib/files');
 const { loadProject, loadItem, visibleProjectsWhere, itemVisibleWhere } = require('../services/access');
+const MP = require('../services/mtl-project');
+const S = require('../services/mtl-sprints');
 const { activity } = require('../services/events');
 const { matchPeople } = require('../services/people');
 const approval = require('../services/approval');
 const bus = require('../services/bus');
 const M = require('../services/mtl');
 const A = require('../services/alerts');
-
-const ITEM_SELECT = {
-  id: true, number: true, title: true, parentId: true, planId: true, planCode: true, planSection: true, ownerText: true, externalParty: true,
-  leadDepartmentId: true, critical: true, milestone: true, milestoneNote: true, startT: true, endT: true, baselineStart: true, baselineEnd: true,
-  startDate: true, dueDate: true, forecastEnd: true, weight: true, progress: true, progressAt: true, startedAt: true, completedAt: true, stateId: true,
-  state: { select: { id: true, name: true, category: true, color: true } }, assignees: { select: { user: { select: { id: true, fullName: true } } } },
-  supportDepartments: { select: { departmentId: true } },
-};
-// Thứ tự bước tự nhiên: 1, 2, …, 10, II.1, II.2 (số trước, rồi La Mã).
-const stepKey = s => { const m = String(s || '').match(/^(\d+)(?:\.(\d+))?/); if (m) return [0, Number(m[1]), Number(m[2] || 0), '']; return [1, 0, 0, String(s || '')]; };
-const byStep = (a, b) => { const x = stepKey(a.planCode), y = stepKey(b.planCode); for (let i = 0; i < 4; i++) { if (x[i] < y[i]) return -1; if (x[i] > y[i]) return 1; } return a.id - b.id; };
 
 // Xem KPI theo người: Ban lãnh đạo (SYSTEM) mọi người; trưởng / phó bộ phận (UNIT) bộ phận mình.
 const kpiScope = user => (isItAdmin(user) ? null : permissionScope(user, 'reports.kpi', 'VIEW') === 'SYSTEM' || permissionScope(user, 'work.approve', 'OPERATE') === 'SYSTEM' ? 'SYSTEM' : permissionScope(user, 'work.approve', 'OPERATE') === 'UNIT' ? 'UNIT' : null);
@@ -38,43 +29,36 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
     return ctx;
   };
 
-  // Tải hạng mục MTL người xem được + tính tiến độ / trạng thái (dùng chung cho bảng theo dõi, Dashboard, KPI).
-  async function computeProject(project, user, day = new Date()) {
-    const cfg = M.alertConfigOf(project);
-    const rows = await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, AND: [itemVisibleWhere(user)] }, select: ITEM_SELECT });
-    const actual = M.rollup(rows);
-    const items = rows.map(r => {
-      const a = actual.get(r.id) ?? r.progress;
-      const st = M.statusOf(r, a, day, cfg);
-      return { ...r, assignees: r.assignees.map(x => x.user), supportDepartmentIds: r.supportDepartments.map(x => x.departmentId), supportDepartments: undefined,
-        code: `${project.key}-${r.number}`, actual: a, planned: st.planned ?? M.plannedPct(r, day), status: st.code, statusLabel: M.STATUS[st.code], variance: st.variance ?? null,
-        lateDays: st.lateDays ?? null, daysLeft: st.daysLeft ?? null, startsIn: st.startsIn ?? null, children: 0 };
-    });
-    const byId = new Map(items.map(i => [i.id, i]));
-    for (const i of items) if (i.parentId && byId.has(i.parentId)) byId.get(i.parentId).children++;
-    return { items: items.sort(byStep), cfg, actualOf: i => actual.get(i.id) ?? i.progress };
-  }
+  const computeProject = (project, user, day) => MP.computeProject(prisma, project, user, day);
+  const isDeptLeader = async (user, departmentId) => departmentId != null && (await approval.deptLeaderIds(prisma, departmentId)).includes(user.id);
 
   // ---------- Nhập MTL từ Excel ----------
   // multipart: file (.xlsx), sheet?, kind = MASTER | DEPARTMENT, departmentId (MTL bộ phận), planName?, dryRun, rebaseline (đặt lại kế hoạch gốc).
   app.post('/api/projects/:id/mtl-import', auth, upload.single('file'), async (req, res) => {
     const file = req.file;
     try {
-      const { project } = await mtlProject(req, 'manage');
+      const { project, rights } = await mtlProject(req);
+      const kind = req.body.kind === 'DEPARTMENT' ? 'DEPARTMENT' : 'MASTER';
+      const departmentId = kind === 'DEPARTMENT' ? intParam(req.body.departmentId, 'Bộ phận') : null;
+      // PMO (người quản lý dự án) nhập mọi kế hoạch. Lãnh đạo bộ phận tự nhập MTL của bộ phận mình — không đặt lại kế hoạch gốc, không đổi tên kế hoạch.
+      const asLeader = !rights.canManage;
+      if (asLeader && !(kind === 'DEPARTMENT' && rights.canEdit && departmentId === req.user.departmentId && await isDeptLeader(req.user, departmentId)))
+        fail(403, 'Chỉ PMO nhập MTL tổng; lãnh đạo bộ phận nhập MTL của bộ phận mình', 'FORBIDDEN');
       if (!file) fail(400, 'Chưa chọn tệp Excel', 'REQUIRED');
       if (!/\.xlsx$/i.test(file.originalname)) fail(415, 'Chỉ nhận tệp .xlsx', 'FILE_TYPE_NOT_ALLOWED');
       await verifyUpload('import.xlsx', file.path);
       const buf = await fs.readFile(file.path);
       const fileHash = crypto.createHash('sha256').update(buf).digest('hex');
-      const kind = req.body.kind === 'DEPARTMENT' ? 'DEPARTMENT' : 'MASTER';
-      const departmentId = kind === 'DEPARTMENT' ? intParam(req.body.departmentId, 'Bộ phận') : null;
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buf);
       const cell = c => { const v = c?.value; if (v == null) return null; if (v instanceof Date) return v; if (typeof v === 'object') { const r = v.result ?? v.text ?? (v.richText ? v.richText.map(t => t.text).join('') : null); return r instanceof Date || typeof r === 'number' ? r : r == null ? null : String(r); } return v; };
       const sheets = [];
+      // Giới hạn kích thước: tệp định dạng cả cột (nhiều dòng rỗng có style) không được chặn event loop / làm hết bộ nhớ.
+      const MAX_ROWS = 3000, MAX_COLS = 40;
       for (const ws of wb.worksheets) {
+        if (ws.actualRowCount > MAX_ROWS) fail(422, `Sheet "${ws.name}" có ${ws.actualRowCount} dòng dữ liệu, vượt ${MAX_ROWS} — tách tệp`, 'IMPORT_TOO_LARGE');
         const rows = [];
-        ws.eachRow({ includeEmpty: true }, (row, n) => { const vals = []; for (let i = 1; i <= Math.max(row.cellCount, 10); i++) vals.push(cell(row.getCell(i))); rows[n - 1] = vals; });
+        ws.eachRow({ includeEmpty: false }, (row, n) => { const vals = []; for (let i = 1; i <= Math.min(Math.max(row.cellCount, 10), MAX_COLS); i++) vals.push(cell(row.getCell(i))); rows[n - 1] = vals; });
         for (let i = 0; i < rows.length; i++) rows[i] = rows[i] || [];
         const parsed = M.parseMtlRows(rows);
         if (parsed && parsed.items.length) sheets.push({ name: ws.name, ...parsed });
@@ -84,50 +68,69 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
       const departments = await prisma.department.findMany({ where: { isActive: true }, select: { id: true, code: true, name: true } });
       if (departmentId != null && !departments.some(d => d.id === departmentId)) fail(422, 'Bộ phận không hợp lệ', 'INVALID_DEPARTMENT');
       const people = kind === 'DEPARTMENT' ? await prisma.user.findMany({ where: { isActive: true, role: { not: 'admin' }, isRootAdmin: false, departmentId }, select: { id: true, fullName: true, username: true } }) : [];
-      const planName = text(req.body.planName, 'Tên kế hoạch', { max: 160 }) || (kind === 'DEPARTMENT' ? `MTL ${departments.find(d => d.id === departmentId).name}` : `MTL — ${sheet.name}`);
+      // MTL bộ phận không ghi tên: bộ phận đã có đúng một kế hoạch → cập nhật kế hoạch đó (tải mẫu → sửa → nhập lại).
+      const deptPlans = kind === 'DEPARTMENT' ? await prisma.plan.findMany({ where: { projectId: project.id, kind: 'DEPARTMENT', departmentId }, select: { name: true } }) : [];
+      const planName = (!asLeader && text(req.body.planName, 'Tên kế hoạch', { max: 160 }))
+        || (kind === 'DEPARTMENT' ? (deptPlans.length === 1 ? deptPlans[0].name : `MTL ${departments.find(d => d.id === departmentId).name}`) : `MTL — ${sheet.name}`);
       const existingPlan = await prisma.plan.findFirst({ where: { projectId: project.id, name: planName } });
+      if (existingPlan && (existingPlan.kind !== kind || (kind === 'DEPARTMENT' && existingPlan.departmentId !== departmentId)))
+        fail(409, `Tên kế hoạch "${planName}" đang dùng cho kế hoạch khác — đặt tên khác`, 'PLAN_NAME_TAKEN');
       const existing = existingPlan ? await prisma.workItem.findMany({ where: { planId: existingPlan.id, archivedAt: null }, select: { id: true, planCode: true, baselineStart: true, baselineEnd: true } }) : [];
       const byCode = new Map(existing.filter(e => e.planCode).map(e => [e.planCode, e]));
       // MTL bộ phận: khớp "Thuộc bước" với hạng mục MTL tổng (kế hoạch MASTER mới nhất).
-      const master = kind === 'DEPARTMENT' ? await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, plan: { kind: 'MASTER' } }, select: { id: true, planCode: true, title: true }, orderBy: { id: 'desc' } }) : [];
+      const master = kind === 'DEPARTMENT' ? await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, plan: { kind: 'MASTER' } }, select: { id: true, planCode: true, title: true, progress: true, leadDepartmentId: true, supportDepartments: { select: { departmentId: true } }, state: { select: { category: true } }, _count: { select: { children: { where: { archivedAt: null } } } } }, orderBy: { id: 'desc' } }) : [];
       const masterByCode = new Map(); for (const m of master) if (m.planCode && !masterByCode.has(m.planCode)) masterByCode.set(m.planCode, m);
       const rebaseline = req.body.rebaseline === '1' || req.body.rebaseline === 'true';
+      if (rebaseline && asLeader) fail(403, 'Chỉ PMO được đặt lại kế hoạch gốc', 'FORBIDDEN');
       const unmatchedOwners = new Map(), unmatchedParents = new Set();
       const plan = sheet.items.map(it => {
         const dates = it.startT != null ? M.tToDates(project.t0Date, it.startT, it.endT) : { start: it.startDate, end: it.endDate ? new Date(it.endDate.getTime() + 86_400_000 - 1) : null };
         const owner = kind === 'DEPARTMENT' ? { leadDepartmentId: departmentId, supportDepartmentIds: [], externalParty: '' } : M.splitOwner(it.ownerText, departments);
         const assignees = kind === 'DEPARTMENT' ? matchPeople(it.ownerText.replace(/\//g, '\n'), people) : { ids: [], unmatched: [] };
         if (kind === 'MASTER' && !owner.leadDepartmentId) unmatchedOwners.set(it.ownerText || '(trống)', (unmatchedOwners.get(it.ownerText || '(trống)') || 0) + 1);
-        const parent = it.parentStep ? masterByCode.get(it.parentStep) : null;
+        let parent = it.parentStep ? masterByCode.get(it.parentStep) : null;
+        // Lãnh đạo bộ phận chỉ gắn dòng con vào bước tổng bộ phận mình CHỦ TRÌ (không đổi tiến độ bước của bộ phận khác;
+        // phần phối hợp trong bước của bộ phận khác: người quản lý dự án nhập).
+        if (parent && asLeader && parent.leadDepartmentId !== departmentId) parent = null;
         if (it.parentStep && !parent) unmatchedParents.add(it.parentStep);
         const prev = it.step ? byCode.get(it.step) : null;
         const baselineChanged = !!prev && !!prev.baselineStart && (prev.baselineStart.getTime() !== dates.start?.getTime() || prev.baselineEnd?.getTime() !== dates.end?.getTime());
         return { ...it, ...owner, leadDepartmentId: owner.leadDepartmentId ?? project.departmentId, assigneeIds: assignees.ids, unmatchedPeople: assignees.unmatched,
-          parentId: parent?.id ?? null, parentTitle: parent?.title ?? null, baselineStart: dates.start, baselineEnd: dates.end, existingId: prev?.id ?? null, baselineChanged };
+          parentId: parent?.id ?? null, parentTitle: parent?.title ?? null, baselineStart: dates.start, baselineEnd: dates.end, existingId: prev?.id ?? null, baselineChanged,
+          // Chi tiết hoá lần đầu một bước tổng đang làm dở: dòng con mới nhận % hiện tại của bước tổng, để tiến độ bước tổng (tính từ các dòng con) không bị tụt.
+          inheritProgress: !prev && parent && !parent._count.children && parent.progress > 0 && parent.state?.category !== 'COMPLETED' ? Math.min(99, parent.progress) : 0 };
       });
+      // Lãnh đạo bộ phận không tạo bước tổng (bước gốc): mọi dòng phải thuộc một bước bộ phận mình chủ trì.
+      const orphans = asLeader ? plan.filter(p => !p.parentId && !(p.existingId && existing.find(e => e.id === p.existingId))) : [];
       const summary = { sheet: sheet.name, sheets: sheets.map(s => ({ name: s.name, items: s.items.length })), planName, kind, items: plan.length,
         create: plan.filter(p => !p.existingId).length, update: plan.filter(p => p.existingId).length, baselineChanged: plan.filter(p => p.baselineChanged).length,
         critical: plan.filter(p => p.critical).length, milestones: plan.filter(p => p.milestone).length,
-        unmatchedOwners: [...unmatchedOwners].map(([k, n]) => ({ text: k, count: n })), unmatchedParents: [...unmatchedParents], warnings: sheet.warnings.slice(0, 50), fileHash };
+        unmatchedOwners: [...unmatchedOwners].map(([k, n]) => ({ text: k, count: n })), unmatchedParents: [...unmatchedParents], warnings: sheet.warnings.slice(0, 50), fileHash,
+        orphans: orphans.map(p => ({ step: p.step, title: p.title, parentStep: p.parentStep || '' })) };
       const deptName = Object.fromEntries(departments.map(d => [d.id, d.name]));
       if (req.body.dryRun === '1' || req.body.dryRun === 'true') {
         return res.json({ ...summary, preview: plan.slice(0, 300).map(p => ({ step: p.step, title: p.title, ownerText: p.ownerText, lead: deptName[p.leadDepartmentId] || '', support: p.supportDepartmentIds.map(id => deptName[id]), externalParty: p.externalParty,
           startT: p.startT, endT: p.endT, baselineStart: p.baselineStart, baselineEnd: p.baselineEnd, critical: p.critical, milestone: p.milestone, parent: p.parentTitle ? `${p.parentStep} · ${p.parentTitle}` : p.parentStep || '',
-          action: p.existingId ? (p.baselineChanged ? (rebaseline ? 'Cập nhật + đặt lại kế hoạch gốc' : 'Cập nhật (giữ kế hoạch gốc)') : 'Cập nhật') : 'Tạo mới' })) });
+          action: p.existingId ? (p.baselineChanged ? (rebaseline ? 'Cập nhật + đặt lại kế hoạch gốc' : 'Cập nhật (giữ kế hoạch gốc)') : 'Cập nhật') : p.inheritProgress ? `Tạo mới (nhận ${p.inheritProgress}% của bước ${p.parentStep})` : 'Tạo mới' })) });
       }
+      if (orphans.length) fail(422, `${orphans.length} dòng không thuộc bước MTL tổng nào do bộ phận chủ trì (cột "Thuộc bước"): ${orphans.slice(0, 5).map(p => p.step || p.title.slice(0, 30)).join(', ')} — lãnh đạo bộ phận chỉ chi tiết hoá bước bộ phận mình chủ trì`, 'ORPHAN_ROWS');
       const states = await prisma.workflowState.findMany({ where: { projectId: project.id }, orderBy: { position: 'asc' } });
       const todo = states.find(s => s.category === 'UNSTARTED') || states[0];
+      const doing = states.find(s => s.category === 'STARTED') || todo;
       const result = await prisma.$transaction(async tx => {
         const planRow = existingPlan
           ? await tx.plan.update({ where: { id: existingPlan.id }, data: { fileName: file.originalname.slice(0, 200), fileHash, sheetName: sheet.name } })
           : await tx.plan.create({ data: { projectId: project.id, name: planName, year: new Date().getFullYear(), kind, departmentId, sheetName: sheet.name, fileName: file.originalname.slice(0, 200), fileHash, createdById: req.user.id } });
         let created = 0, updated = 0, rebased = 0, position = (await tx.workItem.aggregate({ where: { stateId: todo.id }, _max: { position: true } }))._max.position || 0;
         for (const p of plan) {
-          const fields = { title: p.title, planCode: p.step || null, planSection: p.section, ownerText: p.ownerText, externalParty: p.externalParty, critical: p.critical, milestone: p.milestone,
-            milestoneNote: p.milestoneNote, startT: p.startT, endT: p.endT, weight: p.weight, leadDepartmentId: p.leadDepartmentId, note: p.note || '', planId: planRow.id, taskType: 'PLAN',
+          // Trọng số / găng / mốc: kế hoạch của người quản lý dự án — lãnh đạo bộ phận nhập không đổi (giữ giá trị cũ / mặc định).
+          const planOnly = asLeader ? {} : { critical: p.critical, milestone: p.milestone, milestoneNote: p.milestoneNote, weight: p.weight };
+          const fields = { title: p.title, planCode: p.step || null, planSection: p.section, ownerText: p.ownerText, externalParty: p.externalParty, ...planOnly,
+            leadDepartmentId: p.leadDepartmentId, note: p.note || '', planId: planRow.id, taskType: 'PLAN',
             ...(p.parentId ? { parentId: p.parentId } : {}) };
           if (p.existingId) {
-            const base = rebaseline || !p.baselineChanged ? { baselineStart: p.baselineStart, baselineEnd: p.baselineEnd } : {};
+            // Tháng T đi cùng kế hoạch gốc: giữ kế hoạch gốc thì giữ cả T (lần đổi T0 sau không âm thầm đặt lại kế hoạch gốc).
+            const base = rebaseline || !p.baselineChanged ? { baselineStart: p.baselineStart, baselineEnd: p.baselineEnd, startT: p.startT, endT: p.endT } : {};
             if (rebaseline && p.baselineChanged) rebased++;
             await tx.workItem.update({ where: { id: p.existingId }, data: { ...fields, ...base } });
             await tx.workItemDepartment.deleteMany({ where: { workItemId: p.existingId } });
@@ -136,7 +139,8 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
           } else {
             const { nextNumber } = await tx.project.update({ where: { id: project.id }, data: { nextNumber: { increment: 1 } }, select: { nextNumber: true } });
             position += 1024;
-            const item = await tx.workItem.create({ data: { ...fields, projectId: project.id, number: nextNumber - 1, stateId: todo.id, position, reporterId: req.user.id, assignedById: req.user.id, assignedAt: new Date(),
+            const inherit = p.inheritProgress ? { progress: p.inheritProgress, progressAt: new Date(), startedAt: new Date() } : {};
+            const item = await tx.workItem.create({ data: { ...fields, startT: p.startT, endT: p.endT, ...inherit, projectId: project.id, number: nextNumber - 1, stateId: (p.inheritProgress ? doing : todo).id, position, reporterId: req.user.id, assignedById: req.user.id, assignedAt: new Date(),
               baselineStart: p.baselineStart, baselineEnd: p.baselineEnd, startDate: p.baselineStart, dueDate: p.baselineEnd, originalDueDate: p.baselineEnd,
               supportDepartments: { create: p.supportDepartmentIds.map(departmentId => ({ departmentId })) }, assignees: { create: p.assigneeIds.map(userId => ({ userId })) } } });
             await activity(tx, item.id, req.user.id, 'CREATED', { source: 'MTL', plan: planName });
@@ -147,9 +151,9 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
         const deptIds = [...new Set(plan.flatMap(p => [p.leadDepartmentId, ...p.supportDepartmentIds]).filter(Boolean))];
         const staff = await tx.user.findMany({ where: { isActive: true, role: { not: 'admin' }, isRootAdmin: false, departmentId: { in: deptIds } }, select: { id: true } });
         await tx.projectMember.createMany({ data: staff.map(u => ({ projectId: project.id, userId: u.id, role: 'MEMBER' })), skipDuplicates: true });
-        await audit(req, 'MTL_IMPORT', 'Plan', planRow.id, null, { projectId: project.id, kind, sheet: sheet.name, fileHash, created, updated, rebased }, tx);
+        await audit(req, 'MTL_IMPORT', 'Plan', planRow.id, null, { projectId: project.id, kind, departmentId, sheet: sheet.name, fileHash, created, updated, rebased, byDepartmentLeader: asLeader }, tx);
         return { planId: planRow.id, created, updated, rebased, members: staff.length };
-      });
+      }, { timeout: 120_000, maxWait: 10_000 }); // MTL thật nhiều dòng: mặc định 5 s không đủ
       bus.project(project.id, req.user.id);
       res.json({ ...summary, ...result });
     } finally { if (file) await fs.rm(file.path, { force: true }).catch(() => {}); }
@@ -164,11 +168,13 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
     const deptName = Object.fromEntries(departments.map(d => [d.id, d.name]));
     const leaves = M.leavesOf(items);
     const totalT = Math.max(0, ...items.map(i => i.endT ?? 0), project.t0Date ? M.currentT(project.t0Date, items.reduce((m, i) => (i.baselineEnd && i.baselineEnd > m ? i.baselineEnd : m), now)) ?? 0 : 0);
-    const summary = M.kpiOf(leaves, actualOf, now, cfg);
-    const byDepartment = departments.map(d => ({ id: d.id, name: d.name, code: d.code, ...M.kpiOf(leaves.filter(i => i.leadDepartmentId === d.id), actualOf, now, cfg) })).filter(r => r.items);
+    // Tiến độ theo cây đầu việc (mỗi việc con chia đều phần của việc cha); đếm chậm / trễ trên việc lá.
+    const summary = M.kpiOf(items, actualOf, now, cfg);
+    const byDepartment = departments.map(d => ({ id: d.id, name: d.name, code: d.code, ...M.kpiOf(items.filter(i => i.leadDepartmentId === d.id), actualOf, now, cfg) })).filter(r => r.items);
+    const sp = S.buildSprints(project, items, actualOf, now, cfg);
     const milestones = items.filter(i => i.milestone).map(i => ({ id: i.id, code: i.code, step: i.planCode, title: i.title, baselineEnd: i.baselineEnd, forecastEnd: i.forecastEnd, completedAt: i.completedAt, status: i.status, statusLabel: i.statusLabel, critical: i.critical }));
     const nextMilestone = milestones.filter(m => !m.completedAt && m.baselineEnd).sort((a, b) => a.baselineEnd - b.baselineEnd)[0] || null;
-    const curve = project.t0Date ? M.plannedCurve(leaves, project.t0Date, totalT) : [];
+    const curve = project.t0Date ? M.plannedCurve(items, project.t0Date, totalT) : [];
     const snaps = await prisma.progressSnapshot.findMany({ where: { projectId: project.id, departmentId: null }, orderBy: { day: 'asc' }, select: { day: true, plannedPct: true, actualPct: true, spi: true } });
     const alerts = await prisma.progressAlert.findMany({ where: { projectId: project.id, workItem: { archivedAt: null, AND: [itemVisibleWhere(req.user)] } }, orderBy: { createdAt: 'desc' }, take: 40,
       select: { id: true, kind: true, level: true, day: true, variance: true, lateDays: true, workItem: { select: { id: true, number: true, title: true, leadDepartmentId: true } } } });
@@ -176,7 +182,8 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
     res.json({
       project: { id: project.id, key: project.key, name: project.name, t0Date: project.t0Date, currentT: M.currentT(project.t0Date, now), totalT, alertConfig: cfg },
       generatedAt: now, summary, byDepartment, milestones, nextMilestone, curve, actualCurve: snaps,
-      items: items.map(i => ({ ...i, leadDepartmentName: deptName[i.leadDepartmentId] || '' })),
+      items: items.map(i => ({ ...i, leadDepartmentName: deptName[i.leadDepartmentId] || '', sprint: sp.indexOf.get(i.id) ?? null })),
+      sprints: sp.list, sprintConfigured: sp.configured, currentSprint: sp.current,
       alerts: alerts.map(a => ({ ...a, label: A.KIND_LABEL[a.kind], item: { id: a.workItem.id, code: `${project.key}-${a.workItem.number}`, title: a.workItem.title, department: deptName[a.workItem.leadDepartmentId] || '' }, workItem: undefined })),
       plans: await prisma.plan.findMany({ where: { projectId: project.id }, select: { id: true, name: true, kind: true, departmentId: true, sheetName: true, fileName: true, createdAt: true }, orderBy: { id: 'asc' } }),
     });
@@ -213,7 +220,7 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
       }
       await audit(req, data.t0Date ? 'MTL_T0_CHANGE' : 'UPDATE', 'Project', project.id, { t0Date: project.t0Date, alertConfig: project.alertConfig }, { ...data, reason, moved }, tx);
       return { project: p, moved };
-    });
+    }, { timeout: 60_000, maxWait: 10_000 });
     res.json({ ok: true, moved: result.moved, alertConfig: M.alertConfigOf(result.project), t0Date: result.project.t0Date });
   });
 
@@ -273,8 +280,10 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
       const leaves = M.leavesOf(items);
       const mine = leaves.filter(i => i.assignees.some(a => a.id === req.user.id) || (req.user.departmentId != null && i.leadDepartmentId === req.user.departmentId));
       const next = items.filter(i => i.milestone && !i.completedAt && i.baselineEnd).sort((a, b) => a.baselineEnd - b.baselineEnd)[0];
+      const sp = S.buildSprints(p, items, actualOf, now, cfg), cs = sp.current != null ? sp.list[sp.current] : null;
       out.push({ id: p.id, key: p.key, name: p.name, t0Date: p.t0Date, currentT: M.currentT(p.t0Date, now), totalT: Math.max(0, ...items.map(i => i.endT ?? 0)),
-        summary: M.kpiOf(leaves, actualOf, now, cfg), mine: M.kpiOf(mine, actualOf, now, cfg),
+        summary: M.kpiOf(items, actualOf, now, cfg), mine: M.kpiOf(mine, actualOf, now, cfg),
+        currentSprint: cs ? { index: cs.index, name: cs.name, stepsLabel: cs.stepsLabel, plannedPct: cs.plannedPct, actualPct: cs.actualPct, status: cs.status, statusLabel: cs.statusLabel, stepsDone: cs.stepsDone, steps: cs.steps, count: sp.list.length, configured: sp.configured } : null,
         attention: items.filter(i => ['OVERDUE', 'BEHIND', 'LATE_START'].includes(i.status) && (i.critical || i.milestone || mine.includes(i))).slice(0, 12)
           .map(i => ({ id: i.id, code: i.code, title: i.title, status: i.status, statusLabel: i.statusLabel, variance: i.variance, lateDays: i.lateDays, critical: i.critical, milestone: i.milestone, leadDepartmentId: i.leadDepartmentId })),
         nextMilestone: next ? { id: next.id, code: next.code, title: next.title, baselineEnd: next.baselineEnd, status: next.status, statusLabel: next.statusLabel } : null });

@@ -23,7 +23,8 @@ module.exports = function mountAuth(app, { prisma, config, auth, audit }) {
   app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body || {};
     const u = await prisma.user.findUnique({ where: { username: String(username || '').trim().toLowerCase() }, include: { department: true, permissions: true } });
-    if (!u || !u.isActive || !bcrypt.compareSync(String(password || ''), u.passwordHash)) {
+    // So khớp bất đồng bộ (không chặn máy chủ khi nhiều người đăng nhập cùng lúc); tiêu chí đăng nhập giữ nguyên.
+    if (!u || !u.isActive || !(await bcrypt.compare(String(password || ''), u.passwordHash))) {
       if (audit) { const f = failedLogin(String(username || '').trim().toLowerCase(), u); await audit(req, 'LOGIN_FAILED', 'Auth', f.entityId, null, f.value); }
       return res.status(401).json({ error: 'Tài khoản hoặc mật khẩu không đúng' });
     }
@@ -41,11 +42,11 @@ module.exports = function mountAuth(app, { prisma, config, auth, audit }) {
 
   app.post('/api/me/password', auth, async (req, res) => {
     const currentPassword = String(req.body?.currentPassword || ''), newPassword = String(req.body?.newPassword || '');
-    if (!bcrypt.compareSync(currentPassword, req.user.passwordHash)) return res.status(422).json({ error: 'Mật khẩu hiện tại không đúng' });
+    if (!(await bcrypt.compare(currentPassword, req.user.passwordHash))) return res.status(422).json({ error: 'Mật khẩu hiện tại không đúng' });
     if (newPassword.length < MIN_PASSWORD_LENGTH || !newPassword.trim()) return res.status(422).json({ error: 'Mật khẩu mới phải có ít nhất 6 ký tự và không chỉ gồm khoảng trắng' });
-    if (bcrypt.compareSync(newPassword, req.user.passwordHash)) return res.status(422).json({ error: 'Mật khẩu mới phải khác mật khẩu hiện tại' });
+    if (await bcrypt.compare(newPassword, req.user.passwordHash)) return res.status(422).json({ error: 'Mật khẩu mới phải khác mật khẩu hiện tại' });
     const updated = await prisma.$transaction(async tx => {
-      const user = await tx.user.update({ where: { id: req.user.id }, data: { passwordHash: bcrypt.hashSync(newPassword, 10), mustChangePw: false, sessionVersion: { increment: 1 } } });
+      const user = await tx.user.update({ where: { id: req.user.id }, data: { passwordHash: await bcrypt.hash(newPassword, 10), mustChangePw: false, sessionVersion: { increment: 1 } } });
       await tx.auditLog.create({ data: { userId: user.id, action: 'PASSWORD_CHANGE', entity: 'User', entityId: String(user.id), ip: req.ip } });
       return user;
     });

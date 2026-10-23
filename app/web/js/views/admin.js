@@ -11,9 +11,24 @@ const ICON = {
 };
 
 export async function renderAdmin(root, section, params, setCrumbs) {
-  const map = { users: renderUsers, departments: renderDepartments, labels: renderLabels, audit: renderAudit };
-  setCrumbs('<span class="muted">Quản trị /</span> ' + ({ users: 'Tài khoản', departments: 'Phòng ban', labels: 'Nhãn', audit: 'Nhật ký hệ thống' }[section] || ''));
+  const map = { users: renderUsers, departments: renderDepartments, labels: renderLabels, audit: renderAudit, tokens: renderTokens };
+  setCrumbs('<span class="muted">Quản trị /</span> ' + ({ users: 'Tài khoản', departments: 'Phòng ban', labels: 'Nhãn', audit: 'Nhật ký hệ thống', tokens: 'Token Claude' }[section] || ''));
   await (map[section] || renderUsers)(root, params);
+}
+
+// ---------- Token Claude (siêu dữ liệu — không thấy token, không thấy dữ liệu nghiệp vụ) ----------
+async function renderTokens(root) {
+  const rows = await api('/api/admin/tokens');
+  root.innerHTML = `<div class="page-head"><h1>Token Claude</h1><span class="muted sm">Mỗi người tự tạo trong "Kết nối Claude"; Claude dùng đúng quyền của người đó. Thu hồi khi mất máy, nghỉ việc hoặc dùng bất thường.</span></div>
+    <div class="admin-scroll"><table class="table admin-cards" data-testid="admin-tokens"><thead><tr><th>Người dùng</th><th>Tên</th><th>Mã đầu</th><th>Quyền</th><th>Hết hạn</th><th>Dùng gần nhất</th><th>IP</th><th></th></tr></thead><tbody>
+    ${rows.map(t => `<tr${t.active ? '' : ' class="muted"'}><td>${esc(t.user.fullName)} <span class="muted xs">${esc(t.user.username)}</span></td><td>${esc(t.name)}</td><td><code>${esc(t.prefix)}…</code></td>
+      <td>${t.scopes.includes('write') ? 'Đọc và cập nhật' : 'Chỉ đọc'}</td><td>${t.revokedAt ? 'Đã thu hồi' : esc(fmtDateTime(t.expiresAt))}</td><td>${t.lastUsedAt ? esc(fmtDateTime(t.lastUsedAt)) : '—'}</td><td>${esc(t.lastIp || '')}</td>
+      <td>${t.active ? `<button class="btn btn-ghost btn-sm" data-trevoke="${t.id}">Thu hồi</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">Chưa có token.</td></tr>'}</tbody></table></div>`;
+  root.onclick = async e => {
+    const b = e.target.closest('[data-trevoke]');
+    if (!b || !(await confirmDialog('Thu hồi token này? Người dùng được thông báo.', { okText: 'Thu hồi', danger: true }))) return;
+    try { await api(`/api/admin/tokens/${b.dataset.trevoke}/revoke`, { method: 'POST' }); toast('Đã thu hồi', 'ok'); await renderTokens(root); } catch (error) { toast(errorMessage(error), 'err'); }
+  };
 }
 
 // ---------- Quyền: nhãn tiếng Việt + so sánh với hồ sơ vai trò ----------
@@ -310,11 +325,26 @@ const FIELD = {
 };
 const HIDDEN_FIELDS = new Set(['id', 'sensitive', 'department', 'createdAt', 'lastLoginAt', 'createdById', 'updatedById', 'updatedAt', 'passwordHash']);
 let adminUsersCache = null;
+// Tình trạng vận hành: sao lưu gần nhất, job lịch chạy (lần chạy, lỗi). Chỉ thông tin hệ thống.
+function opsBox(ops) {
+  if (!ops) return '';
+  const t = v => (v ? new Date(v).toLocaleString('vi-VN') : '—');
+  const b = ops.backup || {};
+  const jobs = Object.entries(ops.jobs || {}).sort((x, y) => x[0].localeCompare(y[0]));
+  return `<details class="card" data-testid="ops-box"${ops.problems.length ? ' open' : ''} style="margin-bottom:12px;padding:10px 14px">
+    <summary><b>Tình trạng vận hành</b> ${ops.problems.length ? `<span class="chip chip-OVERDUE">${ops.problems.length} cần xử lý</span>` : '<span class="chip">Bình thường</span>'}</summary>
+    ${ops.problems.length ? `<ul>${ops.problems.map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
+    <p class="sm">Sao lưu đạt gần nhất: <b>${esc(t(b.lastOk))}</b>${b.sizeKb ? ` · ${esc(String(b.sizeKb))} KB` : ''} · mã hoá: ${b.encrypted ? 'có' : 'không'} · bản ngoài máy: ${b.copied ? 'có' : 'không'}${b.lastFailAt ? ` · lỗi gần nhất: ${esc(t(b.lastFailAt))}` : ''}</p>
+    <table class="table sm"><thead><tr><th>Job</th><th>Lần chạy gần nhất</th><th>Kết quả</th></tr></thead><tbody>
+    ${jobs.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(t(v.at))}</td><td>${v.ok ? 'Đạt' : `Lỗi: ${esc(v.error || '')}`}</td></tr>`).join('') || '<tr><td colspan="3" class="empty">Chưa có job nào chạy.</td></tr>'}</tbody></table>
+  </details>`;
+}
 async function renderAudit(root, params) {
   const page = Number(params.get('page')) || 1;
   const q = new URLSearchParams({ page, pageSize: 50 });
   for (const k of AUDIT_FILTERS) if (params.get(k)) q.set(k, params.get(k));
-  const [d, people] = await Promise.all([api('/api/admin/audit?' + q), adminUsersCache || (can('admin.users') ? api('/api/admin/users') : Promise.resolve(store.users)).catch(() => store.users)]);
+  const [d, people, ops] = await Promise.all([api('/api/admin/audit?' + q), adminUsersCache || (can('admin.users') ? api('/api/admin/users') : Promise.resolve(store.users)).catch(() => store.users),
+    api('/api/admin/ops').catch(() => null)]);
   adminUsersCache = people;
   const pages = Math.max(1, Math.ceil(d.total / d.pageSize));
   const { actions, entities } = d.labels;
@@ -323,6 +353,7 @@ async function renderAudit(root, params) {
   const link = p => { const x = new URLSearchParams(); for (const k of AUDIT_FILTERS) if (params.get(k)) x.set(k, params.get(k)); x.set('page', p); return '#/admin/audit?' + x; };
   const filtered = AUDIT_FILTERS.some(k => params.get(k));
   root.innerHTML = `<div class="page-head"><h1>Nhật ký hệ thống</h1><span class="muted">${d.total} bản ghi</span></div>
+    ${opsBox(ops)}
     <form class="filters" id="auditFilters" data-testid="audit-filters">
       <select name="action" aria-label="Hành động" data-testid="audit-action"><option value="">Mọi hành động</option>${sortBy(actions).map(([k, v]) => opt(k, v, 'action')).join('')}</select>
       <select name="entity" aria-label="Đối tượng" data-testid="audit-entity"><option value="">Mọi đối tượng</option>${sortBy(entities).map(([k, v]) => opt(k, v, 'entity')).join('')}</select>

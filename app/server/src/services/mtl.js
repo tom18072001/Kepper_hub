@@ -150,7 +150,9 @@ function plannedPct(item, day = new Date()) {
   return Math.round(((d - s + 1) / (e - s + 1)) * 1000) / 10;
 }
 const durationDays = i => (i.baselineStart && i.baselineEnd ? vnDay(i.baselineEnd) - vnDay(i.baselineStart) + 1 : 1);
-const weightOf = i => (i.weight > 0 ? i.weight : durationDays(i));
+// Thang tiến độ theo đầu việc: mỗi việc con chia đều phần của việc cha (5 việc con → xong 1 việc = 20%), người dùng chỉ cần
+// đánh dấu xong từng việc. Cột "Trọng số" trong MTL (nếu có) ghi đè để một việc con nặng hơn.
+const weightOf = i => (i.weight > 0 ? i.weight : 1);
 
 // Tiến độ thực tế: hạng mục có hạng mục con (không huỷ) → bình quân gia quyền của con (đệ quy); ngược lại → % đã cập nhật.
 function rollup(items) {
@@ -203,12 +205,38 @@ function spiOf(items, actualOf, day = new Date()) {
 // Lá: hạng mục không có con (trong tập đang xét).
 const leavesOf = items => { const parents = new Set(items.map(i => i.parentId).filter(x => x != null)); return items.filter(i => !parents.has(i.id)); };
 
+// Tiến độ theo cây đầu việc: mỗi nút = bình quân (trọng số mặc định 1) của các con; tập = bình quân các nút gốc của tập.
+// Kế hoạch tính cùng cách (việc lá: tuyến tính theo kế hoạch gốc) để SPI so sánh cùng thang.
+function treeProgress(items, actualOf, day = new Date()) {
+  const live = items.filter(i => !isCancelled(i) && i.baselineStart && i.baselineEnd);
+  const ids = new Set(live.map(i => i.id)), kids = new Map();
+  for (const i of live) if (i.parentId != null && ids.has(i.parentId)) { if (!kids.has(i.parentId)) kids.set(i.parentId, []); kids.get(i.parentId).push(i); }
+  const memo = new Map();
+  const node = (i, depth = 0) => {
+    if (memo.has(i.id)) return memo.get(i.id);
+    const ch = depth < 20 ? kids.get(i.id) || [] : [];
+    let p, a;
+    if (ch.length) {
+      const w = ch.reduce((n, k) => n + weightOf(k), 0), vals = ch.map(k => [weightOf(k), node(k, depth + 1)]);
+      p = vals.reduce((n, [x, v]) => n + x * v.p, 0) / w; a = isDone(i) ? 100 : vals.reduce((n, [x, v]) => n + x * v.a, 0) / w;
+    } else { p = plannedPct(i, day); a = isDone(i) ? 100 : actualOf(i) || 0; }
+    const v = { p, a }; memo.set(i.id, v); return v;
+  };
+  const top = live.filter(i => !(i.parentId != null && ids.has(i.parentId)));
+  const W = top.reduce((n, i) => n + weightOf(i), 0);
+  if (!W) return { spi: null, plannedPct: null, actualPct: null };
+  const pv = top.reduce((n, i) => n + weightOf(i) * node(i).p, 0) / W, ev = top.reduce((n, i) => n + weightOf(i) * node(i).a, 0) / W;
+  return { spi: pv > 0 ? Math.round(ev / pv * 100) / 100 : null, plannedPct: Math.round(pv * 10) / 10, actualPct: Math.round(ev * 10) / 10 };
+}
+
 // KPI tiến độ = 50% × SPI (quy 0–1,1 về 0–100) + 30% × tỷ lệ hoàn thành đúng hạn + 20% × (1 − tỷ lệ đường găng trễ).
 // Thành phần chưa có dữ liệu thì bỏ, chia lại trọng số.
+// items: tập hạng mục (có thể gồm cả việc cha và con) — tiến độ / SPI theo cây đầu việc, đếm chậm / trễ trên việc lá.
 function kpiOf(items, actualOf, day = new Date(), cfg = DEFAULT_ALERTS) {
-  const live = items.filter(i => !isCancelled(i) && i.baselineStart);
+  const all = items.filter(i => !isCancelled(i) && i.baselineStart);
+  const live = leavesOf(all);
   const st = live.map(i => ({ i, s: statusOf(i, actualOf(i), day, cfg) }));
-  const { spi, plannedPct: p, actualPct: a } = spiOf(live, actualOf, day);
+  const { spi, plannedPct: p, actualPct: a } = treeProgress(all, actualOf, day);
   const finished = st.filter(x => ['DONE_ON_TIME', 'DONE_LATE'].includes(x.s.code));
   const dueOrDone = st.filter(x => finished.includes(x) || x.s.code === 'OVERDUE');
   const onTime = finished.filter(x => x.s.code === 'DONE_ON_TIME').length;
@@ -237,12 +265,41 @@ function plannedCurve(items, t0Date, months) {
   const out = [];
   for (let t = 0; t <= months; t++) {
     const day = new Date(monthStart(t0Date, t + 1).getTime() - 1);
-    out.push({ t, day, planned: spiOf(live, () => 0, day).plannedPct ?? 0 });
+    out.push({ t, day, planned: treeProgress(live, () => 0, day).plannedPct ?? 0 });
   }
   return out;
 }
 
+// ---------- Sprint = một tháng T ----------
+// Sprint T chạy từ 00:00 ngày 1 tới 23:59:59.999 ngày cuối của tháng (T0 + T), giờ Việt Nam — khớp cách quy đổi tháng T của MTL.
+function sprintOf(t0Date, t) {
+  const start = monthStart(t0Date, t), end = new Date(monthStart(t0Date, t + 1).getTime() - 1);
+  return { t, start, end, days: vnDay(end) - vnDay(start) + 1 };
+}
+const sprintState = (sprint, day = new Date()) => (day.getTime() < sprint.start.getTime() ? 'FUTURE' : day.getTime() > sprint.end.getTime() ? 'PAST' : 'CURRENT');
+const ms = v => (v == null ? null : new Date(v).getTime());
+// Hạng mục nằm ở làn nào của sprint:
+// - DUE: kế hoạch gốc kết thúc trong sprint; với sprint hiện tại thêm hạng mục trễ từ sprint trước mà chưa xong (chuyển sang);
+// - RUNNING: đang chạy qua sprint và kết thúc ở sprint sau (đã xong trước khi sprint bắt đầu thì không tính);
+// - NEXT: bắt đầu ở sprint kế tiếp (chuẩn bị).
+// null = không thuộc sprint.
+function sprintLane(item, sprint, next = null, { current = false } = {}) {
+  const s = ms(item.baselineStart), e = ms(item.baselineEnd);
+  if (s == null || e == null) return null;
+  const done = isDone(item), doneAt = ms(item.completedAt);
+  const a = sprint.start.getTime(), b = sprint.end.getTime();
+  if (e >= a && e <= b) return 'DUE';
+  if (current && !done && e < a) return 'DUE';
+  if (done && doneAt != null && doneAt < a) return null;
+  if (s <= b && e > b) return 'RUNNING';
+  if (next && !done && s >= next.start.getTime() && s <= next.end.getTime()) return 'NEXT';
+  return null;
+}
+// Mục tiêu % của hạng mục ở đầu và cuối sprint (theo kế hoạch gốc).
+const sprintTarget = (item, sprint) => ({ from: plannedPct(item, new Date(sprint.start.getTime() - 1)), to: plannedPct(item, sprint.end) });
+
 module.exports = {
   DEFAULT_ALERTS, alertConfigOf, STATUS, vnDay, vnMidnight, monthStart, tToDates, currentT, timeValue, parseMtlRows, splitOwner,
-  plannedPct, durationDays, weightOf, rollup, statusOf, spiOf, leavesOf, kpiOf, plannedCurve, isDone, isCancelled,
+  plannedPct, durationDays, weightOf, rollup, statusOf, spiOf, leavesOf, treeProgress, kpiOf, plannedCurve, isDone, isCancelled,
+  sprintOf, sprintState, sprintLane, sprintTarget,
 };

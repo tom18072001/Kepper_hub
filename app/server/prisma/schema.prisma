@@ -49,6 +49,7 @@ model User {
   supporting     WorkItemSupporter[]
   notifications  Notification[]
   notes          PersonalNote[]
+  apiTokens      ApiToken[]
   scheduleEvents ScheduleParticipant[]
 
   @@index([departmentId])
@@ -85,6 +86,7 @@ model Project {
   kind          String   @default("BOARD") // BOARD = bảng công việc | MTL = dự án theo Master Timeline (tháng T từ T0)
   t0Date        DateTime? // ngày T0 của MTL (đầu tháng T0)
   alertConfig   Json?    // ngưỡng cảnh báo: { behindPct, aheadPct, startSoonDays, dueSoonDays, staleDays }
+  sprintPlan    Json?    // Kepper: sprint = nhóm bước MTL theo thứ tự [{ name, steps: "1-9", goal }] — PMO thiết lập
   archivedAt    DateTime?
   deletedAt     DateTime? // đã xoá (thùng rác): khôi phục được trong 7 ngày, sau đó xoá hẳn
   deletedById   Int?
@@ -722,4 +724,94 @@ model ViberLink {
   consentAt DateTime?
   linkedAt  DateTime?
   createdAt DateTime  @default(now())
+}
+
+// Kepper GĐ2b — Báo cáo tuần bộ phận (mẫu BM-TH-01): mỗi bộ phận × tuần (thứ Sáu, giờ VN) một bản.
+// data: { results: [], ongoing: [], plans: [], other: '' } — hạng mục tự điền từ MTL (itemId) hoặc nhập thêm.
+// Người phụ trách lưu id tài khoản (không lưu họ tên tự gõ). Nhãn: Bảo mật (xem docs/data-protection-assessment.md).
+model WeeklyReport {
+  id               Int       @id @default(autoincrement())
+  departmentId     Int
+  week             String    // YYYY-MM-DD của thứ Sáu
+  status           String    @default("DRAFT") // DRAFT | SUBMITTED
+  data             Json
+  preparerId       Int?      // người lưu gần nhất
+  firstSubmittedAt DateTime? // giờ nộp lần đầu — dùng để tính đúng hạn / muộn
+  submittedAt      DateTime? // giờ nộp gần nhất
+  submittedById    Int?
+  submitCount      Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([departmentId, week])
+  @@index([week])
+}
+
+// Báo nộp muộn / vắng giao ban. Lý do chọn theo danh sách + ghi chú ngắn; tự xoá sau 12 tháng.
+model WeeklyNotice {
+  id           Int       @id @default(autoincrement())
+  departmentId Int
+  week         String    // YYYY-MM-DD của thứ Sáu
+  type         String    // LATE | ABSENT
+  reason       String    // CONG_TAC | NGHI_PHEP | DOT_XUAT | KHAC
+  note         String    @default("")
+  expectedAt   DateTime? // LATE: giờ nộp dự kiến
+  substituteId Int?      // ABSENT: người dự thay
+  receivedAt   DateTime? // thư ký nhập hộ tin nhắn báo: giờ nhận tin (tính đúng hạn theo giờ này)
+  createdById  Int
+  createdAt    DateTime  @default(now())
+
+  @@index([week, departmentId])
+  @@index([createdAt])
+}
+
+// Buổi giao ban của một tuần (QT-TH-01): hạn nộp / ngày họp khi trùng ngày nghỉ, điểm danh, kết luận của TGĐ cho từng
+// yêu cầu hỗ trợ, Action Log (việc · bộ phận · phụ trách · hạn) — Action Log tự vào Phần I báo cáo tuần sau ("TGĐ giao").
+model WeeklyMeeting {
+  id          Int       @id @default(autoincrement())
+  week        String    @unique // YYYY-MM-DD của thứ Sáu trước buổi giao ban
+  data        Json
+  publishedAt DateTime? // phát hành Kết luận + Action Log
+  updatedById Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// Mỗi lần nộp / gửi lại một bản bất biến kèm SHA-256 (Điều 6: bản sửa được ghi nhận; đối chiếu khi chấm "không đạt"; DET-05).
+model WeeklyReportVersion {
+  id            Int      @id @default(autoincrement())
+  reportId      Int
+  n             Int      // lần nộp thứ n (1 = lần đầu)
+  departmentId  Int
+  week          String
+  data          Json
+  sha256        String
+  submittedAt   DateTime
+  submittedById Int
+  onBehalf      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@unique([reportId, n])
+  @@index([week, departmentId])
+}
+
+// Kepper GĐ3 — token cá nhân cho Claude (MCP trên máy người dùng). AI dùng ĐÚNG quyền của người dùng:
+// mọi lời gọi bằng token đi qua cùng API + lib/policy.js. Chỉ lưu băm SHA-256; token hiện một lần khi tạo.
+model ApiToken {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  prefix     String
+  hash       String    @unique
+  scopes     String[]
+  expiresAt  DateTime
+  // sessionVersion của tài khoản lúc tạo: đổi / reset mật khẩu, khoá tài khoản → token tự mất hiệu lực.
+  sessionVersion Int    @default(0)
+  lastUsedAt DateTime?
+  lastIp     String?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
 }

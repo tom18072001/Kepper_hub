@@ -47,6 +47,9 @@ async function seed(prisma = new PrismaClient(), env = process.env) {
   // Danh mục mặc định (mẫu nhóm việc "Nhiệm vụ chuẩn – Cuộc thi/Hội thi").
   await require('./services/register').ensureDefaults(prisma);
   if (String(env.SEED_DEMO) !== 'true' || await prisma.project.count()) return out;
+  // Máy chạy thật: dữ liệu mẫu tạo tài khoản Ban GĐ mẫu với mật khẩu công khai trong README → phải xác nhận rõ.
+  if (env.NODE_ENV === 'production' && env.ALLOW_DEMO_SEED !== 'yes')
+    throw new Error('SEED_DEMO=true trên máy chạy sẽ tạo tài khoản mẫu (vd. giamdoc — Ban GĐ) với mật khẩu công khai. Đặt SEED_DEMO=false, hoặc ALLOW_DEMO_SEED=yes nếu đây là máy dùng thử.');
 
   const root = await prisma.user.findFirst({ where: { isRootAdmin: true } });
   const dept = {};
@@ -134,6 +137,14 @@ const DEMO_MTL = [
   ['II.1', '(Phân kỳ 2) Thoả thuận nhận quyền sử dụng đất (mẫu)', 'Pháp lý/GR', 3, 9, true, false, 35, false],
   ['II.2', '(Phân kỳ 2) Giải phóng mặt bằng (mẫu)', 'GR/UBND TP', 5, 14, false, true, 15, false],
 ];
+// Sprint (giai đoạn) của dự án mẫu = nhóm bước MTL tổng.
+const DEMO_SPRINTS = [
+  { name: 'Chuyển nhượng dự án (mẫu)', steps: '1-7', goal: 'Pháp nhân dự án kế thừa chủ đầu tư, có quyết định giao / cho thuê đất' },
+  { name: 'Đề xuất dự án → chấp thuận chủ trương (mẫu)', steps: '8-9', goal: 'Có quyết định chấp thuận chủ trương đầu tư' },
+  { name: 'Quy hoạch, thiết kế → giấy phép xây dựng (mẫu)', steps: '10-14', goal: '' },
+  { name: 'Khởi công → mở bán (mẫu)', steps: '15-16', goal: '' },
+  { name: 'Phân kỳ 2 (mẫu)', steps: 'II.1-II.2', goal: '' },
+];
 const DEMO_PL = [ // MTL bộ phận Pháp lý: chi tiết hoá bước 8 (ngày tương đối so với đầu tháng T7)
   ['8.1', 'Soạn hồ sơ đề xuất (mẫu)', 'nv.phaply', 0, 30, 100, true],
   ['8.2', 'Lấy ý kiến các sở (mẫu)', 'nv.phaply', 25, 75, 30, false],
@@ -147,7 +158,7 @@ async function seedKepper(prisma, { root, users, dept }) {
   const t = M.monthStart(now, -10); // T0 = đầu tháng, 10 tháng trước
   const departments = Object.values(dept);
   await prisma.$transaction(async tx => {
-    const project = await tx.project.create({ data: { key: 'DA', name: 'Dự án mẫu NƠXH (giả)', kind: 'MTL', t0Date: t, visibility: 'PUBLIC', defaultApprovalLevels: 0,
+    const project = await tx.project.create({ data: { key: 'DA', name: 'Dự án mẫu NƠXH (giả)', kind: 'MTL', t0Date: t, visibility: 'PUBLIC', defaultApprovalLevels: 0, sprintPlan: DEMO_SPRINTS,
       departmentId: dept.BGD.id, leadId: users.pmo.id, createdById: root.id, states: { create: MTL_STATES.map((s, position) => ({ ...s, position })) } }, include: { states: true } });
     const st = c => project.states.find(s => s.category === c);
     const master = await tx.plan.create({ data: { projectId: project.id, name: 'MTL tổng (mẫu)', year: now.getFullYear(), kind: 'MASTER', sheetName: 'MTL overall', createdById: users.pmo.id } });
@@ -188,4 +199,4 @@ if (require.main === module) {
   seed(prisma).then(result => { console.log(JSON.stringify({ level: 'info', msg: 'seed_done', ...result })); return prisma.$disconnect(); })
     .catch(async error => { console.error(error.message); await prisma.$disconnect(); process.exit(1); });
 }
-module.exports = { seed };
+module.exports = { seed, DEMO_USERNAMES: USERS.map(u => u.username) };

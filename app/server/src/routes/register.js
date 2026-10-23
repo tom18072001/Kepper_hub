@@ -1,6 +1,7 @@
 // Sổ theo dõi, kiểm soát giao việc: danh mục, mẫu nhóm việc, tổng hợp theo cán bộ chủ trì / phòng chủ trì,
 // nhập Kế hoạch công tác năm (.docx), nhập / xuất sổ Excel đúng mẫu.
 const path = require('node:path');
+const MG = require('../services/mtl-guard');
 const fs = require('node:fs/promises');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
@@ -220,6 +221,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
     const allowed = rights.canManage || parent.assignedById === req.user.id || parent.assignees.some(a => a.userId === req.user.id)
       || (await deptLeaderIds(prisma, parent.leadDepartmentId ?? project.departmentId)).includes(req.user.id);
     if (!allowed) fail(403, 'Chỉ người quản lý dự án, người giao việc hoặc lãnh đạo phòng chủ trì được áp mẫu', 'FORBIDDEN');
+    MG.mtlBulkGuard(req.user, project, rights); // MTL: áp mẫu (tạo hàng loạt) chỉ người quản lý dự án
     const prefix = text(body.prefix, 'Ký hiệu', { max: 12 }) || null;
     const anchorDate = dayInput(body.anchorDate, 'Ngày mốc');
     if (body.rows !== undefined && body.rows !== null && (!Array.isArray(body.rows) || body.rows.length > 30)) fail(422, 'Danh sách việc nhánh không hợp lệ');
@@ -298,6 +300,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
   });
   // Xuất Excel bảng tổng hợp: cùng bộ lọc, cùng phạm vi quyền với /api/summary; ghi nhật ký EXPORT_SUMMARY; dấu người xuất.
   app.get('/api/summary.xlsx', auth, async (req, res) => {
+    require('../lib/tokens').assertNotVia(req);
     const d = await summaryData(req);
     const now = new Date();
     const deptName = d.filters.departmentId ? (await prisma.department.findUnique({ where: { id: d.filters.departmentId }, select: { name: true } }))?.name : null;
@@ -432,8 +435,10 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
 
   // ---------- Sổ giao việc Excel (đúng mẫu "Sổ theo dõi, kiểm soát giao việc nội bộ") ----------
   app.get('/api/projects/:id/register.xlsx', auth, async (req, res) => {
+    require('../lib/tokens').assertNotVia(req);
     const { project, member, rights } = await loadProject(prisma, req.user, intParam(req.params.id));
     if (!canExport(req.user, project, member, rights)) fail(403, 'Bạn không có quyền xuất Excel dự án này', 'FORBIDDEN');
+    MG.mtlExportGuard(req.user, project, rights); // MTL: quy định xuất (người quản lý dự án / Ban GĐ)
     const settings = await R.getSettings(prisma);
     const items = await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, AND: [itemVisibleWhere(req.user)] }, orderBy: { number: 'asc' },
       include: { state: true, assignees: { include: { user: true } }, supporters: { include: { user: true } },

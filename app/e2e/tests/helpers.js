@@ -27,6 +27,8 @@ async function login(page, username) {
     changed.add(username);
   }
   await expect(app).toBeVisible();
+  // Menu "Công cụ khác" (Việc của tôi, Chờ duyệt, Số liệu, Thùng rác…) mặc định thu gọn: mở ra để kịch bản bấm được.
+  await page.evaluate(() => { const m = document.querySelector('#navMore'); if (m) m.open = true; });
   // Kịch bản E2E thao tác mọi mục trong panel việc: bật "Xem đầy đủ" (mặc định giao diện là dạng gọn).
   await page.evaluate(() => { const t = localStorage.getItem('workhub_token'); const id = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).id; localStorage.setItem(`workhub:u${id}:ip:full`, 'true'); });
 }

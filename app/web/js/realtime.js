@@ -1,7 +1,7 @@
 // Nhận cập nhật thời gian thực qua fetch streaming (gửi token trong header, không đưa lên URL).
 import { getToken } from './api.js';
 
-let controller = null, retryTimer = null, handlers = {}, connected = false;
+let controller = null, retryTimer = null, handlers = {}, connected = false, failures = 0;
 const listeners = new Set();
 
 export function onRealtime(fn) { listeners.add(fn); return () => listeners.delete(fn); }
@@ -31,8 +31,10 @@ async function connect() {
   const mine = controller;
   try {
     const res = await fetch('/api/stream', { headers: { authorization: 'Bearer ' + token }, signal: mine.signal, cache: 'no-store' });
+    // Phiên hết hạn / bị thu hồi: dừng hẳn (không gọi lại mỗi 3 giây cả đêm) — api.js đưa về màn đăng nhập ở lần gọi kế tiếp.
+    if (res.status === 401 || res.status === 403) { setLive(false); controller = null; return; }
     if (!res.ok || !res.body) throw new Error('stream ' + res.status);
-    setLive(true);
+    setLive(true); failures = 0;
     const reader = res.body.getReader(), decoder = new TextDecoder();
     let buffer = '';
     for (;;) {
@@ -50,5 +52,7 @@ async function connect() {
   } catch { /* mất kết nối hoặc bị huỷ */ }
   if (controller !== mine) return; // đã dừng/khởi động lại
   setLive(false);
-  retryTimer = setTimeout(connect, 3000);
+  // Kết nối lại giãn dần (3 s → 60 s) có độ lệch ngẫu nhiên: máy chủ khởi động lại không bị mọi tab gọi dồn cùng lúc.
+  failures++;
+  retryTimer = setTimeout(connect, Math.min(60_000, 3000 * 2 ** Math.min(failures - 1, 5)) * (0.75 + Math.random() * 0.5));
 }
