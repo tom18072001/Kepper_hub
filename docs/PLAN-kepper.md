@@ -125,7 +125,7 @@ Chốt (sau khi làm rõ): **sprint = một giai đoạn gồm một nhóm bư�
 | Theo tháng | Chế độ phụ của tab Sprint: tháng T phải xong gì (kèm việc trễ từ tháng trước) / đang chạy (mục tiêu % cuối tháng) / chuẩn bị tháng sau, tổng kết theo ban (`/api/projects/:id/mtl-month`) |
 | Gantt | Hàng gom theo sprint (đầu nhóm có thanh tổng sprint, bấm để thu gọn), lọc theo sprint; khung 12 tháng quanh hiện tại; đầu cột mở "Theo tháng" |
 | Thang tiến độ | `weightOf` mặc định 1 (cột "Trọng số" ghi đè): việc cha = bình quân việc con. Dự án / ban / sprint tính theo cây (`treeProgress`), KPI đếm chậm / trễ trên việc lá. Việc lá có checklist: % = mục đã xong / tổng, đủ mục tự Hoàn thành |
-| Cập nhật nhanh | `GET /api/my/sprint`: việc của tôi trong tháng hiện tại hoặc trễ chưa xong, kèm tên sprint; "✓ Xong" là thao tác chính. Nhắc 15:00 thứ Sáu trong ứng dụng |
+| Cập nhật nhanh | `GET /api/my/sprint`: việc của tôi trong tháng hiện tại hoặc trễ chưa xong, kèm tên sprint; "✓ Xong" là thao tác chính. Nhắc 15:00 thứ Năm trong ứng dụng (trước hạn báo cáo tuần) |
 | MTL bộ phận | Như trước: mẫu Excel điền sẵn, lãnh đạo bộ phận tự nhập MTL của bộ phận mình |
 
 Còn mở: Viber / kênh tin nhắn (Viber bot, Viber Business Messages qua Infobip, Zalo ZBS/ZNS) — chọn kênh, hợp đồng, hồ sơ chuyển DLCN; tin tổng hợp 1 tin/người/ngày theo mẫu.
@@ -144,6 +144,30 @@ Phản hồi của chủ dự án (23/10/2026): "rườm rà và nhiều thao t�
 | Chấm điểm | `GET /api/weekly/compliance?month=` theo Phụ lục 1: nộp muộn có báo 5, không báo 15, không nộp 25, không đạt 5, đi muộn 5, vắng không báo 25, vắng có báo + người dự thay 0; tính từ "tuần bắt đầu chấm điểm" |
 | Thiết lập | `AppSetting weekly.config`: bộ phận phải nộp theo thứ tự trình bày, tuần bắt đầu chấm điểm, (tuỳ chọn) mức trừ. Chưa thiết lập → bộ phận chủ trì hạng mục MTL |
 | Lịch | 15:00 thứ Năm: nhắc từng người cập nhật % (GĐ2a); 15:00 ngày hạn nộp: nhắc bộ phận chưa nộp; 07:35 ngày giao ban: tóm tắt tổng hợp; 02:35: xoá thông báo muộn / vắng quá 12 tháng |
-| Quyền | Lập / nộp: thành viên bộ phận. Nhập thay, thiết lập, giao ban, chấm điểm: quyền "Xem tổng hợp" toàn đơn vị (TGĐ, thư ký — cấp thêm quyền này cho thư ký Phòng Tổng hợp & Nhân sự) hoặc PMO. Xem tổng hợp: thêm trưởng / phó bộ phận. Admin IT không xem |
+| Quyền | Vai trò **suy ra tự động** từ tài khoản (không chọn vai trò trên màn hình), cưỡng chế bằng `lib/policy.js`:<br>• **Ban GĐ** = tài khoản vai trò giám đốc: không lập báo cáo, xem mọi bộ phận, kết luận, duyệt và khoá bảng điểm, chọn bộ phận thư ký và PMO.<br>• **Thư ký** = thành viên bộ phận do Ban GĐ chọn: nhập thay (giờ nhận email), ghi điểm danh / Action Log, lập và trình bảng điểm, mở lại báo cáo sau giờ họp.<br>• **PMO** = người Ban GĐ chỉ định: xem chi tiết mọi bộ phận.<br>• **Trưởng / phó bộ phận** (có quyền xem tổng hợp của bộ phận): bản tóm tắt + chi tiết bộ phận mình.<br>• **Nhân viên**: lập / nộp báo cáo bộ phận mình.<br>• Admin IT không xem. |
 
-Cài đặt trên máy chạy: tạo đúng 5 bộ phận theo quy chế (tên thật chỉ nhập trên máy chạy), gán trưởng bộ phận; cấp quyền "Xem tổng hợp giao việc — toàn đơn vị" cho thư ký; vào Báo cáo tuần → Tổng hợp → Thiết lập: chọn 5 bộ phận theo thứ tự trình bày, tuần bắt đầu chấm điểm 30/10/2026.
+Cài đặt trên máy chạy:
+1. Tạo đúng 5 bộ phận theo quy chế (tên thật chỉ nhập trên máy chạy), gán trưởng bộ phận.
+2. Đăng nhập tài khoản giám đốc → Báo cáo tuần → Thiết lập:
+   - chọn bộ phận thư ký và PMO;
+   - chọn bộ phận phải nộp theo thứ tự trình bày;
+   - tuần bắt đầu chấm điểm 30/10/2026.
+3. Không cần cấp thêm quyền cho thư ký.
+
+### Rà soát GĐ2b (23/10/2026)
+
+Ba rà soát độc lập (nghiệp vụ theo quy chế, bảo mật / phân quyền, khung kỹ thuật). Phát hiện mức Chặn / Cao đã sửa trong mã; chi tiết và ma trận ở `docs/data-protection-assessment.md`, mục "Rà soát độc lập GĐ2b".
+
+| Hạng mục | Cách làm |
+|---|---|
+| Quy định phân quyền | `lib/policy.js` — ma trận vai trò × tập dữ liệu × hành động (xem / sửa / xuất / AI / gửi ra ngoài); `policy.test.js` kiểm từng ô |
+| Một nguồn % | Việc cha theo việc con; việc có checklist theo checklist; nhập tay vào hai loại này bị từ chối. Báo cáo tuần chỉ ghi % khi MTL chưa đổi từ lúc điền sẵn; nhập thay không ghi % |
+| Quyền sửa MTL | `% / checklist`: người được giao, lãnh đạo bộ phận chủ trì, người quản lý dự án. Tên, găng, mốc, kế hoạch gốc: người quản lý dự án. Thẻ sprint ẩn nút cập nhật khi không có quyền |
+| Báo cáo tuần | Hạng mục bắt buộc (MTL, Action Log, việc chưa xong tuần trước) không bỏ được; tình trạng dòng liên kết do máy chủ tính, chỉ được nâng lên "Vướng"; bắt buộc người phụ trách, "cần trước ngày" khi đề nghị hỗ trợ, sản phẩm đầu ra Phần III. Hai người sửa cùng nháp → báo xung đột. Khoá nộp lại sau giờ họp |
+| Bằng chứng | Mỗi lần nộp một phiên bản bất biến kèm SHA-256 (`WeeklyReportVersion`); `AuditLog` chỉ ghi thêm (trigger CSDL) |
+| Giao ban | Tuần nghỉ; danh sách bộ phận phải nộp chụp theo tuần; phát hành chỉ khi mọi yêu cầu hỗ trợ đã có kết luận; Action Log bắt buộc người phụ trách, rà mọi việc mở 12 tuần |
+| Chấm điểm | Báo vắng sau 17:30 chỉ miễn trừ khi "Việc đột xuất"; đi muộn luôn trừ; thư ký trình → TGĐ duyệt và khoá tháng |
+| Lịch chạy | `services/jobs.js`: mỗi job một lần / ngày, **chạy bù** khi máy bật lại trong khung giờ còn ý nghĩa; lỗi một job không làm dừng máy chủ (sổ `AppSetting jobs.lastRun`) |
+| Vận hành | Sao lưu kiểm lỗi từng bước, chỉ dọn bản cũ khi bản mới đạt (`LAST_OK`); xoay vòng log Docker; image gắn phiên bản; CI (unit, migration, `npm audit`, e2e) |
+
+Chờ chủ dự án quyết: giới hạn đăng nhập sai / mật khẩu tạm hoặc SSO Microsoft 365; phạm vi mặc định của MTL; máy chủ luôn bật + TLS; báo Ban GĐ khi admin IT cấp quyền nghiệp vụ.

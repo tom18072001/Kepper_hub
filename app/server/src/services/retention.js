@@ -18,4 +18,13 @@ async function purgeOldWeeklyNotices(prisma, now = new Date()) {
   return count;
 }
 
-module.exports = { NOTE_RETENTION_DAYS, WEEKLY_NOTICE_RETENTION_DAYS, purgeNotesOfInactiveUsers, purgeOldWeeklyNotices };
+// Thông báo trong ứng dụng (chuông) giữ 12 tháng — tiêu đề có thể nhắc tên bộ phận, lý do vắng (nhãn), việc được giao.
+const NOTIFICATION_RETENTION_DAYS = 365;
+async function purgeOldNotifications(prisma, now = new Date()) {
+  const cutoff = new Date(now.getTime() - NOTIFICATION_RETENTION_DAYS * 86_400_000);
+  const { count } = await prisma.notification.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  if (count) console.log(JSON.stringify({ level: 'info', msg: 'retention_notifications_purged', count, retentionDays: NOTIFICATION_RETENTION_DAYS }));
+  return count;
+}
+
+module.exports = { NOTE_RETENTION_DAYS, WEEKLY_NOTICE_RETENTION_DAYS, NOTIFICATION_RETENTION_DAYS, purgeNotesOfInactiveUsers, purgeOldWeeklyNotices, purgeOldNotifications };

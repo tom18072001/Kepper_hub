@@ -91,9 +91,12 @@ test('làm sạch + kiểm tra: Chậm / Vướng / Quá hạn bắt buộc nguy
   assert.ok(errs.some(e => /Phần II “Hạng mục 4”: ghi việc sẽ làm tuần tới/.test(e)));
   assert.ok(errs.some(e => /Phần III “Kế hoạch \(giả\)”: thiếu người phụ trách/.test(e)));
   assert.ok(errs.some(e => /Không được xem.*thiếu người phụ trách/.test(e)));
-  Object.assign(data.results[0], { cause: 'Chờ Sở (giả)', solution: 'Đôn đốc (giả)', helpWhat: 'Làm việc với Sở' });
-  data.ongoing[0].next = 'Nộp hồ sơ'; data.plans[0].ownerIds = [50]; data.plans[0].due = '2026-11-05'; data.results[2].ownerIds = [50];
+  assert.ok(errs.some(e => /Hạng mục 1.*thiếu người phụ trách/.test(e))); // dòng MTL chưa giao người: phải chọn người phụ trách
+  Object.assign(data.results[0], { cause: 'Chờ Sở (giả)', solution: 'Đôn đốc (giả)', helpWhat: 'Làm việc với Sở', helpBy: '2026-11-03', ownerIds: [50] });
+  data.ongoing[0].next = 'Nộp hồ sơ'; data.ongoing[0].ownerIds = [50]; data.plans[0].ownerIds = [50]; data.plans[0].due = '2026-11-05'; data.plans[0].output = 'Biên bản (giả)'; data.results[2].ownerIds = [50];
   assert.deepEqual(WK.validate(data, F), []);
+  // Hạng mục bắt buộc (MTL quá hạn, việc TGĐ giao…) không được bỏ khỏi báo cáo.
+  assert.ok(WK.validate(data, F, { mandatory: [{ itemId: 77, task: 'Bước găng (giả)', ref: 'DA-77' }] }).some(e => /Không được bỏ “Bước găng \(giả\)” \(DA-77\)/.test(e)));
   assert.deepEqual(WK.writeBacks(data), [{ itemId: 1, pct: 70 }]); // hạng mục 4 không đổi %
   data.results[0].pctLocked = true;
   assert.deepEqual(WK.writeBacks(data), []); // hạng mục dùng checklist: không ghi ngược
@@ -124,8 +127,9 @@ test('tổng hợp giao ban: gom yêu cầu hỗ trợ theo nơi nhận, Action 
     { departmentId: 2, firstSubmittedAt: null, data: { results: [], ongoing: [], plans: [] } },
   ];
   const notices = [{ departmentId: 3, type: 'ABSENT', reason: 'CONG_TAC', note: '', substituteId: 51, createdAt: new Date('2026-10-30T10:00:00+07:00') }];
-  const prevMeeting = { week: '2026-10-23', data: { actions: [{ id: 1, task: 'Chốt phương án', departmentId: 1, ownerId: 50, due: '2026-10-28' }, { id: 2, task: 'Gửi số liệu', departmentId: 2, due: '2026-10-27' }] } };
-  const sum = WK.buildSummary({ week: F, depts, reports, notices, prevMeeting, now: new Date('2026-11-02T07:00:00+07:00'), userName: id => ({ 50: 'Người A (giả)', 51: 'Người B (giả)' }[id] || '') });
+  const actions = [{ id: 1, ref: '2026-10-23:1', task: 'Chốt phương án', departmentId: 1, ownerId: 50, due: '2026-10-28' }, { id: 2, ref: '2026-10-23:2', task: 'Gửi số liệu', departmentId: 2, due: '2026-10-27' }];
+  const actionRows = new Map([['2026-10-23:1', reports[0].data.results[0]]]);
+  const sum = WK.buildSummary({ week: F, depts, reports, notices, actions, actionRows, now: new Date('2026-11-02T07:00:00+07:00'), userName: id => ({ 50: 'Người A (giả)', 51: 'Người B (giả)' }[id] || '') });
   assert.deepEqual(sum.kpis, { submitted: 1, total: 3, overdue: 1, stuck: 1, helps: 2 });
   assert.deepEqual(sum.rows.map(r => r.status.code), ['ON_TIME', 'MISSING', 'MISSING']);
   assert.equal(sum.rows[0].resubmits, 1); assert.equal(sum.rows[1].draft, true);
@@ -137,6 +141,11 @@ test('tổng hợp giao ban: gom yêu cầu hỗ trợ theo nơi nhận, Action 
   assert.match(text, /Dự án A \(giả\) → Ban Giám đốc: Ký văn bản/);
   assert.match(text, /\[Dự án A \(giả\)\] Việc b — Quá hạn 28\/10 — Giải pháp: S2/);
   assert.doesNotMatch(text, /Người A|Người B/);
+  // Bản tóm tắt cho trưởng / phó bộ phận: không họ tên, không ghi chú vắng, không chi tiết bộ phận khác.
+  const brief = WK.briefSummary(sum, 2);
+  assert.equal(brief.rows[0].report, null); assert.equal(brief.rows[0].submittedBy, '');
+  assert.deepEqual(brief.rows[2].absent, { noticed: true, hasSubstitute: true }); assert.equal(brief.actionReview[0].owner, '');
+  assert.equal(WK.summaryText(brief).includes('có người dự thay'), true);
 });
 
 test('chấm điểm tuân thủ tháng (Phụ lục 1): nộp muộn, không nộp, vắng có / không báo, đi muộn, báo cáo không đạt', () => {
@@ -145,13 +154,21 @@ test('chấm điểm tuân thủ tháng (Phụ lục 1): nộp muộn, không n�
   const byWeek = {
     '2026-10-23': { reports: [{ departmentId: 1, firstSubmittedAt: t('2026-10-23T17:00:00+07:00') }, { departmentId: 2, firstSubmittedAt: t('2026-10-24T10:00:00+07:00') }], notices: [{ departmentId: 2, type: 'LATE', createdAt: t('2026-10-23T16:00:00+07:00') }], meeting: { data: { attendance: { 1: 'LATE', 3: 'ABSENT' }, failed: { 1: true } } } },
     '2026-10-30': { reports: [{ departmentId: 1, firstSubmittedAt: t('2026-10-30T17:00:00+07:00') }, { departmentId: 3, firstSubmittedAt: t('2026-10-30T17:00:00+07:00') }],
-      notices: [{ departmentId: 3, type: 'ABSENT', substituteId: 9, createdAt: t('2026-11-02T07:30:00+07:00') }], meeting: { data: { attendance: { 3: 'ABSENT' } } } },
+      notices: [{ departmentId: 3, type: 'ABSENT', reason: 'DOT_XUAT', substituteId: 9, createdAt: t('2026-11-02T07:30:00+07:00') }], meeting: { data: { attendance: { 3: 'ABSENT' } } } },
+    '2026-11-06': { reports: [], notices: [], meeting: { data: { skip: true, attendance: { 1: 'ABSENT' } } } }, // tuần nghỉ: không chấm
   };
-  const rows = WK.compliance({ weeks: ['2026-10-23', '2026-10-30'], depts, byWeek, now: t('2026-11-03T09:00:00+07:00') });
+  const rows = WK.compliance({ weeks: ['2026-10-23', '2026-10-30', '2026-11-06'], depts, byWeek, now: t('2026-11-10T09:00:00+07:00') });
   const by = Object.fromEntries(rows.map(r => [r.name, r]));
   assert.equal(by.A.score, 90); // đi muộn 5 + báo cáo không đạt 5
   assert.equal(by.B.score, 70); // muộn có báo 5 + không nộp tuần 30/10: 25
-  assert.equal(by.C.score, 50); // không nộp 23/10: 25 + vắng không báo 25; tuần 30/10 vắng có báo đột xuất trước 08:00 T2, có người dự thay: 0
+  assert.equal(by.C.score, 50); // không nộp 23/10: 25 + vắng không báo 25; tuần 30/10 vắng ĐỘT XUẤT báo trước 08:00 T2, có người dự thay: 0
+  // Báo vắng sau 17:30 thứ Sáu mà không phải đột xuất → tính vắng không báo.
+  const S30 = WK.scheduleOf('2026-10-30');
+  assert.equal(WK.absenceNoticed([{ type: 'ABSENT', reason: 'CONG_TAC', substituteId: 9, createdAt: t('2026-11-02T07:30:00+07:00') }], S30), null);
+  assert.ok(WK.absenceNoticed([{ type: 'ABSENT', reason: 'CONG_TAC', substituteId: 9, createdAt: t('2026-11-02T07:30:00+07:00'), receivedAt: t('2026-10-30T16:00:00+07:00') }], S30)); // thư ký nhập hộ tin nhận lúc 16:00 T6
+  // Danh sách phải nộp đã chụp của tuần: bộ phận không có trong đó không bị chấm tuần đó.
+  const snap = WK.compliance({ weeks: ['2026-10-23'], depts, byWeek: { '2026-10-23': { ...byWeek['2026-10-23'], meeting: { data: { required: [1, 2] } } } }, now: t('2026-11-10T09:00:00+07:00') });
+  assert.equal(snap.find(r => r.name === 'C').score, 100);
   assert.equal(by.C.violations, 2);
   assert.deepEqual(WK.fridaysOf('2026-10', t('2026-10-28T09:00:00+07:00')), ['2026-10-02', '2026-10-09', '2026-10-16', '2026-10-23', '2026-10-30']);
   assert.deepEqual(WK.fridaysOf('2026-10', t('2026-10-28T09:00:00+07:00'), '2026-10-30'), ['2026-10-30']);

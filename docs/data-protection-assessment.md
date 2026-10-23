@@ -37,7 +37,7 @@ Khi có nhiều tiêu chí thì áp mức cao nhất, nên các tập kế hoạ
 1. **Tệp MTL Excel**, do Ban lãnh đạo hoặc PMO lập.
    - Nhập trên máy chạy qua "Nhập MTL từ Excel". Tệp tạm bị xoá ngay sau khi đọc.
    - Dữ liệu được lưu vào PostgreSQL trên máy chạy.
-2. **Cập nhật tiến độ**: các bộ phận cập nhật %, ngày thực tế, tệp và bình luận trên giao diện web, qua HTTPS nội bộ.
+2. **Cập nhật tiến độ**: các bộ phận cập nhật %, ngày thực tế, tệp và bình luận trên giao diện web, qua HTTPS nội bộ (**chưa có** — hiện chạy HTTP trên `127.0.0.1`; bắt buộc đặt reverse proxy TLS trước khi mở cho máy khác).
 3. **Job hằng ngày** tính kế hoạch so với thực tế, sinh cảnh báo và KPI.
    - Thông báo trong ứng dụng.
    - **[Nhạy cảm, xuyên biên giới]** Viber Bot API (Rakuten Viber). Tin nhắn chỉ gồm mã hạng mục, loại cảnh báo và liên kết nội bộ. Không gửi số liệu tiến độ chi tiết, tên người khác hay tài liệu.
@@ -60,7 +60,7 @@ Khi có nhiều tiêu chí thì áp mức cao nhất, nên các tập kế hoạ
 | PRE-04 | Đầy đủ | Repo / seed / test chỉ dùng dữ liệu giả. MTL thật chỉ có trên máy chạy. Không dùng bản sao lưu thật cho DEV | Bắt buộc |
 | PRE-05 | Một phần | Kiểm tra loại và dung lượng tệp đính kèm (đã có). Xuất Excel ghi nhật ký người xuất | Nên có |
 | PRE-06 | Một phần | KPI theo người chỉ Ban lãnh đạo, trưởng bộ phận (bộ phận mình) và PMO (người quản lý dự án, trong dự án mình điều phối) xem được; ghi nhật ký `VIEW_KPI` / `VIEW_WORK`. KPI chỉ dùng tham khảo, không tự động gắn thưởng phạt | Bắt buộc |
-| PRE-07 | Một phần | API chỉ trả trường cần thiết; rate limit đăng nhập (đã có). Webhook Viber kiểm chữ ký HMAC `X-Viber-Content-Signature` | Bắt buộc (khi bật Viber) |
+| PRE-07 | Một phần | API chỉ trả trường cần thiết. **Đính chính 23/10/2026: chưa có giới hạn số lần đăng nhập** (`/api/auth` được loại khỏi rate limit để giữ tiêu chí đăng nhập) — chờ chủ dự án quyết (xem mục rà soát 23/10). Webhook Viber kiểm chữ ký HMAC `X-Viber-Content-Signature` | Bắt buộc (khi bật Viber) |
 | DET-01 | Một phần | AuditLog cho nhập MTL, điều chỉnh kế hoạch gốc, cập nhật tiến độ, xuất dữ liệu, xem KPI. Giữ ≥ 12 tháng | Bắt buộc |
 | DET-02 | N/A | Quy mô nhỏ, on-prem. Rà định kỳ quyền thành viên dự án mỗi quý | Nâng cao |
 | DET-03 | N/A | Nâng cao. Có thể cảnh báo khi một tài khoản xuất dữ liệu nhiều lần trong ngày | Nâng cao |
@@ -112,7 +112,7 @@ Thay đổi về dữ liệu so với GĐ1:
 - Thang tiến độ theo đầu việc và tiến độ theo checklist: đổi cách tính, không thêm dữ liệu; cập nhật % từ checklist ghi vào nhật ký hoạt động của hạng mục.
 - **Xuất tệp mới**: mẫu Excel MTL bộ phận chứa hạng mục MTL (Bảo mật) và **họ tên nhân viên** của bộ phận (danh sách chọn người phụ trách).
 - **Mở quyền**: lãnh đạo bộ phận tự nhập MTL của bộ phận mình (trước đây chỉ PMO).
-- Thông báo nhắc cập nhật thứ Sáu: chỉ trong ứng dụng, không qua Viber.
+- Thông báo nhắc cập nhật 15:00 thứ Năm (chạy bù đến 20:00 nếu máy tắt): chỉ trong ứng dụng, không qua Viber.
 
 ### 1. Phân loại
 
@@ -190,9 +190,9 @@ Thay đổi về dữ liệu so với GĐ2a:
   - Giờ nộp dự kiến hoặc người dự thay chọn từ danh sách tài khoản.
   - Tự xoá sau 12 tháng.
 - **Ghi ngược % vào MTL** khi nộp: chỉ với hạng mục người nộp có quyền sửa và không dùng checklist. Đi qua cùng đường cập nhật tiến độ như "Cập nhật nhanh", có nhật ký hoạt động của hạng mục.
-- **Tổng hợp giao ban**: Ban GĐ (quyền `reports.summary` toàn đơn vị) và PMO (trưởng / chủ dự án MTL) xem mọi bộ phận. Bộ phận chỉ xem bản của mình.
+- **Tổng hợp giao ban** (cập nhật 23/10): Ban GĐ, thư ký giao ban (bộ phận do Ban GĐ chọn) và PMO (do Ban GĐ chỉ định) xem chi tiết mọi bộ phận. Trưởng / phó bộ phận nhận bản tóm tắt như văn bản sao chép (QC-TH-01 Điều 5) và chi tiết của bộ phận mình. Nhân viên chỉ xem báo cáo bộ phận mình.
 - **Nút "Sao chép bản tổng hợp"**: văn bản rời hệ thống qua clipboard. Dòng đầu ghi "BẢO MẬT – chỉ dùng nội bộ"; không chứa họ tên người phụ trách, chỉ có tên bộ phận. Mỗi lần sao chép ghi nhật ký `WEEKLY_SUMMARY_COPY`.
-- Thông báo nhắc nộp 15:00 thứ Sáu và tổng hợp 07:30 thứ Hai: chỉ trong ứng dụng, chưa qua Viber.
+- Thông báo nhắc nộp 15:00 ngày hạn nộp và tóm tắt tổng hợp 07:35 ngày giao ban (chạy bù khi máy bật lại): chỉ trong ứng dụng, chưa qua Viber.
 
 ### 1. Phân loại
 
@@ -210,7 +210,7 @@ Thay đổi về dữ liệu so với GĐ2a:
    - Máy chủ kiểm tra lại toàn bộ; nộp được ghi nhật ký `WEEKLY_REPORT_SUBMIT`.
    - % được ghi ngược vào `WorkItem` (nhật ký hoạt động `PROGRESS`).
 4. Báo muộn / vắng `POST /api/weekly/notices` → `WeeklyNotice` → nhật ký `WEEKLY_NOTICE`.
-5. **[Bảo mật]** Ban GĐ / PMO → `GET /api/weekly/summary` → màn hình Tổng hợp.
+5. **[Bảo mật]** Ban GĐ / thư ký / PMO → `GET /api/weekly/summary` (chi tiết) → màn hình Tổng hợp; trưởng / phó → bản tóm tắt.
 6. **[Bảo mật, rời hệ thống]** "Sao chép bản tổng hợp" → clipboard → email / nhóm chat. Đây là chặng rủi ro nhất: Viber/Zalo lưu máy chủ ngoài công ty, có thể ở nước ngoài.
 
 ### 3. Rà năng lực (chỉ ghi thay đổi; mã không nêu thay đổi giữ nguyên trạng thái GĐ2a)
@@ -223,7 +223,7 @@ Thay đổi về dữ liệu so với GĐ2a:
 | GOV-04 | Một phần | Gắn nhãn "BẢO MẬT" trên màn hình Tổng hợp và dòng đầu văn bản sao chép (đã làm) | Nên có |
 | GOV-05 | Một phần | Dòng dữ liệu ở mục 2; % ghi ngược vào MTL có nhật ký hoạt động để truy vết nguồn | Nên có |
 | GOV-06 | N/A | Không chia sẻ ra ngoài tổ chức | — |
-| PRE-01 | Đầy đủ | Máy chủ cưỡng chế ba quyền:<br>• Lập / nộp: chỉ thành viên đúng bộ phận.<br>• Xem bản của bộ phận khác: chỉ Ban GĐ / PMO.<br>• Ghi ngược %: chỉ hạng mục người nộp có quyền sửa. | Bắt buộc |
+| PRE-01 | Đầy đủ | Cưỡng chế bằng `lib/policy.js` (ma trận ở mục rà soát 23/10):<br>• Lập / nộp: chỉ thành viên đúng bộ phận; thư ký nhập thay.<br>• Xem chi tiết bộ phận khác: Ban GĐ / thư ký / PMO chỉ định.<br>• Ghi ngược %: chỉ hạng mục người nộp có quyền `mtl.progress`, MTL chưa đổi từ lúc điền sẵn, không áp dụng khi nhập thay. | Bắt buộc |
 | PRE-02 | Một phần | Không đổi | Nên có |
 | PRE-03 | Một phần | Không đổi — HTTPS khi truy cập từ máy khác | Bắt buộc |
 | PRE-04 | Đầy đủ | Seed / test chỉ dữ liệu giả; không đưa tên bộ phận thật của mẫu vào repo | Bắt buộc |
@@ -234,7 +234,7 @@ Thay đổi về dữ liệu so với GĐ2a:
 | DET-02 | N/A | Quy mô nhỏ | — |
 | DET-03 | Nâng cao | Có thể cảnh báo khi một tài khoản sao chép tổng hợp nhiều lần | Nâng cao |
 | DET-04 | Một phần | Không đổi | Nên có |
-| DET-05 | Chưa có | Báo cáo đã nộp có thể sửa và nộp lại. Hệ thống giữ giờ nộp đầu, giờ nộp cuối và số lần nộp lại. Nếu báo cáo dùng làm căn cứ đánh giá KPI, nên lưu bản băm mỗi lần nộp | Nâng cao |
+| DET-05 | Một phần | Cập nhật 23/10: mỗi lần nộp lưu phiên bản bất biến kèm SHA-256 (`WeeklyReportVersion`); `AuditLog` và bảng phiên bản bị trigger chặn sửa / xoá. Còn thiếu: ký số, lưu WORM ngoài máy | Nên có |
 | PRI-01 | N/A | Không phát sinh xử lý cần đồng ý mới (Viber vẫn tắt) | — |
 | PRI-02 | Đầy đủ | Bộ phận chỉ thấy báo cáo của mình; Tổng hợp không có cột "người lập" trong văn bản sao chép | Bắt buộc |
 | PRI-03 | Một phần | Không đổi | Nên có |
@@ -256,6 +256,88 @@ Không phát sinh nghĩa vụ mới ngoài GĐ1. Hồ sơ đánh giá tác độ
 
 ### 6. Rủi ro còn lại & câu hỏi mở
 
-- Báo cáo nộp xong vẫn sửa và nộp lại được. Lý do: đúng mẫu, và để giảm thao tác báo lại. Tổng hợp hiện giờ nộp đầu và số lần nộp lại. Cần chủ dự án chốt có khoá sau 12:00 thứ Bảy hay không.
-- % ghi ngược từ báo cáo tuần có thể đè % người phụ trách vừa cập nhật. Hệ thống chỉ ghi khi % trong báo cáo khác % lúc điền sẵn. Hạng mục dùng checklist thì không ghi ngược.
-- Danh sách bộ phận phải nộp được tính tự động: bộ phận chủ trì ít nhất một hạng mục MTL đang chạy, cộng bộ phận đã nộp. Bộ phận không có MTL nhưng vẫn phải báo cáo (vd. Tổng hợp & Nhân sự) cần một thiết lập riêng. Hiện để PMO thêm ở màn Tổng hợp.
+- Báo cáo nộp xong vẫn nộp lại được đến giờ họp (08:30 thứ Hai); sau đó chỉ thư ký mở lại. Mỗi lần nộp là một phiên bản có băm (cập nhật 23/10).
+- % ghi ngược: chỉ ghi khi % MTL vẫn bằng % lúc điền sẵn; nếu MTL đã đổi thì bỏ qua và báo xung đột. Hạng mục dùng checklist hoặc có việc con thì không ghi ngược.
+- Danh sách bộ phận phải nộp được tính tự động: bộ phận chủ trì ít nhất một hạng mục MTL đang chạy, cộng bộ phận đã nộp. Bộ phận không có MTL nhưng vẫn phải báo cáo (vd. Tổng hợp & Nhân sự) cần một thiết lập riêng. Cập nhật 23/10: Ban GĐ / thư ký chọn danh sách bộ phận phải nộp ở Thiết lập; danh sách được chụp theo từng tuần để chấm điểm không đổi khi thiết lập đổi.
+
+
+## Rà soát độc lập GĐ2b và quy định phân quyền dữ liệu (23/10/2026)
+
+Ba subagent rà độc lập, chỉ đọc mã: (1) luồng nghiệp vụ so với QC-TH-01 / QT-TH-01, (2) bảo mật và phân quyền (AI, dữ liệu, dự án, vai trò), (3) khung hệ thống kỹ thuật theo checklist phản biện. Phát hiện mức Chặn / Cao đã sửa trong mã. Các điểm thuộc quyền quyết định của chủ dự án được liệt kê riêng.
+**Kết luận cổng: ĐẠT CÓ ĐIỀU KIỆN.** Điều kiện gồm các mục Bắt buộc còn mở của GĐ1–GĐ2b và 4 quyết định ở cuối mục này.
+
+### Quy định phân quyền dữ liệu — thực thi bằng mã
+
+Nguồn duy nhất là `app/server/src/lib/policy.js`. `lib/policy.test.js` kiểm từng ô ma trận, nên đổi quyền mà không sửa test thì test hỏng.
+
+Vai trò giao ban **suy ra** từ vai trò và phòng ban đã gán cho tài khoản, cộng hai lựa chọn của Ban GĐ (bộ phận thư ký, danh sách PMO). Không có quyền mới nào được cấp cho từng tài khoản, và luồng đăng nhập không đổi.
+
+| Tập dữ liệu (nhãn) | IT | Ban GĐ | Thư ký | PMO (chỉ định) | Trưởng / phó | Nhân viên |
+|---|---|---|---|---|---|---|
+| Báo cáo tuần bộ phận mình (Bảo mật) | — | xem (không lập) | lập, nộp | xem | lập, nộp | lập, nộp |
+| Báo cáo tuần bộ phận khác | — | xem bản đã nộp | xem, nhập thay (không ghi % MTL) | xem bản đã nộp | — | — |
+| Tổng hợp tóm tắt (như văn bản sao chép, không họ tên) | — | xem, sao chép | xem, sao chép | xem, sao chép | xem, sao chép (Điều 5) | — |
+| Tổng hợp chi tiết (mọi báo cáo, người nộp, ghi chú vắng) | — | xem | xem | xem | chỉ bộ phận mình | — |
+| Thông báo muộn / vắng | — | xem mọi bộ phận | xem, nhập hộ (giờ nhận tin), xoá | xem | xem bộ phận mình, tạo | tạo, xoá của mình |
+| Ghi chú lý do vắng | — | xem | xem | — | — | chỉ người tạo |
+| Giao ban (điểm danh, kết luận, Action Log, tuần nghỉ) | — | sửa (TGĐ kết luận) | sửa | xem | xem | — |
+| Bảng điểm tuân thủ | — | xem, duyệt và khoá | xem, lập, trình | — | — | — |
+| Thiết lập giao ban | — | sửa | sửa | xem | xem | — |
+| Vai trò giao ban (bộ phận thư ký, PMO) | — | sửa | — | — | — | — |
+| % tiến độ / checklist hạng mục MTL | — | khi là người quản lý dự án | như nhân viên | khi là người quản lý dự án | lãnh đạo bộ phận chủ trì | người được giao |
+| Kế hoạch hạng mục MTL (tên, găng, mốc, đầu mối) | — | người quản lý dự án | | | | |
+| KPI cá nhân | — | xem | — | — | bộ phận mình | của mình |
+
+**Quy tắc bắt buộc đã có trong mã:**
+- **QĐ-01** Quản trị IT không có quyền nào trên dữ liệu nghiệp vụ.
+- **QĐ-AI** AI tắt mặc định (`AI_ENABLED`). Khi bật, chỉ gửi bản tổng hợp tóm tắt, do Ban GĐ / thư ký. Không bao giờ gửi: KPI cá nhân, thông báo vắng, bảng điểm, báo cáo chi tiết, kế hoạch / % MTL.
+- **QĐ-EXT** Gửi ra ngoài (mail / Teams / Viber): chỉ bản tóm tắt, do thư ký / Ban GĐ. KPI cá nhân, thông báo vắng, báo cáo chi tiết không bao giờ rời hệ thống.
+- **Một nguồn sự thật cho %:**
+  - việc cha tổng hợp từ việc con, việc có checklist tính theo checklist; nhập tay vào hai loại này bị từ chối (422);
+  - báo cáo tuần chỉ ghi % khi MTL chưa đổi kể từ lúc điền sẵn;
+  - nhập thay không ghi % vào MTL.
+- **Bằng chứng:**
+  - mỗi lần nộp lưu một phiên bản bất biến kèm SHA-256 (`WeeklyReportVersion`);
+  - `AuditLog` và `WeeklyReportVersion` chỉ được ghi thêm (trigger chặn UPDATE / DELETE / TRUNCATE);
+  - nhật ký ghi `receivedAt` khi nhập thay.
+- **Thời hạn lưu:** thông báo vắng và thông báo trong ứng dụng giữ 12 tháng; thông báo chỉ mang nhãn lý do, không mang ghi chú.
+
+**Đã sửa theo các rà soát (trích):**
+- **Chặn:**
+  - tự nâng quyền PMO bằng cách tự tạo dự án MTL → PMO giờ do Ban GĐ chỉ định;
+  - ghi % chéo bộ phận qua báo cáo tuần hoặc `PATCH` → áp policy `mtl.progress` / `mtl.plan`;
+  - gửi lại báo cáo đè % mới bằng số cũ → kiểm `pct0`;
+  - sao lưu báo "xong" khi `pg_dump` lỗi rồi xoá bản cũ → kiểm lỗi từng bước, chỉ dọn khi bản mới đạt, ghi `LAST_OK`.
+- **Cao:**
+  - trưởng / phó đọc báo cáo và ghi chú của bộ phận khác → chỉ nhận bản tóm tắt;
+  - hai người sửa cùng bản nháp → trả 409;
+  - bỏ được hạng mục bắt buộc;
+  - chấm điểm dùng danh sách bộ phận hiện tại cho các tuần cũ → chụp danh sách theo từng tuần;
+  - thiếu cờ tuần nghỉ;
+  - bảng điểm thiếu bước trình / duyệt / khoá;
+  - phát hành khi còn yêu cầu chưa kết luận;
+  - Action Log không có người phụ trách và chỉ rà một tuần;
+  - job lỗi làm dừng máy chủ, máy tắt thì mất job → lập lịch có chạy bù.
+- **Trung bình / Thấp:**
+  - "Quá hạn" tính từ hạn **trước** thứ Sáu báo cáo;
+  - báo vắng sau 17:30 chỉ được miễn trừ khi là "Việc đột xuất";
+  - đi muộn bị trừ độc lập với báo vắng;
+  - bắt buộc nhập "cần trước ngày" và "sản phẩm đầu ra";
+  - tên người hiển thị qua `esc()`;
+  - `jwt.verify` trong bộ giới hạn tần suất;
+  - Prisma `errorFormat: 'minimal'`;
+  - `bcrypt` bất đồng bộ;
+  - xoay vòng log Docker, tag image theo phiên bản;
+  - CI (unit, kiểm migration, `npm audit`, e2e);
+  - nâng `compression` lên 1.8.2 (lỗ hổng mức cao).
+
+**Chờ chủ dự án quyết** (mã chưa đổi vì thuộc tiêu chí đăng nhập / phạm vi dữ liệu đã chốt trước):
+1. **Đăng nhập:**
+   - giới hạn số lần sai và mật khẩu tạm ngẫu nhiên thay `12345678`;
+   - hoặc đăng nhập bằng tài khoản Microsoft 365 (Entra ID, có MFA).
+2. **Phạm vi MTL:** hiện mặc định "dùng chung toàn công ty" (GĐ1) → có chuyển sang "chỉ thành viên" cho dữ liệu Bảo mật không.
+3. **Triển khai:**
+   - chuyển từ PC cá nhân sang máy chủ / VM luôn bật, có reverse proxy TLS;
+   - sao lưu mã hoá đặt ngoài máy, thử khôi phục hằng quý;
+   - đề xuất cấp độ HTTT 2 (không phải cấp 4) — cần tra văn bản hiện hành.
+4. **Quản trị IT:** báo Ban GĐ mỗi khi admin IT cấp quyền nghiệp vụ hoặc tạo tài khoản quản lý (thuộc luồng cấp quyền).

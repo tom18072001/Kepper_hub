@@ -41,7 +41,9 @@ function createApp({ prisma, config }) {
     windowMs: 60_000, limit: config.apiRateLimit, standardHeaders: 'draft-7', legacyHeaders: false,
     keyGenerator: req => {
       const header = req.headers.authorization || '';
-      const payload = header.startsWith('Bearer ') ? jwt.decode(header.slice(7)) : null;
+      // Chỉ tin token đã xác minh chữ ký (token giả không đẩy được yêu cầu vào hạn mức của người khác).
+      let payload = null;
+      try { payload = header.startsWith('Bearer ') ? jwt.verify(header.slice(7), config.jwtSecret) : null; } catch { payload = null; }
       return Number.isInteger(payload?.id) ? 'user:' + payload.id : 'ip:' + ipKeyGenerator(req.ip || '');
     },
     skip: req => req.path.startsWith('/auth/') || req.path === '/stream',

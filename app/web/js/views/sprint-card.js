@@ -60,7 +60,8 @@ export function sprintCard(i, { t, goal = 'month', href, canEdit = false, showDe
       ${showSprint && i.sprintName ? `<span class="pill info sc-sprint" title="Sprint">${esc(i.sprintName)}</span>` : ''}</div>
     ${progressBar(i, { t, goal })}
     ${!i.done && i.progressAt ? `<div class="muted xs">cập nhật ${ago(i.progressAt)}</div>` : !i.done && !i.actual ? '<div class="muted xs">chưa cập nhật tiến độ</div>' : ''}
-    ${canEdit && !i.done ? quickControls(i) : ''}
+    ${canEdit && !i.done && i.canProgress !== false ? quickControls(i) : ''}
+    ${canEdit && !i.done && i.canProgress === false ? '<div class="muted xs">Người được giao / lãnh đạo bộ phận chủ trì cập nhật % (việc có checklist: đánh dấu checklist)</div>' : ''}
   </article>`;
 }
 

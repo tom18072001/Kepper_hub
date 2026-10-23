@@ -1,8 +1,8 @@
-# WorkHub — chạy trên máy cá nhân / máy chủ nội bộ.
+# Kepper Hub — chạy trên máy cá nhân / máy chủ nội bộ.
 #   cp .env.example .env   (sửa mật khẩu, JWT_SECRET)
 #   docker compose up -d --build                      # Postgres + app, tệp lưu trên volume
 #   docker compose --profile full up -d --build       # thêm MinIO + bộ xem trước Word (LibreOffice)
-# Mở http://localhost:4000 — mọi cổng chỉ bind 127.0.0.1.
+# Mở http://localhost:4100 (APP_PORT) — mọi cổng chỉ bind 127.0.0.1. Cho người khác dùng: đặt sau reverse proxy có TLS (xem README).
 name: kepper
 
 services:
@@ -22,12 +22,13 @@ services:
       timeout: 5s
       retries: 20
     restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    image: kepper-app:0.1.0
+    image: kepper-app:${APP_VERSION:-0.2.0}   # đổi APP_VERSION khi nâng cấp để quay lại được bản cũ
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,6 +58,7 @@ services:
     ports:
       - "127.0.0.1:${APP_PORT:-4100}:4000"
     restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
     networks: [default, preview-net]
 
   # Sao lưu hằng ngày: CSDL + tệp đính kèm vào thư mục ./backups trên máy (giữ BACKUP_KEEP_DAYS ngày).

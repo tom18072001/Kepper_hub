@@ -11,6 +11,24 @@ const W = require('../services/workitems');
 const { describe: describeRule } = require('../services/recurring');
 const { stageOf } = require('../services/stage');
 const { setProgress } = require('../services/mtl-progress');
+const Policy = require('../lib/policy');
+const { isItAdmin } = require('../lib/permissions');
+
+// Kepper (MTL) — quy định phân quyền dữ liệu (lib/policy.js): % / trạng thái / checklist = mtl.progress (người được giao,
+// lãnh đạo bộ phận chủ trì, người quản lý dự án); tên, găng, mốc, đầu mối = mtl.plan (người quản lý dự án).
+// Một nguồn sự thật cho %: việc cha = tổng hợp từ việc con, việc có checklist = theo checklist — không nhập tay.
+const MTL_PLAN_KEYS = ['title', 'critical', 'milestone', 'ownerText', 'externalParty', 'weight', 'planCode', 'planSection'];
+async function mtlGuard(client, user, project, rights, itemId, { progress = false, plan = false, manualPct = false } = {}) {
+  if (project.kind !== 'MTL' || (!progress && !plan)) return;
+  const it = await client.workItem.findUnique({ where: { id: itemId }, select: { leadDepartmentId: true, assignees: { select: { userId: true } },
+    _count: { select: { children: { where: { archivedAt: null } }, checklist: true } } } });
+  const ctx = { item: { assigneeIds: it.assignees.map(a => a.userId), leadLeaderIds: await approval.deptLeaderIds(client, it.leadDepartmentId), projectManager: rights.canManage } };
+  const subject = { userId: user.id, it: isItAdmin(user) };
+  if (progress) Policy.assertCan(subject, 'edit', 'mtl.progress', ctx);
+  if (plan) Policy.assertCan(subject, 'edit', 'mtl.plan', ctx);
+  if (manualPct && it._count.children) fail(422, 'Tiến độ việc cha tính tự động từ các việc con — cập nhật ở việc con', 'PROGRESS_FROM_CHILDREN');
+  if (manualPct && it._count.checklist) fail(422, 'Tiến độ việc này tính theo checklist — đánh dấu các mục đã xong', 'PROGRESS_FROM_CHECKLIST');
+}
 
 const { PRIORITIES, BOARD_INCLUDE, boardItem } = W;
 
@@ -190,6 +208,11 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       const role = await dispatchRole(tx, req.user, rights, project, item);
       const toStateEarly = body.stateId !== undefined && Number(body.stateId) !== item.stateId ? await tx.workflowState.findFirst({ where: { id: intParam(body.stateId, 'Trạng thái'), projectId: project.id } }) : null;
       assertDispatchChange(role, { toState: toStateEarly, keys: Object.keys(body).filter(k => k !== 'stateId') });
+      // Kepper (MTL): kiểm quy định phân quyền trước mọi thay đổi (chỉ tính trường thực sự đổi).
+      const pctChanged = body.progress !== undefined && Number(body.progress) !== item.progress;
+      const stateChanged = body.stateId !== undefined && Number(body.stateId) !== item.stateId;
+      const planChanged = MTL_PLAN_KEYS.some(k => body[k] !== undefined && String(body[k] ?? '') !== String(item[k] ?? ''));
+      await mtlGuard(tx, req.user, project, rights, id, { progress: pctChanged || stateChanged, plan: planChanged, manualPct: pctChanged });
       const data = {}, changed = {};
       if (body.title !== undefined) data.title = text(body.title, 'Tiêu đề', { required: true, max: 300 });
       if (body.descriptionHtml !== undefined) { data.descriptionHtml = sanitizeHtml(body.descriptionHtml); data.descriptionText = htmlToText(data.descriptionHtml); }
@@ -353,6 +376,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       if (item.archivedAt) fail(409, 'Việc đã được lưu trữ', 'ARCHIVED');
       const toState = await tx.workflowState.findFirst({ where: { id: intParam(req.body.stateId, 'Trạng thái'), projectId: project.id } });
       if (!toState) fail(422, 'Trạng thái không hợp lệ', 'INVALID_STATE');
+      if (toState.id !== item.stateId) await mtlGuard(tx, req.user, project, rights, id, { progress: true });
       if (toState.id !== item.stateId) assertDispatchChange(await dispatchRole(tx, req.user, rights, project, { ...item, assignees: await tx.workItemAssignee.findMany({ where: { workItemId: id } }) }), { toState });
       const t = await W.transition(tx, { project, rights, item, toState, overrideWip: req.body.overrideWip });
       const position = await W.positionBetween(tx, toState.id, optionalInt(req.body.afterId, 'Thẻ phía trên'), optionalInt(req.body.beforeId, 'Thẻ phía dưới'));
@@ -381,6 +405,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
   app.post('/api/items/:id/checklist', auth, async (req, res) => {
     const id = intParam(req.params.id);
     const { project, rights } = await loadItem(prisma, req.user, id, 'edit');
+    await mtlGuard(prisma, req.user, project, rights, id, { progress: true });
     const count = await prisma.checklistItem.count({ where: { workItemId: id } });
     if (count >= 100) fail(422, 'Tối đa 100 mục checklist');
     const row = await prisma.checklistItem.create({ data: { workItemId: id, title: text(req.body.title, 'Nội dung', { required: true, max: 300 }), position: count } });
@@ -393,6 +418,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
     const row = await prisma.checklistItem.findUnique({ where: { id: intParam(req.params.id) } });
     if (!row) fail(404, 'Không tìm thấy mục checklist', 'NOT_FOUND');
     const { project, rights } = await loadItem(prisma, req.user, row.workItemId, 'edit');
+    await mtlGuard(prisma, req.user, project, rights, row.workItemId, { progress: true });
     const data = {};
     if (req.body.title !== undefined) data.title = text(req.body.title, 'Nội dung', { required: true, max: 300 });
     if (req.body.done !== undefined) data.done = !!req.body.done;
@@ -408,6 +434,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
     const row = await prisma.checklistItem.findUnique({ where: { id: intParam(req.params.id) } });
     if (!row) fail(404, 'Không tìm thấy mục checklist', 'NOT_FOUND');
     const { project, rights } = await loadItem(prisma, req.user, row.workItemId, 'edit');
+    await mtlGuard(prisma, req.user, project, rights, row.workItemId, { progress: true });
     await prisma.checklistItem.delete({ where: { id: row.id } });
     await syncChecklistProgress(req, project, rights, row.workItemId);
     bus.item(project.id, row.workItemId, req.user.id);

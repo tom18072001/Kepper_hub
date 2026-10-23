@@ -81,7 +81,7 @@ const AUDIT_ACTIONS = {
   MTL_SPRINT_PLAN: 'Thiết lập sprint MTL', MTL_TEMPLATE_EXPORT: 'Tải mẫu MTL bộ phận',
   WEEKLY_REPORT_SUBMIT: 'Nộp báo cáo tuần', WEEKLY_NOTICE: 'Báo nộp muộn / vắng giao ban', WEEKLY_NOTICE_DELETE: 'Xoá thông báo muộn / vắng',
   WEEKLY_SUMMARY_COPY: 'Sao chép bản tổng hợp giao ban', WEEKLY_MEETING: 'Cập nhật giao ban (điểm danh, kết luận, Action Log)', WEEKLY_MEETING_PUBLISH: 'Phát hành kết luận giao ban',
-  WEEKLY_CONFIG: 'Thiết lập báo cáo tuần',
+  WEEKLY_CONFIG: 'Thiết lập báo cáo tuần', WEEKLY_COMPLIANCE_SUBMIT: 'Trình bảng điểm tuân thủ giao ban', WEEKLY_COMPLIANCE_APPROVE: 'Duyệt bảng điểm tuân thủ giao ban',
 };
 const AUDIT_ENTITIES = {
   User: 'Tài khoản', Auth: 'Đăng nhập', Department: 'Phòng ban', UserPermission: 'Phân quyền', Label: 'Nhãn', AppSetting: 'Danh mục',

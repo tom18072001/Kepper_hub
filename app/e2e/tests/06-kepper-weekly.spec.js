@@ -47,26 +47,36 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   await expect(nv.getByTestId('wk-errors')).toContainText('Xin ý kiến Sở Xây dựng (giả)” (Vướng): thiếu nguyên nhân');
 
   // 5) Điền đủ: mọi khối Chậm / Vướng / Quá hạn, việc sẽ làm tuần tới, một kế hoạch tuần mới; đổi % một hạng mục MTL.
-  for (const box of await nv.locator('.wk-issue').all()) {
-    await box.locator('[data-k="cause"]').fill('Chờ ý kiến cơ quan (giả)');
-    await box.locator('[data-k="solution"]').fill('Đôn đốc bằng văn bản (giả)');
-    await box.locator('select[data-k="helpFrom"]').selectOption('BGD');
-    await box.locator('[data-k="helpWhat"]').fill('Lãnh đạo làm việc trực tiếp (giả)');
-  }
-  for (const inp of await nv.locator('[data-list="ongoing"] input[data-k="next"]').all()) if (!(await inp.inputValue())) await inp.fill('Hoàn thiện tờ trình (giả)');
-  if (!(await nv.locator('[data-list="plans"]').count())) {
-    await nv.getByTestId('wk-add-plans').click();
-    const p = nv.locator('[data-list="plans"]').last();
-    await p.locator('textarea[data-k="task"]').fill('Rà soát hồ sơ pháp lý (giả)');
-    await p.locator('select[data-k="owner"]').selectOption({ index: 1 });
-    await p.locator('input[data-k="due"]').fill(vnDate(7));
-  }
-  const pctBox = nv.locator('.wk-row.linked:not(.done) input[data-k="pct"]').first();
-  const pctId = (await pctBox.getAttribute('data-testid')).replace('wk-pct-', '');
-  const row = [...rep0.prefill.results, ...rep0.prefill.ongoing].find(r => r.ref === pctId);
+  // % của một hạng mục MTL do chính nhân viên này phụ trách (quy định: chỉ người được giao / lãnh đạo bộ phận chủ trì ghi %).
+  const me = await (await apiAs(nv, '/api/me')).json();
+  const row = [...rep0.prefill.results, ...rep0.prefill.ongoing].find(r => r.itemId && r.status !== 'Hoàn thành' && !r.pctLocked && r.ownerIds.includes(me.id));
   const newPct = row.pct >= 90 ? 80 : row.pct + 5;
+  const pctBox = nv.getByTestId(`wk-pct-${row.ref}`);
   await pctBox.fill(String(newPct)); await pctBox.blur();
+  const fillAll = async () => {
+    for (const box of await nv.locator('.wk-issue').all()) {
+      await box.locator('[data-k="cause"]').fill('Chờ ý kiến cơ quan (giả)');
+      await box.locator('[data-k="solution"]').fill('Đôn đốc bằng văn bản (giả)');
+      await box.locator('select[data-k="helpFrom"]').selectOption('BGD');
+      await box.locator('[data-k="helpWhat"]').fill('Lãnh đạo làm việc trực tiếp (giả)');
+      await box.locator('[data-k="helpBy"]').fill(vnDate(4));
+    }
+    for (const sel of await nv.locator('[data-list] select[data-k="owner"]').all()) if (!(await sel.inputValue())) await sel.selectOption({ index: 1 });
+    for (const inp of await nv.locator('[data-list="ongoing"] input[data-k="next"]').all()) if (!(await inp.inputValue())) await inp.fill('Hoàn thiện tờ trình (giả)');
+    if (!(await nv.locator('[data-list="plans"]').count())) {
+      await nv.getByTestId('wk-add-plans').click();
+      const p = nv.locator('[data-list="plans"]').last();
+      await p.locator('textarea[data-k="task"]').fill('Rà soát hồ sơ pháp lý (giả)');
+      await p.locator('select[data-k="owner"]').selectOption({ index: 1 });
+      await p.locator('input[data-k="due"]').fill(vnDate(7));
+    }
+    for (const inp of await nv.locator('[data-list="plans"] input[data-k="output"]').all()) if (!(await inp.inputValue())) await inp.fill('Biên bản (giả)');
+  };
+  await fillAll();
   await nv.getByTestId('wk-submit').click();
+  // Máy chủ tính lại tình trạng dòng MTL theo % mới: nếu còn khối giải trình mới hiện ra thì điền nốt rồi gửi lại.
+  await expect(nv.getByTestId('wk-submitted').or(nv.getByTestId('wk-errors'))).toBeVisible();
+  if (await nv.getByTestId('wk-errors').isVisible()) { await fillAll(); await nv.getByTestId('wk-submit').click(); }
   await toast(nv, 'Đã gửi báo cáo');
   await expect(nv.getByTestId('wk-submitted')).toContainText('Đã nộp');
   await expect(nv.getByTestId('wk-submit')).toHaveText('Gửi lại');
@@ -78,6 +88,13 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   await login(kd, 'nv.kinhdoanh1');
   expect((await apiAs(kd, `/api/weekly/report?departmentId=${rep0.department.id}`)).status()).toBe(403);
   expect((await apiAs(kd, '/api/weekly/summary')).status()).toBe(403);
+  // Quy định phân quyền MTL: nhân viên bộ phận khác (dù là thành viên dự án dùng chung) không sửa % / kế hoạch hạng mục của Ban Pháp lý.
+  const qx = await (await browser.newContext()).newPage();
+  await login(qx, 'nv.qlxd');
+  const patch = data => apiAs(qx, `/api/items/${row.itemId}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, data });
+  expect((await patch({ progress: 99 })).status()).toBe(403);
+  expect((await patch({ critical: true })).status()).toBe(403);
+  expect((await (await apiAs(nv, `/api/items/${row.itemId}`)).json()).progress).toBe(newPct);
   const admin = await (await browser.newContext()).newPage();
   await login(admin, 'admin');
   expect((await apiAs(admin, '/api/weekly/context')).status()).toBe(403);
@@ -85,6 +102,8 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   // 7) Báo nộp muộn (Ban Tài chính); báo vắng phải cử người dự thay.
   const tc = await (await browser.newContext()).newPage();
   await login(tc, 'tb.taichinh');
+  await expect(tc.getByTestId('wk-dept-name')).toHaveText('Ban Tài chính'); // bộ phận theo tài khoản, không phải chọn
+  await expect(tc.getByTestId('wk-preparer')).toContainText('trưởng bộ phận');
   await tc.getByTestId('wk-tab-bao').click();
   await tc.getByTestId('wk-n-reason').selectOption('CONG_TAC');
   await tc.getByTestId('wk-n-send').click();
@@ -104,11 +123,14 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   await gd.getByTestId('wk-setup').locator('summary').click();
   await gd.getByTestId(`wk-set-dept-${D('BGD').id}`).uncheck();
   await gd.getByTestId(`wk-set-dept-${D('KD').id}`).uncheck();
+  await gd.getByTestId('wk-set-secretary').selectOption(String(D('HCNS').id)); // thư ký giao ban = Phòng Hành chính – Nhân sự (giả)
   await gd.getByTestId('wk-set-save').click();
   await toast(gd, 'Đã lưu thiết lập');
   await expect(gd.getByTestId('wk-status-table').locator('tr')).toHaveCount(5);
   await gd.goto('/#/tuan');
   await expect(gd.getByTestId('wk-tab-tong-hop')).toHaveAttribute('aria-selected', 'true');
+  await expect(gd.getByTestId('wk-tab-nop')).toHaveCount(0); // Ban giám đốc không lập báo cáo tuần
+  expect((await apiAs(gd, '/api/weekly/report')).status()).toBe(422);
   const notif = await (await apiAs(gd, '/api/notifications')).json();
   expect(notif.items.some(n => n.type === 'WEEKLY_NOTICE' && /Ban Tài chính báo nộp báo cáo tuần muộn/.test(n.title))).toBe(true);
 
@@ -119,13 +141,19 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   await expect(gd.getByTestId('wk-helps')).toContainText('Gửi Ban Giám đốc');
   await gd.getByTestId(`wk-att-${D('TC').id}`).selectOption('ABSENT');
   await toast(gd, 'Đã ghi điểm danh');
-  const help = gd.getByTestId('wk-helpitem').first();
+  // Phát hành khi còn yêu cầu chưa kết luận → bị chặn (TGĐ kết luận TỪNG yêu cầu).
+  await gd.getByTestId('wk-act-publish').click();
+  await toast(gd, 'chưa có kết luận của TGĐ');
+  const helps = await gd.getByTestId('wk-helpitem').all();
+  for (const h of helps.slice(1)) await h.locator('select[data-hk="decision"]').selectOption('APPROVE');
+  const help = helps[0];
   await help.locator('select[data-hk="decision"]').selectOption('ASSIGN');
   await help.locator('select[data-hk="departmentId"]').selectOption(String(D('TC').id));
   await toast(gd, 'Đã lưu kết luận');
   await help.locator('[data-toact]').click();
   await expect(gd.getByTestId('wk-act-task-0')).not.toHaveValue('');
   await expect(gd.getByTestId('wk-act-dept-0')).toHaveValue(String(D('TC').id));
+  await gd.getByTestId('wk-act-owner-0').selectOption({ index: 1 }); // Action Log: Việc · Phụ trách · Hạn (bắt buộc)
   await gd.getByTestId('wk-act-publish').click();
   await toast(gd, 'Đã phát hành kết luận và Action Log');
   await expect(gd.getByTestId('wk-act-publish')).toBeDisabled();
@@ -134,7 +162,7 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   const tcNext = await (await apiAs(tc, `/api/weekly/report?week=${next}`)).json();
   expect(tcNext.prefill.results.some(r => r.source === 'TGĐ giao' && r.actionRef === `${week}:1`)).toBe(true);
   const sum = await (await apiAs(gd, '/api/weekly/summary')).json();
-  expect(Object.values(sum.meeting.conclusions)[0].decision).toBe('ASSIGN');
+  expect(Object.values(sum.meeting.conclusions).some(c => c.decision === 'ASSIGN' && c.departmentId === D('TC').id)).toBe(true);
 
   // 10) Sao chép bản tổng hợp: nhãn Bảo mật, không có họ tên người phụ trách; ghi nhật ký.
   await gd.getByTestId('wk-copy').click();
@@ -144,18 +172,46 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   expect(text).toContain('Ban Pháp lý →');
   expect(text).not.toContain('Tô Minh Khoa');
 
-  // 11) Thư ký nhập thay cho bộ phận gửi qua email: giờ nộp = giờ nhận email.
-  const gr = (await (await apiAs(gd, '/api/users/directory')).json()).find(u => u.departmentId === D('GR').id);
-  const received = new Date(Date.now() - 60_000).toISOString();
-  const r = await apiAs(gd, '/api/weekly/submit', { method: 'POST', headers: { 'content-type': 'application/json' }, data: { week, departmentId: D('GR').id, receivedAt: received,
-    data: { results: [{ task: 'Làm việc với phường (giả)', source: 'Phát sinh', ownerIds: [gr.id], due: vnDate(5), status: 'Đúng tiến độ', pct: 30 }], ongoing: [], plans: [{ task: 'Họp dân (giả)', basis: 'KH tháng', ownerIds: [gr.id], due: vnDate(8) }], other: '' } } });
-  expect(r.status()).toBe(200);
-  expect((await r.json()).firstSubmittedAt).toBe(received);
+  // 10b) Trưởng bộ phận nhận bản TÓM TẮT: không chi tiết bộ phận khác, không họ tên người nộp.
+  const tcSum = await (await apiAs(tc, '/api/weekly/summary')).json();
+  expect(tcSum.canDetail).toBe(false);
+  expect(tcSum.rows.find(x => x.id === D('PL').id).report).toBe(null);
+  expect(tcSum.rows.find(x => x.id === D('PL').id).submittedBy).toBe('');
+  expect((await apiAs(tc, `/api/weekly/report?departmentId=${D('PL').id}`)).status()).toBe(403);
 
-  // 12) Chấm điểm tuân thủ tháng: 5 bộ phận, mỗi bộ phận tối đa 100 điểm.
-  await gd.reload();
-  await gd.getByTestId('wk-tab-diem').click();
-  await expect(gd.getByTestId('wk-score').locator('tr')).toHaveCount(5);
+  // 11) Thư ký (bộ phận thư ký) nhập thay cho bộ phận gửi qua email: giờ nộp = giờ nhận email; không ghi % vào MTL. Ban GĐ không nhập thay.
+  const hc = await (await browser.newContext()).newPage();
+  await login(hc, 'nv.hcns');
+  const gr = (await (await apiAs(hc, '/api/users/directory')).json()).find(u => u.departmentId === D('GR').id);
+  const pre = (await (await apiAs(hc, `/api/weekly/report?departmentId=${D('GR').id}`)).json()).prefill;
+  for (const x of [...pre.results, ...pre.ongoing]) Object.assign(x, { ownerIds: x.ownerIds.length ? x.ownerIds : [gr.id], cause: 'Chờ (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF', next: x.next || 'Tiếp tục (giả)' });
+  pre.results.push({ task: 'Làm việc với phường (giả)', source: 'Phát sinh', ownerIds: [gr.id], due: vnDate(5), status: 'Đúng tiến độ', pct: 30 });
+  pre.plans.push({ task: 'Họp dân (giả)', basis: 'KH tháng', ownerIds: [gr.id], due: vnDate(8) });
+  for (const p of pre.plans) Object.assign(p, { ownerIds: p.ownerIds?.length ? p.ownerIds : [gr.id], output: 'Biên bản (giả)' });
+  const received = new Date(Date.now() - 60_000).toISOString();
+  const body = { week, departmentId: D('GR').id, receivedAt: received, data: pre };
+  expect((await apiAs(gd, '/api/weekly/submit', { method: 'POST', headers: { 'content-type': 'application/json' }, data: body })).status()).toBe(403);
+  const r = await apiAs(hc, '/api/weekly/submit', { method: 'POST', headers: { 'content-type': 'application/json' }, data: body });
+  expect(r.status()).toBe(200);
+  const rj = await r.json();
+  expect(rj.firstSubmittedAt).toBe(received); expect(rj.onBehalf).toBe(true); expect(rj.progressUpdated).toBe(0);
+  const versions = await (await apiAs(gd, `/api/weekly/report/versions?week=${week}&departmentId=${D('GR').id}`)).json();
+  expect(versions.length).toBe(1); expect(versions[0].sha256).toMatch(/^[0-9a-f]{64}$/);
+
+  // 12) Chấm điểm tuân thủ tháng: thư ký trình → TGĐ duyệt → khoá.
+  await hc.goto('/#/tuan/diem');
+  await expect(hc.getByTestId('wk-score').locator('tr')).toHaveCount(5);
+  await hc.getByTestId('wk-score-submit').click();
+  await toast(hc, 'Đã trình TGĐ bảng điểm');
+  await gd.goto('/#/tuan/diem');
+  await gd.getByTestId('wk-score-approve').click();
+  await toast(gd, 'Đã duyệt và khoá bảng điểm');
+  await expect(gd.getByTestId('wk-score-state')).toContainText('Đã duyệt');
+  // 13) Thư ký = thành viên bộ phận thư ký (theo phòng ban, không cấp quyền riêng): mở thẳng Tổng hợp, có Chấm điểm.
+  await hc.goto('/#/tuan');
+  await expect(hc.getByTestId('wk-tab-tong-hop')).toHaveAttribute('aria-selected', 'true');
+  await expect(hc.getByTestId('wk-tab-diem')).toBeVisible();
+  expect((await apiAs(kd, '/api/weekly/compliance')).status()).toBe(403);
   const audit = async action => (await (await apiAs(admin, `/api/admin/audit?action=${action}`)).json()).total;
   expect(await audit('WEEKLY_REPORT_SUBMIT')).toBeGreaterThanOrEqual(2);
   expect(await audit('WEEKLY_SUMMARY_COPY')).toBeGreaterThanOrEqual(1);
