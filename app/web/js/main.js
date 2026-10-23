@@ -14,6 +14,7 @@ import { renderHome } from './views/home.js';
 import { renderQuick } from './views/quick.js';
 import { renderWeekly } from './views/weekly.js';
 import { renderTrash } from './views/trash.js';
+import { renderClaude } from './views/claude.js';
 import { renderCatalog } from './views/catalog.js';
 import { renderWork } from './views/work.js';
 import { current as projectState, reloadProject } from './views/project.js';
@@ -268,6 +269,7 @@ export async function route({ background = false } = {}) {
     else if (parts[0] === 'sprint') { await renderQuick(view, params, setCrumbs); syncPanel(); }
     else if (parts[0] === 'dashboard') { closeItem(); await renderDashboard(view, params, setCrumbs); }
     else if (parts[0] === 'trash') { closeItem(); await renderTrash(view, setCrumbs); }
+    else if (parts[0] === 'claude') { closeItem(); await renderClaude(view, setCrumbs); }
     else if (parts[0] === 'catalog') { closeItem(); await renderCatalog(view, setCrumbs); }
     else if (parts[0] === 'work') { await renderWork(view, params, setCrumbs); syncPanel(); }
     else if (parts[0] === 'admin') { closeItem(); await renderAdmin(view, parts[1] || 'users', params, setCrumbs); }

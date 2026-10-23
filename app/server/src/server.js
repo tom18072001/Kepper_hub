@@ -47,6 +47,8 @@ async function start() {
     const daily = [
       { name: 'mtl_alerts', at: '07:30', run: p => A.runAllAlerts(p).then(r => ({ alerts: r.reduce((n, x) => n + x.alerts, 0) })) }, // cảnh báo tiến độ MTL + ảnh chụp
       { name: 'due_soon', at: '08:00', run: p => remindDueSoon(p) },
+      // Nhắc việc cá nhân đến hạn hôm nay (người dùng tạo hoặc nhờ Claude tạo).
+      { name: 'note_reminders', at: '08:05', until: '18:00', run: p => require('./services/reminders').runNoteReminders(p) },
       // Nhắc từng người cập nhật % việc trong sprint — thứ Năm, để báo cáo tuần thứ Sáu điền sẵn đúng số liệu.
       { name: 'mtl_update_reminder', at: '15:00', until: '20:00', days: [4], run: p => A.runWeeklyUpdateReminder(p) },
       // QT-TH-01: 15:00 ngày hạn nộp nhắc bộ phận chưa nộp (đến 17:30); ngày giao ban gửi tóm tắt tổng hợp (07:35–12:00).

@@ -62,19 +62,19 @@ test('MTL: % / checklist — người được giao, lãnh đạo bộ phận ch
   allow('mtl.plan', 'export', { item: { ...item, projectManager: true } }, ROLES.filter(r => r !== 'it'));
 });
 
-test('KPI cá nhân: chính mình, lãnh đạo bộ phận mình, Ban GĐ, quản lý dự án; không bao giờ gửi AI / ra ngoài', () => {
+test('KPI cá nhân: chính mình, lãnh đạo bộ phận mình, Ban GĐ, quản lý dự án; không bao giờ gửi ra ngoài', () => {
   allow('kpi.person', 'view', { departmentId: OWN }, ['director', 'leader']);
   allow('kpi.person', 'view', { departmentId: OTHER }, ['director']);
   allow('kpi.person', 'view', { departmentId: OTHER, self: true }, ROLES.filter(r => r !== 'it'));
-  for (const r of ROLES) for (const a of ['ai', 'external']) assert.equal(P.can(S[r], a, 'kpi.person', {}, { aiEnabled: true }), false);
+  for (const r of ROLES) assert.equal(P.can(S[r], 'external', 'kpi.person', {}), false);
 });
 
-test('QĐ-AI / QĐ-EXT: AI tắt mặc định; khi bật chỉ bản tổng hợp tóm tắt, chỉ Ban GĐ / thư ký; dữ liệu cấm không bao giờ đi', () => {
-  for (const r of ROLES) for (const d of Object.keys(P.DATASETS)) assert.equal(P.can(S[r], 'ai', d, {}, { aiEnabled: false }), false, `${r} ${d}`);
-  for (const d of P.NEVER_AI) for (const r of ROLES) assert.equal(P.can(S[r], 'ai', d, {}, { aiEnabled: true }), false, `${r} ${d}`);
+test('QĐ-AI / QĐ-EXT: AI dùng đúng quyền xem của người dùng (không rộng hơn); gửi ra ngoài chỉ bản tóm tắt', () => {
+  for (const r of ROLES) for (const d of Object.keys(P.DATASETS)) for (const ctx of [{}, { departmentId: OWN }, { departmentId: OTHER, createdById: 6 }])
+    assert.equal(P.can(S[r], 'ai', d, ctx), P.can(S[r], 'view', d, ctx), `${r} ${d} ${JSON.stringify(ctx)}`);
+  assert.equal(P.can(S.it, 'ai', 'weekly.summary'), false); // QĐ-01 vẫn giữ
+  assert.equal(P.can(S.member, 'ai', 'weekly.summary.detail'), false);
   allow('weekly.summary', 'external', {}, ['director', 'secretary']);
   for (const d of P.NEVER_EXTERNAL) for (const r of ROLES) assert.equal(P.can(S[r], 'external', d), false);
-  assert.equal(P.can(S.secretary, 'ai', 'weekly.summary', {}, { aiEnabled: true }), true);
-  assert.equal(P.can(S.leader, 'ai', 'weekly.summary', {}, { aiEnabled: true }), false);
   assert.throws(() => P.assertCan(S.member, 'edit', 'weekly.roles'), e => e.status === 403 && e.code === 'FORBIDDEN');
 });

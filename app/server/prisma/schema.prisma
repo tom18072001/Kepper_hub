@@ -49,6 +49,7 @@ model User {
   supporting     WorkItemSupporter[]
   notifications  Notification[]
   notes          PersonalNote[]
+  apiTokens      ApiToken[]
   scheduleEvents ScheduleParticipant[]
 
   @@index([departmentId])
@@ -792,4 +793,25 @@ model WeeklyReportVersion {
 
   @@unique([reportId, n])
   @@index([week, departmentId])
+}
+
+// Kepper GĐ3 — token cá nhân cho Claude (MCP trên máy người dùng). AI dùng ĐÚNG quyền của người dùng:
+// mọi lời gọi bằng token đi qua cùng API + lib/policy.js. Chỉ lưu băm SHA-256; token hiện một lần khi tạo.
+model ApiToken {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  prefix     String
+  hash       String    @unique
+  scopes     String[]
+  expiresAt  DateTime
+  // sessionVersion của tài khoản lúc tạo: đổi / reset mật khẩu, khoá tài khoản → token tự mất hiệu lực.
+  sessionVersion Int    @default(0)
+  lastUsedAt DateTime?
+  lastIp     String?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
 }

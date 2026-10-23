@@ -171,3 +171,23 @@ Ba rà soát độc lập (nghiệp vụ theo quy chế, bảo mật / phân quy
 | Vận hành | Sao lưu kiểm lỗi từng bước, chỉ dọn bản cũ khi bản mới đạt (`LAST_OK`); xoay vòng log Docker; image gắn phiên bản; CI (unit, migration, `npm audit`, e2e) |
 
 Chờ chủ dự án quyết: giới hạn đăng nhập sai / mật khẩu tạm hoặc SSO Microsoft 365; phạm vi mặc định của MTL; máy chủ luôn bật + TLS; báo Ban GĐ khi admin IT cấp quyền nghiệp vụ.
+
+## GĐ3 — AI native: Claude dùng đúng quyền người dùng (nhánh `kepper/gd3-ai-native`)
+
+Chủ dự án (24/10/2026): mọi người dùng Claude (tài khoản Claude Team công ty) trong công việc. Bỏ "AI tắt mặc định". Bộ khung phải chặn người không đủ quyền xem tài liệu mật.
+
+| Hạng mục | Cách làm |
+|---|---|
+| Nguyên tắc | AI = người dùng: policy `ai` = `view` của chính người dùng. Không tài khoản AI riêng, không token hệ thống |
+| Kết nối | Tiện ích MCP chạy trên máy người dùng (`app/mcp`, đóng gói `.mcpb`, Node đi kèm Claude Desktop). Gọi Kepper trong LAN — không mở Kepper ra Internet |
+| Token | `ApiToken`: băm SHA-256, phạm vi `read` / `write`, hạn ≤ 90 ngày, ≤ 5 token / người. Đổi mật khẩu / khoá → mất hiệu lực. Admin xem / thu hồi |
+| Công cụ | 18 công cụ: whoami, việc của tôi, việc trong kỳ, chi tiết, tìm, dự án, tiến độ MTL, thông báo, báo cáo tuần, tổng hợp (theo quyền), nhắc việc, danh bạ; cập nhật % / checklist, bình luận, tạo / giao việc, phân công, tạo nhắc việc, lưu nháp báo cáo tuần |
+| Không qua AI | Nộp báo cáo, phát hành giao ban, duyệt, xoá, xuất tệp, quản trị, mật khẩu, tạo token |
+| Nhắc việc | Ghi chú cá nhân có hạn → thông báo 08:05 ngày đến hạn (job `note_reminders`) |
+| Kiểm thử | `lib/tokens.test.js`, `policy.test.js`, e2e `07-kepper-claude`, kiểm thử tích hợp MCP thật (`app/mcp/test`) |
+
+Còn mở:
+- hồ sơ chuyển DLCN ra nước ngoài;
+- quy chế sử dụng AI;
+- cảnh báo đọc dồn bất thường theo token;
+- connector từ xa (claude.ai web / điện thoại) khi đã có máy chủ + TLS.

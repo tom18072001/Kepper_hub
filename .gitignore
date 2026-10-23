@@ -41,3 +41,6 @@ backups/
 # Bản sao lưu thủ công trên máy vận hành (có dữ liệu thật) — không bao giờ đưa vào git
 backups-manual/
 *.dump
+
+# ---- Tiện ích Claude Desktop (build trong Docker) ----
+app/web/downloads/*.mcpb

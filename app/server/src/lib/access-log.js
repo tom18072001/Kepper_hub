@@ -34,7 +34,7 @@ function createAccessLog({ dir = process.env.ACCESS_LOG_DIR, out: out0 } = {}) {
     const t0 = process.hrtime.bigint();
     res.on('finish', () => {
       const now = new Date();
-      const line = JSON.stringify({ ts: now.toISOString(), level: 'info', msg: 'http', uid: req.user?.id ?? null, method: req.method,
+      const line = JSON.stringify({ ts: now.toISOString(), level: 'info', msg: 'http', uid: req.user?.id ?? null, ...(req.via ? { via: req.via, token: req.tokenId } : {}), method: req.method,
         path: req.originalUrl.split('?')[0].slice(0, 200), status: res.statusCode, ms: Math.round(Number(process.hrtime.bigint() - t0) / 1e5) / 10, ip: req.ip }) + '\n';
       out?.write(line);
       fileStream(now)?.write(line);
