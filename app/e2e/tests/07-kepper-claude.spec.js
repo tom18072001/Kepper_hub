@@ -25,6 +25,9 @@ test('21. Kết nối Claude: token cá nhân đúng quyền người dùng, tha
     expect((await T(p, m, {})).status(), `${m} ${p}`).toBe(403);
   const projects = await (await T('/api/projects')).json();
   expect((await T(`/api/projects/${projects[0].id}/export.xlsx`)).status()).toBe(403);
+  // Biến thể đường dẫn (Express 5 không phân biệt hoa thường, bỏ "/" cuối) cũng bị chặn.
+  for (const p of [`/api/projects/${projects[0].id}/export.xlsx/`, `/api/projects/${projects[0].id}/export.XLSX`, '/api/stream/', '/API/me/tokens'])
+    expect((await T(p)).status(), p).toBe(403);
   // Nhật ký đánh dấu thao tác qua Claude.
   const admin = await (await browser.newContext()).newPage();
   await login(admin, 'admin');

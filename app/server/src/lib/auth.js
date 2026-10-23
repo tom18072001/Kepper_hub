@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const T = require('./tokens');
+const { isItAdmin } = require('./permissions');
 
 const PASSWORD_ROUTES = new Set(['GET /api/me', 'POST /api/me/password']);
 
@@ -20,6 +21,8 @@ function createAuth(prisma, secret) {
         if (!row || row.revokedAt || row.expiresAt < now || !row.user?.isActive || row.sessionVersion !== Number(row.user.sessionVersion || 0))
           return res.status(401).json({ error: 'Token Claude không hợp lệ, đã hết hạn hoặc đã thu hồi — tạo token mới trong "Tài khoản của tôi"', code: 'TOKEN_INVALID' });
         if (row.user.mustChangePw) return res.status(403).json({ error: 'Tài khoản phải đổi mật khẩu trên giao diện trước', code: 'PASSWORD_CHANGE_REQUIRED' });
+        // Tài khoản đã chuyển sang quản trị IT sau khi tạo token: token không dùng được (IT không truy cập dữ liệu nghiệp vụ).
+        if (isItAdmin(row.user)) return res.status(403).json({ error: 'Tài khoản quản trị hệ thống không dùng token Claude', code: 'NOT_VIA_AI' });
         const denied = T.tokenDenied(req.method, req.originalUrl.split('?')[0], row.scopes);
         if (denied) return res.status(403).json({ error: denied, code: 'NOT_VIA_AI' });
         req.user = row.user; req.via = 'mcp'; req.tokenId = row.id;

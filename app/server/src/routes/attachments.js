@@ -61,6 +61,7 @@ module.exports = function mountAttachments(app, { prisma, auth, audit, config })
   }
 
   app.get('/api/attachments/:id/download', auth, async (req, res) => {
+    require('../lib/tokens').assertNotVia(req);
     const a = await attachmentFor(req);
     if (!(await storage.stat(a.objectKey))) fail(404, 'Tệp không còn trong kho lưu trữ', 'NOT_FOUND');
     res.setHeader('Content-Type', (typeOf(a.fileName) || {}).mime || 'application/octet-stream');
@@ -74,6 +75,7 @@ module.exports = function mountAttachments(app, { prisma, auth, audit, config })
   });
 
   app.get('/api/attachments/:id/preview', auth, async (req, res) => {
+    require('../lib/tokens').assertNotVia(req);
     const a = await attachmentFor(req);
     const kind = previewable(a.fileName);
     if (!kind) fail(415, 'Định dạng tệp không hỗ trợ xem trước', 'PREVIEW_UNSUPPORTED');

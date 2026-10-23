@@ -175,6 +175,7 @@ async function buildWeekly(prisma, user, { projectId, departmentId, from, to }) 
 
 module.exports = function mountReports(app, { prisma, auth, audit }) {
   app.get('/api/reports/weekly.docx', auth, async (req, res) => {
+    require('../lib/tokens').assertNotVia(req);
     const week = defaultWeek();
     const from = dayOf(req.query.from, week.from), to = dayOf(req.query.to, week.to);
     if (to < from || (to - from) / DAY > MAX_DAYS - 1) fail(422, `Khoảng thời gian không hợp lệ (tối đa ${MAX_DAYS} ngày)`, 'INVALID_RANGE');
