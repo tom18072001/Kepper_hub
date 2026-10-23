@@ -585,3 +585,55 @@ Chạy thử dự án "Khu nhà ở Bình Minh (giả)" trên bản thử (dữ 
 **Quyết định của chủ dự án (23/10/2026):** tạm chưa lập hồ sơ đánh giá tác động chuyển DLCN ra nước ngoài; không coi là điều kiện chặn cho bản thử (dữ liệu giả). Nghĩa vụ pháp lý vẫn còn (Luật BVDLCN Điều 20; Luật Dữ liệu Điều 23; NĐ 165/2025 Điều 12): phải có hồ sơ trước khi dữ liệu thật về nhân sự / đối tác đi qua Claude hoặc Viber. Các quyết định còn lại (quy chế dùng AI, người phụ trách nhân sự, thời hạn lưu hồ sơ, cấu hình Claude Team, cách đăng nhập) để sau.
 
 **Kết luận cổng cho thay đổi này:** ĐẠT (không thêm bên nhận, không thêm trường DLCN, không đổi quyền).
+
+## Thông tin cá nhân, kết nối Claude nhanh, chạy trên NAS công ty (23/10/2026)
+
+Ba thay đổi theo yêu cầu của chủ dự án: trang **Thông tin cá nhân** (ảnh đại diện, xem thông tin tài khoản, vị trí trong cây tổ chức);
+**kết nối Claude bằng nút "Cho phép"** thay cho tạo token tay; chuẩn bị **chạy trên NAS công ty** cho laptop truy cập qua HTTPS.
+Phản biện vận hành kèm theo: `docs/production-readiness.md`; cách cài: `docs/deploy-nas.md`.
+
+**Kết luận cổng:** ĐẠT CÓ ĐIỀU KIỆN — điều kiện: HTTPS và bản sao lưu ngoài NAS trước khi chuyển dữ liệu thật sang NAS (RES-01, PRE-03).
+
+### 1. Phân loại
+
+| Tập dữ liệu | Nhãn nội bộ | Phân loại pháp lý | Ghi chú |
+|---|---|---|---|
+| Ảnh đại diện (`User.avatarFile`, tệp `uploads/avatars/`) | Nội bộ | DLCN cơ bản (hình ảnh của cá nhân) | Tuỳ chọn, chính người dùng tải lên / xoá; không bắt buộc, không dùng nhận dạng |
+| Cây tổ chức (ai trên / dưới / cùng cấp) | Nội bộ | DLCN cơ bản (họ tên, chức danh, bộ phận) | Suy ra từ vai trò + bộ phận có sẵn; không thêm trường mới |
+| Mã kết nối Claude trên laptop (`%APPDATA%\kepper-claude\token-*.json`) | Bảo mật | Thông tin xác thực | Thay cho Windows Credential Manager khi tạo token tay |
+| Dữ liệu trên NAS (CSDL, tệp, nhật ký, sao lưu) | Như hiện tại (cao nhất: Bảo mật; Hạn chế nếu bật HRM) | Không đổi | Đổi nơi lưu: PC → NAS công ty, vẫn trong nước, trong mạng công ty |
+
+### 2. Dòng dữ liệu
+
+- **Ảnh:** trình duyệt cắt vuông, thu nhỏ ≤ 512 px (ảnh gốc không rời máy) → `PUT /api/me/avatar` (≤ 400 KB, kiểm chữ ký tệp PNG / JPEG / WebP, SVG bị từ chối)
+  → lưu `uploads/avatars/<uuid>` → người đã đăng nhập xem qua `/avatars/<uuid>` (đường dẫn ngẫu nhiên, chỉ ảnh đang gắn với tài khoản còn hoạt động; xoá / khoá tài khoản → 404).
+  Không đi qua token Claude (`NOT_VIA_AI`), không vào nhật ký nội dung.
+- **Kết nối Claude:** tiện ích trên laptop xin mã (`/api/claude/connect/start`, không cần đăng nhập, ≤ 5 mã chờ / IP) → mở trình duyệt trang "Cho phép"
+  → người dùng đã đăng nhập bấm **Cho phép**, chọn phạm vi → máy chủ chỉ cho phép khi trình duyệt và tiện ích **cùng một máy** (cùng IP) → token 30 ngày trao **một lần** cho tiện ích
+  → tiện ích lưu tệp quyền 600 trong thư mục người dùng. Kết nối lại cùng máy thu hồi token cũ; tối đa 5 máy / người.
+- **NAS:** laptop → HTTPS (reverse proxy trên NAS) → app (chỉ nghe 127.0.0.1) → Postgres / thư mục trên ổ NAS → sao lưu → bản thứ hai ngoài NAS.
+
+### 3. Rà năng lực (thay đổi)
+
+| Mã | Trạng thái | Ghi chú | Ưu tiên |
+|---|---|---|---|
+| PRE-01 | Đầy đủ | Kết nối Claude cần người dùng đã đăng nhập bấm "Cho phép" trên chính máy đó; quản trị IT không cấp được; khoá tài khoản / đổi mật khẩu thu hồi ngay | Bắt buộc |
+| PRE-03 | Một phần | Trên NAS: HTTPS bắt buộc trước khi dùng dữ liệu thật (`APP_BIND=127.0.0.1` + proxy TLS); nên đặt thư mục dữ liệu trên volume / thư mục mã hoá của NAS. Mã kết nối Claude trên laptop là tệp (không còn Credential Manager) → BitLocker bắt buộc | Bắt buộc |
+| PRE-02 | Một phần | NAS: chỉ 1–2 tài khoản quản trị, 2FA, tắt SSH sau khi cài; `.env` quyền 600 | Bắt buộc |
+| PRI-02 | Đầy đủ | Ảnh tuỳ chọn, thu nhỏ trước khi gửi; cây tổ chức chỉ dùng trường đã có | Bắt buộc |
+| PRI-03 | Một phần | Người dùng tự xem thông tin tài khoản, tự xoá ảnh; sửa họ tên / chức danh vẫn qua quản trị (giữ luồng cấp quyền) | Nên có |
+| DET-01 | Đầy đủ | AuditLog: `AVATAR_UPDATE`, `AVATAR_DELETE`, `TOKEN_CREATE` (via `connect`); nhật ký truy cập ghi IP thật khi `TRUST_PROXY=1` | Bắt buộc |
+| DET-04 | Một phần | Nhật ký truy cập 400 ngày ra thư mục NAS; app báo khi thư mục không ghi được | Bắt buộc |
+| RES-01 | Một phần | Bộ cài NAS + tài liệu 3-2-1-1-0; còn thiếu trên thực tế: bản ngoài NAS, snapshot bất biến, khoá age | Bắt buộc |
+| RES-02 | Một phần | Ảnh cũ bị xoá khi đổi / xoá ảnh; PC cũ giữ 30 ngày sau khi chuyển rồi huỷ theo quy trình | Nên có |
+
+### 4. Nghĩa vụ pháp lý (soát lại với Công báo trước khi trích dẫn chính thức)
+
+- Ảnh đại diện là DLCN cơ bản: thông báo mục đích (hiển thị trong hệ thống nội bộ) trên trang — đã ghi "ai đăng nhập Kepper cũng thấy; xoá được bất cứ lúc nào".
+- Chuyển máy chạy sang NAS: dữ liệu vẫn lưu trong nước; không phát sinh chuyển ra nước ngoài. Lưu bản sao lưu lên cloud nước ngoài = chuyển ra nước ngoài (cần hồ sơ) — tài liệu NAS khuyến nghị đích trong nước.
+- Hồ sơ chuyển DLCN ra nước ngoài cho Claude: vẫn theo quyết định hoãn ngày 23/10 của chủ dự án.
+
+### 5. Rủi ro còn lại
+
+- Kiểm tra "cùng máy" dựa vào IP: sau NAT / proxy thiếu `TRUST_PROXY` thì mọi người cùng một IP → kiểm tra mất tác dụng (người bấm "Cho phép" vẫn phải đăng nhập và tự nhìn thấy mã).
+- Laptop không mã hoá ổ: lộ mã kết nối Claude (30 ngày) và phiên trình duyệt (12 giờ) khi mất máy → quy trình khoá tài khoản ngay khi báo mất.

@@ -2,7 +2,8 @@
 #   cp .env.example .env   (sửa mật khẩu, JWT_SECRET)
 #   docker compose up -d --build                      # Postgres + app, tệp lưu trên volume
 #   docker compose --profile full up -d --build       # thêm MinIO + bộ xem trước Word (LibreOffice)
-# Mở http://localhost:4100 (APP_PORT) — mọi cổng chỉ bind 127.0.0.1. Cho người khác dùng: đặt sau reverse proxy có TLS (xem README).
+# Mở http://localhost:4100 (APP_PORT) — mặc định chỉ bind 127.0.0.1. Cho người khác dùng: đặt sau reverse proxy có TLS (xem README).
+# Chạy trên NAS công ty: xem docs/deploy-nas.md (APP_BIND, PGDATA_PATH, UPLOADS_PATH… trong .env).
 name: kepper
 
 services:
@@ -15,7 +16,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Đặt POSTGRES_PASSWORD trong .env}
       POSTGRES_DB: workhub
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ${PGDATA_PATH:-pgdata}:/var/lib/postgresql/data   # NAS: thư mục trên ổ NAS, vd. /volume1/kepper/pgdata
     ports:
       - "127.0.0.1:${POSTGRES_HOST_PORT:-5435}:5432"
     healthcheck:
@@ -63,11 +64,13 @@ services:
       VIBER_AUTH_TOKEN: ${VIBER_AUTH_TOKEN:-}
       VIBER_BOT_NAME: ${VIBER_BOT_NAME:-Kepper Hub}
     volumes:
-      - uploads:/data/uploads
+      - ${UPLOADS_PATH:-uploads}:/data/uploads   # NAS: vd. /volume1/kepper/uploads
       - ${LOG_PATH:-./logs}:/data/logs
       - ${BRANDING_PATH:-./branding}:/data/branding:ro
     ports:
-      - "127.0.0.1:${APP_PORT:-4100}:4000"
+      # Mặc định chỉ máy này vào được. Có reverse proxy HTTPS trên cùng máy (DSM / QNAP): giữ 127.0.0.1.
+      # Không có proxy, cho laptop trong mạng vào thẳng: APP_BIND=0.0.0.0 (HTTP không mã hoá — chỉ để thử).
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-4100}:4000"
     restart: unless-stopped
     stop_grace_period: 20s   # dừng êm: chờ request / job đang chạy (server.js)
     logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
@@ -101,7 +104,7 @@ services:
       - ./deploy:/deploy:ro
       - ${BACKUP_PATH:-./backups}:/backups
       - ${BACKUP_COPY_PATH:-./backups-copy}:/backups-copy
-      - uploads:/data/uploads:ro
+      - ${UPLOADS_PATH:-uploads}:/data/uploads:ro
     entrypoint: ["sh", "/deploy/backup.sh"]
     restart: unless-stopped
 
@@ -124,7 +127,7 @@ services:
     volumes:
       - ./deploy:/deploy:ro
       - ${BACKUP_PATH:-./backups}:/backups:ro
-      - uploads:/data/uploads
+      - ${UPLOADS_PATH:-uploads}:/data/uploads
     entrypoint: ["sh", "/deploy/restore.sh"]
     restart: "no"
 

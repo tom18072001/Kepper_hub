@@ -215,6 +215,9 @@ Phản hồi của chủ dự án: chưa ưng UI/UX; tham khảo 1Office, Base.v
 |---|---|
 | Khung | Thanh đầu trang trắng (logo, nút **Ứng dụng** dạng lưới phân hệ, tìm nhanh Ctrl K, thông báo, menu tài khoản); sidebar navy chia nhóm Tiến độ · Công việc · Nghiệp vụ · Dự án · Quản trị, gập từng nhóm, thu gọn thành dải icon (`js/shell.js`, `css/shell.css`). Thay cho menu 3 mục + "Công cụ khác" của GĐ2b |
 | Trang chủ | `#/today` (thay `#/tuan`): việc cần xử lý xếp theo hạn (phiếu trình, gia hạn, kiến nghị, việc của tôi quá hạn / trong 7 ngày), dự án xếp theo mức lo, thẻ Giao ban (giờ họp, tình trạng báo cáo của bộ phận / số bộ phận đã nộp), thông báo mới. Chỉ dùng API sẵn có |
-| Danh mục | Bỏ khỏi sidebar; ở menu tài khoản (Ban GĐ, người tạo mẫu) và nhóm Quản trị (IT) |
+| Danh mục | Bỏ khỏi sidebar và menu tài khoản (người dùng nghiệp vụ); chỉ còn ở nhóm Quản trị (IT) |
 | Theme | Navy `#09334C`, vàng đồng `#B28A33` theo logo; mục đang mở có chấm vàng; trang đăng nhập có quỹ đạo elip |
 | Nhận diện | Tên, logo công ty chỉ trên máy chạy: `ORG_NAME`, thư mục `BRANDING_PATH` (logo.png, logo-light.png, mark.png, mark-light.png). `GET /api/brand` (công khai: tên + tệp có sẵn), `GET /branding/<tệp>` (4 tên cố định). `branding/` trong `.gitignore` |
+| Thông tin cá nhân | `#/me` (menu tài khoản): thông tin tài khoản (chỉ xem), đổi / xoá ảnh đại diện (`PUT/DELETE /api/me/avatar`, ảnh ở `/avatars/<uuid>`), đổi mật khẩu, cây tổ chức (`GET /api/me/profile`, `routes/profile.js` `orgOf`) |
+| Kết nối Claude | Bỏ bước tạo / dán token: tiện ích 0.5.0 xin mã → trình duyệt mở `#/claude?connect=<mã>` → **Cho phép** (cùng máy) → token 30 ngày lưu trong thư mục người dùng (`routes/tokens.js` `/api/claude/connect/*`). Token tay vẫn còn trong mục "Cách thủ công". Gói `.mcpb` tải về tự điền địa chỉ theo `APP_ORIGIN` |
+| Chạy trên NAS | `APP_BIND`, `PGDATA_PATH`, `UPLOADS_PATH`; `deploy/nas-setup.sh`, `deploy/upgrade.sh`; `docs/deploy-nas.md`; phản biện production + đo tải 50 người: `docs/production-readiness.md` |
