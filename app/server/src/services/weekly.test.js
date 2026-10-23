@@ -69,6 +69,21 @@ test('điền sẵn: kế hoạch tuần trước → I, việc chưa xong → I
   assert.equal(p.ongoing.some(r => r.itemId === 4), false); // hạng mục 4 đã ở Phần I (kế hoạch tuần trước), không lặp
 });
 
+test('điền sẵn: hạng mục còn chậm nhận lại nguyên nhân / giải pháp tuần trước (đánh dấu để xem lại), không chép đề nghị hỗ trợ', () => {
+  const items = [item(4, '2026-10-01', '2026-12-31', { status: 'BEHIND', actual: 10 }), item(5, '2026-10-01', '2026-12-31', { status: 'BEHIND', actual: 10 })];
+  const prev = { plans: [], ongoing: [
+    { key: 'm4', itemId: 4, task: 'x', status: 'Chậm', cause: 'Chờ Sở phản hồi (giả)', solution: 'Bám Sở hằng ngày (giả)', helpFrom: 'BGD', helpWhat: 'Gọi Sở (giả)' },
+    { key: 'r9', task: 'Việc phát sinh (giả)', status: 'Vướng', cause: 'Thiếu hồ sơ (giả)', solution: 'Bổ sung (giả)' },
+  ], results: [] };
+  const p = WK.buildPrefill({ week: F, deptId: 1, items, memberIds: new Set([50]), prev });
+  const r4 = p.ongoing.find(r => r.itemId === 4), r5 = p.ongoing.find(r => r.itemId === 5), r9 = p.ongoing.find(r => r.key === 'r9');
+  assert.equal(r4.cause, 'Chờ Sở phản hồi (giả)'); assert.equal(r4.solution, 'Bám Sở hằng ngày (giả)'); assert.equal(r4.carried, true);
+  assert.equal(r4.helpFrom, ''); assert.equal(r4.helpWhat, '');
+  assert.equal(r5.cause, ''); assert.equal(r5.carried, undefined);
+  assert.equal(r9.cause, 'Thiếu hồ sơ (giả)');
+  assert.equal(WK.sanitize({ ongoing: [r4] }).ongoing[0].carried, undefined); // cờ chỉ để hiển thị, không lưu
+});
+
 test('làm sạch + kiểm tra: Chậm / Vướng / Quá hạn bắt buộc nguyên nhân, giải pháp, đề nghị hỗ trợ; ghi ngược % chỉ khi đổi', () => {
   const raw = {
     results: [

@@ -189,7 +189,7 @@ function issueHtml(r, dis) {
   const f = st.week;
   const help = [['', '— Chọn —'], [BGD, 'Ban Giám đốc'], ...ctx.departments.filter(d => d.id !== st.dept).map(d => [`D${d.id}`, d.name]), [SELF, 'Tự xử lý – không cần hỗ trợ']];
   return `<div class="wk-issue" data-testid="wk-issue-${testKey(r)}"><p>${esc(issueLabel(r, f))}: nêu nguyên nhân, giải pháp và đề nghị hỗ trợ</p>
-    <label class="wk-f">Nguyên nhân / khó khăn<textarea data-k="cause" rows="1" ${dis} data-testid="wk-cause-${testKey(r)}">${esc(r.cause)}</textarea></label>
+    <label class="wk-f">Nguyên nhân / khó khăn${r.carried ? ' <span class="muted small" data-testid="wk-carried">(chép từ tuần trước — xem lại)</span>' : ''}<textarea data-k="cause" rows="1" ${dis} data-testid="wk-cause-${testKey(r)}">${esc(r.cause)}</textarea></label>
     <label class="wk-f">Giải pháp bộ phận đề xuất<textarea data-k="solution" rows="1" ${dis} data-testid="wk-solution-${testKey(r)}">${esc(r.solution)}</textarea></label>
     <div class="r-meta">
       <label class="wk-f">Đề nghị hỗ trợ từ<select data-k="helpFrom" ${dis} data-testid="wk-help-${testKey(r)}">${opts(help, r.helpFrom)}</select></label>
