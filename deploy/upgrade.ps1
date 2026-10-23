@@ -2,12 +2,15 @@
 # Dùng (PowerShell, trong thư mục kepper):   powershell -ExecutionPolicy Bypass -File deploy\upgrade.ps1 [-Branch main]
 # Nên chạy ngoài giờ nộp báo cáo (không chạy chiều thứ Sáu / sáng thứ Hai).
 param([string]$Branch = "")
-$ErrorActionPreference = "Stop"
+# "Continue": lệnh docker / git ghi tiến trình ra stderr — với "Stop" PowerShell 5.1 coi đó là lỗi và dừng giữa chừng khi chuyển hướng log.
+# Mỗi bước tự kiểm $LASTEXITCODE.
+$ErrorActionPreference = "Continue"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 $stamp = Get-Date -Format "yyyyMMdd-HHmm"
 
 Write-Host "==> 1/5 Sao lưu CSDL + tệp đính kèm trước khi nâng cấp"
 docker compose build backup | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Build image sao lưu lỗi (cần mạng để cài age) — DỪNG nâng cấp." }
 docker compose run --rm -e BACKUP_ONCE=1 backup
 if ($LASTEXITCODE -ne 0) { throw "Sao lưu lỗi — DỪNG nâng cấp (dữ liệu hiện tại không đổi)." }
 
