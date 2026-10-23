@@ -8,7 +8,7 @@ function publicUser(user) {
   return {
     id: user.id, username: user.username, fullName: user.fullName, displayTitle: user.displayTitle, email: user.email,
     role: user.role, departmentId: user.departmentId, departmentName: user.department ? user.department.name : null,
-    isRootAdmin: user.isRootAdmin, mustChangePw: user.mustChangePw, permissions: accessMap(user),
+    isRootAdmin: user.isRootAdmin, mustChangePw: user.mustChangePw, permissions: accessMap(user), avatarUrl: user.avatarFile ? '/' + user.avatarFile : null,
   };
 }
 

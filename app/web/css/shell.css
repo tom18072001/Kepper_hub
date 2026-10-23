@@ -226,3 +226,59 @@ body.nav-collapsed #sidebar a.sb-home .t{display:none}
   .td-due{grid-column:2;justify-self:start}
   .td-h,.td-more{padding-left:14px;padding-right:14px}
 }
+
+/* ---------- Kết nối Claude ---------- */
+.cl-req{padding:16px 18px;margin-bottom:14px;border:1px solid var(--brand-200);box-shadow:inset 4px 0 0 var(--gold),var(--shadow)}
+.cl-req.bad{border-color:var(--warn-line);box-shadow:inset 4px 0 0 var(--warn)}
+.cl-req-h{display:flex;gap:12px;align-items:flex-start}
+.cl-req-h>svg.i{width:22px;height:22px;color:var(--gold);margin-top:3px}
+.cl-req h2{font-size:1.05rem;color:var(--navy)}
+.cl-req p{margin:6px 0}
+.cl-code{font-family:ui-monospace,Consolas,monospace;letter-spacing:.06em;color:var(--navy)}
+.cl-req-act{gap:14px;margin-top:10px}
+.cl-steps,.cl-list{padding:16px 18px;margin-bottom:14px}
+.cl-steps p{margin:0 0 8px}
+.cl-ol{margin:0;padding-left:20px;line-height:1.75;font-size:.92rem}
+.cl-list h2{font-size:1.02rem;color:var(--navy);margin:0 0 10px}
+.cl-manual{margin-top:12px;border-top:1px solid var(--border);padding-top:10px}
+.cl-manual>summary{cursor:pointer;font-size:.86rem;font-weight:600;color:var(--muted)}
+
+/* ---------- Ảnh đại diện ---------- */
+img.avatar-img{object-fit:cover;background:var(--surface-3);display:inline-block}
+
+/* ---------- Thông tin cá nhân ---------- */
+.pf-grid{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:18px;align-items:start;max-width:1200px}
+.pf-card,.pf-org{padding:20px}
+.pf-head{display:flex;gap:16px;align-items:center;margin-bottom:14px}
+.pf-avatar .avatar{width:96px;height:96px;font-size:1.9rem;box-shadow:0 0 0 3px #fff,0 0 0 5px var(--gold)}
+.pf-name h2{font-size:1.25rem;color:var(--navy)}
+.pf-name p{margin:2px 0 8px}
+.pf-actions{gap:6px}
+.pf-actions label.btn{cursor:pointer}
+.pf-dl{margin:0 0 12px;border-top:1px solid var(--border)}
+.pf-row{display:grid;grid-template-columns:150px 1fr;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:.9rem}
+.pf-row dt{color:var(--muted)}
+.pf-row dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.pf-link{display:flex;gap:12px;align-items:center;padding:10px 12px;margin-top:8px;border-radius:10px;background:var(--surface-2);color:var(--text);text-decoration:none}
+.pf-link:hover{background:var(--brand-050);text-decoration:none}
+.pf-link svg.i{color:var(--gold)}
+.pf-link>span{display:flex;flex-direction:column}
+.pf-org h2{font-size:1.05rem;color:var(--navy);margin-bottom:12px}
+/* Cây tổ chức: các tầng nối bằng đường dọc, tầng "Bạn" có viền vàng */
+.org-tree{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--border)}
+.org-level{position:relative;padding:0 0 16px 18px}
+.org-level::before{content:'';position:absolute;left:-21px;top:6px;width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--brand-200)}
+.org-me::before{background:var(--gold);border-color:var(--gold);box-shadow:0 0 0 4px var(--gold-soft)}
+.org-label{font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:6px}
+.org-me .org-label{color:var(--gold-ink)}
+.org-people{display:flex;flex-wrap:wrap;gap:8px}
+.org-person{display:flex;gap:9px;align-items:center;padding:7px 12px 7px 7px;border:1px solid var(--border);border-radius:12px;background:#fff;min-width:0;max-width:300px}
+.org-person .avatar{width:34px;height:34px;font-size:.78rem}
+.org-person>span:not(.avatar){display:flex;flex-direction:column;min-width:0;line-height:1.25}
+.org-person b{font-size:.88rem;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.org-person .muted{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.org-me .org-person{border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-soft)}
+.org-peers{margin-top:8px}
+.org-peers>summary{cursor:pointer;margin-bottom:6px}
+@media (max-width:1000px){.pf-grid{grid-template-columns:1fr}}
+@media (max-width:560px){.pf-row{grid-template-columns:1fr;gap:2px}.pf-head{flex-direction:column;align-items:flex-start}}

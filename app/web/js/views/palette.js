@@ -35,7 +35,7 @@ function pages() {
     ...(can('admin.users') ? [{ label: 'Quản trị tài khoản', href: '#/admin/users', nav: 'nav-admin-users' }] : []),
     ...(can('admin.departments') ? [{ label: 'Phòng ban', href: '#/admin/departments', nav: 'nav-admin-departments' }] : []),
     ...(can('admin.audit') ? [{ label: 'Nhật ký hệ thống', href: '#/admin/audit', nav: 'nav-admin-audit' }] : []),
-    { label: 'Danh mục', href: '#/catalog', nav: 'nav-catalog' },
+    { label: 'Danh mục', href: '#/catalog', nav: 'nav-admin-catalog' },
   ];
   return [
     { label: 'Dashboard dự án', hint: 'Master Timeline: tiến độ, SPI, KPI, cảnh báo', href: '#/home', nav: 'nav-home', words: 'dashboard tong quan du an mtl tien do' },
@@ -45,7 +45,8 @@ function pages() {
     { label: 'Chờ tôi duyệt', hint: 'Duyệt, gia hạn', href: '#/approvals', nav: 'nav-approvals', words: 'duyet gia han' },
     ...(can('reports.dashboard') ? [{ label: 'Số liệu công việc', href: '#/dashboard', nav: 'nav-dashboard', words: 'so lieu bao cao tuan' }] : []),
     { label: 'Thùng rác', href: '#/trash', nav: 'nav-trash', words: 'khoi phuc da xoa' },
-    { label: 'Danh mục', href: '#/catalog', nav: 'nav-catalog' },
+    { label: 'Trang chủ', hint: 'Việc cần xử lý hôm nay', href: '#/today', nav: 'nav-today', words: 'trang chu hom nay' },
+    { label: 'Thông tin cá nhân', hint: 'Ảnh đại diện, mật khẩu, cây tổ chức', href: '#/me', nav: 'nav-me', words: 'thong tin ca nhan anh dai dien mat khau to chuc' },
     ...(can('admin.users') ? [{ label: 'Quản trị tài khoản', href: '#/admin/users', nav: 'nav-admin-users' }] : []),
   ].map(e => ({ ...e, group: 'Trang', key: 'page:' + e.href, keys: e.keys || (e.nav && navKeys(e.nav) ? `G ${navKeys(e.nav)}` : '') }));
 }

@@ -1,6 +1,6 @@
 {
   "name": "kepper-claude-mcp",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Kepper Hub cho Claude Desktop — MCP chạy trên máy người dùng, gọi API Kepper bằng token cá nhân (AI dùng đúng quyền người dùng)",
   "private": true,
   "type": "module",

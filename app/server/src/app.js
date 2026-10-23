@@ -38,7 +38,8 @@ function createApp({ prisma, config }) {
   app.use('/api', cors({
     origin(origin, callback) {
       if (!origin || config.allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(new HttpError(403, 'Origin không được phép', 'CORS_FORBIDDEN'));
+      // Hay gặp khi chuyển máy chạy (NAS) mà người dùng mở bằng địa chỉ khác APP_ORIGIN (IP thay vì tên miền, http thay vì https).
+      return callback(new HttpError(403, `Địa chỉ ${String(origin).slice(0, 80)} chưa được phép — mở Kepper bằng ${config.allowedOrigins[0] || 'địa chỉ quản trị cung cấp'} hoặc nhờ quản trị thêm vào APP_ORIGIN`, 'CORS_FORBIDDEN'));
     },
   }));
   // Giới hạn tần suất chung cho API (không áp lên /api/auth để giữ nguyên tiêu chí đăng nhập).
@@ -96,10 +97,35 @@ function createApp({ prisma, config }) {
     require('./routes/attachments'), require('./routes/approvals'), require('./routes/me'), require('./routes/notes'), require('./routes/dashboard'), require('./routes/kpi'), require('./routes/register'), require('./routes/dispatch'), require('./routes/excel'),
     require('./routes/cycles'), require('./routes/recurring'), require('./routes/views'), require('./routes/reports'), require('./routes/work'), require('./routes/search'),
     require('./routes/mtl'), require('./routes/sprint'), require('./routes/weekly'), require('./routes/viber'), require('./routes/realtime'), require('./routes/tokens'),
+    require('./routes/profile'),
     require('./routes/crm'), require('./routes/hrm'), // chỉ gắn khi bật trong MODULES
   ]) mount(app, ctx);
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'Không tìm thấy API', code: 'NOT_FOUND' }));
+  // Tiện ích Claude: điền sẵn địa chỉ của chính máy chủ này (APP_ORIGIN — vd. địa chỉ NAS) vào ô "Địa chỉ Kepper",
+  // người dùng không phải sửa localhost. Không chứa token hay thông tin người dùng.
+  let mcpbCache = null;
+  app.get('/downloads/kepper-claude.mcpb', async (req, res, next) => {
+    try {
+      const file = path.join(config.webDir, 'downloads', 'kepper-claude.mcpb');
+      const stat = await require('node:fs/promises').stat(file).catch(() => null);
+      if (!stat) return next();
+      const origin = config.allowedOrigins[0] || '';
+      const key = `${stat.mtimeMs}:${origin}`;
+      if (mcpbCache?.key !== key) {
+        const JSZip = require('jszip');
+        const zip = await JSZip.loadAsync(await require('node:fs/promises').readFile(file));
+        const manifest = JSON.parse(await zip.file('manifest.json').async('string'));
+        if (manifest.user_config?.kepper_url && /^https?:\/\//.test(origin)) manifest.user_config.kepper_url.default = origin;
+        zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+        mcpbCache = { key, buf: await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }) };
+      }
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', 'attachment; filename="kepper-claude.mcpb"');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.send(mcpbCache.buf);
+    } catch (error) { next(error); }
+  });
   // HTML/JS/CSS luôn kiểm tra lại (ETag) để bản cập nhật hiện ngay; font giữ cache 7 ngày.
   app.use(express.static(config.webDir, { index: 'index.html', setHeaders(res, file) {
     res.setHeader('Cache-Control', /\.woff2$/.test(file) ? 'public, max-age=604800' : 'no-cache');

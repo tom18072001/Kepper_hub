@@ -42,6 +42,7 @@ model User {
   mustChangePw   Boolean               @default(true)
   sessionVersion Int                   @default(0)
   lastLoginAt    DateTime?
+  avatarFile     String? // ảnh đại diện do chính người dùng tải lên (khoá lưu trữ avatars/<uuid>.<ext>), xoá được
   createdAt      DateTime              @default(now())
   permissions    UserPermission[]
   memberships    ProjectMember[]

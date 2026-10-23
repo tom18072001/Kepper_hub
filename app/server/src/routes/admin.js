@@ -281,8 +281,9 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
 
   // ---------- Danh bạ (tối thiểu hoá trường trả về) ----------
   app.get('/api/users/directory', auth, async (req, res) => {
-    res.json(await prisma.user.findMany({ where: { isActive: true }, orderBy: { fullName: 'asc' },
-      select: { id: true, username: true, fullName: true, displayTitle: true, role: true, departmentId: true } }));
+    const rows = await prisma.user.findMany({ where: { isActive: true }, orderBy: { fullName: 'asc' },
+      select: { id: true, username: true, fullName: true, displayTitle: true, role: true, departmentId: true, avatarFile: true } });
+    res.json(rows.map(({ avatarFile, ...u }) => ({ ...u, avatarUrl: avatarFile ? '/' + avatarFile : null })));
   });
 
   // ---------- Tài khoản ----------

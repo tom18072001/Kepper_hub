@@ -12,6 +12,7 @@ import { openItem, closeItem, isItemOpen } from './views/item-panel.js';
 import { openPalette, closePalette } from './views/palette.js';
 import { renderHome } from './views/home.js';
 import { renderToday } from './views/today.js';
+import { renderProfile } from './views/profile.js';
 import { renderQuick } from './views/quick.js';
 import { renderWeekly } from './views/weekly.js';
 import { renderTrash } from './views/trash.js';
@@ -101,7 +102,7 @@ async function enter() {
 
 function renderShell() {
   const me = store.me;
-  $('#meAvatar').outerHTML = avatar(me).replace('class="avatar"', 'class="avatar" id="meAvatar"');
+  $('#meAvatar').outerHTML = avatar(me).replace(/^<(\w+) class="avatar/, '<$1 id="meAvatar" class="avatar');
   renderMe();
   $('.ab-brand').setAttribute('href', isItAdmin() ? '#/admin/users' : '#/today');
   // Admin IT: chỉ thấy phần quản trị, không thấy công việc / dự án / báo cáo.
@@ -230,7 +231,7 @@ export async function route({ background = false } = {}) {
   const setCrumbs = html => { $('#crumbs').innerHTML = html; };
   const syncPanel = () => { if (background) return; if (params.get('item')) openItem(Number(params.get('item'))); else closeItem(); };
   try {
-    if (isItAdmin() && !['admin', 'catalog'].includes(parts[0])) { location.hash = '#/admin/users'; return; }
+    if (isItAdmin() && !['admin', 'catalog', 'me'].includes(parts[0])) { location.hash = '#/admin/users'; return; }
     if (parts[0] === 'projects' && parts[1]) {
       const id = Number(parts[1]);
       if (parts[2] === 'settings') await renderProjectSettings(view, id, setCrumbs);
@@ -248,7 +249,8 @@ export async function route({ background = false } = {}) {
     else if (parts[0] === 'sprint') { await renderQuick(view, params, setCrumbs); syncPanel(); }
     else if (parts[0] === 'dashboard') { closeItem(); await renderDashboard(view, params, setCrumbs); }
     else if (parts[0] === 'trash') { closeItem(); await renderTrash(view, setCrumbs); }
-    else if (parts[0] === 'claude') { closeItem(); await renderClaude(view, setCrumbs); }
+    else if (parts[0] === 'claude') { closeItem(); await renderClaude(view, setCrumbs, params); }
+    else if (parts[0] === 'me') { closeItem(); await renderProfile(view, setCrumbs); }
     else if (parts[0] === 'crm') { closeItem(); await renderCrm(view, parts[1] || null, params, setCrumbs); }
     else if (parts[0] === 'hrm') { closeItem(); await renderHrm(view, parts, params, setCrumbs); }
     else if (parts[0] === 'catalog') { closeItem(); await renderCatalog(view, setCrumbs); }

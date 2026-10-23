@@ -9,8 +9,13 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import os from 'node:os';
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { spawn } from 'node:child_process';
 
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 const BASE = String(process.env.KEPPER_URL || 'http://localhost:4100').replace(/\/+$/, '');
 const TOKEN = String(process.env.KEPPER_TOKEN || '').trim();
 const TIMEOUT_MS = 20_000;
@@ -19,7 +24,7 @@ const MAX_ROWS = 100;
 // ---------- Gọi API ----------
 export class KepperError extends Error { constructor(status, message, code) { super(message); this.status = status; this.code = code; } }
 export async function api(path, { method = 'GET', body, base = BASE, token = TOKEN, fetchImpl = globalThis.fetch } = {}) {
-  if (!token) throw new KepperError(401, 'Chưa cấu hình token Kepper — tạo token trong Kepper → "Kết nối Claude", rồi dán vào cài đặt extension', 'NO_TOKEN');
+  if (!token) throw new KepperError(401, 'Chưa kết nối Kepper — hỏi lại Claude để mở trang "Cho phép" của Kepper', 'NO_TOKEN');
   const headers = { authorization: `Bearer ${token}`, 'user-agent': `kepper-claude-mcp/${VERSION}`, accept: 'application/json' };
   if (body !== undefined) headers['content-type'] = 'application/json';
   let res;
@@ -28,6 +33,73 @@ export async function api(path, { method = 'GET', body, base = BASE, token = TOK
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) throw new KepperError(res.status, data?.error || `Lỗi ${res.status}`, data?.code);
   return data;
+}
+
+// ---------- Kết nối nhanh: không phải tạo / dán token ----------
+// Chưa có token (ô "Token Kepper" để trống): tiện ích xin Kepper một yêu cầu kết nối, mở trình duyệt tới trang "Cho phép";
+// người dùng (đã đăng nhập Kepper) bấm Cho phép trên CHÍNH máy này → tiện ích nhận token của chính người đó, lưu trong
+// thư mục người dùng của máy (chỉ tài khoản Windows / macOS này đọc được). Thu hồi trong Kepper → tiện ích tự xin kết nối lại.
+const STATE_DIR = process.env.KEPPER_STATE_DIR || path.join(process.env.APPDATA || process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'kepper-claude');
+const stateFile = base => path.join(STATE_DIR, `token-${crypto.createHash('sha256').update(base).digest('hex').slice(0, 12)}.json`);
+function loadSaved(base) { try { return String(JSON.parse(fs.readFileSync(stateFile(base), 'utf8')).token || ''); } catch { return ''; } }
+function saveToken(base, token) {
+  try { fs.mkdirSync(STATE_DIR, { recursive: true, mode: 0o700 }); fs.writeFileSync(stateFile(base), JSON.stringify({ base, token, savedAt: new Date().toISOString() }), { mode: 0o600 }); }
+  catch { /* không lưu được: dùng trong phiên này, lần sau xin lại */ }
+}
+function forgetToken(base) { try { fs.unlinkSync(stateFile(base)); } catch { /* không có */ } }
+function openBrowser(url) {
+  if (process.env.KEPPER_NO_BROWSER === '1' || !/^https?:\/\//i.test(url)) return;
+  try {
+    const [cmd, args] = process.platform === 'win32' ? ['rundll32', ['url.dll,FileProtocolHandler', url]] : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
+    spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  } catch { /* không mở được: người dùng mở theo đường dẫn trong thông báo */ }
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+// Chờ nền (hỏi Kepper đã được Cho phép chưa) không giữ tiến trình sống khi Claude Desktop đóng tiện ích.
+const idle = ms => new Promise(r => setTimeout(r, ms).unref?.());
+
+export function createSession({ base = BASE, envToken = TOKEN, fetchImpl = globalThis.fetch, wait = 45_000 } = {}) {
+  let token = envToken || loadSaved(base);
+  let flow = null; // { userCode, url, until, done }
+  const post = async (p, body) => {
+    try { return await fetchImpl(base + p, { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': `kepper-claude-mcp/${VERSION}` }, body: JSON.stringify(body), signal: AbortSignal.timeout(TIMEOUT_MS) }); }
+    catch (error) { throw new KepperError(0, `Không kết nối được Kepper tại ${base} (${error.message}) — kiểm tra địa chỉ và mạng nội bộ`, 'NETWORK'); }
+  };
+  async function start() {
+    const r = await post('/api/claude/connect/start', { device: os.hostname() });
+    const d = await r.json().catch(() => null);
+    if (!r.ok) throw new KepperError(r.status, d?.error || `Lỗi ${r.status}`, d?.code);
+    const f = { userCode: d.userCode, url: base + d.verifyPath, until: Date.now() + d.expiresIn * 1000 };
+    f.done = (async () => {
+      while (Date.now() < f.until) {
+        await idle((d.interval || 3) * 1000);
+        const p = await post('/api/claude/connect/poll', { deviceCode: d.deviceCode }).catch(() => null);
+        if (!p || p.status === 202) continue;
+        if (p.status === 200) { const j = await p.json(); token = j.token; saveToken(base, token); return true; }
+        return false; // từ chối / hết hạn
+      }
+      return false;
+    })().finally(() => { if (flow === f) flow = null; });
+    openBrowser(f.url);
+    return f;
+  }
+  async function connect(prefix = '') {
+    if (!flow) flow = await start();
+    const f = flow;
+    // Chờ người dùng bấm "Cho phép" một lúc — bấm kịp thì câu hỏi đầu tiên chạy tiếp luôn.
+    const ok = await Promise.race([f.done, sleep(wait).then(() => null)]);
+    if (ok) return;
+    throw new KepperError(401, `${prefix}Chưa kết nối Kepper. Trang Kepper đã mở trên trình duyệt: bấm "Cho phép" (mã ${f.userCode}) rồi hỏi lại. Nếu trình duyệt không mở, vào ${f.url}`, 'CONNECT_PENDING');
+  }
+  return async function call(p, opts = {}) {
+    if (!token) await connect();
+    try { return await api(p, { ...opts, base, token, fetchImpl }); }
+    catch (e) {
+      // Token đã lưu bị thu hồi / hết hạn → xin kết nối lại (token cấu hình tay thì báo lỗi như cũ).
+      if (e.status === 401 && !envToken) { forgetToken(base); token = ''; await connect('Kết nối cũ đã hết hạn hoặc bị thu hồi. '); return api(p, { ...opts, base, token, fetchImpl }); }
+      throw e;
+    }
+  };
 }
 
 // ---------- Tối thiểu hoá dữ liệu gửi cho AI ----------
@@ -56,7 +128,7 @@ const itemBrief = i => ({ id: i.id, code: i.code || (i.project?.key && i.number 
   assignees: (i.assignees || []).map(a => a.fullName || a.user?.fullName).filter(Boolean), mtlStatus: i.mtl?.statusLabel || i.statusLabel, critical: i.critical || undefined });
 
 // ---------- Công cụ ----------
-export function buildServer({ call = api } = {}) {
+export function buildServer({ call = createSession() } = {}) {
   const server = new McpServer({ name: 'kepper-hub', version: VERSION });
   const R = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
   const W = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };

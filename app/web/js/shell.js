@@ -76,10 +76,10 @@ function renderLauncher(groups, admin) {
 
 // ---------- Menu tài khoản ----------
 function renderUserMenu() {
-  const s = store.settings || {}, it = isItAdmin();
+  const it = isItAdmin();
   $('#userPanel').innerHTML = `<div class="um-head"><b>${esc(store.me.fullName)}</b><span class="muted xs">${esc(store.me.departmentName || (store.me.isRootAdmin ? 'Quản trị gốc' : ''))}${store.me.displayTitle ? ' — ' + esc(store.me.displayTitle) : ''}</span></div>
+    <a class="menu-item" role="menuitem" href="#/me" data-testid="nav-me">${icon('users')}Thông tin cá nhân</a>
     ${it ? '' : `<a class="menu-item" role="menuitem" href="#/claude" data-testid="nav-claude">${icon('send')}Kết nối Claude</a>`}
-    ${!it && (s.canEdit || s.canCreateTemplate) ? `<a class="menu-item" role="menuitem" href="#/catalog" data-testid="nav-catalog">${icon('list')}Danh mục dùng chung</a>` : ''}
     ${it ? '' : `<a class="menu-item" role="menuitem" href="#/trash" data-testid="nav-trash">${icon('trash')}Thùng rác</a>`}
     <button type="button" class="menu-item" role="menuitem" id="userShortcuts">${icon('settings')}Phím tắt</button>
     <div class="um-sep"></div>

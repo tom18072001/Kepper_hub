@@ -30,6 +30,7 @@
     "express-rate-limit": "^8.7.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
+    "jszip": "3.10.2",
     "minio": "^8.0.7",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",

@@ -7,6 +7,7 @@ test('21. Kết nối Claude: token cá nhân đúng quyền người dùng, tha
   const nv = await (await browser.newContext()).newPage();
   await login(nv, 'nv.phaply');
   await nv.goto('/#/claude');
+  await nv.getByTestId('claude-manual').locator('summary').click();
   await nv.getByTestId('claude-token-name').fill('Máy văn phòng (giả)');
   await nv.getByTestId('claude-token-create').click();
   await expect(nv.getByTestId('claude-token-value')).toHaveValue(/^kpt_/);
@@ -40,4 +41,19 @@ test('21. Kết nối Claude: token cá nhân đúng quyền người dùng, tha
   await nv.getByTestId('confirm-ok').click();
   await toast(nv, 'Đã thu hồi');
   expect((await T('/api/me')).status()).toBe(401);
+
+  // Kết nối nhanh (không tạo / dán token): tiện ích xin kết nối → người dùng bấm "Cho phép" trên Kepper → tiện ích nhận token một lần.
+  const start = await (await nv.request.post('/api/claude/connect/start', { data: { device: 'Laptop e2e' } })).json();
+  expect((await nv.request.post('/api/claude/connect/poll', { data: { deviceCode: start.deviceCode } })).status()).toBe(202);
+  await nv.goto('/#' + start.verifyPath.split('#')[1]);
+  await expect(nv.getByTestId('claude-connect')).toContainText('Laptop e2e');
+  await nv.getByTestId('claude-connect-approve').click();
+  await toast(nv, 'Đã kết nối');
+  await expect(nv.getByTestId('claude-tokens')).toContainText('Claude Desktop — Laptop e2e');
+  const got = await (await nv.request.post('/api/claude/connect/poll', { data: { deviceCode: start.deviceCode } })).json();
+  expect(got.token).toMatch(/^kpt_/);
+  expect((await nv.request.post('/api/claude/connect/poll', { data: { deviceCode: start.deviceCode } })).status()).toBe(410); // chỉ trao một lần
+  const quick = path => nv.request.fetch(path, { headers: { authorization: 'Bearer ' + got.token } });
+  expect((await quick('/api/me')).status()).toBe(200);
+  expect((await quick('/api/claude/connect/' + start.userCode)).status()).toBe(403); // token không tự duyệt kết nối
 });

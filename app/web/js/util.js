@@ -47,9 +47,15 @@ export function dueClass(item) {
 }
 
 const PALETTE = ['#2563eb', '#7c3aed', '#db2777', '#ea580c', '#059669', '#0891b2', '#4f46e5', '#b45309'];
+// Ảnh đại diện theo id người dùng (danh bạ nạp một lần — store.js gọi setAvatarDirectory): mọi nơi vẽ avatar() đều hiện ảnh nếu có.
+let avatarDir = new Map();
+export function setAvatarDirectory(users = []) { avatarDir = new Map(users.filter(u => u.avatarUrl).map(u => [u.id, u.avatarUrl])); }
+const SAFE_AVATAR = /^\/avatars\/[0-9a-f-]{36}\.(png|jpg|webp)$/;
 export function avatar(user, title = true) {
   if (!user) return '';
   const name = user.fullName || user.username || '?';
+  const url = user.avatarUrl !== undefined ? user.avatarUrl : avatarDir.get(user.id);
+  if (url && SAFE_AVATAR.test(url)) return `<img class="avatar avatar-img" src="${esc(url)}" alt=""${title ? ` title="${esc(name)}"` : ''} loading="lazy">`;
   const parts = name.trim().split(/\s+/);
   const initials = ((parts.length > 1 ? parts[parts.length - 2][0] : '') + parts[parts.length - 1][0]).toUpperCase();
   const color = PALETTE[(user.id || 0) % PALETTE.length];

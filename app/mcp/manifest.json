@@ -2,9 +2,9 @@
   "manifest_version": "0.3",
   "name": "kepper-hub",
   "display_name": "Kepper Hub",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Kepper Hub trong Claude: xem việc, cập nhật tiến độ, giao việc, nhắc việc, soạn nháp báo cáo tuần; đối tác (CRM), nghỉ phép / bảng công (HRM) khi Kepper bật — đúng quyền tài khoản Kepper của bạn.",
-  "long_description": "Chạy trên máy bạn, gọi Kepper trong mạng nội bộ bằng token cá nhân (Kepper → Kết nối Claude). Claude chỉ thấy và làm được những gì tài khoản Kepper của bạn được phép; nộp báo cáo, phê duyệt, xoá, xuất tệp vẫn làm trên giao diện Kepper.",
+  "long_description": "Chạy trên máy bạn, gọi Kepper trong mạng nội bộ. Kết nối nhanh: lần đầu hỏi Claude, Kepper mở trên trình duyệt — bấm \"Cho phép\" là xong (không phải tạo / dán token). Claude chỉ thấy và làm được những gì tài khoản Kepper của bạn được phép; nộp báo cáo, phê duyệt, xoá, xuất tệp vẫn làm trên giao diện Kepper.",
   "author": {
     "name": "Kepper Hub"
   },
@@ -32,9 +32,9 @@
     },
     "kepper_token": {
       "type": "string",
-      "title": "Token Kepper",
-      "description": "Tạo trong Kepper → Công cụ khác → Kết nối Claude (bắt đầu bằng kpt_). Lưu mã hoá trong Windows Credential Manager / macOS Keychain.",
-      "required": true,
+      "title": "Token Kepper (không bắt buộc)",
+      "description": "Để trống: lần đầu hỏi Claude, Kepper mở trên trình duyệt — bấm \"Cho phép\". Chỉ điền khi quản trị cấp token thủ công (bắt đầu bằng kpt_).",
+      "required": false,
       "sensitive": true
     }
   },
