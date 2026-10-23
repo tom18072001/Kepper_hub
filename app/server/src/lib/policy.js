@@ -86,12 +86,20 @@ function rule(s, action, dataset, ctx, env) {
       const it = ctx.item || {};
       if (action === 'view') return true; // xem đã lọc bằng itemVisibleWhere
       if (action === 'edit') return !!it.projectManager || (it.assigneeIds || []).includes(s.userId) || (it.leadLeaderIds || []).includes(s.userId);
+      if (action === 'export') return mtlExport(s, ctx);
       return false;
     }
     case 'mtl.plan': {
       const it = ctx.item || {};
       if (action === 'view') return true;
-      if (action === 'edit') return !!it.projectManager; // tên, găng, mốc, kế hoạch gốc: chỉ người quản lý dự án
+      if (action === 'edit') {
+        // Tên, găng, mốc, hạn, kế hoạch gốc, cấu trúc cây, bộ phận chủ trì của bước MTL tổng: chỉ người quản lý dự án.
+        if (it.projectManager) return true;
+        // Lãnh đạo bộ phận chủ trì: chi tiết hoá (thêm / sửa việc con) và phân công người trong hạng mục bộ phận mình (MTL bộ phận).
+        if (['child', 'detail', 'assign'].includes(ctx.op)) return (it.leadLeaderIds || []).includes(s.userId);
+        return false;
+      }
+      if (action === 'export') return mtlExport(s, ctx);
       return false;
     }
     case 'kpi.person':
@@ -100,6 +108,12 @@ function rule(s, action, dataset, ctx, env) {
     default:
       return false;
   }
+}
+
+// Xuất MTL ra tệp (Excel / Word): người quản lý dự án, Ban GĐ; lãnh đạo bộ phận chỉ phần bộ phận mình (op 'dept').
+function mtlExport(s, ctx) {
+  const it = ctx.item || {};
+  return !!it.projectManager || !!s.director || (ctx.op === 'dept' && (it.leadLeaderIds || []).includes(s.userId));
 }
 
 class PolicyError extends Error { constructor(message) { super(message); this.status = 403; this.code = 'FORBIDDEN'; } }
@@ -111,7 +125,7 @@ const MESSAGES = {
   'weekly.compliance': 'Điểm tuân thủ chỉ thư ký giao ban và Ban giám đốc xem',
   'weekly.roles': 'Chỉ Ban giám đốc chọn bộ phận thư ký và PMO',
   'mtl.progress': 'Chỉ người được giao, lãnh đạo bộ phận chủ trì hoặc người quản lý dự án cập nhật tiến độ hạng mục này',
-  'mtl.plan': 'Chỉ người quản lý dự án sửa tên, đường găng, mốc của hạng mục MTL',
+  'mtl.plan': 'Kế hoạch MTL (tên, găng, mốc, hạn, cấu trúc, phân công) do người quản lý dự án sửa; lãnh đạo bộ phận chủ trì chi tiết hoá phần bộ phận mình',
 };
 function assertCan(s, action, dataset, ctx, env) {
   if (!can(s, action, dataset, ctx, env)) throw new PolicyError(MESSAGES[dataset] || 'Bạn không có quyền với dữ liệu này');

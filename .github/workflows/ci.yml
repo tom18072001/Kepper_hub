@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm, cache-dependency-path: app/server/package-lock.json }
+        with: { node-version: 22, cache: npm, cache-dependency-path: app/server/package-lock.json }
       - name: Cài thư viện máy chủ
         working-directory: app/server
         run: npm ci && npx prisma generate
@@ -35,9 +35,14 @@ jobs:
           npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma \
             --shadow-database-url postgresql://workhub:workhub@127.0.0.1:5432/shadow_ci --exit-code
         env: { PGPASSWORD: workhub }
-      - name: Lỗ hổng thư viện (mức cao trở lên)
+      - name: Lỗ hổng thư viện (mức cao trở lên; gồm cả prisma CLI chạy trong image)
         working-directory: app/server
-        run: npm audit --omit=dev --audit-level=high
+        run: npm audit --audit-level=high
+      - name: Build image (app + sao lưu) và kiểm cú pháp script vận hành
+        run: |
+          docker build -t kepper-app:ci -f Dockerfile .
+          docker build -t kepper-backup:ci -f Dockerfile.backup .
+          sh -n deploy/backup.sh && sh -n deploy/restore.sh && sh -n app/server/docker-entrypoint.sh
       - name: E2E
         working-directory: app/e2e
         run: |

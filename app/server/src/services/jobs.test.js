@@ -33,8 +33,16 @@ test('bộ lập lịch: chạy một lần / ngày, lỗi của job không làm
   const quiet = { log: () => {}, error: () => {} };
   const s = J.scheduler(prisma, jobs, { log: quiet });
   assert.deepEqual(await s.tick(at('2026-10-30T08:00:00+07:00')), ['ok', 'boom']);
-  assert.deepEqual(await s.tick(at('2026-10-30T08:01:00+07:00')), []); // không chạy lại trong ngày
+  assert.deepEqual(await s.tick(at('2026-10-30T08:01:00+07:00')), []); // không chạy lại trong ngày; lỗi chờ 20 phút mới thử lại
   assert.equal(store.ok.ok, true); assert.equal(store.boom.ok, false); assert.match(store.boom.error, /db down/);
+  store.boom.at = '2026-10-30T00:30:00.000Z'; // lần lỗi cách đây > 20 phút
+  assert.deepEqual(await s.tick(at('2026-10-30T08:30:00+07:00')), ['boom']); // thử lại lần 2
+  store.boom.at = '2026-10-30T00:30:00.000Z';
+  assert.deepEqual(await s.tick(at('2026-10-30T09:00:00+07:00')), ['boom']); // lần 3
+  store.boom.at = '2026-10-30T00:30:00.000Z';
+  assert.deepEqual(await s.tick(at('2026-10-30T10:00:00+07:00')), []); // hết lượt trong ngày
   assert.deepEqual(await s.tick(at('2026-10-31T08:00:00+07:00')), ['ok', 'boom']); // ngày mới
-  assert.deepEqual(calls, ['ok', 'boom', 'ok', 'boom']);
+  assert.deepEqual(calls, ['ok', 'boom', 'boom', 'boom', 'ok', 'boom']);
+  // Đang chạy (đã nhận việc ở tiến trình khác / tiến trình chết giữa chừng): không chạy lại trong ngày.
+  assert.deepEqual(J.dueJobs([{ name: 'x', at: '07:00' }], { x: { day: '2026-10-30', running: true, at: '2026-10-29T00:00:00Z' } }, at('2026-10-30T12:00:00+07:00')), []);
 });

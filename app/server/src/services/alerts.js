@@ -92,9 +92,13 @@ async function runProjectAlerts(prisma, project, day = new Date()) {
       update: { plannedPct: s.plannedPct, actualPct: s.actualPct, spi: s.spi } }).catch(async e => {
       // Prisma không upsert được khoá có null (departmentId = null) → cập nhật / tạo tay.
       if (departmentId !== null) throw e;
-      const ex = await prisma.progressSnapshot.findFirst({ where: { projectId: project.id, departmentId: null, day: dayDate } });
-      if (ex) await prisma.progressSnapshot.update({ where: { id: ex.id }, data: { plannedPct: s.plannedPct, actualPct: s.actualPct, spi: s.spi } });
-      else await prisma.progressSnapshot.create({ data: { projectId: project.id, departmentId: null, day: dayDate, plannedPct: s.plannedPct, actualPct: s.actualPct, spi: s.spi } });
+      // Khoá theo dự án: bấm "Chạy ngay" trùng lúc job chạy không tạo hai điểm cùng ngày trên đường cong S.
+      await prisma.$transaction(async tx => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'snapshot:' + project.id}))`;
+        const ex = await tx.progressSnapshot.findFirst({ where: { projectId: project.id, departmentId: null, day: dayDate } });
+        if (ex) await tx.progressSnapshot.update({ where: { id: ex.id }, data: { plannedPct: s.plannedPct, actualPct: s.actualPct, spi: s.spi } });
+        else await tx.progressSnapshot.create({ data: { projectId: project.id, departmentId: null, day: dayDate, plannedPct: s.plannedPct, actualPct: s.actualPct, spi: s.spi } });
+      });
     });
   };
   await snap(null, rows);
@@ -104,8 +108,10 @@ async function runProjectAlerts(prisma, project, day = new Date()) {
 
 async function runAllAlerts(prisma, day = new Date()) {
   const projects = await prisma.project.findMany({ where: { kind: 'MTL', archivedAt: null, deletedAt: null, t0Date: { not: null } } });
-  const out = [];
-  for (const p of projects) out.push(await runProjectAlerts(prisma, p, day));
+  const out = [], failed = [];
+  // Một dự án lỗi không chặn cảnh báo của các dự án khác; cuối vòng báo lỗi tổng hợp để lịch chạy thử lại.
+  for (const p of projects) { try { out.push(await runProjectAlerts(prisma, p, day)); } catch (error) { failed.push(`${p.key}: ${error.message}`); } }
+  if (failed.length) throw new Error(`Cảnh báo MTL lỗi ở ${failed.length} dự án — ${failed.join('; ').slice(0, 200)}`);
   return out;
 }
 

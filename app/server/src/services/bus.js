@@ -13,7 +13,10 @@ function init(prisma) { prismaRef = prisma; }
 function send(client, event, data) {
   try { client.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch { remove(client); }
 }
+const MAX_PER_USER = 5; // nhiều tab hơn: đóng luồng cũ nhất (giới hạn số kết nối giữ mở trên máy chủ)
 function add(res, user) {
+  const mine = [...clients].filter(c => c.user.id === user.id);
+  for (const old of mine.slice(0, Math.max(0, mine.length - MAX_PER_USER + 1))) close(old);
   const client = { res, user, rights: new Map(), sessionAt: Date.now() };
   clients.add(client);
   return client;
@@ -74,4 +77,4 @@ function notified(userIds) {
   notifyTimer.unref?.();
 }
 
-module.exports = { sessionValid, close, init, add, remove, item, project, notified, count: () => clients.size };
+module.exports = { closeAll: () => { for (const c of [...clients]) close(c); }, sessionValid, close, init, add, remove, item, project, notified, count: () => clients.size };

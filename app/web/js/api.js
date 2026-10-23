@@ -15,6 +15,17 @@ export class ApiError extends Error {
   constructor(status, body) { super(body?.error || `Lỗi ${status}`); this.status = status; this.code = body?.code; this.body = body; }
 }
 
+// Đồng hồ máy chủ lệch (PC ngủ / VM Docker lệch giờ) làm sai giờ nộp báo cáo và điểm tuân thủ: cảnh báo một lần mỗi phiên.
+let clockChecked = false;
+function checkClock(res) {
+  if (clockChecked) return;
+  const d = Date.parse(res.headers.get('date') || '');
+  if (!Number.isFinite(d)) return;
+  clockChecked = true;
+  const skew = Math.round((d - Date.now()) / 60_000);
+  if (Math.abs(skew) >= 3) setTimeout(() => listeners.clockSkew?.(skew), 0);
+}
+
 // Thời điểm người dùng vừa tự thay đổi dữ liệu (để bỏ qua sự kiện realtime do chính mình gây ra — giao diện đã tự tải lại).
 export let lastLocalWrite = 0;
 export async function api(path, { method = 'GET', body, form, raw = false, signal } = {}) {
@@ -25,6 +36,7 @@ export async function api(path, { method = 'GET', body, form, raw = false, signa
   if (form) payload = form;
   else if (body !== undefined) { headers['content-type'] = 'application/json'; payload = JSON.stringify(body); }
   const res = await fetch(path, { method, headers, body: payload, signal });
+  checkClock(res);
   if (raw && res.ok) return res;
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {

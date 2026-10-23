@@ -47,6 +47,9 @@ async function seed(prisma = new PrismaClient(), env = process.env) {
   // Danh mục mặc định (mẫu nhóm việc "Nhiệm vụ chuẩn – Cuộc thi/Hội thi").
   await require('./services/register').ensureDefaults(prisma);
   if (String(env.SEED_DEMO) !== 'true' || await prisma.project.count()) return out;
+  // Máy chạy thật: dữ liệu mẫu tạo tài khoản Ban GĐ mẫu với mật khẩu công khai trong README → phải xác nhận rõ.
+  if (env.NODE_ENV === 'production' && env.ALLOW_DEMO_SEED !== 'yes')
+    throw new Error('SEED_DEMO=true trên máy chạy sẽ tạo tài khoản mẫu (vd. giamdoc — Ban GĐ) với mật khẩu công khai. Đặt SEED_DEMO=false, hoặc ALLOW_DEMO_SEED=yes nếu đây là máy dùng thử.');
 
   const root = await prisma.user.findFirst({ where: { isRootAdmin: true } });
   const dept = {};
@@ -196,4 +199,4 @@ if (require.main === module) {
   seed(prisma).then(result => { console.log(JSON.stringify({ level: 'info', msg: 'seed_done', ...result })); return prisma.$disconnect(); })
     .catch(async error => { console.error(error.message); await prisma.$disconnect(); process.exit(1); });
 }
-module.exports = { seed };
+module.exports = { seed, DEMO_USERNAMES: USERS.map(u => u.username) };

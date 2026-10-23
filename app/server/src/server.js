@@ -39,6 +39,8 @@ async function start() {
   const prisma = new PrismaClient({ errorFormat: 'minimal' });
   await prisma.$connect();
   const app = createApp({ prisma, config });
+  const tasks = [];
+  let jobs = null;
   if (config.enableCron) {
     // Job hằng ngày (giờ Việt Nam) có CHẠY BÙ khi máy bật lại sau giờ chạy, trong khung giờ còn ý nghĩa; lỗi không làm dừng máy chủ.
     const A = require('./services/alerts'), WD = require('./services/weekly-data');
@@ -57,17 +59,28 @@ async function start() {
       { name: 'retention_notifications', at: '02:50', run: p => purgeOldNotifications(p).then(count => ({ count })) },
       // Báo quản trị IT khi sao lưu quá 36 giờ / lỗi, hoặc một job lịch chạy lỗi (máy đơn lẻ, chưa có giám sát ngoài).
       { name: 'ops_check', at: '09:00', run: p => require('./services/ops').runOpsCheck(p) },
+      { name: 'retention_access_logs', at: '03:00', run: () => ({ count: require('./lib/access-log').purgeAccessLogs() }) },
     ];
-    const jobs = require('./services/jobs').scheduler(prisma, daily);
-    cron.schedule('* * * * *', () => jobs.tick(), { timezone: 'Asia/Ho_Chi_Minh' });
+    jobs = require('./services/jobs').scheduler(prisma, daily);
+    tasks.push(cron.schedule('* * * * *', () => jobs.tick(), { timezone: 'Asia/Ho_Chi_Minh' }));
     jobs.tick();
     // Việc lặp lại: kiểm tra mỗi 15 phút (quy tắc chạy lúc 07:00 giờ Việt Nam).
     const runRecurring = () => runDue(prisma).catch(error => console.error(JSON.stringify({ level: 'error', msg: 'recurring_cron_failed', error: error.message })));
-    cron.schedule('*/15 * * * *', runRecurring, { timezone: 'Asia/Ho_Chi_Minh' });
+    tasks.push(cron.schedule('*/15 * * * *', runRecurring, { timezone: 'Asia/Ho_Chi_Minh' }));
     runRecurring();
   }
   const server = app.listen(config.port, () => console.log(JSON.stringify({ level: 'info', msg: 'listening', port: config.port })));
-  const stop = async () => { server.close(); await prisma.$disconnect().catch(() => {}); process.exit(0); };
+  // Dừng êm: ngừng nhận việc mới, đóng luồng SSE, chờ request / job đang chạy tối đa 15 giây rồi mới ngắt CSDL.
+  let stopping = false;
+  const stop = async () => {
+    if (stopping) return; stopping = true;
+    for (const t of tasks) t.stop();
+    server.close(); require('./services/bus').closeAll(); server.closeIdleConnections?.();
+    const until = Date.now() + 15_000;
+    while ((app.locals.inflight() > 0 || jobs?.isBusy()) && Date.now() < until) await new Promise(r => setTimeout(r, 200));
+    await prisma.$disconnect().catch(() => {});
+    process.exit(0);
+  };
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);
 }

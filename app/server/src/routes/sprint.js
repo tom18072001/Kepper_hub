@@ -5,6 +5,7 @@
 // - "Cập nhật nhanh": việc của tôi (và việc chưa giao người của ban tôi, nếu tôi là lãnh đạo ban) đang trong kỳ thực hiện;
 // - mẫu Excel MTL bộ phận điền sẵn (tải → sửa → nhập lại bằng "Nhập MTL bộ phận").
 const ExcelJS = require('exceljs');
+const MG = require('../services/mtl-guard');
 const { fail, intParam } = require('../lib/http');
 const { isItAdmin } = require('../lib/permissions');
 const { Prisma } = require('@prisma/client');
@@ -221,8 +222,8 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
     const { project, rights } = await loadProject(prisma, req.user, intParam(req.params.id));
     if (project.kind !== 'MTL') fail(422, 'Dự án này không theo Master Timeline', 'NOT_MTL');
     const departmentId = intParam(req.query.departmentId, 'Bộ phận');
-    if (!rights.canManage && !(departmentId === req.user.departmentId && await isDeptLeader(req.user, departmentId)))
-      fail(403, 'Chỉ PMO hoặc lãnh đạo của bộ phận này tải được MTL bộ phận', 'FORBIDDEN');
+    // Quy định xuất MTL (lib/policy.js mtl.plan · export): quản lý dự án, Ban GĐ; lãnh đạo bộ phận chỉ bộ phận mình.
+    MG.mtlExportGuard(req.user, project, rights, { deptLeader: departmentId === req.user.departmentId && await isDeptLeader(req.user, departmentId) });
     const department = await prisma.department.findFirst({ where: { id: departmentId, isActive: true }, select: { id: true, name: true, code: true } });
     if (!department) fail(422, 'Bộ phận không hợp lệ', 'INVALID_DEPARTMENT');
     const { items } = await MP.computeProject(prisma, project, req.user, new Date());

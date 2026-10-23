@@ -19,6 +19,7 @@ async function weeklyConfig(prisma) {
     secretaryDepartmentId: Number.isInteger(v.secretaryDepartmentId) ? v.secretaryDepartmentId : null,
     // PMO do Ban GĐ chỉ định (không suy từ việc tự tạo / làm chủ một dự án MTL — tránh tự nâng quyền).
     pmoUserIds: Array.isArray(v.pmoUserIds) ? v.pmoUserIds.map(Number).filter(Number.isInteger) : [],
+    pmoConfigured: Array.isArray(v.pmoUserIds),
   };
 }
 // Ban giám đốc (vai trò director): chủ trì giao ban, nhận báo cáo — KHÔNG lập báo cáo tuần (QC-TH-01 Điều 2, 5).
@@ -26,7 +27,7 @@ const isDirector = user => user?.role === 'director';
 // Vai trò nghiệp vụ trong giao ban (subject của lib/policy.js), suy ra từ vai trò + phòng ban đã gán cho tài khoản:
 // - director: tài khoản vai trò Ban giám đốc — chủ trì, kết luận, KHÔNG lập báo cáo tuần;
 // - secretary: thành viên bộ phận thư ký (Ban GĐ chọn trong thiết lập) — tổng hợp, điểm danh, Action Log, nhập thay, chấm điểm;
-// - pmo: người Ban GĐ chỉ định làm PMO, hoặc tài khoản có quyền "Xem tổng hợp" toàn đơn vị mà không phải Ban GĐ — xem đầy đủ, không sửa;
+// - pmo: người Ban GĐ chỉ định làm PMO (chưa thiết lập danh sách: tạm dùng quyền "Xem tổng hợp" toàn đơn vị) — xem đầy đủ, không sửa;
 // - leader: có quyền "Xem tổng hợp" (trưởng / phó bộ phận) — nhận bản tổng hợp mức tóm tắt (Điều 5);
 // - mustReport: có phòng ban và không phải Ban GĐ.
 async function rolesOf(prisma, user, cfg = null) {
@@ -34,8 +35,10 @@ async function rolesOf(prisma, user, cfg = null) {
   const c = cfg || await weeklyConfig(prisma);
   const scope = permissionScope(user, 'reports.summary', 'VIEW');
   const director = isDirector(user);
-  const secretary = c.secretaryDepartmentId != null && user.departmentId === c.secretaryDepartmentId;
-  const pmo = c.pmoUserIds.includes(user.id) || (scope === 'SYSTEM' && !director);
+  // Ban GĐ không kiêm thư ký (không tự trình rồi tự duyệt bảng điểm, không nhập thay).
+  const secretary = !director && c.secretaryDepartmentId != null && user.departmentId === c.secretaryDepartmentId;
+  // PMO = danh sách Ban GĐ chỉ định. Chỉ khi Ban GĐ CHƯA thiết lập danh sách mới tạm dùng quyền "Xem tổng hợp" toàn đơn vị (khởi tạo).
+  const pmo = !director && (c.pmoConfigured ? c.pmoUserIds.includes(user.id) : scope === 'SYSTEM');
   const s = { it: false, director, secretary, pmo, leader: !!scope, mustReport: !director && user.departmentId != null, departmentId: user.departmentId ?? null, userId: user.id };
   // Tiện cho giao diện / route: manage = sửa giao ban; summary = xem bản tổng hợp; full = xem chi tiết mọi bộ phận.
   return { ...s, manage: P.can(s, 'edit', 'weekly.meeting'), summary: P.can(s, 'view', 'weekly.summary'), full: P.can(s, 'view', 'weekly.summary.detail') };
@@ -80,8 +83,10 @@ async function openActions(prisma, f, departmentId = null) {
     .filter(a => departmentId == null || a.departmentId === departmentId);
   if (!list.length) return { actions: [], rows: new Map() };
   const reps = await prisma.weeklyReport.findMany({ where: { week: { gt: from, lte: f }, firstSubmittedAt: { not: null }, departmentId: { in: [...new Set(list.map(a => a.departmentId))] } }, orderBy: { week: 'asc' } });
-  const rows = new Map(), rowWeek = new Map();
-  for (const r of reps) for (const x of [...(r.data?.results || []), ...(r.data?.ongoing || [])]) if (x.actionRef) { rows.set(x.actionRef, x); rowWeek.set(x.actionRef, r.week); }
+  const rows = new Map(), rowWeek = new Map(), ownerDept = new Map(list.map(a => [a.ref, a.departmentId]));
+  // Chỉ báo cáo của ĐÚNG bộ phận được giao mới cập nhật / đóng được việc trong Action Log (bộ phận khác gửi actionRef thì bỏ qua).
+  for (const r of reps) for (const x of [...(r.data?.results || []), ...(r.data?.ongoing || [])])
+    if (x.actionRef && ownerDept.get(x.actionRef) === r.departmentId) { rows.set(x.actionRef, x); rowWeek.set(x.actionRef, r.week); }
   const actions = list.filter(a => a.meetingWeek === prevWeek || !(rows.get(a.ref)?.status === WK.DONE && rowWeek.get(a.ref) < f));
   return { actions, rows };
 }
@@ -106,10 +111,16 @@ async function summaryOf(prisma, week, now = new Date()) {
   const sum = WK.buildSummary({ week, depts, reports, notices, meeting, actions, actionRows, now, userName: id => names[id] || '' });
   return { sum, names, depts, all: rd.all, configured: rd.configured, cfg };
 }
+// Ghi vào WeeklyMeeting.data luôn trong khoá 'meeting:<tuần>' và đọc lại trong khoá (không mất cập nhật của người khác).
+const meetingLock = (tx, week) => tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'meeting:' + week}))`;
 async function snapshotRequired(prisma, week, required) {
-  const m = await meetingOf(prisma, week);
-  const data = { ...(m?.data || {}), required };
-  await prisma.weeklyMeeting.upsert({ where: { week }, create: { week, data }, update: { data } });
+  await prisma.$transaction(async tx => {
+    await meetingLock(tx, week);
+    const m = await tx.weeklyMeeting.findUnique({ where: { week } });
+    if (Array.isArray(m?.data?.required) && JSON.stringify(m.data.required) === JSON.stringify(required)) return;
+    const data = { ...(m?.data || {}), required };
+    await tx.weeklyMeeting.upsert({ where: { week }, create: { week, data }, update: { data } });
+  });
 }
 
 // ---------- Lịch tự động ----------
@@ -145,4 +156,4 @@ async function runSummaryNotice(prisma, now = new Date()) {
   return { skipped: true, sent: 0 };
 }
 
-module.exports = { CONFIG_KEY, ACTIVE_USER, weeklyConfig, isDirector, rolesOf, requiredDepartments, userNames, rowOwnerIds, meetingOf, managerIds, summaryViewerIds, summaryOf, openActions, snapshotRequired, runReportReminder, runSummaryNotice };
+module.exports = { meetingLock, CONFIG_KEY, ACTIVE_USER, weeklyConfig, isDirector, rolesOf, requiredDepartments, userNames, rowOwnerIds, meetingOf, managerIds, summaryViewerIds, summaryOf, openActions, snapshotRequired, runReportReminder, runSummaryNotice };

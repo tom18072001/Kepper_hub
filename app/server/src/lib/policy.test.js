@@ -53,6 +53,13 @@ test('MTL: % / checklist — người được giao, lãnh đạo bộ phận ch
   allow('mtl.progress', 'edit', { item: { ...item, projectManager: true } }, ROLES.filter(r => r !== 'it'));
   allow('mtl.plan', 'edit', { item }, []);
   allow('mtl.plan', 'edit', { item: { ...item, projectManager: true } }, ROLES.filter(r => r !== 'it'));
+  // Lãnh đạo bộ phận chủ trì: thêm / sửa việc con, phân công — không sửa bước tổng, không đổi cấu trúc.
+  for (const op of ['child', 'detail', 'assign']) allow('mtl.plan', 'edit', { item, op }, ['leader']);
+  allow('mtl.plan', 'edit', { item, op: 'struct' }, []);
+  // Xuất ra tệp: quản lý dự án, Ban GĐ; lãnh đạo bộ phận phần bộ phận mình.
+  allow('mtl.plan', 'export', { item }, ['director']);
+  allow('mtl.progress', 'export', { item, op: 'dept' }, ['director', 'leader']);
+  allow('mtl.plan', 'export', { item: { ...item, projectManager: true } }, ROLES.filter(r => r !== 'it'));
 });
 
 test('KPI cá nhân: chính mình, lãnh đạo bộ phận mình, Ban GĐ, quản lý dự án; không bao giờ gửi AI / ra ngoài', () => {

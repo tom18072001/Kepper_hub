@@ -30,6 +30,13 @@ fail() { echo "[backup] LỖI $1" >&2; rm -rf "$dir"; status "{\"lastFailAt\":\"
 # Mỗi bước kiểm lỗi riêng: trong hàm gọi kiểu `run_backup || …`, `set -e` KHÔNG có tác dụng (POSIX), nên phải return tường minh.
 # Chỉ xoá bản cũ khi bản mới đã đạt (dump đọc được + mã hoá nếu cấu hình + có tổng kiểm); ghi dấu LAST_OK.
 run_backup() {
+  # Ổ đầy là lý do hỏng sao lưu hay gặp nhất: cần trống ít nhất gấp đôi bản gần nhất (tối thiểu 200 MB).
+  prev_dir="$(ls -1dt "$BACKUP_DIR"/2* 2>/dev/null | head -1 || true)"
+  prev_kb=0; [ -n "$prev_dir" ] && prev_kb="$(du -sk "$prev_dir" 2>/dev/null | cut -f1)"
+  need_kb=$(( ${prev_kb:-0} * 2 ))
+  [ "$need_kb" -lt 204800 ] && need_kb=204800
+  free_kb="$(df -Pk "$BACKUP_DIR" | awk 'NR==2 {print $4}')"
+  if [ -n "$free_kb" ] && [ "$free_kb" -lt "$need_kb" ]; then dir="/nonexistent"; fail "ổ sao lưu còn ${free_kb} KB, cần ${need_kb} KB"; return 1; fi
   stamp="$(date +%Y%m%d-%H%M%S)"
   dir="$BACKUP_DIR/$stamp"
   # Không bao giờ dùng lại thư mục đã có (lỗi ở lần chạy sau sẽ xoá nhầm bản đạt cùng giây).
@@ -56,12 +63,17 @@ run_backup() {
   size="$(du -sk "$dir" | cut -f1)"
   copied=false
   if [ "${BACKUP_COPY:-0}" = "1" ]; then
-    if [ -d "$COPY_DIR" ] && cp -r "$dir" "$COPY_DIR/" && (cd "$COPY_DIR/$stamp" && sha256sum -c SHA256SUMS >/dev/null); then
+    # Thư mục "ngoài máy" mà trùng thư mục sao lưu (quên đặt BACKUP_COPY_PATH) thì không tính là bản ngoài máy.
+    probe=".probe.$$"; : > "$BACKUP_DIR/$probe"
+    if [ -e "$COPY_DIR/$probe" ]; then
+      echo "[backup] CẢNH BÁO: BACKUP_COPY_PATH trùng thư mục sao lưu — chưa có bản ngoài máy" >&2
+    elif [ -d "$COPY_DIR" ] && cp -r "$dir" "$COPY_DIR/" && (cd "$COPY_DIR/$stamp" && sha256sum -c SHA256SUMS >/dev/null); then
       copied=true
       find "$COPY_DIR" -mindepth 1 -maxdepth 1 -type d -mtime +"$COPY_KEEP_DAYS" -exec rm -rf {} +
     else
       echo "[backup] CẢNH BÁO: không chép được sang $COPY_DIR" >&2
     fi
+    rm -f "$BACKUP_DIR/$probe"
   fi
   date -u +%Y-%m-%dT%H:%M:%SZ > "$BACKUP_DIR/LAST_OK" && echo "$stamp" >> "$BACKUP_DIR/LAST_OK"
   status "{\"lastOk\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"stamp\":\"$stamp\",\"sizeKb\":$size,\"encrypted\":$encrypted,\"copied\":$copied,\"error\":null}"
@@ -73,16 +85,20 @@ run_backup() {
 if [ "${BACKUP_ONCE:-0}" = "1" ]; then run_backup || exit 1; exit 0; fi
 
 [ -n "$RECIPIENT" ] || echo "[backup] CẢNH BÁO: chưa đặt BACKUP_AGE_RECIPIENT — bản sao lưu KHÔNG mã hoá" >&2
+[ "${STORAGE_DRIVER:-local}" = "local" ] || echo "[backup] CẢNH BÁO: STORAGE_DRIVER=${STORAGE_DRIVER} — tệp đính kèm trên MinIO KHÔNG nằm trong bản sao lưu này" >&2
 echo "[backup] chạy hằng ngày từ ${HOUR}:00 (chạy bù khi máy bật lại), giữ ${KEEP_DAYS} ngày, lưu tại ${BACKUP_DIR}"
-mark="$BACKUP_DIR/.last_attempt"
+# Ghi mốc "đã sao lưu hôm nay" CHỈ khi đạt; lỗi thì thử lại sau ~30 phút, tối đa 3 lần / ngày.
+mark="$BACKUP_DIR/.last_ok_day"
+tday=""; tries=0; next_try=0
 while true; do
   today="$(date +%Y%m%d)"
+  [ "$today" != "$tday" ] && { tday="$today"; tries=0; next_try=0; }
   last="$(cat "$mark" 2>/dev/null || true)"
   # So sánh giờ dạng số (bỏ số 0 đầu: "08" không phải số bát phân hợp lệ).
   now_h="$(date +%H | sed 's/^0//')"; want_h="$(echo "$HOUR" | sed 's/^0//')"
-  if [ "${now_h:-0}" -ge "${want_h:-0}" ] && [ "$last" != "$today" ]; then
-    echo "$today" > "$mark"
-    run_backup || echo "[backup] LỖI sao lưu $(date)" >&2
+  if [ "${now_h:-0}" -ge "${want_h:-0}" ] && [ "$last" != "$today" ] && [ "$tries" -lt 3 ] && [ "$(date +%s)" -ge "$next_try" ]; then
+    if run_backup; then echo "$today" > "$mark"
+    else tries=$((tries + 1)); next_try=$(( $(date +%s) + 1800 )); echo "[backup] LỖI sao lưu lần $tries $(date)" >&2; fi
   fi
   sleep 300
 done

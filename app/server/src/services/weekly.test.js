@@ -173,3 +173,10 @@ test('chấm điểm tuân thủ tháng (Phụ lục 1): nộp muộn, không n�
   assert.deepEqual(WK.fridaysOf('2026-10', t('2026-10-28T09:00:00+07:00')), ['2026-10-02', '2026-10-09', '2026-10-16', '2026-10-23', '2026-10-30']);
   assert.deepEqual(WK.fridaysOf('2026-10', t('2026-10-28T09:00:00+07:00'), '2026-10-30'), ['2026-10-30']);
 });
+
+test('SHA-256 bản nộp: JSON chuẩn hoá không phụ thuộc thứ tự khoá (JSONB đọc ra kiểm lại được)', () => {
+  const a = { results: [{ task: 'x', pct: 50, ownerIds: [2, 1] }], plans: [], b: { z: 1, a: null } };
+  const b = { plans: [], b: { a: null, z: 1 }, results: [{ ownerIds: [2, 1], pct: 50, task: 'x' }] };
+  assert.equal(WK.stableStringify(a), WK.stableStringify(b));
+  assert.notEqual(WK.stableStringify(a), WK.stableStringify({ ...a, plans: [1] }));
+});

@@ -284,8 +284,17 @@ function briefSummary(sum, ownDeptId) {
   return { ...sum, brief: true,
     rows: sum.rows.map(r => ({ ...r, submittedBy: '', report: r.id === ownDeptId ? r.report : null,
       absent: r.absent ? { noticed: r.absent.noticed, hasSubstitute: !!r.absent.substitute } : null, late: r.late.map(() => ({})), draft: r.id === ownDeptId ? r.draft : false, attendance: null, failed: false })),
-    actionReview: sum.actionReview.map(a => ({ ...a, owner: '' })),
+    // Yêu cầu hỗ trợ: bỏ nguyên nhân / giải pháp của bộ phận khác (văn bản sao chép cũng không có); Action Log: bỏ người phụ trách.
+    helps: sum.helps.map(g => ({ ...g, list: g.list.map(({ cause, solution, ...h }) => (h.fromId === ownDeptId ? { ...h, cause, solution } : h)) })),
+    actionReview: sum.actionReview.map(({ owner, ownerId, ...a }) => ({ ...a, owner: '' })),
     meeting: { conclusions: sum.meeting?.conclusions || {} } };
+}
+
+// JSON chuẩn hoá (khoá sắp xếp đệ quy): băm SHA-256 của bản nộp kiểm lại được từ bản đọc ra CSDL (JSONB sắp lại thứ tự khoá).
+function stableStringify(v) {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v ?? null);
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(',')}]`;
+  return `{${Object.keys(v).filter(k => v[k] !== undefined).sort().map(k => `${JSON.stringify(k)}:${stableStringify(v[k])}`).join(',')}}`;
 }
 
 // Văn bản "Sao chép bản tổng hợp" — không có họ tên người phụ trách (tối thiểu hoá DLCN), dòng đầu ghi nhãn Bảo mật.
@@ -350,5 +359,5 @@ module.exports = {
   SOURCES, MTL_SOURCE, STATUSES, DONE, HELP_BGD, HELP_SELF, REASONS, NOTICE_TYPES, ATTENDANCE, DECISIONS, POINTS, POINT_LABEL,
   isDay, addDays, dayOf, at, weekday, currentFriday, isFriday, fmtD, fmtTime, scheduleOf,
   isOverdue, needsIssue, issueLabel, statusFromMtl, deptCandidates, buildPrefill, sanitize, validate, finalize, writeBacks,
-  submissionStatus, absenceNoticed, SUBMITTED, buildSummary, briefSummary, summaryText, compliance, fridaysOf,
+  submissionStatus, absenceNoticed, SUBMITTED, buildSummary, briefSummary, summaryText, compliance, fridaysOf, stableStringify,
 };

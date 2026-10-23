@@ -8,6 +8,8 @@ name: kepper
 services:
   postgres:
     image: postgres:16-alpine
+    # Transaction treo không giữ khoá / kết nối mãi; truy vấn > 1 s ghi vào log để tìm điểm chậm.
+    command: ["postgres", "-c", "idle_in_transaction_session_timeout=300s", "-c", "log_min_duration_statement=1000", "-c", "log_line_prefix=%m [%p] %u@%d "]
     environment:
       POSTGRES_USER: workhub
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Đặt POSTGRES_PASSWORD trong .env}
@@ -33,10 +35,11 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://workhub:${POSTGRES_PASSWORD}@postgres:5432/workhub
+      DATABASE_URL: postgresql://workhub:${POSTGRES_PASSWORD}@postgres:5432/workhub?connection_limit=10&pool_timeout=20
       JWT_SECRET: ${JWT_SECRET:?Đặt JWT_SECRET trong .env}
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:4100}
-      TRUST_PROXY: ${TRUST_PROXY:-loopback, linklocal, uniquelocal}
+      TRUST_PROXY: ${TRUST_PROXY:-false}   # sau reverse proxy: 1 (một tầng) hoặc IP của proxy
+      ACCESS_LOG_DIR: /data/logs          # nhật ký truy cập ≥ 12 tháng (giữ 400 ngày), ra thư mục LOG_PATH trên máy
       ROOT_ADMIN_USERNAME: ${ROOT_ADMIN_USERNAME:-admin}
       ROOT_ADMIN_PASSWORD: ${ROOT_ADMIN_PASSWORD:?Đặt ROOT_ADMIN_PASSWORD trong .env}
       SEED_DEMO: ${SEED_DEMO:-false}
@@ -55,9 +58,11 @@ services:
       VIBER_BOT_NAME: ${VIBER_BOT_NAME:-Kepper Hub}
     volumes:
       - uploads:/data/uploads
+      - ${LOG_PATH:-./logs}:/data/logs
     ports:
       - "127.0.0.1:${APP_PORT:-4100}:4000"
     restart: unless-stopped
+    stop_grace_period: 20s   # dừng êm: chờ request / job đang chạy (server.js)
     logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
     networks: [default, preview-net]
 
@@ -83,11 +88,12 @@ services:
       # Bản ngoài máy: đặt BACKUP_COPY_PATH là ổ / thư mục mạng khác (vd. E:/kepper-backups) → tự chép bản đạt sang đó.
       BACKUP_COPY: ${BACKUP_COPY:-0}
       BACKUP_COPY_KEEP_DAYS: ${BACKUP_COPY_KEEP_DAYS:-90}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
       TZ: ICT-7   # chuỗi POSIX (UTC+7), không cần gói tzdata trong image alpine
     volumes:
       - ./deploy:/deploy:ro
       - ${BACKUP_PATH:-./backups}:/backups
-      - ${BACKUP_COPY_PATH:-./backups}:/backups-copy
+      - ${BACKUP_COPY_PATH:-./backups-copy}:/backups-copy
       - uploads:/data/uploads:ro
     entrypoint: ["sh", "/deploy/backup.sh"]
     restart: unless-stopped

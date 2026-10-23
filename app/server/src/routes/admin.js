@@ -85,7 +85,7 @@ const AUDIT_ACTIONS = {
 };
 const AUDIT_ENTITIES = {
   User: 'Tài khoản', Auth: 'Đăng nhập', Department: 'Phòng ban', UserPermission: 'Phân quyền', Label: 'Nhãn', AppSetting: 'Danh mục',
-  TaskTemplate: 'Mẫu nhóm việc', Delegation: 'Uỷ quyền', WorkItem: 'Công việc', Project: 'Dự án / sổ', Attachment: 'Tệp đính kèm',
+  TaskTemplate: 'Mẫu nhóm việc', Delegation: 'Uỷ quyền', WeeklyConfig: 'Thiết lập giao ban', WorkItem: 'Công việc', Project: 'Dự án / sổ', Attachment: 'Tệp đính kèm',
   ApprovalRequest: 'Yêu cầu duyệt', Cycle: 'Chu kỳ', RecurringRule: 'Việc lặp lại', IntakeRequest: 'Yêu cầu tiếp nhận', SavedView: 'Bộ lọc đã lưu',
   Plan: 'Kế hoạch năm', Summary: 'Tổng hợp giao việc', Kpi: 'KPI', WeeklyReport: 'Báo cáo tuần', WeeklyNotice: 'Thông báo muộn / vắng', WeeklyMeeting: 'Giao ban tuần', Ops: 'Trang Điều hành',
 };
@@ -291,7 +291,7 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
       username: usernameOf(req.body.username), fullName: text(req.body.fullName, 'Họ tên', { required: true, max: 120 }),
       displayTitle: text(req.body.displayTitle, 'Chức danh', { max: 120 }) || null, email: text(req.body.email, 'Email', { max: 160 }) || null,
       phone: text(req.body.phone, 'Điện thoại', { max: 30 }) || null, role: roleOf(req.body.role) || 'member',
-      departmentId: await departmentOf(prisma, req.body.departmentId) ?? null, passwordHash: bcrypt.hashSync(password, 10), mustChangePw: true,
+      departmentId: await departmentOf(prisma, req.body.departmentId) ?? null, passwordHash: await bcrypt.hash(password, 10), mustChangePw: true,
     };
     const sensitive = data.role === 'director';
     const user = await prisma.$transaction(async tx => {
@@ -317,6 +317,8 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
     for (const [key, label, max] of [['displayTitle', 'Chức danh', 120], ['email', 'Email', 160], ['phone', 'Điện thoại', 30]])
       if (req.body[key] !== undefined) data[key] = text(req.body[key], label, { max }) || null;
     if (req.body.role !== undefined) data.role = roleOf(req.body.role);
+    // Không tự đổi nhóm tài khoản của chính mình (vd. quản trị IT tự chuyển sang Ban giám đốc để đọc dữ liệu giao ban — QĐ-01).
+    if (id === req.user.id && data.role !== undefined && data.role !== old.role) fail(403, 'Không tự đổi nhóm tài khoản của chính mình — nhờ một quản trị khác', 'SELF_ROLE_CHANGE');
     if (req.body.departmentId !== undefined) {
       // Giữ phòng hiện tại (kể cả phòng đã khoá) khi sửa thông tin khác; chuyển sang phòng mới thì phòng đó phải đang hoạt động.
       const dept = optionalInt(req.body.departmentId, 'Phòng ban');
@@ -376,7 +378,7 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
     if (!canResetPassword(req.user, target)) fail(403, 'Không thể reset mật khẩu tài khoản này', 'FORBIDDEN');
     const sensitive = target.role === 'director';
     await prisma.$transaction(async tx => {
-      await tx.user.update({ where: { id: target.id }, data: { passwordHash: bcrypt.hashSync(DEFAULT_PASSWORD, 10), mustChangePw: true, sessionVersion: { increment: 1 } } });
+      await tx.user.update({ where: { id: target.id }, data: { passwordHash: await bcrypt.hash(DEFAULT_PASSWORD, 10), mustChangePw: true, sessionVersion: { increment: 1 } } });
       await audit(req, 'PASSWORD_RESET', 'User', target.id, null, sensitive ? { sensitive: true } : null, tx);
       if (sensitive) await notifyDirectors(tx, req.user, `Quản trị hệ thống vừa reset mật khẩu tài khoản ${target.username} (Ban giám đốc)`, 'Tài khoản phải đổi mật khẩu ở lần đăng nhập tới');
     });
@@ -420,7 +422,8 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
     const [b, l] = await Promise.all([prisma.appSetting.findUnique({ where: { key: Ops.BACKUP_KEY } }), prisma.appSetting.findUnique({ where: { key: KEY } })]);
     const backup = b?.value || null, jobs = l?.value || {};
     res.setHeader('Cache-Control', 'private, no-store');
-    res.json({ backup, jobs, problems: Ops.opsProblems({ backup, ledger: jobs, now: new Date() }) });
+    const demoActive = (await prisma.user.findMany({ where: { isActive: true, username: { in: require('../seed').DEMO_USERNAMES } }, select: { username: true } })).map(u => u.username);
+    res.json({ backup, jobs, problems: Ops.opsProblems({ backup, ledger: jobs, now: new Date(), demoActive }) });
   });
 
   // ---------- Nhật ký ----------

@@ -11,24 +11,13 @@ const W = require('../services/workitems');
 const { describe: describeRule } = require('../services/recurring');
 const { stageOf } = require('../services/stage');
 const { setProgress } = require('../services/mtl-progress');
-const Policy = require('../lib/policy');
-const { isItAdmin } = require('../lib/permissions');
 
-// Kepper (MTL) — quy định phân quyền dữ liệu (lib/policy.js): % / trạng thái / checklist = mtl.progress (người được giao,
-// lãnh đạo bộ phận chủ trì, người quản lý dự án); tên, găng, mốc, đầu mối = mtl.plan (người quản lý dự án).
-// Một nguồn sự thật cho %: việc cha = tổng hợp từ việc con, việc có checklist = theo checklist — không nhập tay.
-const MTL_PLAN_KEYS = ['title', 'critical', 'milestone', 'ownerText', 'externalParty', 'weight', 'planCode', 'planSection'];
-async function mtlGuard(client, user, project, rights, itemId, { progress = false, plan = false, manualPct = false } = {}) {
-  if (project.kind !== 'MTL' || (!progress && !plan)) return;
-  const it = await client.workItem.findUnique({ where: { id: itemId }, select: { leadDepartmentId: true, assignees: { select: { userId: true } },
-    _count: { select: { children: { where: { archivedAt: null } }, checklist: true } } } });
-  const ctx = { item: { assigneeIds: it.assignees.map(a => a.userId), leadLeaderIds: await approval.deptLeaderIds(client, it.leadDepartmentId), projectManager: rights.canManage } };
-  const subject = { userId: user.id, it: isItAdmin(user) };
-  if (progress) Policy.assertCan(subject, 'edit', 'mtl.progress', ctx);
-  if (plan) Policy.assertCan(subject, 'edit', 'mtl.plan', ctx);
-  if (manualPct && it._count.children) fail(422, 'Tiến độ việc cha tính tự động từ các việc con — cập nhật ở việc con', 'PROGRESS_FROM_CHILDREN');
-  if (manualPct && it._count.checklist) fail(422, 'Tiến độ việc này tính theo checklist — đánh dấu các mục đã xong', 'PROGRESS_FROM_CHECKLIST');
-}
+// Kepper (MTL) — mọi kiểm quy định phân quyền dữ liệu đi qua services/mtl-guard.js (lib/policy.js).
+const { MTL_PLAN_KEYS, mtlGuard, mtlCreateGuard } = require('../services/mtl-guard');
+const sameIds = (a, b) => { const x = [...new Set(a.map(Number))].sort(), y = [...new Set(b.map(Number))].sort(); return x.length === y.length && x.every((v, i) => v === y[i]); };
+const dayOf = v => (v == null || v === '' ? null : new Date(v).getTime());
+const DATE_KEYS = new Set(['dueDate', 'startDate']);
+const fieldChanged = (body, item, k) => body[k] !== undefined && (DATE_KEYS.has(k) ? dayOf(body[k]) !== (item[k] ? item[k].getTime() : null) : String(body[k] ?? '') !== String(item[k] ?? ''));
 
 const { PRIORITIES, BOARD_INCLUDE, boardItem } = W;
 
@@ -99,7 +88,8 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       if (parent.project.id !== project.id) fail(422, 'Việc cha không thuộc dự án');
     }
     const created = await prisma.$transaction(async tx => {
-      const item = await W.createWorkItem(tx, { project, user: req.user, rights, input: req.body || {} });
+      const input = await mtlCreateGuard(tx, req.user, project, rights, req.body || {});
+      const item = await W.createWorkItem(tx, { project, user: req.user, rights, input });
       await audit(req, 'CREATE', 'WorkItem', item.id, null, { code: `${project.key}-${item.number}`, title: item.title }, tx);
       return item;
     });
@@ -211,8 +201,18 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       // Kepper (MTL): kiểm quy định phân quyền trước mọi thay đổi (chỉ tính trường thực sự đổi).
       const pctChanged = body.progress !== undefined && Number(body.progress) !== item.progress;
       const stateChanged = body.stateId !== undefined && Number(body.stateId) !== item.stateId;
-      const planChanged = MTL_PLAN_KEYS.some(k => body[k] !== undefined && String(body[k] ?? '') !== String(item[k] ?? ''));
-      await mtlGuard(tx, req.user, project, rights, id, { progress: pctChanged || stateChanged, plan: planChanged, manualPct: pctChanged });
+      const planChanged = MTL_PLAN_KEYS.some(k => fieldChanged(body, item, k));
+      let structChanged = false, assignChanged = false;
+      if (project.kind === 'MTL') {
+        const supports = body.supportDepartmentIds !== undefined ? (await tx.workItemDepartment.findMany({ where: { workItemId: id } })).map(d => d.departmentId) : [];
+        structChanged = (body.parentId !== undefined && Number(body.parentId || 0) !== Number(item.parentId || 0))
+          || (body.leadDepartmentId !== undefined && Number(body.leadDepartmentId || 0) !== Number(item.leadDepartmentId || 0))
+          || (Array.isArray(body.supportDepartmentIds) && !sameIds(body.supportDepartmentIds, supports));
+        assignChanged = (Array.isArray(body.assigneeIds) && !sameIds(body.assigneeIds, item.assignees.map(a => a.userId)))
+          || (Array.isArray(body.supporterIds) && !sameIds(body.supporterIds, (await tx.workItemSupporter.findMany({ where: { workItemId: id } })).map(x => x.userId)))
+          || (body.assignedById !== undefined && Number(body.assignedById || 0) !== Number(item.assignedById || 0));
+      }
+      await mtlGuard(tx, req.user, project, rights, id, { progress: pctChanged || stateChanged, plan: planChanged, struct: structChanged, assign: assignChanged, manualPct: pctChanged });
       const data = {}, changed = {};
       if (body.title !== undefined) data.title = text(body.title, 'Tiêu đề', { required: true, max: 300 });
       if (body.descriptionHtml !== undefined) { data.descriptionHtml = sanitizeHtml(body.descriptionHtml); data.descriptionText = htmlToText(data.descriptionHtml); }

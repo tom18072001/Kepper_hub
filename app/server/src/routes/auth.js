@@ -44,9 +44,9 @@ module.exports = function mountAuth(app, { prisma, config, auth, audit }) {
     const currentPassword = String(req.body?.currentPassword || ''), newPassword = String(req.body?.newPassword || '');
     if (!(await bcrypt.compare(currentPassword, req.user.passwordHash))) return res.status(422).json({ error: 'Mật khẩu hiện tại không đúng' });
     if (newPassword.length < MIN_PASSWORD_LENGTH || !newPassword.trim()) return res.status(422).json({ error: 'Mật khẩu mới phải có ít nhất 6 ký tự và không chỉ gồm khoảng trắng' });
-    if (bcrypt.compareSync(newPassword, req.user.passwordHash)) return res.status(422).json({ error: 'Mật khẩu mới phải khác mật khẩu hiện tại' });
+    if (await bcrypt.compare(newPassword, req.user.passwordHash)) return res.status(422).json({ error: 'Mật khẩu mới phải khác mật khẩu hiện tại' });
     const updated = await prisma.$transaction(async tx => {
-      const user = await tx.user.update({ where: { id: req.user.id }, data: { passwordHash: bcrypt.hashSync(newPassword, 10), mustChangePw: false, sessionVersion: { increment: 1 } } });
+      const user = await tx.user.update({ where: { id: req.user.id }, data: { passwordHash: await bcrypt.hash(newPassword, 10), mustChangePw: false, sessionVersion: { increment: 1 } } });
       await tx.auditLog.create({ data: { userId: user.id, action: 'PASSWORD_CHANGE', entity: 'User', entityId: String(user.id), ip: req.ip } });
       return user;
     });
