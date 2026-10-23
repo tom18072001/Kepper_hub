@@ -54,15 +54,36 @@ Dữ liệu mẫu **giả** (`SEED_DEMO=true`) gồm:
 
 **MTL thật của công ty chỉ nhập trên máy chạy** ("Khác → Nhập MTL từ Excel"), không đưa vào git.
 
-Sao lưu tự động hằng ngày vào `./backups` (CSDL + tệp + SHA-256). Bản lỗi bị xoá ngay, bản cũ chỉ dọn khi bản mới đạt. `backups/LAST_OK` ghi lần sao lưu đạt gần nhất. Khôi phục: xem `deploy/restore.sh`.
+Vận hành trên máy chạy:
 
-Lịch nền (nhắc, cảnh báo, dọn dữ liệu) **chạy bù** khi máy bật lại, trong khung giờ còn ý nghĩa. Sổ chạy nằm ở `AppSetting jobs.lastRun`.
+- **Sao lưu** hằng ngày từ `BACKUP_HOUR`, vào `./backups` (CSDL + tệp + SHA-256).
+  - Máy tắt đúng giờ thì chạy bù khi bật lại. Lỗi thì thử lại tối đa 3 lần / ngày.
+  - Chỉ dọn bản cũ khi bản mới đạt.
+  - Mã hoá: đặt `BACKUP_AGE_RECIPIENT` (khoá công khai age; khoá bí mật giữ ngoài máy).
+  - Bản ngoài máy: `BACKUP_COPY=1`, `BACKUP_COPY_PATH` = ổ / thư mục mạng khác.
+  - Trạng thái ghi vào CSDL. Quản trị IT xem ở Nhật ký → "Tình trạng vận hành", và nhận thông báo 09:00 khi sao lưu quá 36 giờ hoặc job lỗi.
+- **Khôi phục**: `deploy/restore.sh`.
+  - Khôi phục vào CSDL mới rồi mới đổi tên; CSDL cũ giữ lại để quay về.
+  - Thử khôi phục mỗi quý, không đụng dữ liệu đang dùng: `RESTORE_TEST=1`.
+- **Nâng cấp** (Windows): `powershell -ExecutionPolicy Bypass -File deploy\upgrade.ps1`.
+  - Các bước: sao lưu → giữ image cũ → lấy mã → build → kiểm tra sẵn sàng.
+  - Lỗi thì in sẵn lệnh quay lại.
+- **Nhật ký truy cập**: `./logs/access-YYYY-MM-DD.jsonl`, giữ 400 ngày (≥ 12 tháng).
+  - Ghi tài khoản, đường dẫn, mã trả về, IP.
+  - Không ghi nội dung hay tham số.
+- **Lịch nền** (nhắc, cảnh báo, dọn dữ liệu):
+  - chạy bù khi máy bật lại;
+  - mỗi job một lần / ngày;
+  - lỗi thì thử lại 3 lần;
+  - nhiều tiến trình cùng một CSDL không chạy trùng.
+- **Máy chạy thật**: app từ chối `JWT_SECRET` mẫu và `SEED_DEMO=true`.
+  - Muốn dùng thử trên máy chạy thì đặt `ALLOW_DEMO_SEED=yes`.
 
 Trước khi dùng thật cho nhiều người:
-- chạy trên máy chủ / VM luôn bật, không phải PC cá nhân;
-- đặt reverse proxy TLS (HTTPS) phía trước cổng 4100;
-- chép `./backups` ra ổ khác hoặc nơi lưu trữ có mã hoá;
-- thử khôi phục mỗi quý.
+- chạy trên máy chủ / VM luôn bật (không phải PC cá nhân), đồng bộ giờ NTP;
+- đặt reverse proxy TLS (HTTPS) phía trước cổng 4100 và `TRUST_PROXY=1`;
+- khoá các tài khoản mẫu;
+- bật mã hoá + bản sao lưu ngoài máy.
 
 ## Chạy không cần Docker (phát triển)
 

@@ -1,6 +1,6 @@
 // Nhật ký truy cập hệ thống (CLAUDE.md: nhật ký hệ thống truy xuất được ≥ 12 tháng).
 // Mỗi request API một dòng JSON: thời điểm, tài khoản, phương thức, đường dẫn (không query, không body), mã trả về, thời gian xử lý, IP.
-// Ghi ra ACCESS_LOG_DIR/access-YYYY-MM-DD.jsonl (giờ VN) nếu có thư mục (mount ra máy chủ, ngoài vòng đời container); luôn ghi stdout.
+// Ghi ra ACCESS_LOG_DIR/access-YYYY-MM-DD.jsonl (giờ VN) — thư mục mount ra máy chạy, ngoài vòng đời container.
 // Không ghi nội dung nghiệp vụ / tham số tìm kiếm → không lộ dữ liệu Bảo mật qua log.
 const fs = require('node:fs');
 const path = require('node:path');
@@ -9,14 +9,15 @@ const KEEP_DAYS = 400; // > 12 tháng
 const H7 = 7 * 3_600_000;
 const dayOf = d => new Date(d.getTime() + H7).toISOString().slice(0, 10);
 
-function createAccessLog({ dir = process.env.ACCESS_LOG_DIR, out = process.stdout } = {}) {
+// Có thư mục → chỉ ghi tệp (bền qua vòng đời container); không có thư mục → stdout trên máy chạy (production), im lặng khi phát triển / kiểm thử.
+function createAccessLog({ dir = process.env.ACCESS_LOG_DIR, out = dir || process.env.NODE_ENV !== 'production' ? null : process.stdout } = {}) {
   let day = null, stream = null, disabled = !dir;
   const fileStream = now => {
     if (disabled) return null;
     const d = dayOf(now);
     if (d !== day) {
       try { stream?.end(); fs.mkdirSync(dir, { recursive: true }); stream = fs.createWriteStream(path.join(dir, `access-${d}.jsonl`), { flags: 'a' }); day = d; stream.on('error', () => { disabled = true; }); }
-      catch (error) { disabled = true; out.write(JSON.stringify({ level: 'warn', msg: 'access_log_disabled', error: error.message }) + '\n'); return null; }
+      catch (error) { disabled = true; process.stdout.write(JSON.stringify({ level: 'warn', msg: 'access_log_disabled', error: error.message }) + '\n'); return null; }
     }
     return stream;
   };
@@ -27,7 +28,7 @@ function createAccessLog({ dir = process.env.ACCESS_LOG_DIR, out = process.stdou
       const now = new Date();
       const line = JSON.stringify({ ts: now.toISOString(), level: 'info', msg: 'http', uid: req.user?.id ?? null, method: req.method,
         path: req.originalUrl.split('?')[0].slice(0, 200), status: res.statusCode, ms: Math.round(Number(process.hrtime.bigint() - t0) / 1e5) / 10, ip: req.ip }) + '\n';
-      out.write(line);
+      out?.write(line);
       fileStream(now)?.write(line);
     });
     next();

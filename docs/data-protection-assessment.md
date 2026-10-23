@@ -341,3 +341,41 @@ Vai trò giao ban **suy ra** từ vai trò và phòng ban đã gán cho tài kho
    - sao lưu mã hoá đặt ngoài máy, thử khôi phục hằng quý;
    - đề xuất cấp độ HTTT 2 (không phải cấp 4) — cần tra văn bản hiện hành.
 4. **Quản trị IT:** báo Ban GĐ mỗi khi admin IT cấp quyền nghiệp vụ hoặc tạo tài khoản quản lý (thuộc luồng cấp quyền).
+
+## Vòng lặp rà soát – sửa bằng AI (24/10/2026)
+
+Quy trình: các agent độc lập rà mã (chỉ đọc) → sửa → agent mới rà lại bản sửa. Lặp cho tới khi không còn mục Chặn / Cao sửa được bằng mã. Mỗi vòng gồm hai hướng: khung kỹ thuật (checklist /pha) và bảo mật / phân quyền (tìm đường vượt `lib/policy.js`).
+
+### Vòng 1 — phát hiện chính và cách sửa
+
+| Mức | Phát hiện | Đã sửa |
+|---|---|---|
+| Chặn | Tạo việc trong dự án MTL (POST việc, ghi chú → việc, nhập Excel, áp mẫu, chia việc nhánh) không qua policy. Nhân viên bộ phận A thêm việc con 100% vào hạng mục của B, đẩy % / KPI của B lên | `services/mtl-guard.js` — một cổng cho mọi đường ghi MTL:<br>• chỉ quản lý dự án tạo hạng mục;<br>• lãnh đạo bộ phận chủ trì thêm việc con dưới hạng mục bộ phận mình;<br>• máy chủ bỏ % / trọng số / găng / mốc / trạng thái do người khác gửi;<br>• nhập hàng loạt chỉ quản lý dự án. |
+| Chặn | PATCH đổi người được giao / việc cha / bộ phận chủ trì của hạng mục bộ phận khác (tự thành "người được giao" rồi ghi %) | Đổi cấu trúc = quản lý dự án. Phân công = quản lý dự án hoặc lãnh đạo bộ phận chủ trì. Hạn / ngày bắt đầu MTL là kế hoạch. |
+| Cao | Báo cáo tiến độ (luồng cũ) ghi thẳng % vào MTL, không qua policy / một nguồn % | Qua `mtl-guard` + `setProgress`, có khoá theo hạng mục |
+| Cao | Tự lưu nháp ghi đè bản vừa nộp; hai lần nộp đồng thời ghi % mà không có phiên bản | Khoá theo bộ phận / tuần cho nháp và nộp. Ghi % trong cùng transaction với bản nộp và phiên bản. |
+| Cao | Kết luận TGĐ bị thay bằng bản cũ khi thư ký lưu Action Log; phát hành hai lần | Khoá theo tuần. Gộp kết luận theo từng yêu cầu. Action Log kiểm phiên bản. Phát hành kiểm trong khoá. |
+| Cao | PMO đọc ghi chú lý do vắng (có thể là DLCN nhạy cảm) | Chỉ Ban GĐ / thư ký (policy `weekly.notice · note`) |
+| Cao | Bộ phận A đóng được việc Action Log của bộ phận B bằng `actionRef` | Chỉ báo cáo đúng bộ phận được giao; máy chủ bỏ `actionRef` lạ |
+| Cao | Khôi phục đè thẳng lên CSDL đang dùng, lỗi giữa chừng hỏng cả hai | Khôi phục vào CSDL mới rồi đổi tên. Chặn khi còn kết nối. Có chế độ thử `RESTORE_TEST`. |
+| Cao | `JWT_SECRET` mẫu vẫn được chấp nhận | Máy chạy từ chối khoá mẫu / ngắn hơn 32 ký tự |
+| Cao | Admin IT tự đổi tài khoản mình sang Ban GĐ | Không tự đổi nhóm tài khoản của chính mình. Đổi sang Ban GĐ vẫn báo Ban GĐ (đã có). |
+| TB | Trưởng / phó phòng sở hữu dự án MTL có toàn quyền kế hoạch, KPI cả dự án; bất kỳ trưởng phòng nào tạo được dự án MTL | Quản lý dự án MTL = quyền toàn công ty / OWNER / trưởng dự án. Tạo dự án MTL: Ban GĐ / PMO chỉ định. |
+| TB | PMO suy ra từ quyền xem tổng hợp; Ban GĐ kiêm thư ký tự trình rồi tự duyệt | PMO theo danh sách Ban GĐ (chưa chọn thì tạm dùng quyền cũ). Ban GĐ không kiêm thư ký. |
+| TB | Bảng điểm duyệt được khi tháng chưa khép, không gắn với bảng đã trình | Chỉ lập / duyệt khi tháng đã khép. Duyệt kèm SHA-256 bảng đã trình. Khoá CSDL. |
+| TB | Báo vắng "đặt trước" cho cả năm để né trừ điểm; người dự thay bộ phận khác | Chỉ tuần hiện tại; người dự thay cùng bộ phận |
+| TB | SHA-256 phiên bản không kiểm lại được (JSONB đổi thứ tự khoá) | Băm trên JSON chuẩn hoá |
+| TB | Xuất Excel / Word / mẫu MTL không qua policy | Luật `export` cho `mtl.plan` / `mtl.progress` |
+| TB | Job lỗi không thử lại; hai tiến trình chạy trùng; tắt máy giữa job gửi đôi | Nhận việc nguyên tử (khoá + trạng thái "running"), thử lại 3 lần, `ops_check` báo job treo |
+| TB | Sao lưu đánh dấu "đã chạy" trước khi chạy; chép "ngoài máy" vào chính nó; không kiểm ổ trống | Chỉ đánh dấu khi đạt, thử lại 3 lần / ngày, phát hiện thư mục trùng, kiểm ổ trống |
+| TB | Không có nhật ký truy cập hệ thống ≥ 12 tháng | `./logs/access-*.jsonl`, giữ 400 ngày, không ghi nội dung |
+| TB | Tin `X-Forwarded-For` của mọi IP nội bộ (giả IP trong nhật ký) | `TRUST_PROXY` mặc định không tin; sau proxy đặt `1` |
+| TB | Dừng máy chủ cắt ngang lần nộp; nhập MTL lớn quá 5 giây; tệp Excel định dạng cả cột chặn máy chủ | Dừng êm 15 giây, timeout 120 giây, giới hạn 3.000 dòng / 40 cột |
+| Thấp | Trigger chưa chặn TRUNCATE bảng phiên bản; audit thiết lập giao ban lộ cho IT; SSE không giới hạn, gọi lại vô hạn khi 401; lệch giờ máy chủ | Đã sửa. Thêm cảnh báo lệch giờ ≥ 3 phút. |
+
+Chờ chủ dự án quyết (không đổi trong mã):
+- đăng nhập (giới hạn sai / SSO Entra ID);
+- MTL mặc định PUBLIC;
+- máy chủ + TLS + NTP;
+- tách role CSDL (ứng dụng đang dùng superuser nên vẫn tắt được trigger);
+- báo Ban GĐ khi admin IT cấp quyền nghiệp vụ.
