@@ -14,8 +14,8 @@ test('1. Đăng nhập: sai mật khẩu bị từ chối, tài khoản mới ph
 
   await login(page, 'nv.kinhdoanh1');
   await expect(page.locator('#meName')).toHaveText('Phạm Văn An');
-  // Trang chủ là Dashboard dự án; Việc của tôi: KD-1 và KD-4 được giao cho nhân viên này
-  await expect(page).toHaveURL(/#\/home/);
+  // Trang chủ là "Báo cáo tuần"; Việc của tôi: KD-1 và KD-4 được giao cho nhân viên này
+  await expect(page).toHaveURL(/#\/tuan/);
   await page.getByTestId('nav-my').click();
   await expect(page.getByTestId('my-KD-1')).toBeVisible();
   await expect(page.getByTestId('my-KD-4')).toBeVisible();

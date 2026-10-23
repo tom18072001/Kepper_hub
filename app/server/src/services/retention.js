@@ -9,4 +9,13 @@ async function purgeNotesOfInactiveUsers(prisma, now = new Date()) {
   return count;
 }
 
-module.exports = { NOTE_RETENTION_DAYS, purgeNotesOfInactiveUsers };
+// Kepper GĐ2b: thông báo nộp muộn / vắng giao ban giữ 12 tháng (đủ chấm điểm tuân thủ, rà soát quý / năm) rồi xoá.
+const WEEKLY_NOTICE_RETENTION_DAYS = 365;
+async function purgeOldWeeklyNotices(prisma, now = new Date()) {
+  const cutoff = new Date(now.getTime() - WEEKLY_NOTICE_RETENTION_DAYS * 86_400_000);
+  const { count } = await prisma.weeklyNotice.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  if (count) console.log(JSON.stringify({ level: 'info', msg: 'retention_weekly_notices_purged', count, retentionDays: WEEKLY_NOTICE_RETENTION_DAYS }));
+  return count;
+}
+
+module.exports = { NOTE_RETENTION_DAYS, WEEKLY_NOTICE_RETENTION_DAYS, purgeNotesOfInactiveUsers, purgeOldWeeklyNotices };

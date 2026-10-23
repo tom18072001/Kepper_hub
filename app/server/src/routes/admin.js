@@ -78,12 +78,16 @@ const AUDIT_ACTIONS = {
   RECURRING_RUN: 'Tạo việc lặp lại', CYCLE_ROLLOVER: 'Chuyển việc sang chu kỳ sau',
   INTAKE_ACCEPT: 'Tiếp nhận yêu cầu', INTAKE_DECLINE: 'Từ chối yêu cầu',
   UPDATE_STATES: 'Cập nhật cột trạng thái', UPDATE_MEMBERS: 'Cập nhật thành viên dự án', UPDATE_APPROVAL_STEPS: 'Cập nhật quy trình duyệt', UPDATE_APPROVAL_RULES: 'Cập nhật quy tắc duyệt',
+  MTL_SPRINT_PLAN: 'Thiết lập sprint MTL', MTL_TEMPLATE_EXPORT: 'Tải mẫu MTL bộ phận',
+  WEEKLY_REPORT_SUBMIT: 'Nộp báo cáo tuần', WEEKLY_NOTICE: 'Báo nộp muộn / vắng giao ban', WEEKLY_NOTICE_DELETE: 'Xoá thông báo muộn / vắng',
+  WEEKLY_SUMMARY_COPY: 'Sao chép bản tổng hợp giao ban', WEEKLY_MEETING: 'Cập nhật giao ban (điểm danh, kết luận, Action Log)', WEEKLY_MEETING_PUBLISH: 'Phát hành kết luận giao ban',
+  WEEKLY_CONFIG: 'Thiết lập báo cáo tuần',
 };
 const AUDIT_ENTITIES = {
   User: 'Tài khoản', Auth: 'Đăng nhập', Department: 'Phòng ban', UserPermission: 'Phân quyền', Label: 'Nhãn', AppSetting: 'Danh mục',
   TaskTemplate: 'Mẫu nhóm việc', Delegation: 'Uỷ quyền', WorkItem: 'Công việc', Project: 'Dự án / sổ', Attachment: 'Tệp đính kèm',
   ApprovalRequest: 'Yêu cầu duyệt', Cycle: 'Chu kỳ', RecurringRule: 'Việc lặp lại', IntakeRequest: 'Yêu cầu tiếp nhận', SavedView: 'Bộ lọc đã lưu',
-  Plan: 'Kế hoạch năm', Summary: 'Tổng hợp giao việc', Kpi: 'KPI', WeeklyReport: 'Báo cáo tuần', Ops: 'Trang Điều hành',
+  Plan: 'Kế hoạch năm', Summary: 'Tổng hợp giao việc', Kpi: 'KPI', WeeklyReport: 'Báo cáo tuần', WeeklyNotice: 'Thông báo muộn / vắng', WeeklyMeeting: 'Giao ban tuần', Ops: 'Trang Điều hành',
 };
 // Đối tượng kỹ thuật: admin IT xem được giá trị trước–sau. Mọi đối tượng khác là nghiệp vụ → admin IT chỉ thấy ai/lúc nào/mã đối tượng.
 const NON_BUSINESS_ENTITIES = new Set(['User', 'Department', 'Label', 'UserPermission', 'Auth', 'AppSetting', 'TaskTemplate', 'Delegation']);
