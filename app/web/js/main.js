@@ -11,6 +11,7 @@ import { renderProjectSettings, openCreateProject } from './views/settings.js';
 import { openItem, closeItem, isItemOpen } from './views/item-panel.js';
 import { openPalette, closePalette } from './views/palette.js';
 import { renderHome } from './views/home.js';
+import { renderToday } from './views/today.js';
 import { renderQuick } from './views/quick.js';
 import { renderWeekly } from './views/weekly.js';
 import { renderTrash } from './views/trash.js';
@@ -90,8 +91,8 @@ async function enter() {
   await loadBasics();
   show('appShell');
   renderShell();
-  // Trang chủ: "Tuần này" (báo cáo tuần theo BM-TH-01 + tổng hợp giao ban) cho mọi người dùng nghiệp vụ; admin IT: quản trị.
-  const home = isItAdmin() ? '#/admin/users' : '#/tuan';
+  // Trang chủ: "hôm nay cần làm gì" (việc cần xử lý, dự án theo mức lo, giao ban tuần này) cho người dùng nghiệp vụ; admin IT: quản trị.
+  const home = isItAdmin() ? '#/admin/users' : '#/today';
   if (!location.hash || location.hash === '#/' || (isItAdmin() && !/^#\/(admin|catalog)/.test(location.hash))) location.hash = home; else route();
   refreshCounters();
   startRealtime();
@@ -102,7 +103,7 @@ function renderShell() {
   const me = store.me;
   $('#meAvatar').outerHTML = avatar(me).replace('class="avatar"', 'class="avatar" id="meAvatar"');
   renderMe();
-  $('.ab-brand').setAttribute('href', isItAdmin() ? '#/admin/users' : '#/tuan');
+  $('.ab-brand').setAttribute('href', isItAdmin() ? '#/admin/users' : '#/today');
   // Admin IT: chỉ thấy phần quản trị, không thấy công việc / dự án / báo cáo.
   $('#paletteBtn').classList.toggle('hidden', isItAdmin());
   renderNav({ onNewProject: () => openCreateProject(async project => { await reloadProjects(); renderProjectNav(); location.hash = `#/projects/${project.id}`; }) });
@@ -192,7 +193,7 @@ document.addEventListener('keydown', e => {
 let renderToken = 0, lastViewKey = '';
 // Vẽ lại trang nền (hộp việc, điều hành, chờ duyệt…) sau thao tác trong panel, không đụng tới panel đang mở.
 // Chỉ các trang danh sách; bỏ qua khi người dùng đang gõ hoặc đã nhập dở trong trang (ghi chú, form uỷ quyền, danh mục…).
-const LIST_PAGES = ['', 'my', 'ops', 'approvals', 'dept', 'schedule'];
+const LIST_PAGES = ['', 'my', 'ops', 'approvals', 'dept', 'schedule', 'today'];
 let bgBusy = false;
 export async function refreshBackground() {
   if (!store.me || bgBusy) return;
@@ -243,6 +244,7 @@ export async function route({ background = false } = {}) {
     else if (['requests', 'schedule', 'ops', 'dept', 'summary', 'kpi'].includes(parts[0])) { location.replace('#/home'); return; } // nghiệp vụ NQ57 đã bỏ (Kepper)
     else if (parts[0] === 'tuan') { closeItem(); await renderWeekly(view, parts[1] || '', params, setCrumbs); }
     else if (parts[0] === 'home') { await renderHome(view, params, setCrumbs); syncPanel(); }
+    else if (parts[0] === 'today') { closeItem(); await renderToday(view, params, setCrumbs, () => token === renderToken); }
     else if (parts[0] === 'sprint') { await renderQuick(view, params, setCrumbs); syncPanel(); }
     else if (parts[0] === 'dashboard') { closeItem(); await renderDashboard(view, params, setCrumbs); }
     else if (parts[0] === 'trash') { closeItem(); await renderTrash(view, setCrumbs); }

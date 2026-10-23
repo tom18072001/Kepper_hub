@@ -206,3 +206,15 @@ Chủ dự án (24/10/2026): mở playground riêng xây thêm CRM (đối tác,
 | Kiểm thử | unit (ma trận, ngày nghỉ, phép năm, đi muộn, CIDR, bảng công, mã hoá), e2e `08-playground-crm-hrm`, tích hợp MCP |
 
 Trước khi bật trên bản chạy thật: thông báo xử lý DLCN cho người lao động, chỉ định người phụ trách nhân sự + người chịu trách nhiệm bảo vệ DLCN, thời hạn lưu hồ sơ người nghỉ việc, khoá `HR_ENC_KEY` ngoài máy, hồ sơ đánh giá tác động (DPA mục Playground).
+
+## Giao diện theo nhận diện công ty, kiểu bộ phần mềm văn phòng (nhánh `kepper/ui-shell`, 23/10/2026)
+
+Phản hồi của chủ dự án: chưa ưng UI/UX; tham khảo 1Office, Base.vn; theo theme logo công ty.
+
+| Hạng mục | Cách làm |
+|---|---|
+| Khung | Thanh đầu trang trắng (logo, nút **Ứng dụng** dạng lưới phân hệ, tìm nhanh Ctrl K, thông báo, menu tài khoản); sidebar navy chia nhóm Tiến độ · Công việc · Nghiệp vụ · Dự án · Quản trị, gập từng nhóm, thu gọn thành dải icon (`js/shell.js`, `css/shell.css`). Thay cho menu 3 mục + "Công cụ khác" của GĐ2b |
+| Trang chủ | `#/today` (thay `#/tuan`): việc cần xử lý xếp theo hạn (phiếu trình, gia hạn, kiến nghị, việc của tôi quá hạn / trong 7 ngày), dự án xếp theo mức lo, thẻ Giao ban (giờ họp, tình trạng báo cáo của bộ phận / số bộ phận đã nộp), thông báo mới. Chỉ dùng API sẵn có |
+| Danh mục | Bỏ khỏi sidebar; ở menu tài khoản (Ban GĐ, người tạo mẫu) và nhóm Quản trị (IT) |
+| Theme | Navy `#09334C`, vàng đồng `#B28A33` theo logo; mục đang mở có chấm vàng; trang đăng nhập có quỹ đạo elip |
+| Nhận diện | Tên, logo công ty chỉ trên máy chạy: `ORG_NAME`, thư mục `BRANDING_PATH` (logo.png, logo-light.png, mark.png, mark-light.png). `GET /api/brand` (công khai: tên + tệp có sẵn), `GET /branding/<tệp>` (4 tên cố định). `branding/` trong `.gitignore` |

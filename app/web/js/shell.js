@@ -56,7 +56,8 @@ export function renderNav({ onNewProject } = {}) {
   const canNew = !isItAdmin() && can('projects.manage', 'operate');
   const projects = isItAdmin() ? '' : group({ id: 'projects', name: 'Dự án', color: '#B28A33', icon: 'folder' }, '<div id="projectNav" class="sb-projects"></div>',
     canNew ? `<button class="icon-btn sb-add" id="newProjectBtn" title="Tạo dự án" aria-label="Tạo dự án" data-testid="new-project">${icon('plus')}</button>` : '');
-  $('#sidebarNav').innerHTML = `<nav id="workNav" aria-label="Điều hướng chính">${groups.map(g => group(g, g.items.map(link).join(''))).join('')}</nav>
+  const home = isItAdmin() ? '' : `<a href="#/today" class="sb-home" data-testid="nav-today" title="Trang chủ">${icon('home')}<span class="t">Trang chủ</span></a>`;
+  $('#sidebarNav').innerHTML = `${home}<nav id="workNav" aria-label="Điều hướng chính">${groups.map(g => group(g, g.items.map(link).join(''))).join('')}</nav>
     ${projects}
     ${admin.items.length ? `<nav id="adminNav" aria-label="Quản trị">${group(admin, admin.items.map(link).join(''))}</nav>` : ''}`;
   $('#newProjectBtn')?.addEventListener('click', e => { e.stopPropagation(); onNewProject?.(); });
@@ -70,7 +71,7 @@ function renderLauncher(groups, admin) {
   const tiles = [...groups, ...(admin.items.length ? [admin] : [])].map(g => `<div class="la-group"><div class="la-name">${esc(g.name)}</div><div class="la-grid">
     ${g.items.map(it => `<a href="${it.href}" class="la-app" role="menuitem" data-testid="app-${it.testid}">${tile({ ...g, icon: it.icon }, ' lg')}<span class="la-t">${esc(it.label)}</span>${it.desc ? `<span class="la-d">${esc(it.desc)}</span>` : ''}</a>`).join('')}
   </div></div>`).join('');
-  $('#appsPanel').innerHTML = `<div class="la-head">Ứng dụng</div>${tiles}`;
+  $('#appsPanel').innerHTML = `<div class="la-head">Ứng dụng</div>${isItAdmin() ? '' : `<a href="#/today" class="la-home" role="menuitem" data-testid="app-nav-today">${icon('home')}Trang chủ — việc cần xử lý hôm nay</a>`}${tiles}`;
 }
 
 // ---------- Menu tài khoản ----------

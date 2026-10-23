@@ -8,7 +8,7 @@ import { store } from './store.js';
 
 // G + chữ → trang (chỉ khi mục menu tương ứng đang hiện với người dùng).
 const GO = [
-  ['o', 'nav-home', 'Dashboard dự án'], ['m', 'nav-my', 'Việc của tôi'], ['a', 'nav-approvals', 'Chờ tôi duyệt'], ['w', 'nav-work', 'Tổng thể công việc'],
+  ['h', 'nav-today', 'Trang chủ'], ['o', 'nav-home', 'Dashboard dự án'], ['m', 'nav-my', 'Việc của tôi'], ['a', 'nav-approvals', 'Chờ tôi duyệt'], ['w', 'nav-work', 'Tổng thể công việc'],
   ['b', 'nav-dashboard', 'Số liệu công việc'], ['r', 'nav-trash', 'Thùng rác'],
   ['n', null, 'Ghi chú của tôi', () => '#/my?mode=notes'],
 ];
