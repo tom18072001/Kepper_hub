@@ -1,7 +1,7 @@
 // Khởi động ứng dụng: đăng nhập, khung giao diện, điều hướng theo hash.
 import { api, setToken, getToken, onAuthEvent, lastLocalWrite } from './api.js';
 import { store, can, loadBasics, reloadProjects, isItAdmin, workScope } from './store.js';
-import { $, $$, esc, toast, closeModal, requestCloseModal, avatar, errorMessage, ago, setPrefUser, clearDrafts } from './util.js';
+import { $, $$, esc, toast, closeModal, requestCloseModal, avatar, errorMessage, ago, setPrefUser, clearDrafts, uiPref } from './util.js';
 import { renderProject } from './views/project.js';
 import { renderMyWork } from './views/mywork.js';
 import { renderApprovals } from './views/approvals.js';
@@ -12,6 +12,7 @@ import { openItem, closeItem, isItemOpen } from './views/item-panel.js';
 import { openPalette, closePalette } from './views/palette.js';
 import { renderHome } from './views/home.js';
 import { renderQuick } from './views/quick.js';
+import { renderWeekly } from './views/weekly.js';
 import { renderTrash } from './views/trash.js';
 import { renderCatalog } from './views/catalog.js';
 import { renderWork } from './views/work.js';
@@ -85,8 +86,8 @@ async function enter() {
   await loadBasics();
   show('appShell');
   renderShell();
-  // Trang chủ: Dashboard dự án (Master Timeline) cho mọi người dùng nghiệp vụ; admin IT: quản trị.
-  const home = isItAdmin() ? '#/admin/users' : '#/home';
+  // Trang chủ: "Tuần này" (báo cáo tuần theo BM-TH-01 + tổng hợp giao ban) cho mọi người dùng nghiệp vụ; admin IT: quản trị.
+  const home = isItAdmin() ? '#/admin/users' : '#/tuan';
   if (!location.hash || location.hash === '#/' || (isItAdmin() && !/^#\/(admin|catalog)/.test(location.hash))) location.hash = home; else route();
   refreshCounters();
   startRealtime();
@@ -109,6 +110,10 @@ function renderShell() {
   for (const a of $$('#adminNav [data-perm]')) { const ok = can(a.dataset.perm); a.classList.toggle('hidden', !ok); anyAdmin ||= ok; }
   $('#adminNav').classList.toggle('hidden', !anyAdmin);
   $('#newProjectBtn').classList.toggle('hidden', !can('projects.manage', 'operate'));
+  // Nhóm "Công cụ khác" nhớ trạng thái mở / đóng theo người dùng (mặc định thu gọn cho gọn mắt).
+  const more = $('#navMore');
+  more.open = !!uiPref('nav:more');
+  more.ontoggle = () => uiPref('nav:more', more.open || null);
   renderProjectNav();
 }
 export function renderProjectNav() {
@@ -127,8 +132,12 @@ function highlightNav() {
   const hash = location.hash;
   $$('.sb-nav a, .sb-projects a').forEach(a => {
     const href = a.getAttribute('href');
-    a.classList.toggle('active', hash === href || hash.split('?')[0] === href || (href.startsWith('#/projects/') && hash.startsWith(href + '/')) || (href.startsWith('#/projects/') && hash.startsWith(href + '?')));
+    a.classList.toggle('active', hash === href || hash.split('?')[0] === href || (href.startsWith('#/projects/') && hash.startsWith(href + '/')) || (href.startsWith('#/projects/') && hash.startsWith(href + '?'))
+      || (href === '#/tuan' && hash.startsWith('#/tuan')));
   });
+  // Đang mở một trang trong "Công cụ khác" thì mở nhóm đó ra.
+  const more = $('#navMore');
+  if (more && $('a.active', more)) more.open = true;
 }
 
 let countersBusy = false;
@@ -143,6 +152,8 @@ export async function refreshCounters() {
     const badge = $('#approvalBadge');
     badge.textContent = counts.total; badge.classList.toggle('hidden', !counts.total);
     badge.title = `${counts.queue} chờ duyệt · ${counts.extensions} đề nghị gia hạn`;
+    // "Công cụ khác" đang thu gọn: hiện số việc chờ duyệt ngay trên tiêu đề nhóm.
+    const more = $('#moreBadge'); more.textContent = counts.total; more.classList.toggle('hidden', !counts.total); more.title = badge.title;
     store.counts = counts;
     store.notifications = notif;
   } catch { /* bỏ qua lỗi đếm */ } finally { countersBusy = false; }
@@ -251,6 +262,7 @@ export async function route({ background = false } = {}) {
       if (params.get('item')) openItem(Number(params.get('item'))); else closeItem();
     } else if (parts[0] === 'approvals') { await renderApprovals(view, params, setCrumbs); syncPanel(); }
     else if (['requests', 'schedule', 'ops', 'dept', 'summary', 'kpi'].includes(parts[0])) { location.replace('#/home'); return; } // nghiệp vụ NQ57 đã bỏ (Kepper)
+    else if (parts[0] === 'tuan') { closeItem(); await renderWeekly(view, parts[1] || '', params, setCrumbs); }
     else if (parts[0] === 'home') { await renderHome(view, params, setCrumbs); syncPanel(); }
     else if (parts[0] === 'sprint') { await renderQuick(view, params, setCrumbs); syncPanel(); }
     else if (parts[0] === 'dashboard') { closeItem(); await renderDashboard(view, params, setCrumbs); }

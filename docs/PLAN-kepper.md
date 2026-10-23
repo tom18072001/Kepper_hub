@@ -129,3 +129,21 @@ Chốt (sau khi làm rõ): **sprint = một giai đoạn gồm một nhóm bư�
 | MTL bộ phận | Như trước: mẫu Excel điền sẵn, lãnh đạo bộ phận tự nhập MTL của bộ phận mình |
 
 Còn mở: Viber / kênh tin nhắn (Viber bot, Viber Business Messages qua Infobip, Zalo ZBS/ZNS) — chọn kênh, hợp đồng, hồ sơ chuyển DLCN; tin tổng hợp 1 tin/người/ngày theo mẫu.
+
+## GĐ2b — Giao diện gọn theo mẫu Báo cáo tuần, giao ban theo QC-TH-01 / QT-TH-01 / BM-TH-01 (nhánh `kepper/gd2b-bao-cao-tuan`)
+
+Phản hồi của chủ dự án (23/10/2026): "rườm rà và nhiều thao tác quá" — làm theo hai mẫu: biểu mẫu web "Báo cáo tuần" (BM-TH-01) và tài liệu Quy chế / Quy trình giao ban tuần.
+
+| Hạng mục | Cách làm |
+|---|---|
+| Điều hướng | Trang chủ `#/tuan`. Menu chính còn 3 mục: **Báo cáo tuần · Tiến độ dự án · Cập nhật nhanh**; các trang khác (Việc của tôi, Chờ duyệt, Số liệu, Thùng rác, Danh mục) gom vào "Công cụ khác" (thu gọn, có số việc chờ duyệt). Tông navy / vàng đồng của mẫu áp cho cả ứng dụng |
+| Báo cáo tuần | Một cột 920 px như mẫu; `GET /api/weekly/report` trả bản đã lưu + bản điền sẵn (`services/weekly.js#buildPrefill`): MTL của bộ phận (mức chi tiết nhất, không đếm cha – con hai lần), kế hoạch tuần trước, Action Log giao ban đã phát hành. Tự lưu nháp `PUT`; nộp `POST /api/weekly/submit` — làm sạch, kiểm tra theo Điều 4 (trả danh sách lỗi), ghi ngược % vào MTL (`services/mtl-progress.js`, dùng chung với checklist), lưu bản nộp; giờ nộp lần đầu không đổi khi gửi lại |
+| Báo muộn / vắng | `WeeklyNotice`: lý do chọn danh sách + ghi chú ≤ 200 ký tự; muộn: giờ nộp dự kiến; vắng: bắt buộc người dự thay. Báo thư ký / Ban GĐ / PMO. Tự xoá sau 12 tháng |
+| Tổng hợp | `GET /api/weekly/summary` (TGĐ, thư ký, PMO, trưởng / phó bộ phận): tình trạng nộp (Điều 6), vắng (Điều 7), rà Action Log tuần trước, yêu cầu hỗ trợ theo nơi nhận, chi tiết, văn bản sao chép (`summaryText`: nhãn BẢO MẬT, không họ tên) |
+| Giao ban | `WeeklyMeeting` mỗi tuần: hạn nộp / ngày họp khi nghỉ lễ, điểm danh, báo cáo không đạt, kết luận TGĐ (Chấp thuận / Giao bộ phận phối hợp / Phương án khác), Action Log; phát hành một lần → thông báo |
+| Chấm điểm | `GET /api/weekly/compliance?month=` theo Phụ lục 1: nộp muộn có báo 5, không báo 15, không nộp 25, không đạt 5, đi muộn 5, vắng không báo 25, vắng có báo + người dự thay 0; tính từ "tuần bắt đầu chấm điểm" |
+| Thiết lập | `AppSetting weekly.config`: bộ phận phải nộp theo thứ tự trình bày, tuần bắt đầu chấm điểm, (tuỳ chọn) mức trừ. Chưa thiết lập → bộ phận chủ trì hạng mục MTL |
+| Lịch | 15:00 thứ Năm: nhắc từng người cập nhật % (GĐ2a); 15:00 ngày hạn nộp: nhắc bộ phận chưa nộp; 07:35 ngày giao ban: tóm tắt tổng hợp; 02:35: xoá thông báo muộn / vắng quá 12 tháng |
+| Quyền | Lập / nộp: thành viên bộ phận. Nhập thay, thiết lập, giao ban, chấm điểm: quyền "Xem tổng hợp" toàn đơn vị (TGĐ, thư ký — cấp thêm quyền này cho thư ký Phòng Tổng hợp & Nhân sự) hoặc PMO. Xem tổng hợp: thêm trưởng / phó bộ phận. Admin IT không xem |
+
+Cài đặt trên máy chạy: tạo đúng 5 bộ phận theo quy chế (tên thật chỉ nhập trên máy chạy), gán trưởng bộ phận; cấp quyền "Xem tổng hợp giao việc — toàn đơn vị" cho thư ký; vào Báo cáo tuần → Tổng hợp → Thiết lập: chọn 5 bộ phận theo thứ tự trình bày, tuần bắt đầu chấm điểm 30/10/2026.

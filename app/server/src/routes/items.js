@@ -10,6 +10,7 @@ const bus = require('../services/bus');
 const W = require('../services/workitems');
 const { describe: describeRule } = require('../services/recurring');
 const { stageOf } = require('../services/stage');
+const { setProgress } = require('../services/mtl-progress');
 
 const { PRIORITIES, BOARD_INCLUDE, boardItem } = W;
 
@@ -374,23 +375,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       const item = await tx.workItem.findUnique({ where: { id: itemId }, include: { state: true, checklist: { select: { done: true } }, _count: { select: { children: { where: { archivedAt: null } } } } } });
       if (!item || item.archivedAt || item._count.children || !item.checklist.length || item.state.category === 'CANCELLED') return;
       const pct = Math.round(item.checklist.filter(c => c.done).length / item.checklist.length * 100);
-      const cat = item.state.category;
-      if (pct === item.progress && !(cat === 'COMPLETED' && pct < 100)) return;
-      const data = { progress: pct, progressAt: new Date() };
-      const want = pct >= 100 ? 'COMPLETED' : cat === 'COMPLETED' || (pct > 0 && ['BACKLOG', 'UNSTARTED'].includes(cat)) ? 'STARTED' : null;
-      let moved = null;
-      if (want && want !== cat) {
-        const target = await tx.workflowState.findFirst({ where: { projectId: project.id, category: want }, orderBy: { position: 'asc' } });
-        const steps = await approval.stepsForItem(tx, project, item);
-        if (target && !(want === 'COMPLETED' && steps.length)) {
-          const t = await W.transition(tx, { project, rights, item, toState: target });
-          Object.assign(data, t.data, { progress: pct, position: await W.endPosition(tx, target.id) });
-          moved = { ...t, toState: target };
-        }
-      }
-      const updated = await tx.workItem.update({ where: { id: itemId }, data });
-      await activity(tx, itemId, req.user.id, 'UPDATED', { progress: pct });
-      if (moved) await W.afterTransition(tx, { user: req.user, project, item: updated, fromState: item.state, toState: moved.toState, steps: moved.steps });
+      await setProgress(tx, { user: req.user, project, rights, item, pct });
     });
   }
   app.post('/api/items/:id/checklist', auth, async (req, res) => {

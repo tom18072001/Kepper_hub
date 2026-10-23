@@ -68,7 +68,7 @@ function createApp({ prisma, config }) {
     require('./routes/auth'), require('./routes/admin'), require('./routes/labels'), require('./routes/projects'), require('./routes/items'), require('./routes/trash'),
     require('./routes/attachments'), require('./routes/approvals'), require('./routes/me'), require('./routes/notes'), require('./routes/dashboard'), require('./routes/kpi'), require('./routes/register'), require('./routes/dispatch'), require('./routes/excel'),
     require('./routes/cycles'), require('./routes/recurring'), require('./routes/views'), require('./routes/reports'), require('./routes/work'), require('./routes/search'),
-    require('./routes/mtl'), require('./routes/sprint'), require('./routes/viber'), require('./routes/realtime'),
+    require('./routes/mtl'), require('./routes/sprint'), require('./routes/weekly'), require('./routes/viber'), require('./routes/realtime'),
   ]) mount(app, ctx);
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'Không tìm thấy API', code: 'NOT_FOUND' }));

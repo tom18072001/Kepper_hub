@@ -172,3 +172,90 @@ Không phát sinh nghĩa vụ mới ngoài GĐ1. Cập nhật nội dung hồ s�
 
 - Lãnh đạo bộ phận phối hợp có thể thêm dòng con vào bước do bộ phận khác chủ trì (cột "Thuộc bước"), làm tiến độ bước tổng tính theo dòng con đó. Mẫu chỉ gợi ý dòng con cho bước bộ phận chủ trì và hướng dẫn ghi rõ phải thống nhất với bên chủ trì; PMO rà khi duyệt.
 - Mục tiêu % theo sprint dùng kế hoạch gốc tuyến tính — với hạng mục không đều (chờ cơ quan ngoài) có thể đặt mục tiêu chưa sát; cân nhắc trọng số / mốc trung gian ở GĐ sau.
+
+## Đánh giá bảo vệ dữ liệu — Kepper Hub GĐ2b (Báo cáo tuần bộ phận theo mẫu BM-TH-01, tự điền từ MTL) — 23/10/2026
+
+**Giả định:** như GĐ1 (on-prem, < 500 nhân viên, không có dữ liệu khách hàng, không có bí mật nhà nước). Mẫu BM-TH-01 do chủ dự án cung cấp; tên bộ phận thật trong mẫu KHÔNG đưa vào repo, seed dùng bộ phận giả có sẵn.
+**Kết luận cổng: ĐẠT CÓ ĐIỀU KIỆN**. Có hai nhóm điều kiện:
+- Các mục Bắt buộc còn mở từ GĐ1/GĐ2a: GOV-02, PRI-04, RES-01, RES-03.
+- Quy chế giao ban (GOV-01) quy định: ai lập và nộp báo cáo, nơi dán bản tổng hợp, và không ghi chi tiết sức khoẻ/việc riêng vào lý do vắng.
+
+Thay đổi về dữ liệu so với GĐ2a:
+- **Bảng mới `WeeklyReport`**: mỗi bộ phận × tuần (thứ Sáu) một bản. Nội dung JSON gồm:
+  - Phần I–III: hạng mục; mã hạng mục MTL nếu có; tình trạng; %; hạn; người phụ trách (lưu **id tài khoản**, không lưu họ tên tự gõ); nguyên nhân; giải pháp; đề nghị hỗ trợ từ ai, việc gì, trước ngày nào.
+  - Phần IV: kiến nghị.
+  - Người lập và người nộp (id), giờ nộp.
+- **Bảng mới `WeeklyNotice`**: báo nộp muộn / vắng giao ban.
+  - Lý do chọn trong danh sách (Công tác / Nghỉ phép / Việc đột xuất / Khác), kèm ghi chú ngắn ≤ 200 ký tự.
+  - Giờ nộp dự kiến hoặc người dự thay chọn từ danh sách tài khoản.
+  - Tự xoá sau 12 tháng.
+- **Ghi ngược % vào MTL** khi nộp: chỉ với hạng mục người nộp có quyền sửa và không dùng checklist. Đi qua cùng đường cập nhật tiến độ như "Cập nhật nhanh", có nhật ký hoạt động của hạng mục.
+- **Tổng hợp giao ban**: Ban GĐ (quyền `reports.summary` toàn đơn vị) và PMO (trưởng / chủ dự án MTL) xem mọi bộ phận. Bộ phận chỉ xem bản của mình.
+- **Nút "Sao chép bản tổng hợp"**: văn bản rời hệ thống qua clipboard. Dòng đầu ghi "BẢO MẬT – chỉ dùng nội bộ"; không chứa họ tên người phụ trách, chỉ có tên bộ phận. Mỗi lần sao chép ghi nhật ký `WEEKLY_SUMMARY_COPY`.
+- Thông báo nhắc nộp 15:00 thứ Sáu và tổng hợp 07:30 thứ Hai: chỉ trong ứng dụng, chưa qua Viber.
+
+### 1. Phân loại
+
+| Tập dữ liệu | Nhãn nội bộ | Phân loại pháp lý | Số chủ thể | Cấp độ HTTT |
+|---|---|---|---|---|
+| `WeeklyReport` (tình trạng, %, nguyên nhân chậm, giải pháp, đề nghị hỗ trợ của bộ phận; người phụ trách, người lập, người nộp) | **Bảo mật** (tiến độ dự án + đánh giá công việc) | Dữ liệu khác, dùng riêng + DLCN cơ bản (gắn việc với người) | < 500 | Như GĐ1 |
+| `WeeklyNotice` (báo muộn / vắng, lý do, người dự thay) | Nội bộ, nâng lên **Bảo mật** vì ghi chú tự do có thể lộ tình trạng cá nhân | DLCN cơ bản. Nếu ai đó ghi lý do sức khoẻ thì là **DLCN nhạy cảm**, nên tối thiểu hoá bằng danh sách lý do | < 500 | — |
+| Bản tổng hợp sao chép (văn bản) | **Bảo mật** | Dữ liệu khác; không có họ tên | — | — |
+
+### 2. Dòng dữ liệu
+
+1. MTL (PostgreSQL) → `GET /api/weekly` tính sẵn Phần I–III cho bộ phận → trình duyệt của thành viên bộ phận.
+2. Thành viên sửa → tự lưu nháp `PUT /api/weekly` → `WeeklyReport` (DRAFT).
+3. Nộp `POST /api/weekly/submit`:
+   - Máy chủ kiểm tra lại toàn bộ; nộp được ghi nhật ký `WEEKLY_REPORT_SUBMIT`.
+   - % được ghi ngược vào `WorkItem` (nhật ký hoạt động `PROGRESS`).
+4. Báo muộn / vắng `POST /api/weekly/notices` → `WeeklyNotice` → nhật ký `WEEKLY_NOTICE`.
+5. **[Bảo mật]** Ban GĐ / PMO → `GET /api/weekly/summary` → màn hình Tổng hợp.
+6. **[Bảo mật, rời hệ thống]** "Sao chép bản tổng hợp" → clipboard → email / nhóm chat. Đây là chặng rủi ro nhất: Viber/Zalo lưu máy chủ ngoài công ty, có thể ở nước ngoài.
+
+### 3. Rà năng lực (chỉ ghi thay đổi; mã không nêu thay đổi giữ nguyên trạng thái GĐ2a)
+
+| Mã | Trạng thái | Khuyến nghị cụ thể | Ưu tiên |
+|---|---|---|---|
+| GOV-01 | Một phần | Ban hành quy chế giao ban kèm mẫu BM-TH-01, gồm 4 nội dung:<br>• Trưởng bộ phận chịu trách nhiệm; người được giao lập và nộp thay.<br>• Hạn nộp 17:30 thứ Sáu, muộn nhất 12:00 thứ Bảy.<br>• Bản tổng hợp chỉ dán vào email công ty hoặc nhóm chat được phê duyệt.<br>• Không ghi chi tiết sức khoẻ / việc riêng vào lý do vắng. | Bắt buộc |
+| GOV-02 | Chưa có | Như GĐ1. Thêm: Phòng Tổng hợp & Nhân sự (hoặc PMO) là đầu mối dữ liệu giao ban | Bắt buộc |
+| GOV-03 | Một phần | Ghi 2 bảng mới vào danh mục dữ liệu (README mục Dữ liệu) | Nên có |
+| GOV-04 | Một phần | Gắn nhãn "BẢO MẬT" trên màn hình Tổng hợp và dòng đầu văn bản sao chép (đã làm) | Nên có |
+| GOV-05 | Một phần | Dòng dữ liệu ở mục 2; % ghi ngược vào MTL có nhật ký hoạt động để truy vết nguồn | Nên có |
+| GOV-06 | N/A | Không chia sẻ ra ngoài tổ chức | — |
+| PRE-01 | Đầy đủ | Máy chủ cưỡng chế ba quyền:<br>• Lập / nộp: chỉ thành viên đúng bộ phận.<br>• Xem bản của bộ phận khác: chỉ Ban GĐ / PMO.<br>• Ghi ngược %: chỉ hạng mục người nộp có quyền sửa. | Bắt buộc |
+| PRE-02 | Một phần | Không đổi | Nên có |
+| PRE-03 | Một phần | Không đổi — HTTPS khi truy cập từ máy khác | Bắt buộc |
+| PRE-04 | Đầy đủ | Seed / test chỉ dữ liệu giả; không đưa tên bộ phận thật của mẫu vào repo | Bắt buộc |
+| PRE-05 | Một phần | Clipboard không chặn được bằng ứng dụng. Có DLP thì chặn chuỗi "BẢO MẬT – chỉ dùng nội bộ" ra miền ngoài | Nên có |
+| PRE-06 | Một phần | • Người phụ trách và người dự thay là id tài khoản, không phải chữ tự do.<br>• Lý do vắng chọn theo danh sách.<br>• Bản sao chép không có họ tên. | Bắt buộc |
+| PRE-07 | Đầy đủ | API chỉ trả trường cần cho biểu mẫu; Tổng hợp chỉ trả tên hiển thị, không trả email / điện thoại | Bắt buộc |
+| DET-01 | Một phần | Thêm nhật ký `WEEKLY_REPORT_SUBMIT` (bộ phận, tuần, số hạng mục, số % ghi ngược), `WEEKLY_NOTICE`, `WEEKLY_SUMMARY_COPY`; giữ ≥ 12 tháng | Bắt buộc |
+| DET-02 | N/A | Quy mô nhỏ | — |
+| DET-03 | Nâng cao | Có thể cảnh báo khi một tài khoản sao chép tổng hợp nhiều lần | Nâng cao |
+| DET-04 | Một phần | Không đổi | Nên có |
+| DET-05 | Chưa có | Báo cáo đã nộp có thể sửa và nộp lại. Hệ thống giữ giờ nộp đầu, giờ nộp cuối và số lần nộp lại. Nếu báo cáo dùng làm căn cứ đánh giá KPI, nên lưu bản băm mỗi lần nộp | Nâng cao |
+| PRI-01 | N/A | Không phát sinh xử lý cần đồng ý mới (Viber vẫn tắt) | — |
+| PRI-02 | Đầy đủ | Bộ phận chỉ thấy báo cáo của mình; Tổng hợp không có cột "người lập" trong văn bản sao chép | Bắt buộc |
+| PRI-03 | Một phần | Không đổi | Nên có |
+| PRI-04 | Chưa có | Bổ sung vào hồ sơ đánh giá tác động xử lý DLCN: báo cáo tuần gắn việc với người, thông báo vắng | Bắt buộc |
+| RES-01 | Một phần | Không đổi (2 bảng mới nằm trong cùng cơ sở dữ liệu được sao lưu) | Bắt buộc |
+| RES-02 | Một phần | `WeeklyNotice` tự xoá sau 12 tháng; `WeeklyReport` giữ như hồ sơ công việc (đề xuất 5 năm, chờ quy chế lưu trữ) | Nên có |
+| RES-03 | Chưa có | Kịch bản sự cố thêm trường hợp bản tổng hợp bị dán nhầm ra nhóm ngoài | Bắt buộc |
+
+### 4. Nghĩa vụ pháp lý phát sinh
+
+Không phát sinh nghĩa vụ mới ngoài GĐ1. Hồ sơ đánh giá tác động xử lý DLCN (Luật BVDLCN Đ21) cần bổ sung hai luồng: báo cáo tuần và thông báo vắng. Nếu sau này gửi bản tổng hợp qua Viber/Zalo tự động, đó là chuyển DLCN cho bên thứ ba, có thể xuyên biên giới. Khi đó phải có hồ sơ đánh giá tác động chuyển DLCN ra nước ngoài (Đ20) trước khi bật.
+
+### 5. Khuyến nghị ưu tiên
+
+1. [Bắt buộc] Quy chế giao ban (GOV-01): người lập, hạn nộp, nơi dán bản tổng hợp, lý do vắng không ghi chi tiết sức khoẻ.
+2. [Bắt buộc] Bổ sung báo cáo tuần và thông báo vắng vào hồ sơ đánh giá tác động xử lý DLCN (PRI-04).
+3. [Nên có] Hằng tháng rà nhật ký `WEEKLY_SUMMARY_COPY`, cùng đợt rà `MTL_TEMPLATE_EXPORT`.
+4. [Nâng cao] Băm từng lần nộp nếu báo cáo tuần là căn cứ KPI (DET-05).
+
+### 6. Rủi ro còn lại & câu hỏi mở
+
+- Báo cáo nộp xong vẫn sửa và nộp lại được. Lý do: đúng mẫu, và để giảm thao tác báo lại. Tổng hợp hiện giờ nộp đầu và số lần nộp lại. Cần chủ dự án chốt có khoá sau 12:00 thứ Bảy hay không.
+- % ghi ngược từ báo cáo tuần có thể đè % người phụ trách vừa cập nhật. Hệ thống chỉ ghi khi % trong báo cáo khác % lúc điền sẵn. Hạng mục dùng checklist thì không ghi ngược.
+- Danh sách bộ phận phải nộp được tính tự động: bộ phận chủ trì ít nhất một hạng mục MTL đang chạy, cộng bộ phận đã nộp. Bộ phận không có MTL nhưng vẫn phải báo cáo (vd. Tổng hợp & Nhân sự) cần một thiết lập riêng. Hiện để PMO thêm ở màn Tổng hợp.
