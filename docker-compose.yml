@@ -1,13 +1,15 @@
-# WorkHub — chạy trên máy cá nhân / máy chủ nội bộ.
+# Kepper Hub — chạy trên máy cá nhân / máy chủ nội bộ.
 #   cp .env.example .env   (sửa mật khẩu, JWT_SECRET)
 #   docker compose up -d --build                      # Postgres + app, tệp lưu trên volume
 #   docker compose --profile full up -d --build       # thêm MinIO + bộ xem trước Word (LibreOffice)
-# Mở http://localhost:4000 — mọi cổng chỉ bind 127.0.0.1.
+# Mở http://localhost:4100 (APP_PORT) — mọi cổng chỉ bind 127.0.0.1. Cho người khác dùng: đặt sau reverse proxy có TLS (xem README).
 name: kepper
 
 services:
   postgres:
     image: postgres:16-alpine
+    # Transaction treo không giữ khoá / kết nối mãi; truy vấn > 1 s ghi vào log để tìm điểm chậm.
+    command: ["postgres", "-c", "idle_in_transaction_session_timeout=300s", "-c", "log_min_duration_statement=1000", "-c", "log_line_prefix=%m [%p] %u@%d "]
     environment:
       POSTGRES_USER: workhub
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Đặt POSTGRES_PASSWORD trong .env}
@@ -22,20 +24,22 @@ services:
       timeout: 5s
       retries: 20
     restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    image: kepper-app:0.1.0
+    image: kepper-app:${APP_VERSION:-0.2.0}   # đổi APP_VERSION khi nâng cấp để quay lại được bản cũ
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://workhub:${POSTGRES_PASSWORD}@postgres:5432/workhub
+      DATABASE_URL: postgresql://workhub:${POSTGRES_PASSWORD}@postgres:5432/workhub?connection_limit=10&pool_timeout=20
       JWT_SECRET: ${JWT_SECRET:?Đặt JWT_SECRET trong .env}
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:4100}
-      TRUST_PROXY: ${TRUST_PROXY:-loopback, linklocal, uniquelocal}
+      TRUST_PROXY: ${TRUST_PROXY:-false}   # sau reverse proxy: 1 (một tầng) hoặc IP của proxy
+      ACCESS_LOG_DIR: /data/logs          # nhật ký truy cập ≥ 12 tháng (giữ 400 ngày), ra thư mục LOG_PATH trên máy
       ROOT_ADMIN_USERNAME: ${ROOT_ADMIN_USERNAME:-admin}
       ROOT_ADMIN_PASSWORD: ${ROOT_ADMIN_PASSWORD:?Đặt ROOT_ADMIN_PASSWORD trong .env}
       SEED_DEMO: ${SEED_DEMO:-false}
@@ -54,15 +58,21 @@ services:
       VIBER_BOT_NAME: ${VIBER_BOT_NAME:-Kepper Hub}
     volumes:
       - uploads:/data/uploads
+      - ${LOG_PATH:-./logs}:/data/logs
     ports:
       - "127.0.0.1:${APP_PORT:-4100}:4000"
     restart: unless-stopped
+    stop_grace_period: 20s   # dừng êm: chờ request / job đang chạy (server.js)
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
     networks: [default, preview-net]
 
   # Sao lưu hằng ngày: CSDL + tệp đính kèm vào thư mục ./backups trên máy (giữ BACKUP_KEEP_DAYS ngày).
   # Nên chép thêm ./backups sang ổ/máy khác (quy tắc 3-2-1). Khôi phục: xem README.
   backup:
-    image: postgres:16-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.backup
+    image: kepper-backup:${APP_VERSION:-0.2.0}
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,19 +83,28 @@ services:
       PGDATABASE: workhub
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
       BACKUP_HOUR: ${BACKUP_HOUR:-02}
+      # Mã hoá: khoá công khai age (age-keygen tạo cặp khoá; khoá bí mật giữ ngoài máy chạy). Trống = không mã hoá.
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
+      # Bản ngoài máy: đặt BACKUP_COPY_PATH là ổ / thư mục mạng khác (vd. E:/kepper-backups) → tự chép bản đạt sang đó.
+      BACKUP_COPY: ${BACKUP_COPY:-0}
+      BACKUP_COPY_KEEP_DAYS: ${BACKUP_COPY_KEEP_DAYS:-90}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
       TZ: ICT-7   # chuỗi POSIX (UTC+7), không cần gói tzdata trong image alpine
     volumes:
       - ./deploy:/deploy:ro
       - ${BACKUP_PATH:-./backups}:/backups
+      - ${BACKUP_COPY_PATH:-./backups-copy}:/backups-copy
       - uploads:/data/uploads:ro
     entrypoint: ["sh", "/deploy/backup.sh"]
     restart: unless-stopped
 
   # Khôi phục (chạy tay): docker compose stop app
   #   docker compose --profile restore run --rm -e RESTORE_FROM=/backups/<thư-mục> restore
+  #   Bản đã mã hoá: thêm  -v <thư-mục-chứa-khoá>:/key:ro -e AGE_IDENTITY=/key/kepper-backup.key
+  #   Thử khôi phục mỗi quý vào một CSDL tạm (đặt PGDATABASE=workhub_restore_test) và ghi biên bản.
   restore:
     profiles: ["restore"]
-    image: postgres:16-alpine
+    image: kepper-backup:${APP_VERSION:-0.2.0}
     depends_on:
       postgres:
         condition: service_healthy
@@ -94,6 +113,7 @@ services:
       PGUSER: workhub
       PGPASSWORD: ${POSTGRES_PASSWORD}
       PGDATABASE: workhub
+      AGE_IDENTITY: ${AGE_IDENTITY:-}
     volumes:
       - ./deploy:/deploy:ro
       - ${BACKUP_PATH:-./backups}:/backups:ro

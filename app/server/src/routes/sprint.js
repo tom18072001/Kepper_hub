@@ -5,6 +5,7 @@
 // - "Cập nhật nhanh": việc của tôi (và việc chưa giao người của ban tôi, nếu tôi là lãnh đạo ban) đang trong kỳ thực hiện;
 // - mẫu Excel MTL bộ phận điền sẵn (tải → sửa → nhập lại bằng "Nhập MTL bộ phận").
 const ExcelJS = require('exceljs');
+const MG = require('../services/mtl-guard');
 const { fail, intParam } = require('../lib/http');
 const { isItAdmin } = require('../lib/permissions');
 const { Prisma } = require('@prisma/client');
@@ -14,6 +15,7 @@ const approval = require('../services/approval');
 const M = require('../services/mtl');
 const MP = require('../services/mtl-project');
 const S = require('../services/mtl-sprints');
+const P = require('../lib/policy');
 
 const ATTN = ['OVERDUE', 'BEHIND', 'LATE_START'];
 // Thứ tự trong một làn: chưa xong trước; trễ / chậm trước; đường găng, mốc; rồi theo hạn kế hoạch.
@@ -22,7 +24,7 @@ const byRank = (a, b) => { const x = rank(a), y = rank(b); for (let k = 0; k < x
 const vnDate = d => { if (!d) return null; const x = new Date(new Date(d).getTime() + 7 * 3_600_000); return `${String(x.getUTCDate()).padStart(2, '0')}/${String(x.getUTCMonth() + 1).padStart(2, '0')}/${x.getUTCFullYear()}`; };
 
 // Một hạng mục trên thẻ sprint: chỉ trường cần hiển thị.
-function card(i, { sprint, project, deptName, byId, sprintNameOf }) {
+function card(i, { sprint, project, deptName, byId, sprintNameOf, canProgress }) {
   const parent = i.parentId ? byId.get(i.parentId) : null;
   const target = M.sprintTarget(i, sprint);
   const done = M.isDone(i);
@@ -33,15 +35,27 @@ function card(i, { sprint, project, deptName, byId, sprintNameOf }) {
     progressAt: i.progressAt, completedAt: i.completedAt, done, targetFrom: target.from, targetTo: target.to,
     carriedFrom: !done && i.baselineEnd < sprint.start ? M.currentT(project.t0Date, i.baselineEnd) : null,
     parentCode: parent?.planCode || null, parentTitle: parent?.title || null, sprintName: sprintNameOf ? sprintNameOf(i) : null,
+    canProgress: canProgress ? canProgress(i) : false,
   };
 }
 // Một dòng trong chi tiết sprint (bước tổng và dòng con MTL bộ phận).
-const row = (i, depth, deptName) => ({
+const row = (i, depth, deptName, canProgress) => ({ canProgress: canProgress ? canProgress(i) : false,
   id: i.id, code: i.code, planCode: i.planCode, title: i.title, depth, children: i.children, parentId: i.parentId,
   leadDepartmentId: i.leadDepartmentId, leadDepartmentName: deptName[i.leadDepartmentId] || '', assignees: i.assignees, critical: i.critical, milestone: i.milestone,
   startT: i.startT, endT: i.endT, baselineStart: i.baselineStart, baselineEnd: i.baselineEnd, actual: i.actual, planned: i.planned, status: i.status, statusLabel: i.statusLabel,
   variance: i.variance, lateDays: i.lateDays, daysLeft: i.daysLeft, progressAt: i.progressAt, completedAt: i.completedAt, done: M.isDone(i),
 });
+
+// Ai được bấm cập nhật % trên thẻ (lib/policy.js mtl.progress): việc lá không dùng checklist; người được giao,
+// lãnh đạo bộ phận chủ trì hoặc người quản lý dự án. Máy chủ vẫn kiểm lại ở PATCH.
+async function progressRule(prisma, user, rights, items) {
+  const ids = items.filter(i => !i.children).map(i => i.id);
+  const withChecklist = new Set(ids.length ? (await prisma.checklistItem.findMany({ where: { workItemId: { in: ids } }, distinct: ['workItemId'], select: { workItemId: true } })).map(c => c.workItemId) : []);
+  const leaders = new Map();
+  for (const d of new Set(items.map(i => i.leadDepartmentId).filter(x => x != null))) leaders.set(d, await approval.deptLeaderIds(prisma, d));
+  return i => !i.children && !withChecklist.has(i.id) && P.can({ userId: user.id, it: false }, 'edit', 'mtl.progress',
+    { item: { assigneeIds: (i.assignees || []).map(a => a.id), leadLeaderIds: leaders.get(i.leadDepartmentId) || [], projectManager: rights.canManage } });
+}
 
 module.exports = function mountSprint(app, { prisma, auth, audit }) {
   const departmentsMap = async () => {
@@ -72,7 +86,8 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
       const ids = new Set(members.map(i => i.id)), kids = new Map();
       for (const i of members) if (i.parentId && ids.has(i.parentId)) { if (!kids.has(i.parentId)) kids.set(i.parentId, []); kids.get(i.parentId).push(i); }
       const order = (a, b) => S.compareSteps(a.planCode || '', b.planCode || '') || a.id - b.id;
-      const walk = (list, depth) => { for (const i of [...list].sort(order)) { rows.push(row(i, depth, dept.name)); walk(kids.get(i.id) || [], depth + 1); } };
+      const canProgress = await progressRule(prisma, req.user, rights, items);
+      const walk = (list, depth) => { for (const i of [...list].sort(order)) { rows.push(row(i, depth, dept.name, canProgress)); walk(kids.get(i.id) || [], depth + 1); } };
       walk(members.filter(i => !(i.parentId && ids.has(i.parentId))), 0);
       byDepartment = dept.rows.map(d => {
         const mine = members.filter(i => i.leadDepartmentId === d.id);
@@ -124,7 +139,7 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
     const dept = await departmentsMap();
     const byId = new Map(items.map(i => [i.id, i]));
     const leaves = M.leavesOf(items).filter(i => i.status !== 'CANCELLED');
-    const ctx = { sprint, project, deptName: dept.name, byId, sprintNameOf };
+    const ctx = { sprint, project, deptName: dept.name, byId, sprintNameOf, canProgress: await progressRule(prisma, req.user, rights, items) };
     const lanes = { due: [], running: [], next: [] };
     for (const i of leaves) {
       const lane = M.sprintLane(i, sprint, next, { current: state === 'CURRENT' });
@@ -182,7 +197,7 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
       const t = Math.max(0, M.currentT(p.t0Date, now));
       const sprint = M.sprintOf(p.t0Date, t), next = M.sprintOf(p.t0Date, t + 1);
       const byId = new Map(items.map(i => [i.id, i]));
-      const ctx = { sprint, project: p, deptName: dept.name, byId, sprintNameOf: S.buildSprints(p, items, actualOf, now, cfg).nameOf };
+      const ctx = { sprint, project: p, deptName: dept.name, byId, sprintNameOf: S.buildSprints(p, items, actualOf, now, cfg).nameOf, canProgress: await progressRule(prisma, req.user, rights, items) };
       const rows = [];
       for (const i of M.leavesOf(items)) {
         if (i.status === 'CANCELLED') continue;
@@ -207,8 +222,8 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
     const { project, rights } = await loadProject(prisma, req.user, intParam(req.params.id));
     if (project.kind !== 'MTL') fail(422, 'Dự án này không theo Master Timeline', 'NOT_MTL');
     const departmentId = intParam(req.query.departmentId, 'Bộ phận');
-    if (!rights.canManage && !(departmentId === req.user.departmentId && await isDeptLeader(req.user, departmentId)))
-      fail(403, 'Chỉ PMO hoặc lãnh đạo của bộ phận này tải được MTL bộ phận', 'FORBIDDEN');
+    // Quy định xuất MTL (lib/policy.js mtl.plan · export): quản lý dự án, Ban GĐ; lãnh đạo bộ phận chỉ bộ phận mình.
+    MG.mtlExportGuard(req.user, project, rights, { deptLeader: departmentId === req.user.departmentId && await isDeptLeader(req.user, departmentId) });
     const department = await prisma.department.findFirst({ where: { id: departmentId, isActive: true }, select: { id: true, name: true, code: true } });
     if (!department) fail(422, 'Bộ phận không hợp lệ', 'INVALID_DEPARTMENT');
     const { items } = await MP.computeProject(prisma, project, req.user, new Date());

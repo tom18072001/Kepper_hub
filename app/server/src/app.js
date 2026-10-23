@@ -10,10 +10,15 @@ const { createAuth } = require('./lib/auth');
 const { hasPermission, permissionScope } = require('./lib/permissions');
 const { HttpError } = require('./lib/http');
 const { auditFor } = require('./services/events');
+const { createAccessLog } = require('./lib/access-log');
 
 function createApp({ prisma, config }) {
   const app = express();
   app.disable('x-powered-by');
+  // Đếm request đang xử lý (server.js dừng êm: chờ các request này xong rồi mới tắt).
+  let inflight = 0;
+  app.use((req, res, next) => { inflight++; res.once('close', () => { inflight--; }); next(); });
+  app.locals.inflight = () => inflight;
   // Đứng sau nginx/reverse proxy: lấy IP thật của người dùng cho audit log.
   app.set('trust proxy', config.trustProxy);
   // Nén phản hồi (danh sách việc của sổ lớn ~3 MB → ~0,2 MB). Kênh realtime (SSE) đặt Cache-Control: no-transform nên không bị nén.
@@ -41,13 +46,17 @@ function createApp({ prisma, config }) {
     windowMs: 60_000, limit: config.apiRateLimit, standardHeaders: 'draft-7', legacyHeaders: false,
     keyGenerator: req => {
       const header = req.headers.authorization || '';
-      const payload = header.startsWith('Bearer ') ? jwt.decode(header.slice(7)) : null;
+      // Chỉ tin token đã xác minh chữ ký (token giả không đẩy được yêu cầu vào hạn mức của người khác).
+      let payload = null;
+      try { payload = header.startsWith('Bearer ') ? jwt.verify(header.slice(7), config.jwtSecret) : null; } catch { payload = null; }
       return Number.isInteger(payload?.id) ? 'user:' + payload.id : 'ip:' + ipKeyGenerator(req.ip || '');
     },
     skip: req => req.path.startsWith('/auth/') || req.path === '/stream',
     message: { error: 'Quá nhiều yêu cầu, vui lòng thử lại sau', code: 'RATE_LIMITED' },
   }));
   // Webhook Viber cần body thô để kiểm chữ ký: bỏ qua bộ đọc JSON chung cho đường này.
+  // Nhật ký truy cập (≥ 12 tháng, lib/access-log.js). Đặt sau auth không được vì auth gắn theo route → đọc req.user khi 'finish'.
+  app.use('/api', (config.accessLog || createAccessLog()).middleware);
   const json = express.json({ limit: '2mb' });
   app.use((req, res, next) => (req.path === '/api/viber/webhook' ? next() : json(req, res, next)));
 
@@ -97,7 +106,12 @@ function createApp({ prisma, config }) {
 
 function loadConfig(env = process.env) {
   if (!env.JWT_SECRET) throw new Error('JWT_SECRET là bắt buộc');
-  const trust = env.TRUST_PROXY ?? 'loopback, linklocal, uniquelocal';
+  // Máy chạy thật: không chấp nhận khoá mẫu trong .env.example (ai đọc repo cũng ký được phiên của mọi tài khoản).
+  if (env.NODE_ENV === 'production' && (env.JWT_SECRET.length < 32 || /change|doi-chuoi|example|secret-here/i.test(env.JWT_SECRET)))
+    throw new Error('JWT_SECRET còn giá trị mẫu hoặc ngắn hơn 32 ký tự — tạo bằng: openssl rand -hex 32');
+  // Mặc định KHÔNG tin X-Forwarded-For (người dùng trong LAN tự đặt được header này để giả IP trong nhật ký).
+  // Đứng sau reverse proxy: TRUST_PROXY=1 (đúng một tầng) hoặc IP của proxy.
+  const trust = env.TRUST_PROXY ?? 'false';
   return {
     port: Number(env.PORT || 4000),
     jwtSecret: env.JWT_SECRET,

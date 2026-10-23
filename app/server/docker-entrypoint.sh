@@ -12,7 +12,12 @@ until node -e "const {PrismaClient}=require('@prisma/client');const p=new Prisma
 done
 
 echo "==> Áp migration (prisma migrate deploy)"
-npx prisma migrate deploy
+if ! npx prisma migrate deploy; then
+  echo "!! LỖI migration — ứng dụng KHÔNG khởi động để không chạy trên CSDL dở dang."
+  echo "!! Quay lại:  1) đặt lại image cũ (deploy/upgrade.ps1 in sẵn lệnh)  2) khôi phục bản sao lưu vừa tạo trước khi nâng cấp (deploy/restore.sh)."
+  echo "!! Hoặc sửa migration lỗi rồi đánh dấu:  npx prisma migrate resolve --rolled-back <tên migration>"
+  exit 1
+fi
 
 echo "==> Tạo tài khoản quản trị gốc / dữ liệu mẫu (nếu cần)"
 node src/seed.js

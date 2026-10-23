@@ -56,6 +56,7 @@ onRealtime((event, data) => {
 export function rerender() { lastViewKey = ''; return route(); }
 onAuthEvent('unauthorized', () => { if (store.me) toast('Phiên đăng nhập đã hết, vui lòng đăng nhập lại', 'err'); logout({ keepDrafts: true }); });
 onAuthEvent('mustChangePassword', () => show('passwordPage'));
+onAuthEvent('clockSkew', min => toast(`Giờ máy chủ lệch ${Math.abs(min)} phút so với máy bạn. Nếu giờ máy bạn đúng, báo quản trị IT — giờ nộp báo cáo tuần tính theo giờ máy chủ.`, 'err'));
 
 $('#loginForm').addEventListener('submit', async e => {
   e.preventDefault();

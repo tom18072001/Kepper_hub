@@ -43,14 +43,15 @@ function scheduleOf(f, meeting = null) {
   const deadlineDay = isDay(m.deadlineDay) ? m.deadlineDay : f;
   const meetingDay = isDay(m.meetingDay) ? m.meetingDay : addDays(f, 3);
   return {
-    week: f, from: addDays(f, -4), to: f, nextFrom: addDays(f, 3), nextTo: addDays(f, 7), deadlineDay, meetingDay,
+    week: f, from: addDays(f, -4), to: f, nextFrom: addDays(f, 3), nextTo: addDays(f, 7), deadlineDay, meetingDay, skip: !!m.skip,
     remind: at(deadlineDay, 15, 0), deadline: at(deadlineDay, 17, 30), grace: at(addDays(deadlineDay, 1), 12, 0),
     summaryDue: at(meetingDay, 8, 0), meetingAt: at(meetingDay, 8, 30), absentEmergency: at(meetingDay, 8, 0), actionLogDue: at(meetingDay, 14, 0),
   };
 }
 
 // ---------- Tình trạng hạng mục ----------
-const isOverdue = (r, f) => !!r.due && r.status !== DONE && r.due <= f;
+// Quá hạn = đã QUA deadline mà chưa hoàn thành (QC-TH-01 Điều 4): hạn trước thứ Sáu của tuần báo cáo.
+const isOverdue = (r, f) => !!r.due && r.status !== DONE && r.due < f;
 const needsIssue = (r, f) => r.status === 'Chậm' || r.status === 'Vướng' || isOverdue(r, f);
 const issueLabel = (r, f) => [r.status === 'Chậm' || r.status === 'Vướng' ? r.status : null, isOverdue(r, f) ? 'Quá hạn' : null].filter(Boolean).join(' · ');
 // Tình trạng MTL → tình trạng BM-TH-01 (người lập chỉ sửa khi thực tế khác, vd. "Vướng").
@@ -84,7 +85,7 @@ function mtlRow(i, extra = {}) {
   return {
     key: `m${i.id}`, itemId: i.id, ref: i.code, step: i.planCode || '', project: i.projectKey || '', task: i.title, source: MTL_SOURCE,
     ownerIds: (i.assignees || []).map(a => a.id), start: dayOf(i.baselineStart), due: dayOf(i.baselineEnd), status, pct, pct0: pct,
-    pctLocked: !!i.hasChecklist, critical: !!i.critical, milestone: !!i.milestone, ...blankIssue(), next: '', ...extra,
+    pctLocked: !!i.hasChecklist, critical: !!i.critical, milestone: !!i.milestone, ...blankIssue(), next: '', mandatory: true, ...extra,
   };
 }
 
@@ -95,26 +96,26 @@ function buildPrefill({ week: f, deptId, items = [], memberIds = new Set(), prev
   const results = [], ongoing = [], plans = [], seen = new Set();
   const add = (list, row) => { if (row.itemId) { if (seen.has(row.itemId)) return; seen.add(row.itemId); } list.push(row); };
 
-  // 1) Action Log giao ban vừa rồi giao cho bộ phận → Phần I, nguồn "TGĐ giao".
-  for (const a of actions) results.push({ key: `a${a.ref}`, actionRef: a.ref, itemId: null, task: a.task, source: 'TGĐ giao', ownerIds: a.ownerId ? [a.ownerId] : [],
-    due: a.due || '', status: 'Đúng tiến độ', pct: '', ...blankIssue() });
-
-  // 2) Kế hoạch tuần trước → Phần I; việc chưa xong tuần trước → Phần II (QT-TH-01, Phần C bước 2).
+  // 1) Kế hoạch tuần trước (bản ĐÃ NỘP) → Phần I; việc chưa xong tuần trước → Phần II (QT-TH-01, Phần C bước 2).
   if (prev) {
     for (const p of prev.plans || []) {
       if (p.itemId) { const i = byId.get(p.itemId); if (i && !(i.done && dayOf(i.completedAt) < S.from)) add(results, mtlRow(i)); continue; }
       if (!String(p.task || '').trim()) continue;
       results.push({ key: p.key || newKey('f'), itemId: null, task: p.task, source: SOURCES.includes(p.basis) ? p.basis : 'KH tháng', ownerIds: p.ownerIds || [], due: p.due || '',
-        status: 'Đúng tiến độ', pct: '', ...blankIssue() });
+        status: 'Đúng tiến độ', pct: '', ...blankIssue(), mandatory: true });
     }
     for (const r of [...(prev.results || []), ...(prev.ongoing || [])]) {
       if (r.status === DONE || !String(r.task || '').trim()) continue;
       if (r.itemId) { const i = byId.get(r.itemId); if (i && !i.done) add(ongoing, mtlRow(i)); continue; }
       if (ongoing.some(o => o.key === r.key) || results.some(o => o.key === r.key)) continue;
       ongoing.push({ key: r.key || newKey('f'), itemId: null, actionRef: r.actionRef || null, task: r.task, source: r.source === MTL_SOURCE ? 'Chuyển tiếp tuần trước' : r.source || 'Chuyển tiếp tuần trước',
-        ownerIds: r.ownerIds || [], start: r.start || '', due: r.due || '', status: r.status || 'Đúng tiến độ', pct: r.pct ?? '', ...blankIssue(), next: '' });
+        ownerIds: r.ownerIds || [], start: r.start || '', due: r.due || '', status: r.status || 'Đúng tiến độ', pct: r.pct ?? '', ...blankIssue(), next: '', mandatory: !!r.actionRef });
     }
   }
+  // 2) Action Log giao ban (mọi việc TGĐ giao còn mở, kể cả tuần trước bộ phận chưa nộp) → Phần I, nguồn "TGĐ giao" — bắt buộc báo cáo.
+  const hasAction = ref => [...results, ...ongoing].some(r => r.actionRef === ref);
+  for (const a of actions) if (!hasAction(a.ref)) results.push({ key: `a${a.ref}`, actionRef: a.ref, itemId: null, task: a.task, source: 'TGĐ giao', ownerIds: a.ownerId ? [a.ownerId] : [],
+    due: a.due || '', status: 'Đúng tiến độ', pct: '', ...blankIssue(), mandatory: true });
 
   // 3) MTL của bộ phận: đến hạn / quá hạn / xong trong tuần → I; đang chạy nhiều tuần → II; bắt đầu tuần tới → III.
   for (const i of cand) {
@@ -145,6 +146,7 @@ function sanitize(data, { userIds = null, deptIds = new Set(), itemIds = null } 
     return {
       key: str(r?.key, 40) || newKey('f'), itemId, ref: itemId ? str(r.ref, 40) : '', step: itemId ? str(r.step, 20) : '', project: itemId ? str(r.project, 20) : '',
       actionRef: str(r?.actionRef, 40) || null, task: str(r?.task, 500), ownerIds: idsOf(r?.ownerIds, userIds), due: day(r?.due),
+      mandatory: !!r?.mandatory, ownerPicked: !!r?.ownerPicked,
     };
   };
   const row = (r, ongoing) => {
@@ -167,20 +169,24 @@ function sanitize(data, { userIds = null, deptIds = new Set(), itemIds = null } 
 }
 
 // ---------- Kiểm tra trước khi nộp (Điều 4, Phần C) ----------
-function validate(data, f, { deptName = () => '' } = {}) {
+function validate(data, f, { deptName = () => '', mandatory = [] } = {}) {
   const e = [];
   const res = data.results.filter(r => r.task), on = data.ongoing.filter(r => r.task), pl = data.plans.filter(p => p.task);
   if (!res.length && !on.length) e.push('Phần I hoặc II cần ít nhất 1 hạng mục.');
   if (!on.length && !pl.length) e.push('Phần II hoặc III cần ít nhất 1 việc cho tuần mới.');
   const check = (r, label) => {
     if (!r.due) e.push(`${label}: thiếu deadline.`);
-    if (!r.itemId && !r.ownerIds.length) e.push(`${label}: thiếu người phụ trách.`);
+    if (!r.ownerIds.length) e.push(`${label}: thiếu người phụ trách.`);
     if (needsIssue(r, f)) {
       const why = issueLabel(r, f);
       if (!r.cause) e.push(`${label} (${why}): thiếu nguyên nhân.`);
       if (!r.solution) e.push(`${label} (${why}): thiếu giải pháp bộ phận đề xuất.`);
       if (!r.helpFrom) e.push(`${label} (${why}): chọn đề nghị hỗ trợ từ Ban Giám đốc, bộ phận nào, hoặc "Tự xử lý".`);
-      else if (r.helpFrom !== HELP_SELF && !r.helpWhat) e.push(`${label}: ghi rõ cần ${r.helpFrom === HELP_BGD ? 'Ban Giám đốc' : deptName(Number(r.helpFrom.slice(1))) || 'bộ phận được đề nghị'} hỗ trợ việc gì.`);
+      else if (r.helpFrom !== HELP_SELF) {
+        const who = r.helpFrom === HELP_BGD ? 'Ban Giám đốc' : deptName(Number(r.helpFrom.slice(1))) || 'bộ phận được đề nghị';
+        if (!r.helpWhat) e.push(`${label}: ghi rõ cần ${who} hỗ trợ việc gì.`);
+        if (!r.helpBy) e.push(`${label}: ghi cần ${who} hỗ trợ trước ngày nào.`);
+      }
     }
   };
   const short = t => `“${t.length > 50 ? t.slice(0, 50) + '…' : t}”`;
@@ -194,7 +200,12 @@ function validate(data, f, { deptName = () => '' } = {}) {
     if (!p.task) { e.push(`Phần III, hạng mục ${k + 1}: thiếu tên hạng mục.`); return; }
     if (!p.ownerIds.length) e.push(`Phần III ${short(p.task)}: thiếu người phụ trách.`);
     if (!p.due) e.push(`Phần III ${short(p.task)}: thiếu deadline.`);
+    if (!p.output) e.push(`Phần III ${short(p.task)}: ghi sản phẩm đầu ra.`);
   });
+  // Hạng mục bắt buộc báo cáo (MTL đến hạn / quá hạn / đang chạy, việc TGĐ giao, kế hoạch tuần trước) không được bỏ (Điều 4).
+  const has = (k, v) => [...data.results, ...data.ongoing].some(r => r[k] === v);
+  for (const m of mandatory) if (!(m.itemId ? has('itemId', m.itemId) : m.actionRef ? has('actionRef', m.actionRef) : has('key', m.key)))
+    e.push(`Không được bỏ ${short(m.task)}${m.ref ? ` (${m.ref})` : ''} — đây là hạng mục bắt buộc báo cáo; cập nhật tình trạng thay vì bỏ.`);
   return e;
 }
 // Xoá nội dung vướng mắc ở hạng mục không còn Chậm / Vướng / Quá hạn (giữ báo cáo gọn).
@@ -202,14 +213,17 @@ function finalize(data, f) {
   const fix = r => (needsIssue(r, f) ? { ...r, overdue: isOverdue(r, f) } : { ...r, ...blankIssue(), overdue: false });
   return { ...data, results: data.results.filter(r => r.task).map(fix), ongoing: data.ongoing.filter(r => r.task).map(fix), plans: data.plans.filter(p => p.task) };
 }
-// % cần ghi ngược vào MTL: hạng mục liên kết, không tự tính theo checklist, % khác lúc điền sẵn.
+// % đề xuất ghi ngược vào MTL: hạng mục liên kết, không tự tính theo checklist, % khác lúc điền sẵn (pct0).
+// Máy chủ chỉ ghi khi % trong MTL vẫn bằng pct0 (chưa ai đổi từ lúc điền sẵn) — tránh đè số mới bằng số cũ khi gửi lại.
 const writeBacks = data => [...data.results, ...data.ongoing]
   .filter(r => r.itemId && !r.pctLocked && r.pct !== '' && r.pct !== r.pct0)
   .map(r => ({ itemId: r.itemId, pct: r.pct }));
 
 // ---------- Tình trạng nộp (Điều 6) ----------
+const noticeTime = n => new Date(n.receivedAt || n.createdAt); // thư ký nhập hộ tin nhắn: tính theo giờ nhận
 function submissionStatus(report, notices, S, now = new Date()) {
-  const told = notices.some(n => n.type === 'LATE' && new Date(n.createdAt) <= S.deadline);
+  if (S.skip) return { code: 'SKIPPED', label: 'Tuần nghỉ — không giao ban', tone: 'idle' };
+  const told = notices.some(n => n.type === 'LATE' && noticeTime(n) <= S.deadline);
   const t = report?.firstSubmittedAt ? new Date(report.firstSubmittedAt) : null;
   if (!t) {
     if (now <= S.deadline) return { code: 'PENDING', label: 'Chưa nộp', tone: 'idle' };
@@ -220,13 +234,17 @@ function submissionStatus(report, notices, S, now = new Date()) {
   if (t <= S.grace) return told ? { code: 'LATE_TOLD', label: 'Muộn, có báo trước', tone: 'warn', points: 'LATE_NOTICED' } : { code: 'LATE', label: 'Muộn, không báo', tone: 'bad', points: 'LATE_UNNOTICED' };
   return { code: 'TOO_LATE', label: 'Nộp sau 12:00 T7 (tính không nộp)', tone: 'bad', points: 'NOT_SUBMITTED' };
 }
-// Vắng có báo đúng hạn (17:30 thứ Sáu; đột xuất 08:00 thứ Hai) và có người dự thay → không trừ (Điều 7).
-const absenceNoticed = (notices, S) => notices.find(n => n.type === 'ABSENT' && n.substituteId && new Date(n.createdAt) <= S.absentEmergency) || null;
+// Vắng có báo đúng hạn và có người dự thay → không trừ (Điều 7): báo trước 17:30 ngày hạn nộp;
+// lý do "Việc đột xuất" thì đến 08:00 ngày giao ban.
+const absenceNoticed = (notices, S) => notices.find(n => n.type === 'ABSENT' && n.substituteId
+  && (noticeTime(n) <= S.deadline || (n.reason === 'DOT_XUAT' && noticeTime(n) <= S.absentEmergency))) || null;
+const SUBMITTED = ['ON_TIME', 'LATE_TOLD', 'LATE']; // nộp sau 12:00 thứ Bảy tính là không nộp
 
 // ---------- Tổng hợp giao ban ----------
 const helpTarget = (h, deptName) => (h === HELP_BGD ? 'Ban Giám đốc' : h?.startsWith('D') ? deptName(Number(h.slice(1))) || 'Bộ phận khác' : '');
 // depts: [{ id, name }] theo thứ tự trình bày; reports / notices của tuần; meeting của tuần (điểm danh, kết luận); prevMeeting: Action Log tuần trước.
-function buildSummary({ week: f, depts, reports, notices, meeting = null, prevMeeting = null, now = new Date(), userName = () => '' }) {
+// actions: Action Log còn theo dõi [{ ...action, ref, meetingWeek }]; actionRows: Map ref → dòng báo cáo mới nhất (đã nộp) có actionRef đó.
+function buildSummary({ week: f, depts, reports, notices, meeting = null, actions = [], actionRows = new Map(), now = new Date(), userName = () => '' }) {
   const S = scheduleOf(f, meeting), deptName = id => depts.find(d => d.id === id)?.name || '';
   const md = meeting?.data || {};
   let submitted = 0, stuck = 0, overdue = 0;
@@ -238,7 +256,7 @@ function buildSummary({ week: f, depts, reports, notices, meeting = null, prevMe
     const st = submissionStatus(sent, ns, S, now);
     const absent = ns.find(n => n.type === 'ABSENT') || null;
     const items = sent ? [...(sent.data.results || []), ...(sent.data.ongoing || [])] : [];
-    if (sent) submitted++;
+    if (SUBMITTED.includes(st.code)) submitted++;
     const nStuck = items.filter(x => x.status === 'Chậm' || x.status === 'Vướng').length, nOver = items.filter(x => isOverdue(x, f)).length;
     stuck += nStuck; overdue += nOver;
     for (const x of items) if (needsIssue(x, f) && x.helpFrom && x.helpFrom !== HELP_SELF)
@@ -249,16 +267,34 @@ function buildSummary({ week: f, depts, reports, notices, meeting = null, prevMe
       late: ns.filter(n => n.type === 'LATE').map(n => ({ reason: REASONS[n.reason] || '', note: n.note, expectedAt: n.expectedAt, createdAt: n.createdAt })),
       attendance: md.attendance?.[d.id] || null, failed: !!md.failed?.[d.id], report: sent ? sent.data : null, draft: !sent && !!rep });
   }
-  // Rà Action Log tuần trước: trạng thái lấy từ báo cáo của bộ phận được giao (dòng có actionRef).
-  const actionReview = (prevMeeting?.data?.actions || []).map(a => {
-    const ref = `${prevMeeting.week}:${a.id}`, rep = reports.find(r => r.departmentId === a.departmentId && r.firstSubmittedAt);
-    const row = rep ? [...(rep.data.results || []), ...(rep.data.ongoing || [])].find(x => x.actionRef === ref) : null;
-    return { ...a, ref, department: deptName(a.departmentId), owner: userName(a.ownerId), status: row ? row.status : null, pct: row ? row.pct : null, overdue: row ? isOverdue(row, f) : !!(a.due && a.due <= f) };
+  // Rà Action Log (08:30–08:35): mọi việc TGĐ giao còn mở + việc của buổi liền trước; trạng thái lấy từ báo cáo đã nộp mới nhất.
+  const actionReview = actions.map(a => {
+    const row = actionRows.get(a.ref) || null;
+    return { ...a, department: deptName(a.departmentId), owner: userName(a.ownerId), status: row ? row.status : null, pct: row ? row.pct : null,
+      overdue: row ? isOverdue(row, f) : !!(a.due && a.due < f) };
   });
   const groups = [];
   for (const h of helps) { let g = groups.find(x => x.toKey === h.toKey); if (!g) groups.push(g = { toKey: h.toKey, to: h.to, list: [] }); g.list.push(h); }
   groups.sort((a, b) => (a.toKey === HELP_BGD ? -1 : b.toKey === HELP_BGD ? 1 : depts.findIndex(d => `D${d.id}` === a.toKey) - depts.findIndex(d => `D${d.id}` === b.toKey)));
   return { week: f, schedule: S, kpis: { submitted, total: depts.length, overdue, stuck, helps: helps.length }, rows, helps: groups, actionReview, meeting: md, publishedAt: meeting?.publishedAt || null };
+}
+// Bản tóm tắt cho trưởng / phó bộ phận (QC-TH-01 Điều 5): như văn bản sao chép — không họ tên, không ghi chú vắng / muộn,
+// không chi tiết báo cáo bộ phận khác (giữ bộ phận mình). Ma trận: lib/policy.js weekly.summary vs weekly.summary.detail.
+function briefSummary(sum, ownDeptId) {
+  return { ...sum, brief: true,
+    rows: sum.rows.map(r => ({ ...r, submittedBy: '', report: r.id === ownDeptId ? r.report : null,
+      absent: r.absent ? { noticed: r.absent.noticed, hasSubstitute: !!r.absent.substitute } : null, late: r.late.map(() => ({})), draft: r.id === ownDeptId ? r.draft : false, attendance: null, failed: false })),
+    // Yêu cầu hỗ trợ: bỏ nguyên nhân / giải pháp của bộ phận khác (văn bản sao chép cũng không có); Action Log: bỏ người phụ trách.
+    helps: sum.helps.map(g => ({ ...g, list: g.list.map(({ cause, solution, ...h }) => (h.fromId === ownDeptId ? { ...h, cause, solution } : h)) })),
+    actionReview: sum.actionReview.map(({ owner, ownerId, ...a }) => ({ ...a, owner: '' })),
+    meeting: { conclusions: sum.meeting?.conclusions || {} } };
+}
+
+// JSON chuẩn hoá (khoá sắp xếp đệ quy): băm SHA-256 của bản nộp kiểm lại được từ bản đọc ra CSDL (JSONB sắp lại thứ tự khoá).
+function stableStringify(v) {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v ?? null);
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(',')}]`;
+  return `{${Object.keys(v).filter(k => v[k] !== undefined).sort().map(k => `${JSON.stringify(k)}:${stableStringify(v[k])}`).join(',')}}`;
 }
 
 // Văn bản "Sao chép bản tổng hợp" — không có họ tên người phụ trách (tối thiểu hoá DLCN), dòng đầu ghi nhãn Bảo mật.
@@ -266,9 +302,9 @@ function summaryText(sum) {
   const S = sum.schedule, f = sum.week;
   const L = ['BẢO MẬT – chỉ dùng nội bộ', `TỔNG HỢP BÁO CÁO TUẦN ${fmtD(S.from)}–${fmtDY(f)} · Giao ban 08:30 ${WD[weekday(S.meetingDay)]} ${fmtDY(S.meetingDay)}`, '',
     `Đã nộp ${sum.kpis.submitted}/${sum.kpis.total} bộ phận · ${sum.kpis.stuck} chậm/vướng · ${sum.kpis.overdue} quá hạn · ${sum.kpis.helps} yêu cầu hỗ trợ`, '', 'TÌNH TRẠNG NỘP'];
-  for (const r of sum.rows) L.push(`- ${r.name}: ${r.status.label}${r.submittedAt ? ` (${fmtTime(r.submittedAt)})` : ''}${r.absent ? ` · VẮNG${r.absent.substitute ? ', có người dự thay' : ''}` : ''}`);
+  for (const r of sum.rows) L.push(`- ${r.name}: ${r.status.label}${r.submittedAt ? ` (${fmtTime(r.submittedAt)})` : ''}${r.absent ? ` · VẮNG${r.absent.substitute || r.absent.hasSubstitute ? ', có người dự thay' : ''}` : ''}`);
   if (sum.actionReview.length) {
-    L.push('', 'ACTION LOG TUẦN TRƯỚC');
+    L.push('', 'ACTION LOG ĐANG THEO DÕI');
     for (const a of sum.actionReview) L.push(`- [${a.department}] ${a.task} — ${a.status || 'chưa báo cáo'}${a.overdue && a.status !== DONE ? ', quá hạn' : ''}`);
   }
   L.push('', 'HẠNG MỤC QUÁ HẠN / CHẬM / VƯỚNG');
@@ -290,6 +326,9 @@ function compliance({ weeks, depts, byWeek, points = POINTS, now = new Date() })
     for (const f of weeks) {
       const w = byWeek[f] || { reports: [], notices: [], meeting: null };
       const S = scheduleOf(f, w.meeting), ns = w.notices.filter(n => n.departmentId === d.id);
+      if (S.skip) continue; // tuần nghỉ (Tết, lễ): không giao ban, không chấm
+      const req = w.meeting?.data?.required; // danh sách phải nộp chụp lại tại hạn nộp của tuần đó
+      if (Array.isArray(req) && !req.includes(d.id)) continue;
       const rep = w.reports.find(r => r.departmentId === d.id && r.firstSubmittedAt) || null;
       const st = submissionStatus(rep, ns, S, now);
       if (st.points) events.push({ week: f, code: st.points, label: POINT_LABEL[st.points], points: P[st.points] });
@@ -298,7 +337,8 @@ function compliance({ weeks, depts, byWeek, points = POINTS, now = new Date() })
       const att = md.attendance?.[d.id];
       const noticed = absenceNoticed(ns, S);
       if (att === 'ABSENT') events.push(noticed ? { week: f, code: 'ABSENT_NOTICED', label: POINT_LABEL.ABSENT_NOTICED, points: P.ABSENT_NOTICED } : { week: f, code: 'ABSENT_UNNOTICED', label: POINT_LABEL.ABSENT_UNNOTICED, points: P.ABSENT_UNNOTICED });
-      if (att === 'LATE' && !noticed) events.push({ week: f, code: 'LATE_ARRIVAL', label: POINT_LABEL.LATE_ARRIVAL, points: P.LATE_ARRIVAL });
+      // "Đi muộn" chỉ ghi khi muộn quá 10 phút mà không báo trước (thư ký chọn khi điểm danh) — không phụ thuộc báo vắng.
+      if (att === 'LATE') events.push({ week: f, code: 'LATE_ARRIVAL', label: POINT_LABEL.LATE_ARRIVAL, points: P.LATE_ARRIVAL });
     }
     const lost = events.reduce((n, e) => n + e.points, 0);
     return { id: d.id, name: d.name, score: Math.max(0, 100 - lost), lost, violations: events.filter(e => e.points > 0).length, events };
@@ -319,5 +359,5 @@ module.exports = {
   SOURCES, MTL_SOURCE, STATUSES, DONE, HELP_BGD, HELP_SELF, REASONS, NOTICE_TYPES, ATTENDANCE, DECISIONS, POINTS, POINT_LABEL,
   isDay, addDays, dayOf, at, weekday, currentFriday, isFriday, fmtD, fmtTime, scheduleOf,
   isOverdue, needsIssue, issueLabel, statusFromMtl, deptCandidates, buildPrefill, sanitize, validate, finalize, writeBacks,
-  submissionStatus, absenceNoticed, buildSummary, summaryText, compliance, fridaysOf,
+  submissionStatus, absenceNoticed, SUBMITTED, buildSummary, briefSummary, summaryText, compliance, fridaysOf, stableStringify,
 };

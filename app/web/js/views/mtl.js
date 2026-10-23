@@ -79,7 +79,7 @@ export async function drawMtlOverview(body, project) {
     ${tile('Trễ hạn', s.overdue, s.criticalLate ? `${s.criticalLate} trên đường găng` : 'theo kế hoạch gốc', s.overdue ? 'danger' : '', planLink(project, { st: 'OVERDUE' }), 'mtl-tile-overdue')}
     ${tile('Mốc kế tiếp', nm ? '◆' : '—', nm ? `${esc(nm.title.slice(0, 48))} · ${fmtDate(nm.baselineEnd)}` : 'không còn mốc', nm && ATTN.includes(nm.status) ? 'danger' : '', nm ? itemLink(project, nm.id) : planLink(project), 'mtl-tile-milestone')}
   </div>`;
-  const deptRows = d.byDepartment.map(r => `<tr class="clickable" data-href="${planLink(project, { dept: r.id })}" data-testid="mtl-dept-${r.code || r.id}"><td><b>${deptLink(r.id, r.name)}</b></td><td class="num">${r.items}</td>
+  const deptRows = d.byDepartment.map(r => `<tr class="clickable" data-href="${planLink(project, { dept: r.id })}" data-testid="mtl-dept-${esc(r.code || r.id)}"><td><b>${deptLink(r.id, r.name)}</b></td><td class="num">${r.items}</td>
       <td class="num">${pct(r.plannedPct)}</td><td class="num">${pct(r.actualPct)}</td><td class="num"><span class="pill ${spiTone(r.spi)}">${r.spi == null ? '—' : num(r.spi, 2)}</span></td>
       <td class="num${r.behind ? ' warn-t' : ''}">${r.behind}</td><td class="num${r.overdue ? ' danger-t' : ''}">${r.overdue}</td><td class="num">${r.criticalLate || 0}</td><td class="num"><b class="${scoreTone(r.score)}-t">${r.score ?? '—'}</b></td></tr>`).join('');
   const ms = d.milestones.map(m => `<tr class="clickable" data-href="${itemLink(project, m.id)}"><td class="code">${esc(m.step || '')}</td><td>${m.critical ? '<span class="crit" title="Đường găng">●</span> ' : ''}${esc(m.title)}</td><td class="nowrap">${fmtDate(m.baselineEnd)}</td>

@@ -53,9 +53,12 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
       await wb.xlsx.load(buf);
       const cell = c => { const v = c?.value; if (v == null) return null; if (v instanceof Date) return v; if (typeof v === 'object') { const r = v.result ?? v.text ?? (v.richText ? v.richText.map(t => t.text).join('') : null); return r instanceof Date || typeof r === 'number' ? r : r == null ? null : String(r); } return v; };
       const sheets = [];
+      // Giới hạn kích thước: tệp định dạng cả cột (nhiều dòng rỗng có style) không được chặn event loop / làm hết bộ nhớ.
+      const MAX_ROWS = 3000, MAX_COLS = 40;
       for (const ws of wb.worksheets) {
+        if (ws.actualRowCount > MAX_ROWS) fail(422, `Sheet "${ws.name}" có ${ws.actualRowCount} dòng dữ liệu, vượt ${MAX_ROWS} — tách tệp`, 'IMPORT_TOO_LARGE');
         const rows = [];
-        ws.eachRow({ includeEmpty: true }, (row, n) => { const vals = []; for (let i = 1; i <= Math.max(row.cellCount, 10); i++) vals.push(cell(row.getCell(i))); rows[n - 1] = vals; });
+        ws.eachRow({ includeEmpty: false }, (row, n) => { const vals = []; for (let i = 1; i <= Math.min(Math.max(row.cellCount, 10), MAX_COLS); i++) vals.push(cell(row.getCell(i))); rows[n - 1] = vals; });
         for (let i = 0; i < rows.length; i++) rows[i] = rows[i] || [];
         const parsed = M.parseMtlRows(rows);
         if (parsed && parsed.items.length) sheets.push({ name: ws.name, ...parsed });
@@ -75,7 +78,7 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
       const existing = existingPlan ? await prisma.workItem.findMany({ where: { planId: existingPlan.id, archivedAt: null }, select: { id: true, planCode: true, baselineStart: true, baselineEnd: true } }) : [];
       const byCode = new Map(existing.filter(e => e.planCode).map(e => [e.planCode, e]));
       // MTL bộ phận: khớp "Thuộc bước" với hạng mục MTL tổng (kế hoạch MASTER mới nhất).
-      const master = kind === 'DEPARTMENT' ? await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, plan: { kind: 'MASTER' } }, select: { id: true, planCode: true, title: true, progress: true, state: { select: { category: true } }, _count: { select: { children: { where: { archivedAt: null } } } } }, orderBy: { id: 'desc' } }) : [];
+      const master = kind === 'DEPARTMENT' ? await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, plan: { kind: 'MASTER' } }, select: { id: true, planCode: true, title: true, progress: true, leadDepartmentId: true, supportDepartments: { select: { departmentId: true } }, state: { select: { category: true } }, _count: { select: { children: { where: { archivedAt: null } } } } }, orderBy: { id: 'desc' } }) : [];
       const masterByCode = new Map(); for (const m of master) if (m.planCode && !masterByCode.has(m.planCode)) masterByCode.set(m.planCode, m);
       const rebaseline = req.body.rebaseline === '1' || req.body.rebaseline === 'true';
       if (rebaseline && asLeader) fail(403, 'Chỉ PMO được đặt lại kế hoạch gốc', 'FORBIDDEN');
@@ -85,7 +88,9 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
         const owner = kind === 'DEPARTMENT' ? { leadDepartmentId: departmentId, supportDepartmentIds: [], externalParty: '' } : M.splitOwner(it.ownerText, departments);
         const assignees = kind === 'DEPARTMENT' ? matchPeople(it.ownerText.replace(/\//g, '\n'), people) : { ids: [], unmatched: [] };
         if (kind === 'MASTER' && !owner.leadDepartmentId) unmatchedOwners.set(it.ownerText || '(trống)', (unmatchedOwners.get(it.ownerText || '(trống)') || 0) + 1);
-        const parent = it.parentStep ? masterByCode.get(it.parentStep) : null;
+        let parent = it.parentStep ? masterByCode.get(it.parentStep) : null;
+        // Lãnh đạo bộ phận chỉ gắn dòng con vào bước tổng bộ phận mình chủ trì hoặc được ghi là phối hợp (không đổi tiến độ bước của bộ phận khác).
+        if (parent && asLeader && parent.leadDepartmentId !== departmentId && !parent.supportDepartments.some(d => d.departmentId === departmentId)) parent = null;
         if (it.parentStep && !parent) unmatchedParents.add(it.parentStep);
         const prev = it.step ? byCode.get(it.step) : null;
         const baselineChanged = !!prev && !!prev.baselineStart && (prev.baselineStart.getTime() !== dates.start?.getTime() || prev.baselineEnd?.getTime() !== dates.end?.getTime());
@@ -140,7 +145,7 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
         await tx.projectMember.createMany({ data: staff.map(u => ({ projectId: project.id, userId: u.id, role: 'MEMBER' })), skipDuplicates: true });
         await audit(req, 'MTL_IMPORT', 'Plan', planRow.id, null, { projectId: project.id, kind, departmentId, sheet: sheet.name, fileHash, created, updated, rebased, byDepartmentLeader: asLeader }, tx);
         return { planId: planRow.id, created, updated, rebased, members: staff.length };
-      });
+      }, { timeout: 120_000, maxWait: 10_000 }); // MTL thật nhiều dòng: mặc định 5 s không đủ
       bus.project(project.id, req.user.id);
       res.json({ ...summary, ...result });
     } finally { if (file) await fs.rm(file.path, { force: true }).catch(() => {}); }
@@ -207,7 +212,7 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
       }
       await audit(req, data.t0Date ? 'MTL_T0_CHANGE' : 'UPDATE', 'Project', project.id, { t0Date: project.t0Date, alertConfig: project.alertConfig }, { ...data, reason, moved }, tx);
       return { project: p, moved };
-    });
+    }, { timeout: 60_000, maxWait: 10_000 });
     res.json({ ok: true, moved: result.moved, alertConfig: M.alertConfigOf(result.project), t0Date: result.project.t0Date });
   });
 

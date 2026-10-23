@@ -756,6 +756,7 @@ model WeeklyNotice {
   note         String    @default("")
   expectedAt   DateTime? // LATE: giờ nộp dự kiến
   substituteId Int?      // ABSENT: người dự thay
+  receivedAt   DateTime? // thư ký nhập hộ tin nhắn báo: giờ nhận tin (tính đúng hạn theo giờ này)
   createdById  Int
   createdAt    DateTime  @default(now())
 
@@ -773,4 +774,22 @@ model WeeklyMeeting {
   updatedById Int?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+// Mỗi lần nộp / gửi lại một bản bất biến kèm SHA-256 (Điều 6: bản sửa được ghi nhận; đối chiếu khi chấm "không đạt"; DET-05).
+model WeeklyReportVersion {
+  id            Int      @id @default(autoincrement())
+  reportId      Int
+  n             Int      // lần nộp thứ n (1 = lần đầu)
+  departmentId  Int
+  week          String
+  data          Json
+  sha256        String
+  submittedAt   DateTime
+  submittedById Int
+  onBehalf      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@unique([reportId, n])
+  @@index([week, departmentId])
 }

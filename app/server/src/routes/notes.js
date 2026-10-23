@@ -1,6 +1,7 @@
 // Ghi chú / việc cá nhân trong "Việc của tôi". Chỉ chủ sở hữu đọc/sửa được — không có ngoại lệ cho quản trị.
 // Nội dung ghi chú không được ghi vào nhật ký hệ thống (chỉ ghi siêu dữ liệu khi chuyển thành công việc).
 const { fail, intParam, optionalDate, text } = require('../lib/http');
+const MG = require('../services/mtl-guard');
 const { loadProject, assertRegisterManager } = require('../services/access');
 const W = require('../services/workitems');
 const bus = require('../services/bus');
@@ -54,6 +55,8 @@ module.exports = function mountNotes(app, { prisma, auth, audit }) {
     if (note.convertedItemId) fail(409, 'Ghi chú đã được chuyển thành công việc', 'ALREADY_CONVERTED');
     const { project, rights, member } = await loadProject(prisma, req.user, intParam(req.body.projectId, 'Dự án'), 'edit');
     assertRegisterManager(project, rights, member);
+    // MTL: thêm hạng mục từ ghi chú = sửa kế hoạch → chỉ người quản lý dự án (services/mtl-guard.js).
+    MG.mtlBulkGuard(req.user, project, rights);
     const item = await prisma.$transaction(async tx => {
       const created = await W.createWorkItem(tx, { project, user: req.user, rights, source: 'NOTE', input: {
         title: note.title, descriptionHtml: note.body ? '<p>' + note.body.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])).replace(/\n/g, '<br>') + '</p>' : '',

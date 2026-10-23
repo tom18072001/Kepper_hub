@@ -2,6 +2,7 @@
 const { fail, intParam, optionalInt, optionalDate, text, oneOf } = require('../lib/http');
 const { loadProject, projectRights, visibleProjectsWhere, canCreateProjectIn } = require('../services/access');
 const { APPROVER_TYPES, approverIds } = require('../services/approval');
+const { permissionScope } = require('../lib/permissions');
 
 const CATEGORIES = ['BACKLOG', 'UNSTARTED', 'STARTED', 'REVIEW', 'COMPLETED', 'CANCELLED', 'OTHER'];
 // OTHER = cột tự do (lịch tuần, danh sách theo chủ đề…): chỉ là nhãn cột, không tính tiến độ, không kích hoạt duyệt.
@@ -96,6 +97,11 @@ module.exports = function mountProjects(app, { prisma, auth, audit }) {
     await checkApprovers(prisma, steps);
     const defaultApprovalLevels = defaultLevelsInput(req.body.defaultApprovalLevels) ?? null;
     const mtl = req.body.kind === 'MTL' || req.body.template === 'MTL';
+    // Dự án MTL là kế hoạch chính thức (vào báo cáo tuần, cảnh báo của mọi bộ phận): chỉ Ban GĐ, người quản lý dự án toàn công ty
+    // hoặc PMO do Ban GĐ chỉ định được tạo — trưởng / phó bộ phận không tự tạo MTL để thành "người quản lý dự án".
+    if (mtl && !(req.user.role === 'director' || permissionScope(req.user, 'projects.manage', 'OPERATE') === 'SYSTEM'
+      || ((await require('../services/weekly-data').weeklyConfig(prisma)).pmoUserIds || []).includes(req.user.id)))
+      fail(403, 'Chỉ Ban Giám đốc hoặc PMO được chỉ định tạo dự án theo Master Timeline', 'FORBIDDEN');
     const t0 = mtl ? optionalDate(req.body.t0Date, 'Ngày T0') : null;
     if (mtl && !t0) fail(422, 'Nhập ngày T0 (tháng bắt đầu của Master Timeline)', 'T0_REQUIRED');
     const project = await prisma.$transaction(async tx => {

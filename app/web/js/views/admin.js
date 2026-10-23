@@ -310,11 +310,26 @@ const FIELD = {
 };
 const HIDDEN_FIELDS = new Set(['id', 'sensitive', 'department', 'createdAt', 'lastLoginAt', 'createdById', 'updatedById', 'updatedAt', 'passwordHash']);
 let adminUsersCache = null;
+// Tình trạng vận hành: sao lưu gần nhất, job lịch chạy (lần chạy, lỗi). Chỉ thông tin hệ thống.
+function opsBox(ops) {
+  if (!ops) return '';
+  const t = v => (v ? new Date(v).toLocaleString('vi-VN') : '—');
+  const b = ops.backup || {};
+  const jobs = Object.entries(ops.jobs || {}).sort((x, y) => x[0].localeCompare(y[0]));
+  return `<details class="card" data-testid="ops-box"${ops.problems.length ? ' open' : ''} style="margin-bottom:12px;padding:10px 14px">
+    <summary><b>Tình trạng vận hành</b> ${ops.problems.length ? `<span class="chip chip-OVERDUE">${ops.problems.length} cần xử lý</span>` : '<span class="chip">Bình thường</span>'}</summary>
+    ${ops.problems.length ? `<ul>${ops.problems.map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
+    <p class="sm">Sao lưu đạt gần nhất: <b>${esc(t(b.lastOk))}</b>${b.sizeKb ? ` · ${esc(String(b.sizeKb))} KB` : ''} · mã hoá: ${b.encrypted ? 'có' : 'không'} · bản ngoài máy: ${b.copied ? 'có' : 'không'}${b.lastFailAt ? ` · lỗi gần nhất: ${esc(t(b.lastFailAt))}` : ''}</p>
+    <table class="table sm"><thead><tr><th>Job</th><th>Lần chạy gần nhất</th><th>Kết quả</th></tr></thead><tbody>
+    ${jobs.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(t(v.at))}</td><td>${v.ok ? 'Đạt' : `Lỗi: ${esc(v.error || '')}`}</td></tr>`).join('') || '<tr><td colspan="3" class="empty">Chưa có job nào chạy.</td></tr>'}</tbody></table>
+  </details>`;
+}
 async function renderAudit(root, params) {
   const page = Number(params.get('page')) || 1;
   const q = new URLSearchParams({ page, pageSize: 50 });
   for (const k of AUDIT_FILTERS) if (params.get(k)) q.set(k, params.get(k));
-  const [d, people] = await Promise.all([api('/api/admin/audit?' + q), adminUsersCache || (can('admin.users') ? api('/api/admin/users') : Promise.resolve(store.users)).catch(() => store.users)]);
+  const [d, people, ops] = await Promise.all([api('/api/admin/audit?' + q), adminUsersCache || (can('admin.users') ? api('/api/admin/users') : Promise.resolve(store.users)).catch(() => store.users),
+    api('/api/admin/ops').catch(() => null)]);
   adminUsersCache = people;
   const pages = Math.max(1, Math.ceil(d.total / d.pageSize));
   const { actions, entities } = d.labels;
@@ -323,6 +338,7 @@ async function renderAudit(root, params) {
   const link = p => { const x = new URLSearchParams(); for (const k of AUDIT_FILTERS) if (params.get(k)) x.set(k, params.get(k)); x.set('page', p); return '#/admin/audit?' + x; };
   const filtered = AUDIT_FILTERS.some(k => params.get(k));
   root.innerHTML = `<div class="page-head"><h1>Nhật ký hệ thống</h1><span class="muted">${d.total} bản ghi</span></div>
+    ${opsBox(ops)}
     <form class="filters" id="auditFilters" data-testid="audit-filters">
       <select name="action" aria-label="Hành động" data-testid="audit-action"><option value="">Mọi hành động</option>${sortBy(actions).map(([k, v]) => opt(k, v, 'action')).join('')}</select>
       <select name="entity" aria-label="Đối tượng" data-testid="audit-entity"><option value="">Mọi đối tượng</option>${sortBy(entities).map(([k, v]) => opt(k, v, 'entity')).join('')}</select>

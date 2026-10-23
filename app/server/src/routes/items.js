@@ -12,6 +12,13 @@ const { describe: describeRule } = require('../services/recurring');
 const { stageOf } = require('../services/stage');
 const { setProgress } = require('../services/mtl-progress');
 
+// Kepper (MTL) — mọi kiểm quy định phân quyền dữ liệu đi qua services/mtl-guard.js (lib/policy.js).
+const { MTL_PLAN_KEYS, mtlGuard, mtlCreateGuard } = require('../services/mtl-guard');
+const sameIds = (a, b) => { const x = [...new Set(a.map(Number))].sort(), y = [...new Set(b.map(Number))].sort(); return x.length === y.length && x.every((v, i) => v === y[i]); };
+const dayOf = v => (v == null || v === '' ? null : new Date(v).getTime());
+const DATE_KEYS = new Set(['dueDate', 'startDate']);
+const fieldChanged = (body, item, k) => body[k] !== undefined && (DATE_KEYS.has(k) ? dayOf(body[k]) !== (item[k] ? item[k].getTime() : null) : String(body[k] ?? '') !== String(item[k] ?? ''));
+
 const { PRIORITIES, BOARD_INCLUDE, boardItem } = W;
 
 function itemFilters(query) {
@@ -81,7 +88,8 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       if (parent.project.id !== project.id) fail(422, 'Việc cha không thuộc dự án');
     }
     const created = await prisma.$transaction(async tx => {
-      const item = await W.createWorkItem(tx, { project, user: req.user, rights, input: req.body || {} });
+      const input = await mtlCreateGuard(tx, req.user, project, rights, req.body || {});
+      const item = await W.createWorkItem(tx, { project, user: req.user, rights, input });
       await audit(req, 'CREATE', 'WorkItem', item.id, null, { code: `${project.key}-${item.number}`, title: item.title }, tx);
       return item;
     });
@@ -190,6 +198,21 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       const role = await dispatchRole(tx, req.user, rights, project, item);
       const toStateEarly = body.stateId !== undefined && Number(body.stateId) !== item.stateId ? await tx.workflowState.findFirst({ where: { id: intParam(body.stateId, 'Trạng thái'), projectId: project.id } }) : null;
       assertDispatchChange(role, { toState: toStateEarly, keys: Object.keys(body).filter(k => k !== 'stateId') });
+      // Kepper (MTL): kiểm quy định phân quyền trước mọi thay đổi (chỉ tính trường thực sự đổi).
+      const pctChanged = body.progress !== undefined && Number(body.progress) !== item.progress;
+      const stateChanged = body.stateId !== undefined && Number(body.stateId) !== item.stateId;
+      const planChanged = MTL_PLAN_KEYS.some(k => fieldChanged(body, item, k));
+      let structChanged = false, assignChanged = false;
+      if (project.kind === 'MTL') {
+        const supports = body.supportDepartmentIds !== undefined ? (await tx.workItemDepartment.findMany({ where: { workItemId: id } })).map(d => d.departmentId) : [];
+        structChanged = (body.parentId !== undefined && Number(body.parentId || 0) !== Number(item.parentId || 0))
+          || (body.leadDepartmentId !== undefined && Number(body.leadDepartmentId || 0) !== Number(item.leadDepartmentId || 0))
+          || (Array.isArray(body.supportDepartmentIds) && !sameIds(body.supportDepartmentIds, supports));
+        assignChanged = (Array.isArray(body.assigneeIds) && !sameIds(body.assigneeIds, item.assignees.map(a => a.userId)))
+          || (Array.isArray(body.supporterIds) && !sameIds(body.supporterIds, (await tx.workItemSupporter.findMany({ where: { workItemId: id } })).map(x => x.userId)))
+          || (body.assignedById !== undefined && Number(body.assignedById || 0) !== Number(item.assignedById || 0));
+      }
+      await mtlGuard(tx, req.user, project, rights, id, { progress: pctChanged || stateChanged, plan: planChanged, struct: structChanged, assign: assignChanged, manualPct: pctChanged });
       const data = {}, changed = {};
       if (body.title !== undefined) data.title = text(body.title, 'Tiêu đề', { required: true, max: 300 });
       if (body.descriptionHtml !== undefined) { data.descriptionHtml = sanitizeHtml(body.descriptionHtml); data.descriptionText = htmlToText(data.descriptionHtml); }
@@ -353,6 +376,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       if (item.archivedAt) fail(409, 'Việc đã được lưu trữ', 'ARCHIVED');
       const toState = await tx.workflowState.findFirst({ where: { id: intParam(req.body.stateId, 'Trạng thái'), projectId: project.id } });
       if (!toState) fail(422, 'Trạng thái không hợp lệ', 'INVALID_STATE');
+      if (toState.id !== item.stateId) await mtlGuard(tx, req.user, project, rights, id, { progress: true });
       if (toState.id !== item.stateId) assertDispatchChange(await dispatchRole(tx, req.user, rights, project, { ...item, assignees: await tx.workItemAssignee.findMany({ where: { workItemId: id } }) }), { toState });
       const t = await W.transition(tx, { project, rights, item, toState, overrideWip: req.body.overrideWip });
       const position = await W.positionBetween(tx, toState.id, optionalInt(req.body.afterId, 'Thẻ phía trên'), optionalInt(req.body.beforeId, 'Thẻ phía dưới'));
@@ -381,6 +405,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
   app.post('/api/items/:id/checklist', auth, async (req, res) => {
     const id = intParam(req.params.id);
     const { project, rights } = await loadItem(prisma, req.user, id, 'edit');
+    await mtlGuard(prisma, req.user, project, rights, id, { progress: true });
     const count = await prisma.checklistItem.count({ where: { workItemId: id } });
     if (count >= 100) fail(422, 'Tối đa 100 mục checklist');
     const row = await prisma.checklistItem.create({ data: { workItemId: id, title: text(req.body.title, 'Nội dung', { required: true, max: 300 }), position: count } });
@@ -393,6 +418,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
     const row = await prisma.checklistItem.findUnique({ where: { id: intParam(req.params.id) } });
     if (!row) fail(404, 'Không tìm thấy mục checklist', 'NOT_FOUND');
     const { project, rights } = await loadItem(prisma, req.user, row.workItemId, 'edit');
+    await mtlGuard(prisma, req.user, project, rights, row.workItemId, { progress: true });
     const data = {};
     if (req.body.title !== undefined) data.title = text(req.body.title, 'Nội dung', { required: true, max: 300 });
     if (req.body.done !== undefined) data.done = !!req.body.done;
@@ -408,6 +434,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
     const row = await prisma.checklistItem.findUnique({ where: { id: intParam(req.params.id) } });
     if (!row) fail(404, 'Không tìm thấy mục checklist', 'NOT_FOUND');
     const { project, rights } = await loadItem(prisma, req.user, row.workItemId, 'edit');
+    await mtlGuard(prisma, req.user, project, rights, row.workItemId, { progress: true });
     await prisma.checklistItem.delete({ where: { id: row.id } });
     await syncChecklistProgress(req, project, rights, row.workItemId);
     bus.item(project.id, row.workItemId, req.user.id);
