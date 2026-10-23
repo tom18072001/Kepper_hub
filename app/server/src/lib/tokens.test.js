@@ -18,3 +18,19 @@ test('Token Claude: đọc mọi thứ người dùng xem được trừ xuất 
   const t = T.newToken();
   assert.ok(T.isToken(t) && t.length > 40); assert.equal(T.sha256(t).length, 64); assert.ok(!T.isToken('eyJhbGciOi'));
 });
+
+test('Token Claude: biến thể đường dẫn (/ cuối, chữ hoa, %xx, //) không lách được danh sách chặn', () => {
+  const R = ['read'], W = ['read', 'write'];
+  for (const p of ['/api/projects/3/export.xlsx/', '/api/projects/3/export.XLSX', '/api/summary.xlsx/', '/api/reports/weekly.docx/', '/api/stream/', '/API/me/tokens',
+    '/api/attachments/5/download/', '/api/attachments/5/preview', '/api/attachments/5/PREVIEW/', '/api/me/viber', '/api/ADMIN/users', '/api/projects/3/export%2Exlsx', '//api//stream',
+    '/api/hrm/people/7/identity/', '/api/projects/3/register.xlsx?x=1'])
+    assert.ok(T.tokenDenied('GET', p, W), p);
+  // Ghi: biến thể không mở thêm đường (chuẩn hoá xong vẫn phải khớp danh sách cho phép).
+  assert.equal(T.tokenDenied('PATCH', '/api/items/12/', W), null);
+  assert.ok(T.tokenDenied('POST', '/api/weekly/submit/', W));
+  assert.ok(T.tokenDenied('DELETE', '/API/items/12', W));
+  assert.equal(T.normPath('/API//Items/12/?a=1'), '/api/items/12');
+  assert.throws(() => T.assertNotVia({ via: 'mcp' }), /Claude/);
+  assert.doesNotThrow(() => T.assertNotVia({}));
+  assert.ok(T.tokenDenied('GET', '/api/projects/3/export.xlsx', R));
+});

@@ -219,6 +219,7 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
   // PMO tải cho mọi bộ phận; lãnh đạo bộ phận tải cho bộ phận mình. Bộ phận đã có MTL → xuất đúng các hạng mục đó (sửa rồi nhập lại theo "Bước");
   // chưa có → mỗi hạng mục MTL tổng của bộ phận (chủ trì hoặc phối hợp) thành một dòng con gợi ý để chi tiết hoá.
   app.get('/api/projects/:id/mtl-template.xlsx', auth, async (req, res) => {
+    require('../lib/tokens').assertNotVia(req);
     const { project, rights } = await loadProject(prisma, req.user, intParam(req.params.id));
     if (project.kind !== 'MTL') fail(422, 'Dự án này không theo Master Timeline', 'NOT_MTL');
     const departmentId = intParam(req.query.departmentId, 'Bộ phận');

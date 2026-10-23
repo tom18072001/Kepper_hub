@@ -48,6 +48,7 @@ module.exports = function mountExcel(app, { prisma, auth, audit, config }) {
   const upload = multer({ dest: path.join(config.uploadTmpDir, 'workhub-import'), limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
 
   app.get('/api/projects/:id/export.xlsx', auth, async (req, res) => {
+    require('../lib/tokens').assertNotVia(req);
     const { project, rights } = await loadProject(prisma, req.user, intParam(req.params.id));
     // MTL: quy định xuất riêng (người quản lý dự án / Ban GĐ — lib/policy.js); dự án khác: quyền xuất Excel thường.
     if (project.kind === 'MTL') MG.mtlExportGuard(req.user, project, rights);
@@ -73,6 +74,7 @@ module.exports = function mountExcel(app, { prisma, auth, audit, config }) {
   });
 
   app.get('/api/projects/:id/import-template.xlsx', auth, async (req, res) => {
+    require('../lib/tokens').assertNotVia(req);
     const { project } = await loadProject(prisma, req.user, intParam(req.params.id), 'edit');
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Cong viec');

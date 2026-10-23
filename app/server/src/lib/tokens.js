@@ -13,8 +13,10 @@ const sha256 = s => crypto.createHash('sha256').update(s).digest('hex');
 const newToken = () => PREFIX + crypto.randomBytes(32).toString('base64url');
 const isToken = s => typeof s === 'string' && s.startsWith(PREFIX) && s.length > 20;
 
-// GET bị chặn với token: xuất tệp hàng loạt, luồng realtime (AI không cần), tải tệp đính kèm gốc.
-const READ_DENY = [/\.(xlsx|docx|pdf)$/, /^\/api\/stream$/, /^\/api\/attachments\/\d+\/download$/, /^\/api\/admin\//, /^\/api\/me\/tokens/];
+// GET bị chặn với token: xuất tệp, tải / xem tệp đính kèm gốc, luồng realtime (AI không cần), quản trị, token, mã liên kết Viber.
+// Số định danh đầy đủ (CCCD): không bao giờ qua Claude — route cũng tự chặn (hai lớp).
+const READ_DENY = [/\.(xlsx|docx|pdf|csv|zip)$/, /^\/api\/stream$/, /^\/api\/attachments\/\d+\/(download|preview)$/, /^\/api\/admin(\/|$)/, /^\/api\/me\/tokens(\/|$)/,
+  /^\/api\/me\/viber(\/|$)/, /^\/api\/hrm\/people\/\d+\/identity$/];
 // Ghi cho phép với phạm vi write (khớp method + đường dẫn). Mọi đường khác → 403 "làm trên giao diện".
 const WRITE_ALLOW = [
   ['PATCH', /^\/api\/items\/\d+$/],                 // % / nội dung / người phụ trách — vẫn qua mtl-guard + policy
@@ -33,13 +35,25 @@ const WRITE_ALLOW = [
   ['POST', /^\/api\/hrm\/leaves$/],
 ];
 
+// Chuẩn hoá đường dẫn như Express 5 khớp route (không phân biệt hoa thường, bỏ "/" cuối) — và chặt hơn: giải mã %xx, gộp "//".
+// Không chuẩn hoá thì "/api/projects/3/export.xlsx/" hay ".XLSX" lọt qua danh sách chặn mà vẫn tới đúng route.
+function normPath(p) {
+  let s = String(p || '').split('?')[0];
+  try { s = decodeURIComponent(s); } catch { /* giữ nguyên */ }
+  return s.toLowerCase().replace(/\/{2,}/g, '/').replace(/\/+$/, '') || '/';
+}
 // Trả về null nếu được phép, hoặc lý do từ chối.
-function tokenDenied(method, path, scopes) {
+function tokenDenied(method, rawPath, scopes) {
   const m = String(method).toUpperCase();
+  const path = normPath(rawPath);
   if (m === 'GET' || m === 'HEAD') return READ_DENY.some(re => re.test(path)) ? 'Thao tác này không làm qua Claude (xuất tệp / quản trị) — làm trên giao diện Kepper' : null;
   if (!scopes.includes('write')) return 'Token chỉ đọc — tạo token có quyền ghi để Claude cập nhật';
   return WRITE_ALLOW.some(([mm, re]) => mm === m && re.test(path)) ? null
     : 'Thao tác này cần người dùng tự làm trên giao diện Kepper (nộp, phê duyệt, xoá, phát hành, quản trị)';
 }
 
-module.exports = { PREFIX, MAX_DAYS, SCOPES, sha256, newToken, isToken, tokenDenied, WRITE_ALLOW, READ_DENY };
+// Lớp thứ hai trong từng route xuất / tải tệp: lời gọi qua token (req.via) bị từ chối dù danh sách chặn có sót.
+function assertNotVia(req) {
+  if (req.via) { const e = new Error('Xuất / tải tệp không làm qua Claude — làm trên giao diện Kepper'); e.status = 403; e.code = 'NOT_VIA_AI'; throw e; }
+}
+module.exports = { assertNotVia, PREFIX, MAX_DAYS, SCOPES, sha256, newToken, isToken, tokenDenied, normPath, WRITE_ALLOW, READ_DENY };
