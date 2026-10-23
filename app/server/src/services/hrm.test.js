@@ -59,23 +59,66 @@ test('Bảng công tháng: lễ, cuối tuần, nghỉ phép, thiếu công, gi�
   assert.equal(st('2026-09-16'), 'FUTURE');
 });
 
-test('Mã hoá theo trường: AES-256-GCM, khoá sai → lỗi, máy chạy thiếu khoá → không chạy', () => {
+test('Mã hoá theo trường: AES-256-GCM gắn chủ sở hữu (AAD), khoá sai → lỗi, máy chạy thiếu khoá → không chạy', () => {
   const env = { HR_ENC_KEY: 'a'.repeat(64) };
   C._reset();
-  const enc = C.encrypt('001090012345', env);
-  assert.match(enc, /^v1:/);
-  assert.notEqual(enc, C.encrypt('001090012345', env)); // IV ngẫu nhiên
-  assert.equal(C.decrypt(enc, env), '001090012345');
+  const ctx = C.AAD.identity(7);
+  const enc = C.encrypt('001090012345', ctx, env);
+  assert.match(enc, /^v1:k1:/);
+  assert.notEqual(enc, C.encrypt('001090012345', ctx, env)); // IV ngẫu nhiên
+  assert.equal(C.decrypt(enc, ctx, env), '001090012345');
+  assert.throws(() => C.decrypt(enc, C.AAD.identity(8), env)); // chép bản mã sang hồ sơ người khác → không giải mã được
+  assert.equal(C.tryDecrypt(enc, C.AAD.salary(7), env), null);
+  assert.throws(() => C.encrypt('x', undefined, env), /AAD/);
   C._reset();
-  assert.throws(() => C.decrypt(enc, { HR_ENC_KEY: 'b'.repeat(64) }));
+  assert.throws(() => C.decrypt(enc, ctx, { HR_ENC_KEY: 'b'.repeat(64) }));
   C._reset();
-  assert.equal(C.tryDecrypt(enc, { HR_ENC_KEY: 'b'.repeat(64) }), null);
+  assert.throws(() => C.decrypt(enc, ctx, { HR_ENC_KEY: 'a'.repeat(64), HR_ENC_KEY_ID: 'k2' }), /khoá/);
   C._reset();
   assert.throws(() => C.keyOf({ NODE_ENV: 'production' }), /HR_ENC_KEY/);
   C._reset();
   assert.throws(() => C.keyOf({ HR_ENC_KEY: 'short' }), /32 byte/);
   C._reset();
   assert.equal(C.last4('0010 9001 2345'), '2345');
-  assert.equal(C.encrypt('', env), null);
+  assert.equal(C.encrypt('', ctx, env), null);
   C._reset();
+});
+
+test('Nghỉ nửa ngày: giờ vào / ra tính theo nghỉ trưa; bảng công HALF_LEAVE, cộng 0,5 ngày', () => {
+  const t = s => new Date(`2026-09-07T${s}:00+07:00`);
+  assert.deepEqual(H.lateEarly(t('13:30'), t('17:30'), cfg, 'AM'), { minutesLate: 0, minutesEarly: 0 });
+  assert.deepEqual(H.lateEarly(t('08:00'), t('12:00'), cfg, 'PM'), { minutesLate: 0, minutesEarly: 0 });
+  assert.deepEqual(H.lateEarly(t('13:30'), t('17:30'), cfg), { minutesLate: 330, minutesEarly: 0 });
+  const recs = [{ day: '2026-09-07', checkIn: t('13:31'), checkOut: t('17:35') }];
+  const leaves = [{ id: 1, status: 'APPROVED', type: 'ANNUAL', halfDay: 'AM', fromDate: new Date('2026-09-07T00:00:00+07:00'), toDate: new Date('2026-09-07T00:00:00+07:00') },
+    { id: 2, status: 'APPROVED', type: 'UNPAID', halfDay: 'NONE', fromDate: new Date('2026-09-08T00:00:00+07:00'), toDate: new Date('2026-09-08T00:00:00+07:00') }];
+  const sheet = H.monthSheet('2026-09', recs, leaves, cfg, '2026-09-09', { startDate: new Date('2026-09-03T00:00:00+07:00') });
+  const day = d => sheet.find(x => x.day === d);
+  assert.equal(day('2026-09-07').status, 'HALF_LEAVE');
+  assert.equal(day('2026-09-07').minutesLate, 0);
+  assert.equal(day('2026-09-01').status, 'NOT_EMPLOYED');
+  const tt = H.sheetTotals(sheet);
+  assert.equal(tt.leavePaid, 0.5);
+  assert.equal(tt.leaveUnpaid, 1);
+  assert.equal(tt.workdays, 20); // 03/09 → 30/09, trừ 2/9 (lễ, trước ngày vào), cuối tuần
+});
+
+test('Đơn qua năm tách số ngày theo năm; phép năm tháng vào làm theo quy tắc ≥ 50%', () => {
+  assert.equal(H.leaveDaysInYear('2026-12-31', '2027-01-05', 'NONE', 2026, cfg), 1);
+  assert.equal(H.leaveDaysInYear('2026-12-31', '2027-01-05', 'NONE', 2027, cfg), 3); // 01/01 (chưa khai ngày lễ 2027 → tính là ngày làm việc), 04, 05
+  assert.deepEqual(H.yearsOf('2026-12-31', '2027-01-05'), [2026, 2027]);
+  assert.equal(H.hasHolidays(2026, cfg), true);
+  assert.equal(H.hasHolidays(2027, cfg), false);
+  assert.equal(H.annualQuota(2026, new Date('2026-10-26T00:00:00+07:00'), cfg), 2); // ngày 26/10: < 50% ngày làm việc tháng 10 → tính từ tháng 11
+  assert.equal(H.annualQuota(2026, new Date('2026-10-05T00:00:00+07:00'), cfg), 3);
+});
+
+test('CSV máy chấm công: chuẩn hoá giờ / ngày; ngày không có thật bị từ chối', () => {
+  assert.equal(H.normTime('8:05'), '08:05');
+  assert.equal(H.normTime('08:05:12'), '08:05');
+  assert.equal(H.normTime('24:00'), null);
+  assert.equal(H.normDay('5/9/2026'), '2026-09-05');
+  assert.equal(H.normDay('2026-09-05'), '2026-09-05');
+  assert.equal(H.normDay('30/02/2026'), null);
+  assert.equal(H.normDay('2026-02-30'), null);
 });

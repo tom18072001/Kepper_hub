@@ -21,7 +21,8 @@ const POINT_LABEL = {
 };
 
 // ---------- Ngày / tuần (chuỗi YYYY-MM-DD theo giờ VN) ----------
-const isDay = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s + 'T00:00:00Z'));
+// Ngày có thật (2026-02-30 → false: Date.parse tự chuyển sang 02/03).
+const isDay = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s + 'T00:00:00Z')) && new Date(s + 'T00:00:00Z').toISOString().slice(0, 10) === s;
 const addDays = (s, n) => new Date(Date.parse(s + 'T00:00:00Z') + n * DAY).toISOString().slice(0, 10);
 const dayOf = d => (d ? new Date(new Date(d).getTime() + H7).toISOString().slice(0, 10) : '');
 const at = (day, hh, mm) => new Date(Date.parse(`${day}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00+07:00`));

@@ -1,7 +1,7 @@
 // Playground CRM / HRM (MODULES=crm,hrm, dữ liệu mẫu GIẢ): quyền theo bộ phận phụ trách / người phụ trách nhân sự; đơn nghỉ → lãnh đạo duyệt;
 // chấm công trên giao diện; số CCCD chỉ hiện khi bấm (ghi nhật ký), không qua token Claude.
 const { test, expect } = require('@playwright/test');
-const { login, apiAs, toast, vnDate } = require('./helpers');
+const { login, apiAs, toast, vnDate, NEW_PASSWORD } = require('./helpers');
 
 const weekdayAhead = n => { for (let i = n; ; i++) { const d = vnDate(i); const w = new Date(d + 'T00:00:00Z').getUTCDay(); if (w >= 1 && w <= 5) return d; } };
 
@@ -63,7 +63,7 @@ test('23. HRM: xin nghỉ → lãnh đạo bộ phận duyệt; chấm công; CC
   expect(person.employeeCode).toBeTruthy();
   expect(person.birthDate).toBeUndefined();
   expect(person.identity).toBeUndefined();
-  expect((await apiAs(tb, `/api/hrm/people/${mine.user.id}/identity`)).status()).toBe(403);
+  expect((await apiAs(tb, `/api/hrm/people/${mine.user.id}/identity/reveal`, { method: 'POST', data: { password: NEW_PASSWORD } })).status()).toBe(403);
 
   await nv.reload();
   await expect(nv.getByTestId('hrm-my-leaves').locator('tr', { hasText: 'Việc gia đình (giả) — e2e' })).toContainText('Đã duyệt');
@@ -73,6 +73,17 @@ test('23. HRM: xin nghỉ → lãnh đạo bộ phận duyệt; chấm công; CC
   await login(hr, 'nv.hcns');
   await hr.goto(`/#/hrm/people/${mine.user.id}`);
   await hr.getByTestId('hrm-reveal').click();
+  // Hiện CCCD phải nhập lại mật khẩu (AI điều khiển trình duyệt không được nhập mật khẩu).
+  await hr.getByTestId('hrm-pw').fill('sai-mat-khau');
+  await hr.getByTestId('hrm-pw-ok').click();
+  await toast(hr, 'Mật khẩu không đúng');
+  await hr.getByTestId('hrm-reveal').click();
+  await hr.getByTestId('hrm-pw').fill(NEW_PASSWORD);
+  await hr.getByTestId('hrm-pw-ok').click();
   await expect(hr.locator(`[data-id-for="${mine.user.id}"]`)).toHaveText(/^\d{12}$/);
   await toast(hr, 'ghi nhật ký');
+  // Lương: không có trong phản hồi; hiện riêng có mật khẩu. Người phụ trách nhân sự không tự sửa hợp đồng của mình.
+  const hrMe = await (await apiAs(hr, '/api/hrm/me')).json();
+  expect(JSON.stringify(hrMe)).not.toMatch(/salary"?\s*:/);
+  expect((await apiAs(hr, `/api/hrm/people/${hrMe.profile.userId}/contracts`, { method: 'POST', data: { number: 'x', type: 'FIXED', startDate: '2026-01-01' } })).status()).toBe(403);
 });

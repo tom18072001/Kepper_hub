@@ -67,6 +67,7 @@ test('HRM nghỉ phép: tự lập; lãnh đạo bộ phận duyệt nhân viên
   allow('hrm.leave', 'edit', { ...lt, op: 'approve' }, ['director']); // trưởng bộ phận không tự duyệt
   const dt = { targetUserId: 2, departmentId: 9, targetLeader: true };
   allow('hrm.leave', 'edit', { ...dt, op: 'approve' }, []); // Ban GĐ không tự duyệt đơn của mình
+  allow('hrm.leave', 'edit', { ...dt, targetDirector: true, op: 'approve' }, ['hr']); // một Ban GĐ duy nhất: người phụ trách nhân sự ghi nhận
 });
 
 test('HRM chấm công: tự chấm / giải trình; duyệt: lãnh đạo bộ phận, HR, Ban GĐ (không tự duyệt); HR nhập máy chấm công không cho chính mình', () => {
@@ -75,9 +76,20 @@ test('HRM chấm công: tự chấm / giải trình; duyệt: lãnh đạo bộ 
   allow('hrm.attendance', 'edit', { ...t, op: 'check' }, ['member']);
   allow('hrm.attendance', 'edit', { ...t, op: 'explain' }, ['member']);
   allow('hrm.attendance', 'edit', { ...t, op: 'approve' }, ['director', 'hr', 'leader']);
-  allow('hrm.attendance', 'edit', { ...t, op: 'hr' }, ['hr']);
-  allow('hrm.attendance', 'edit', { targetUserId: 3, departmentId: 5, op: 'hr' }, []);
+  allow('hrm.attendance', 'edit', { ...t, op: 'hr' }, ['director', 'hr']);
+  allow('hrm.attendance', 'edit', { targetUserId: 3, departmentId: 5, op: 'hr' }, ['director']); // chấm công của chính người phụ trách nhân sự: Ban GĐ nhập
   allow('hrm.attendance', 'edit', { targetUserId: 3, departmentId: 5, op: 'approve' }, ['director']);
+});
+
+test('HRM: người phụ trách nhân sự không tự sửa hồ sơ / hợp đồng / CCCD của chính mình — Ban GĐ làm', () => {
+  const own = { targetUserId: 3, departmentId: 5, targetHr: true };
+  allow('hrm.profile', 'edit', own, ['director']);
+  allow('hrm.profile', 'edit', { ...own, op: 'contact' }, ['director', 'hr']);
+  allow('hrm.contract', 'edit', own, ['director']);
+  allow('hrm.identity', 'edit', own, ['director']);
+  allow('hrm.identity', 'view', own, ['hr']);
+  const other = { targetUserId: 6, departmentId: OWN };
+  allow('hrm.contract', 'edit', other, ['hr']); // Ban GĐ không sửa hợp đồng người thường
 });
 
 test('HRM thiết lập: chỉ Ban GĐ chỉ định người phụ trách nhân sự', () => {

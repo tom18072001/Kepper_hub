@@ -383,11 +383,14 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
     const target = await prisma.user.findUnique({ where: { id: intParam(req.params.id) } });
     if (!target) fail(404, 'Không tìm thấy tài khoản', 'NOT_FOUND');
     if (!canResetPassword(req.user, target)) fail(403, 'Không thể reset mật khẩu tài khoản này', 'FORBIDDEN');
-    const sensitive = target.role === 'director';
+    // Người phụ trách nhân sự (HRM) xem được CCCD, lương của mọi người → reset mật khẩu của họ cũng là thao tác nhạy cảm, báo Ban GĐ.
+    const hrCfg = (await prisma.appSetting.findUnique({ where: { key: 'hrm.config' } }))?.value;
+    const isHr = Array.isArray(hrCfg?.hrUserIds) && hrCfg.hrUserIds.map(Number).includes(target.id);
+    const sensitive = target.role === 'director' || isHr;
     await prisma.$transaction(async tx => {
       await tx.user.update({ where: { id: target.id }, data: { passwordHash: await bcrypt.hash(DEFAULT_PASSWORD, 10), mustChangePw: true, sessionVersion: { increment: 1 } } });
       await audit(req, 'PASSWORD_RESET', 'User', target.id, null, sensitive ? { sensitive: true } : null, tx);
-      if (sensitive) await notifyDirectors(tx, req.user, `Quản trị hệ thống vừa reset mật khẩu tài khoản ${target.username} (Ban giám đốc)`, 'Tài khoản phải đổi mật khẩu ở lần đăng nhập tới');
+      if (sensitive) await notifyDirectors(tx, req.user, `Quản trị hệ thống vừa reset mật khẩu tài khoản ${target.username} (${target.role === 'director' ? 'Ban giám đốc' : 'người phụ trách nhân sự'})`, 'Tài khoản phải đổi mật khẩu ở lần đăng nhập tới');
     });
     res.json({ ok: true });
   });

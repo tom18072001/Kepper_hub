@@ -44,7 +44,8 @@ const NEVER_AI_FIELDS = { 'hrm.identity': ['idNumber'], 'hrm.contract': ['salary
 
 // subject = { it, director, secretary, pmo, leader, departmentId, userId, hr } — dựng bằng weekly-data.rolesOf() (+ hr: services/hrm.js).
 // CRM ctx: { departmentId: bộ phận phụ trách đối tác, ownerUserId, participant: người ghi / người được giao theo dõi, op }.
-// HRM ctx: { targetUserId, departmentId: bộ phận của người đó, targetLeader: người đó là lãnh đạo bộ phận, field, op }.
+// HRM ctx: { targetUserId, departmentId: bộ phận của người đó, targetLeader: lãnh đạo bộ phận / Ban GĐ, targetDirector, targetHr: người phụ trách nhân sự, field, op }.
+// Người phụ trách nhân sự KHÔNG tự sửa hồ sơ / hợp đồng / lương / CCCD / chấm công của chính mình — Ban GĐ (hoặc người phụ trách nhân sự khác) làm.
 // ctx: { departmentId } cho dữ liệu của một bộ phận; { createdById } cho thông báo; { item } cho MTL:
 //   item = { assigneeIds: [], leadDepartmentId, leadLeaderIds: [], projectManager: bool }.
 function can(s, action, dataset, ctx = {}, env = {}) { return !!rule(s, action, dataset, ctx, env); }
@@ -157,24 +158,25 @@ function rule(s, action, dataset, ctx, env) {
         if (self || s.hr || s.director) return true;
         return own && s.leader && ctx.field !== 'private'; // lãnh đạo bộ phận: chỉ trường cơ bản người trong bộ phận
       }
-      if (action === 'edit') return s.hr || (self && ctx.op === 'contact'); // tự sửa liên hệ cá nhân, người liên hệ khẩn cấp
+      if (action === 'edit') return hrEdit(s, ctx, self) || (self && ctx.op === 'contact'); // tự sửa liên hệ cá nhân, người liên hệ khẩn cấp
       return false;
     }
     case 'hrm.identity': { // số CCCD: chỉ chính người đó và người phụ trách nhân sự (Ban GĐ không cần — tối thiểu hoá)
       const self = ctx.targetUserId != null && ctx.targetUserId === s.userId;
       if (action === 'view') return self || s.hr;
-      if (action === 'edit') return s.hr;
+      if (action === 'edit') return hrEdit(s, ctx, self);
       return false;
     }
     case 'hrm.contract': {
       const self = ctx.targetUserId != null && ctx.targetUserId === s.userId;
       if (action === 'view') return self || s.hr || s.director;
-      if (action === 'edit') return s.hr;
+      if (action === 'edit') return hrEdit(s, ctx, self);
       return false;
     }
     case 'hrm.leave': {
       const self = ctx.targetUserId != null && ctx.targetUserId === s.userId;
-      const approver = !self && (s.director || (own && s.leader && !ctx.targetLeader));
+      // Lãnh đạo bộ phận duyệt nhân viên; Ban GĐ duyệt lãnh đạo bộ phận; đơn của Ban GĐ: Ban GĐ khác hoặc người phụ trách nhân sự ghi nhận.
+      const approver = !self && (s.director || (own && s.leader && !ctx.targetLeader) || (ctx.targetDirector === true && s.hr));
       if (action === 'view') return self || s.hr || s.director || (own && s.leader);
       if (action === 'edit') {
         if (ctx.op === 'create') return self || s.hr;
@@ -190,7 +192,7 @@ function rule(s, action, dataset, ctx, env) {
       if (action === 'edit') {
         if (ctx.op === 'check' || ctx.op === 'explain') return self; // chấm công / giải trình: chính người đó (chỉ trên giao diện)
         if (ctx.op === 'approve') return !self && (s.hr || s.director || (own && s.leader && !ctx.targetLeader));
-        if (ctx.op === 'hr') return s.hr && !self; // nhập từ máy chấm công / sửa: người phụ trách nhân sự, không tự sửa của mình
+        if (ctx.op === 'hr') return !self && (s.hr || s.director); // nhập máy chấm công: người phụ trách nhân sự (của chính họ: Ban GĐ)
         return false;
       }
       if (action === 'export') return s.hr || s.director;
@@ -205,6 +207,11 @@ function rule(s, action, dataset, ctx, env) {
   }
 }
 
+// Sửa hồ sơ / hợp đồng / CCCD: người phụ trách nhân sự, trừ hồ sơ của chính mình; hồ sơ của người phụ trách nhân sự: Ban GĐ.
+function hrEdit(s, ctx, self) {
+  if (self) return false;
+  return !!s.hr || (!!s.director && ctx.targetHr === true);
+}
 // Xuất MTL ra tệp (Excel / Word): người quản lý dự án, Ban GĐ; lãnh đạo bộ phận chỉ phần bộ phận mình (op 'dept').
 function mtlExport(s, ctx) {
   const it = ctx.item || {};

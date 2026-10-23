@@ -496,9 +496,10 @@ Máy chấm công ──CSV (mã NV, ngày, giờ)──► người phụ trác
 
 - **Quyền theo dữ liệu, cưỡng chế ở máy chủ** (`lib/policy.js`, kiểm từng ô trong `policy-playground.test.js`; IT không có quyền nào):
   - CRM: mỗi đối tác thuộc **một bộ phận phụ trách** + người phụ trách. Danh bạ tổ chức mọi cán bộ xem; người liên hệ / nhật ký / hợp đồng chỉ bộ phận phụ trách, người phụ trách, Ban GĐ; người được giao việc theo dõi chỉ thấy dòng của mình. Giá trị hợp đồng: lãnh đạo bộ phận phụ trách, người phụ trách, Ban GĐ. Chuyển bộ phận / ngừng theo dõi: lãnh đạo bộ phận, Ban GĐ.
-  - HRM: **người phụ trách nhân sự do Ban GĐ chỉ định** (không suy từ phòng ban — chống tự nâng quyền). Hồ sơ: chính người đó, người phụ trách nhân sự, Ban GĐ; lãnh đạo bộ phận chỉ trường cơ bản người trong bộ phận. Số CCCD: chính người đó + người phụ trách nhân sự (Ban GĐ không cần). Đơn nghỉ: lãnh đạo bộ phận duyệt nhân viên, Ban GĐ duyệt đơn của lãnh đạo bộ phận; không ai tự duyệt của mình. Giải trình chấm công: lãnh đạo bộ phận / người phụ trách nhân sự / Ban GĐ duyệt, không tự duyệt. Người phụ trách nhân sự không nhập / sửa chấm công của chính mình.
-- **Mã hoá theo trường** (`lib/crypto-field.js`): số CCCD, lương — AES-256-GCM, khoá `HR_ENC_KEY`. Máy chạy thiếu khoá → không khởi động. Bản sao lưu chỉ chứa bản mã. Xoá khoá = huỷ toàn bộ dữ liệu đã mã hoá.
-- **Xem số CCCD đầy đủ**: chỉ trên giao diện (bấm "Hiện"), **mỗi lượt ghi nhật ký** `HR_IDENTITY_VIEW`; không bao giờ qua token Claude (chặn ở `lib/tokens.js` và ở route).
+  - HRM: **người phụ trách nhân sự do Ban GĐ chỉ định** (không suy từ phòng ban — chống tự nâng quyền; Ban GĐ không tự chỉ định mình). Người phụ trách nhân sự **không tự sửa** hồ sơ / hợp đồng / lương / CCCD / chấm công của chính mình — Ban GĐ làm. Đơn nghỉ của Ban GĐ: Ban GĐ khác hoặc người phụ trách nhân sự ghi nhận. Hồ sơ: chính người đó, người phụ trách nhân sự, Ban GĐ; lãnh đạo bộ phận chỉ trường cơ bản người trong bộ phận. Số CCCD: chính người đó + người phụ trách nhân sự (Ban GĐ không cần). Đơn nghỉ: lãnh đạo bộ phận duyệt nhân viên, Ban GĐ duyệt đơn của lãnh đạo bộ phận; không ai tự duyệt của mình. Giải trình chấm công: lãnh đạo bộ phận / người phụ trách nhân sự / Ban GĐ duyệt, không tự duyệt. Người phụ trách nhân sự không nhập / sửa chấm công của chính mình.
+- **Mã hoá theo trường** (`lib/crypto-field.js`): số CCCD, lương — AES-256-GCM (thẻ 16 byte), khoá `HR_ENC_KEY` + mã khoá (chuẩn bị xoay khoá). Bản mã **gắn chủ sở hữu (AAD)**: chép bản mã sang hồ sơ khác trong CSDL không giải mã được. Máy chạy thiếu khoá → không khởi động. Bản sao lưu chỉ chứa bản mã. Xoá khoá = huỷ toàn bộ dữ liệu đã mã hoá.
+- **Xem số CCCD / lương đầy đủ**: không nằm trong phản hồi thường; chỉ trên giao diện, bấm "Hiện" và **nhập lại mật khẩu** (AI điều khiển trình duyệt / computer use không được nhập mật khẩu; chặn máy bỏ quên chưa khoá), sai 5 lần khoá 15 phút; **mỗi lượt ghi nhật ký** `HR_IDENTITY_VIEW` / `HR_SALARY_VIEW`; không bao giờ qua token Claude (chặn ở `lib/tokens.js` và ở route).
+- **Thông báo trung tính**: thông báo đơn nghỉ / giải trình không ghi loại nghỉ, lý do (thông báo cũng được Claude đọc); qua Claude, lý do giải trình và ý kiến duyệt của người khác bị bỏ.
 - **Claude (token)**: xem theo đúng quyền người dùng. Ghi được: nhật ký làm việc với đối tác, xong việc theo dõi, tạo đơn nghỉ của chính mình. **Không** qua Claude: chấm công, giải trình, duyệt đơn / giải trình, sửa hồ sơ / hợp đồng / CCCD, thiết lập, nhập máy chấm công, tạo / sửa đối tác.
 - **Tối thiểu hoá**: nhật ký hệ thống chỉ ghi tên trường thay đổi (không chép DLCN); người liên hệ rời đối tác → xoá hẳn; IP chấm công xoá sau 90 ngày; không thu sinh trắc, không GPS.
 - **Chấm công**: giờ lấy từ máy chủ; chỉ chính người đó bấm trên giao diện. Giới hạn "chỉ trong mạng văn phòng" là tuỳ chọn — **Docker Desktop thường che IP thật** của máy người dùng, trang Thiết lập hiện "IP Kepper đang thấy" để kiểm tra trước khi bật. Chấm công qua web là tự khai (có thể chấm từ xa nếu không giới hạn mạng) → nếu bảng công dùng tính lương, nên lấy giờ từ máy chấm công (nhập CSV).
@@ -550,7 +551,22 @@ Máy chấm công ──CSV (mã NV, ngày, giờ)──► người phụ trác
 5. [Nên có] Bảng công tính lương: lấy giờ từ máy chấm công (CSV), web chỉ để giải trình.
 6. [Nên có] Tách role CSDL (app không phải superuser) trước khi lưu dữ liệu Hạn chế thật.
 
-### 7. Rủi ro còn lại và câu hỏi mở
+### 7. Rà soát độc lập vòng 3 (24/10/2026) — đã sửa
+
+| Phát hiện | Mức | Cách sửa |
+|---|---|---|
+| Token đọc lách danh sách chặn bằng "/" cuối, chữ hoa (`/export.xlsx/`, `.XLSX`, `/api/stream/`, `/API/me/tokens`) — Express 5 khớp route không phân biệt | Cao | Chuẩn hoá đường dẫn trước khi so; chặn thêm xem trước tệp, mã Viber; lớp chặn thứ hai `assertNotVia` trong mọi route xuất / tải tệp; test hồi quy |
+| Nhân viên tự gán mình làm "người phụ trách" đối tác → xem giá trị hợp đồng | Cao | Đổi / chỉ định người phụ trách chỉ lãnh đạo bộ phận / Ban GĐ; người phụ trách phải thuộc bộ phận phụ trách |
+| Người phụ trách nhân sự tự sửa hợp đồng / lương / ngày vào làm của chính mình | Trung bình | `!self`; hồ sơ của người phụ trách nhân sự do Ban GĐ sửa |
+| Loại nghỉ ốm lộ qua tiêu đề thông báo; lý do giải trình người khác lộ qua token | Trung bình | Thông báo trung tính; che khi qua Claude |
+| IT reset mật khẩu người phụ trách nhân sự → xem CCCD, lương | Trung bình | Báo Ban GĐ khi reset (như tài khoản Ban GĐ); token của tài khoản đã thành IT bị từ chối |
+| Bản mã không gắn chủ sở hữu | Trung bình | AAD theo bảng / trường / id; thẻ 16 byte; mã khoá |
+| Đơn nghỉ của Giám đốc không ai duyệt; nghỉ nửa ngày bị tính đi muộn 330 phút; đơn qua năm trừ hết vào năm đầu; CSV máy chấm công ghi đè / không nhận 8:05, dd/mm/yyyy | Cao / Trung bình | Người phụ trách nhân sự ghi nhận đơn Ban GĐ; giờ nghỉ trưa + tính lại theo nửa ngày; tách số ngày theo năm, số dư tính theo lịch hiện tại; gộp lần chấm, không ghi đè bằng ô trống, chuẩn hoá giờ / ngày |
+| Huỷ đơn chen lúc duyệt; bấm chấm vào hai lần; tạo đơn song song | Thấp | Cập nhật có điều kiện trạng thái; khoá tư vấn theo người khi tạo đơn |
+
+Chưa sửa (quyết định của chủ dự án): báo Ban GĐ khi IT đổi phòng ban / cấp quyền "Xem tổng hợp"; thông báo lại đơn đang chờ khi người lao động chuyển bộ phận; `PATCH /api/items/:id` qua token nhận mọi trường như giao diện (theo nguyên tắc "AI = người dùng").
+
+### 8. Rủi ro còn lại và câu hỏi mở
 
 - Người có quyền xem vẫn chụp màn hình / sao chép được (không có DRM) → quy chế + nhật ký.
 - Claude Desktop "luôn cho phép" công cụ ghi → Claude ghi nhật ký đối tác / tạo đơn nghỉ không hỏi lại. Nhật ký CRM không sửa được → khuyến cáo không bật "luôn cho phép" cho công cụ ghi.

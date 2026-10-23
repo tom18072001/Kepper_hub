@@ -57,10 +57,11 @@ async function seedPlayground(prisma, env = process.env) {
       await prisma.hrProfile.upsert({ where: { userId: u.id }, update: {}, create: { userId: u.id, employeeCode: code, startDate: vn(start), status: 'OFFICIAL',
         birthDate: vn(`19${85 + (i % 12)}-0${1 + (i % 9)}-1${i % 9}`), gender: i % 2 ? 'MALE' : 'FEMALE', phone: `09000001${String(i).padStart(2, '0')}`, personalEmail: `${u.username}@mail.example`,
         address: `Số ${i} phố Mẫu (giả)`, emergencyName: `Người thân ${i} (giả)`, emergencyPhone: `09000002${String(i).padStart(2, '0')}`, education: 'Đại học (mẫu)',
-        idNumberEnc: C.encrypt(fake, env), idNumberLast4: fake.slice(-4), idIssuedOn: vn('2021-01-01'), idIssuedPlace: 'Cục Cảnh sát QLHC về TTXH (mẫu)' } });
+        idNumberEnc: C.encrypt(fake, C.AAD.identity(u.id), env), idNumberLast4: fake.slice(-4), idIssuedOn: vn('2021-01-01'), idIssuedPlace: 'Cục Cảnh sát QLHC về TTXH (mẫu)' } });
       const expiring = u.username === 'nv.qlxd';
-      await prisma.hrContract.create({ data: { userId: u.id, number: `${code}/HĐLĐ (mẫu)`, type: expiring ? 'FIXED' : 'INDEFINITE', position: u.displayTitle, startDate: vn(start),
-        endDate: expiring ? vn(WK.addDays(today, 20)) : null, salaryEnc: C.encrypt(String(10_000_000 + i * 1_500_000), env), status: 'ACTIVE', signedAt: vn(start), note: 'Hợp đồng mẫu', createdById: hr?.id || u.id } });
+      const k = await prisma.hrContract.create({ data: { userId: u.id, number: `${code}/HĐLĐ (mẫu)`, type: expiring ? 'FIXED' : 'INDEFINITE', position: u.displayTitle, startDate: vn(start),
+        endDate: expiring ? vn(WK.addDays(today, 20)) : null, status: 'ACTIVE', signedAt: vn(start), note: 'Hợp đồng mẫu', createdById: hr?.id || u.id } });
+      await prisma.hrContract.update({ where: { id: k.id }, data: { salaryEnc: C.encrypt(String(10_000_000 + i * 1_500_000), C.AAD.salary(k.id), env) } });
     }
     const L = async (username, type, from, to, status, approver = null, reason = '') => {
       const u = users[username]; if (!u) return;

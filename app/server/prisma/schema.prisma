@@ -980,6 +980,7 @@ model HrAttendance {
   note         String    @default("")
   adjustStatus String? // PENDING | APPROVED | REJECTED (giải trình)
   adjustReason String?
+  adjustNote   String? // ý kiến người duyệt (bắt buộc khi từ chối)
   adjustIn     DateTime?
   adjustOut    DateTime?
   adjustById   Int?

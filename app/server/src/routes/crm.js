@@ -32,6 +32,13 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
     if (!u) fail(422, label + ' không hợp lệ', 'INVALID_USER');
     return u;
   };
+  // Người phụ trách đối tác: phải thuộc bộ phận phụ trách (Ban GĐ chọn tự do). Người phụ trách được xem người liên hệ, nhật ký, giá trị hợp đồng
+  // → đổi / chỉ định người khác chỉ lãnh đạo bộ phận phụ trách hoặc Ban GĐ (op 'transfer'), không tự gán mình để mở quyền.
+  const ownerOk = async (s, id, departmentId) => {
+    const u = await userOk(id, 'Người phụ trách');
+    if (u && !s.director && u.departmentId !== departmentId) fail(422, 'Người phụ trách phải thuộc bộ phận phụ trách đối tác', 'INVALID_USER');
+    return u;
+  };
   const loadPartner = async id => {
     const p = await prisma.crmPartner.findUnique({ where: { id: intParam(id) } });
     if (!p) fail(404, 'Không tìm thấy đối tác', 'NOT_FOUND');
@@ -45,7 +52,8 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
     const detail = P.can(s, 'view', 'crm.contact', c);
     return {
       id: p.id, name: p.name, kind: outEnum(KINDS, p.kind), taxCode: p.taxCode, address: p.address, website: p.website, phone: p.phone, email: p.email,
-      status: outEnum(STATUSES, p.status), rating: p.rating, archivedAt: p.archivedAt, createdAt: p.createdAt, updatedAt: p.updatedAt,
+      status: outEnum(STATUSES, p.status), archivedAt: p.archivedAt, createdAt: p.createdAt, updatedAt: p.updatedAt,
+      rating: detail ? p.rating : undefined, // đánh giá nội bộ về đối tác: như nhận xét, chỉ bộ phận phụ trách
       ownerDepartment: { id: p.ownerDepartmentId, name: depts[p.ownerDepartmentId] || null },
       ownerUser: p.ownerUserId ? { id: p.ownerUserId, fullName: users[p.ownerUserId] || null } : null,
       note: detail ? p.note : undefined, // nhận xét nội bộ về đối tác: chỉ bộ phận phụ trách
@@ -92,7 +100,9 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
     if (s.director && b.ownerDepartmentId != null) ownerDepartmentId = intParam(b.ownerDepartmentId, 'Bộ phận phụ trách');
     if (ownerDepartmentId == null) fail(422, 'Chọn bộ phận phụ trách', 'REQUIRED');
     if (!(await prisma.department.findFirst({ where: { id: ownerDepartmentId, isActive: true } }))) fail(422, 'Bộ phận phụ trách không hợp lệ', 'INVALID_VALUE');
-    const owner = await userOk(optionalInt(b.ownerUserId, 'Người phụ trách') ?? s.userId, 'Người phụ trách');
+    const wanted = optionalInt(b.ownerUserId, 'Người phụ trách') ?? s.userId;
+    if (wanted !== s.userId) P.assertCan(s, 'edit', 'crm.partner', { departmentId: ownerDepartmentId, op: 'transfer' });
+    const owner = await ownerOk(s, wanted, ownerDepartmentId);
     const data = {
       name: text(b.name, 'Tên đối tác', { required: true, max: 200 }), kind: oneOf(b.kind, Object.keys(KINDS), 'Loại đối tác') || 'OTHER',
       taxCode: taxCode(b.taxCode) || null, address: text(b.address, 'Địa chỉ', { max: 300 }) || null, website: text(b.website, 'Website', { max: 200 }) || null,
@@ -101,8 +111,9 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
       ownerDepartmentId, ownerUserId: owner?.id ?? null, createdById: req.user.id,
     };
     if (data.taxCode) {
-      const dup = await prisma.crmPartner.findFirst({ where: { taxCode: data.taxCode, archivedAt: null }, select: { id: true, name: true } });
-      if (dup) fail(409, `Mã số thuế đã có: "${dup.name}" — mở đối tác đó thay vì tạo trùng`, 'DUPLICATE');
+      const dup = await prisma.crmPartner.findFirst({ where: { taxCode: data.taxCode }, orderBy: { archivedAt: { sort: 'asc', nulls: 'first' } }, select: { id: true, name: true, archivedAt: true } });
+      if (dup && !dup.archivedAt) fail(409, `Mã số thuế đã có: "${dup.name}" — mở đối tác đó thay vì tạo trùng`, 'DUPLICATE');
+      if (dup) fail(409, `Mã số thuế thuộc đối tác đã ngừng theo dõi "${dup.name}" (#${dup.id}) — mở đối tác đó và bấm "Theo dõi lại"`, 'DUPLICATE_ARCHIVED');
     }
     const row = await prisma.crmPartner.create({ data });
     await audit(req, 'CRM_PARTNER_CREATE', 'CrmPartner', row.id, null, { name: row.name, kind: row.kind, ownerDepartmentId });
@@ -152,20 +163,30 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
     if (b.status !== undefined) data.status = oneOf(b.status, Object.keys(STATUSES), 'Trạng thái');
     if (b.rating !== undefined) data.rating = b.rating == null || b.rating === '' ? null : Math.max(1, Math.min(5, Math.round(Number(b.rating)) || 1));
     if (b.note !== undefined) data.note = text(b.note, 'Ghi chú', { max: 2000 }) || '';
-    if (b.ownerUserId !== undefined) data.ownerUserId = (await userOk(optionalInt(b.ownerUserId, 'Người phụ trách'), 'Người phụ trách'))?.id ?? null;
     if (b.ownerDepartmentId !== undefined && Number(b.ownerDepartmentId) !== p.ownerDepartmentId) {
       P.assertCan(s, 'edit', 'crm.partner', { ...c, op: 'transfer' });
       const d = intParam(b.ownerDepartmentId, 'Bộ phận phụ trách');
       if (!(await prisma.department.findFirst({ where: { id: d, isActive: true } }))) fail(422, 'Bộ phận phụ trách không hợp lệ', 'INVALID_VALUE');
       data.ownerDepartmentId = d;
     }
+    const newOwner = b.ownerUserId === undefined ? undefined : optionalInt(b.ownerUserId, 'Người phụ trách');
+    if (newOwner !== undefined && newOwner !== p.ownerUserId) {
+      P.assertCan(s, 'edit', 'crm.partner', { ...c, op: 'transfer' });
+      data.ownerUserId = (await ownerOk(s, newOwner, data.ownerDepartmentId ?? p.ownerDepartmentId))?.id ?? null;
+    } else if (data.ownerDepartmentId && p.ownerUserId && !s.director) {
+      // Chuyển bộ phận: người phụ trách cũ không thuộc bộ phận mới → bỏ (lãnh đạo bộ phận mới chỉ định lại).
+      const cur = await prisma.user.findUnique({ where: { id: p.ownerUserId }, select: { departmentId: true } });
+      if (cur?.departmentId !== data.ownerDepartmentId) data.ownerUserId = null;
+    }
     if (b.archived !== undefined) {
       P.assertCan(s, 'edit', 'crm.partner', { ...c, op: 'archive' });
       data.archivedAt = b.archived ? (p.archivedAt || new Date()) : null;
     }
-    if (data.taxCode && data.taxCode !== p.taxCode) {
-      const dup = await prisma.crmPartner.findFirst({ where: { taxCode: data.taxCode, archivedAt: null, id: { not: p.id } }, select: { name: true } });
-      if (dup) fail(409, `Mã số thuế đã có: "${dup.name}"`, 'DUPLICATE');
+    // Trùng MST với đối tác đang theo dõi: kiểm cả khi đổi MST và khi "Theo dõi lại".
+    const taxNow = data.taxCode !== undefined ? data.taxCode : p.taxCode, activeAfter = data.archivedAt !== undefined ? !data.archivedAt : !p.archivedAt;
+    if (taxNow && activeAfter && (data.taxCode !== undefined || (b.archived !== undefined && !b.archived))) {
+      const dup = await prisma.crmPartner.findFirst({ where: { taxCode: taxNow, archivedAt: null, id: { not: p.id } }, select: { name: true } });
+      if (dup) fail(409, `Mã số thuế đã có ở đối tác đang theo dõi "${dup.name}"`, 'DUPLICATE');
     }
     const row = await prisma.crmPartner.update({ where: { id: p.id }, data });
     await audit(req, 'CRM_PARTNER_UPDATE', 'CrmPartner', p.id, null, { fields: Object.keys(data) });
@@ -187,6 +208,7 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
     const s = await subject(req);
     const p = await loadPartner(req.params.id);
     P.assertCan(s, 'edit', 'crm.contact', ctxOf(p));
+    if (p.archivedAt) fail(409, 'Đối tác đã ngừng theo dõi', 'ARCHIVED');
     if ((await prisma.crmContact.count({ where: { partnerId: p.id } })) >= 50) fail(409, 'Mỗi đối tác tối đa 50 người liên hệ', 'TOO_MANY');
     const row = await prisma.crmContact.create({ data: { partnerId: p.id, ...contactData(req.body || {}, false) } });
     await audit(req, 'CRM_CONTACT_CREATE', 'CrmContact', row.id, null, { partnerId: p.id });
@@ -224,7 +246,9 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
     const b = req.body || {};
     const date = optionalDate(b.date, 'Ngày') || new Date();
     if (date.getTime() > Date.now() + 86_400_000) fail(422, 'Ngày làm việc không được ở tương lai', 'INVALID_DATE');
+    if (date.getTime() < Date.now() - 2 * 365 * 86_400_000) fail(422, 'Chỉ ghi nhật ký trong 2 năm gần đây', 'INVALID_DATE');
     const nextDue = optionalDate(b.nextDue, 'Hạn theo dõi') || null;
+    if (nextDue && (nextDue.getTime() < Date.now() - 86_400_000 || nextDue.getTime() > Date.now() + 2 * 365 * 86_400_000)) fail(422, 'Hạn theo dõi từ hôm nay tới 2 năm tới', 'INVALID_DATE');
     const nextOwner = nextDue ? await userOk(optionalInt(b.nextOwnerId, 'Người theo dõi') ?? s.userId, 'Người theo dõi') : null;
     let workItemId = optionalInt(b.workItemId, 'Việc liên quan');
     if (workItemId) await loadItem(prisma, req.user, workItemId, 'view').catch(() => fail(422, 'Việc liên quan không tồn tại hoặc bạn không xem được', 'INVALID_VALUE'));
@@ -233,7 +257,7 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
       nextStep: text(b.nextStep, 'Việc tiếp theo', { max: 1000 }) || null, nextDue, nextOwnerId: nextOwner?.id ?? null, workItemId: workItemId || null, createdById: req.user.id,
     } });
     await audit(req, 'CRM_INTERACTION_CREATE', 'CrmInteraction', row.id, null, { partnerId: p.id, type: row.type, nextDue: row.nextDue });
-    if (nextOwner && nextOwner.id !== req.user.id) await notify(prisma, [nextOwner.id], { type: 'CRM_FOLLOWUP', title: `Việc cần theo dõi với ${p.name}`, body: (row.nextStep || row.summary).slice(0, 200), link: `#/crm/${p.id}` });
+    if (nextOwner && nextOwner.id !== req.user.id) await notify(prisma, [nextOwner.id], { type: 'CRM_FOLLOWUP', title: `Bạn được giao theo dõi ${p.name} (hạn ${WK.fmtD(WK.dayOf(nextDue))})`, body: (row.nextStep || '').slice(0, 200) || null, link: `#/crm/${p.id}` });
     res.status(201).json({ id: row.id, nextDue: row.nextDue });
   });
 
@@ -257,6 +281,8 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
     const s = await subject(req);
     const i = await prisma.crmInteraction.findUnique({ where: { id: intParam(req.params.id) }, include: { partner: true } });
     if (!i || !i.nextDue) fail(404, 'Không tìm thấy việc cần theo dõi', 'NOT_FOUND');
+    if (i.partner.archivedAt) fail(409, 'Đối tác đã ngừng theo dõi', 'ARCHIVED');
+    if (i.followUpDone) fail(409, 'Việc này đã xong', 'CONFLICT');
     P.assertCan(s, 'edit', 'crm.interaction', ctxOf(i.partner, null, { op: 'followup', participant: i.nextOwnerId === s.userId || i.createdById === s.userId }));
     const note = text(req.body?.note, 'Kết quả', { max: 2000 });
     await prisma.$transaction(async tx => {
@@ -289,6 +315,7 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
     const s = await subject(req);
     const p = await loadPartner(req.params.id);
     P.assertCan(s, 'edit', 'crm.engagement', ctxOf(p));
+    if (p.archivedAt) fail(409, 'Đối tác đã ngừng theo dõi', 'ARCHIVED');
     const row = await prisma.crmEngagement.create({ data: { partnerId: p.id, ...(await engData(req.body || {}, false, req)), createdById: req.user.id } });
     await audit(req, 'CRM_ENGAGEMENT_CREATE', 'CrmEngagement', row.id, null, { partnerId: p.id, kind: row.kind, title: row.title });
     res.status(201).json({ id: row.id });
@@ -305,13 +332,26 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
   });
 };
 
-// Nhắc việc theo dõi đến hạn hôm nay (08:10). Trả về số thông báo đã gửi.
+// Nhắc việc theo dõi (08:10): đến hạn hôm nay, và quá hạn 1 / 3 / 7 ngày; quá hạn 7 ngày báo thêm lãnh đạo bộ phận phụ trách + người phụ trách đối tác.
+// Người theo dõi đã khoá tài khoản → báo người phụ trách đối tác (hoặc lãnh đạo bộ phận phụ trách).
 async function runCrmFollowups(prisma, now = new Date()) {
   const today = WK.dayOf(now);
-  const from = new Date(Date.parse(today + 'T00:00:00+07:00')), to = new Date(from.getTime() + 86_400_000);
-  const rows = await prisma.crmInteraction.findMany({ where: { followUpDone: false, nextOwnerId: { not: null }, nextDue: { gte: from, lt: to }, partner: { archivedAt: null } }, include: { partner: { select: { id: true, name: true } } } });
+  const end = new Date(Date.parse(today + 'T00:00:00+07:00') + 86_400_000);
+  const rows = await prisma.crmInteraction.findMany({ where: { followUpDone: false, nextDue: { gte: new Date(end.getTime() - 9 * 86_400_000), lt: end }, partner: { archivedAt: null } },
+    include: { partner: { select: { id: true, name: true, ownerUserId: true, ownerDepartmentId: true } } } });
+  const active = new Set((await prisma.user.findMany({ where: { isActive: true, isRootAdmin: false, role: { not: 'admin' } }, select: { id: true } })).map(u => u.id));
+  const leadersOf = async dept => (await prisma.user.findMany({ where: { isActive: true, isRootAdmin: false, role: { not: 'admin' }, departmentId: dept }, include: { permissions: true } }))
+    .filter(u => require('../lib/permissions').permissionScope(u, 'reports.summary', 'VIEW')).map(u => u.id);
   let sent = 0;
-  for (const i of rows) sent += await notify(prisma, [i.nextOwnerId], { type: 'CRM_FOLLOWUP_DUE', title: `Hôm nay: theo dõi ${i.partner.name}`, body: (i.nextStep || i.summary).slice(0, 200), link: `#/crm/${i.partner.id}` });
+  for (const i of rows) {
+    const late = Math.round((Date.parse(today + 'T00:00:00Z') - Date.parse(WK.dayOf(i.nextDue) + 'T00:00:00Z')) / 86_400_000);
+    if (![0, 1, 3, 7].includes(late)) continue;
+    let to = i.nextOwnerId && active.has(i.nextOwnerId) ? [i.nextOwnerId] : [];
+    if (!to.length) to = i.partner.ownerUserId && active.has(i.partner.ownerUserId) ? [i.partner.ownerUserId] : await leadersOf(i.partner.ownerDepartmentId);
+    if (late === 7) to = [...new Set([...to, ...(i.partner.ownerUserId && active.has(i.partner.ownerUserId) ? [i.partner.ownerUserId] : []), ...(await leadersOf(i.partner.ownerDepartmentId))])];
+    sent += await notify(prisma, to, { type: late ? 'CRM_FOLLOWUP_OVERDUE' : 'CRM_FOLLOWUP_DUE', title: late ? `Quá hạn ${late} ngày: theo dõi ${i.partner.name}` : `Hôm nay: theo dõi ${i.partner.name}`,
+      body: (i.nextStep || '').slice(0, 200) || null, link: `#/crm/${i.partner.id}` });
+  }
   return { sent };
 }
 module.exports.runCrmFollowups = runCrmFollowups;

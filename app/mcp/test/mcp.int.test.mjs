@@ -119,11 +119,13 @@ test('MCP playground: CRM / HRM theo đúng quyền; không CCCD đầy đủ, k
     assert.ok(!me.error, me.text);
     assert.equal(me.json.profile.identity.last4.length, 4);
     assert.ok(!/\b\d{12}\b/.test(me.text) && !/salary/.test(me.text), 'không lộ CCCD / lương');
-    assert.equal((await fetch(`${BASE_URL}/api/hrm/people/${nv.user.id}/identity`, { headers: { authorization: `Bearer ${nv.token}` } })).status, 403);
+    assert.equal((await fetch(`${BASE_URL}/api/hrm/people/${nv.user.id}/identity/reveal`, { method: 'POST', headers: { authorization: `Bearer ${nv.token}`, 'content-type': 'application/json' }, body: '{"password":"x"}' })).status, 403);
+    const k = (await prisma.hrContract.findFirst({ where: { userId: nv.user.id } }));
+    if (k) assert.equal((await fetch(`${BASE_URL}/api/hrm/contracts/${k.id}/salary/reveal`, { method: 'POST', headers: { authorization: `Bearer ${nv.token}`, 'content-type': 'application/json' }, body: '{"password":"x"}' })).status, 403);
     assert.equal((await fetch(`${BASE_URL}/api/hrm/attendance/check`, { method: 'POST', headers: { authorization: `Bearer ${nv.token}`, 'content-type': 'application/json' }, body: '{"kind":"in"}' })).status, 403);
 
     // Đơn nghỉ: tạo của chính mình được (chờ duyệt); không có gì để tôi duyệt.
-    const leave = await call(c, 'kepper_hr_request_leave', { type: 'UNPAID', fromDate: '2026-12-21', reason: 'Claude tạo thử (giả)' });
+    const leave = await call(c, 'kepper_hr_request_leave', { type: 'UNPAID', fromDate: '2027-03-16', reason: 'Claude tạo thử (giả)' });
     assert.ok(!leave.error && leave.json.status === 'PENDING', leave.text);
     await prisma.hrLeave.delete({ where: { id: leave.json.id } });
     assert.deepEqual((await call(c, 'kepper_hr_leaves', { scope: 'approve' })).json, []);
