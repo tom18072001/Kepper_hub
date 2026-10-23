@@ -94,6 +94,13 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   const patch = data => apiAs(qx, `/api/items/${row.itemId}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, data });
   expect((await patch({ progress: 99 })).status()).toBe(403);
   expect((await patch({ critical: true })).status()).toBe(403);
+  // Rà soát vòng 1 (Chặn): không tự gán mình làm người được giao, không đổi cây / bộ phận chủ trì, không thêm việc con vào hạng mục bộ phận khác.
+  const qxMe = await (await apiAs(qx, '/api/me')).json();
+  expect((await patch({ assigneeIds: [qxMe.id] })).status()).toBe(403);
+  expect((await patch({ leadDepartmentId: qxMe.departmentId })).status()).toBe(403);
+  const plItem = await (await apiAs(nv, `/api/items/${row.itemId}`)).json();
+  const child = await apiAs(qx, `/api/projects/${plItem.projectId}/items`, { method: 'POST', headers: { 'content-type': 'application/json' }, data: { title: 'Việc con giả', parentId: row.itemId, progress: 100, weight: 1000 } });
+  expect(child.status()).toBe(403);
   expect((await (await apiAs(nv, `/api/items/${row.itemId}`)).json()).progress).toBe(newPct);
   const admin = await (await browser.newContext()).newPage();
   await login(admin, 'admin');
