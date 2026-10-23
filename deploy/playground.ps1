@@ -4,7 +4,7 @@
 #   Xoá hẳn bản thử (cả dữ liệu thử):                  docker compose -p kepper-play down -v
 # Tài khoản thử: giamdoc, tb.phaply, nv.phaply, nv.hcns (phụ trách nhân sự)… mật khẩu mẫu 12345678 (đổi ở lần đăng nhập đầu).
 param([string]$Branch = "kepper/playground-crm-hrm", [string]$Dir = "")
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"   # docker / git ghi tiến trình ra stderr; mỗi bước tự kiểm $LASTEXITCODE
 $src = Split-Path $PSScriptRoot -Parent
 if (-not $Dir) { $Dir = Join-Path (Split-Path $src -Parent) "kepper-play" }
 function Hex32 { $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); ($b | ForEach-Object { $_.ToString("x2") }) -join "" }
@@ -12,16 +12,16 @@ function Hex32 { $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberG
 Write-Host "==> 1/4 Lấy mã nhánh $Branch (qua bản kepper đang có, không cần đăng nhập GitHub lại)"
 git -C $src fetch origin "+refs/heads/${Branch}:refs/remotes/origin/${Branch}"
 if ($LASTEXITCODE -ne 0) { throw "git fetch lỗi." }
-if (-not (Test-Path $Dir)) {
-  git clone --no-checkout $src $Dir
-  git -C $Dir fetch $src "+refs/remotes/origin/${Branch}:refs/heads/play"
-  git -C $Dir checkout play
-} else {
-  git -C $Dir fetch $src "+refs/remotes/origin/${Branch}:refs/remotes/src/play"
-  git -C $Dir checkout play
-  git -C $Dir reset --hard refs/remotes/src/play
+if (-not (Test-Path (Join-Path $Dir ".git"))) {
+  git init -q $Dir
+  if ($LASTEXITCODE -ne 0) { throw "Không tạo được $Dir." }
 }
+# Bản thử chỉ theo mã nhánh thử (không sửa tay trong kepper-play): lấy từ bản kepper đang có rồi đặt cứng vào đó.
+git -C $Dir fetch -q $src "+refs/remotes/origin/${Branch}:refs/remotes/src/play"
 if ($LASTEXITCODE -ne 0) { throw "Không lấy được mã vào $Dir." }
+git -C $Dir checkout -q -B play refs/remotes/src/play
+git -C $Dir reset -q --hard refs/remotes/src/play
+if ($LASTEXITCODE -ne 0) { throw "Không cập nhật được mã trong $Dir." }
 git -C $Dir log --oneline -1
 
 Set-Location $Dir
