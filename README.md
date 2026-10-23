@@ -58,6 +58,8 @@ Dữ liệu mẫu **giả** (`SEED_DEMO=true`) gồm:
 
 **Bản thử CRM / HRM** (không đụng bản đang chạy): `powershell -ExecutionPolicy Bypass -File deploy\playground.ps1` → thư mục `kepper-play` bên cạnh, Docker project `kepper-play`, http://localhost:4200, CSDL riêng, khoá ngẫu nhiên, dữ liệu mẫu GIẢ (thêm `nv.hcns` = người phụ trách nhân sự). Xoá hẳn: `docker compose -p kepper-play down -v`.
 
+**Chạy thử một dự án theo vai trò trên bản thử** (TGĐ giao việc → PMO nhập MTL → lãnh đạo bộ phận chi tiết hoá → nhân viên làm, xin nghỉ → báo cáo tuần → giao ban): `docker exec -e BASE=http://127.0.0.1:4000 -e OUT=/tmp/journal.json kepper-play-app-1 node scripts/simulate-project.mjs`. Kịch bản đặt mật khẩu chung `Play@2026` cho các tài khoản mẫu, tạo dự án **BM — Khu nhà ở Bình Minh (giả)**; chỉ chạy khi máy có dữ liệu mẫu (tự từ chối trên bản chạy thật).
+
 Vận hành trên máy chạy:
 
 - **Sao lưu** hằng ngày từ `BACKUP_HOUR`, vào `./backups` (CSDL + tệp + SHA-256).

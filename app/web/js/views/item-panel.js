@@ -356,6 +356,7 @@ function render() {
           : editable ? compact('Checklist', checklistBody) : ''}
         ${childrenSection(d, editable, plan.children)}
         ${d.attachments.length || (d.documents || []).length || editable ? sec('files', { title: 'Tài liệu', count: d.attachments.length + (d.documents || []).length || '', summary: `bên giao ${giveFiles.length + giveDocs.length} · bên thực hiện ${backFiles.length + backDocs.length}`, open: plan.files, testid: 'files-section', body: filesBody }) : ''}
+        ${(store.settings?.modules || []).includes('crm') ? `<div id="ipCrm" data-testid="item-crm">${crmCache.id === d.id ? crmCache.html : ''}</div>` : ''}
         ${sec('comments', { title: 'Bình luận', count: d.comments.length || '', open: plan.comments || !!d.comments.length, body: commentsBody })}
         ${sec('history', { title: 'Lịch sử', count: d.activities.length, summary: lastAct ? `gần nhất: ${esc(lastAct.actorName)} ${ago(lastAct.createdAt)}` : '', open: plan.history, body: historyBody })}
       </div>
@@ -399,6 +400,22 @@ function render() {
   restoreDrafts(p);
   const t = $('#ipTitle', p); if (t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
   bind(editable);
+  if (!same && $('#ipCrm', p)) fillCrm(d.id);
+}
+
+// Playground CRM: nhật ký làm việc với đối tác gắn việc này (ghi ở trang Đối tác, chọn "Việc liên quan").
+let crmCache = { id: null, html: '' };
+async function fillCrm(id) {
+  try {
+    const r = await api(`/api/crm/items/${id}/interactions`);
+    if (openId !== id) return;
+    const html = !r.rows.length && !r.hidden ? '' : sec('crm', { title: 'Làm việc với đối tác', count: r.rows.length || '', open: true, body: `
+      ${r.rows.map(i => `<div class="crm-row" data-testid="item-crm-row"><div class="muted xs">${fmtDate(i.date)} · ${esc(i.type.label)} · <a href="#/crm/${i.partner.id}">${esc(i.partner.name)}</a> · ${esc(i.createdBy.fullName || '')}</div>
+        <div>${esc(i.summary)}</div>${i.nextStep ? `<div class="muted xs">Tiếp theo: ${esc(i.nextStep)}${i.nextDue ? ` — hạn ${fmtDate(i.nextDue)}` : ''}${i.nextOwner ? ` (${esc(i.nextOwner.fullName || '')})` : ''}${i.followUpDone ? ' · đã xong' : ''}</div>` : ''}</div>`).join('')}
+      ${r.hidden ? `<p class="muted xs">${r.hidden} nhật ký khác chỉ bộ phận phụ trách đối tác xem được.</p>` : ''}` });
+    crmCache = { id, html };
+    const box = $('#ipCrm', panel()); if (box) box.innerHTML = html;
+  } catch { /* chưa bật CRM / không có quyền: không hiện */ }
 }
 
 // Sau khi duyệt từ "Chờ tôi xử lý": mời mở phiếu tiếp theo.

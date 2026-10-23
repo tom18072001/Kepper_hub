@@ -147,6 +147,26 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
     });
   });
 
+  // Nhật ký làm việc với đối tác gắn một việc (mở từ màn việc): người xem được việc thấy nhật ký nếu được xem nhật ký của đối tác đó
+  // (bộ phận phụ trách / Ban GĐ) hoặc là người ghi / người được giao theo dõi; còn lại chỉ biết số lượng.
+  app.get('/api/crm/items/:id/interactions', auth, async (req, res) => {
+    const s = await subject(req);
+    if (!P.can(s, 'view', 'crm.partner')) fail(403, 'Quản trị hệ thống không xem dữ liệu nghiệp vụ', 'FORBIDDEN');
+    const id = intParam(req.params.id);
+    await loadItem(prisma, req.user, id, 'view');
+    const rows = await prisma.crmInteraction.findMany({ where: { workItemId: id }, orderBy: [{ date: 'desc' }, { id: 'desc' }], take: 100 });
+    const partners = Object.fromEntries((await prisma.crmPartner.findMany({ where: { id: { in: [...new Set(rows.map(i => i.partnerId))] } } })).map(p => [p.id, p]));
+    const seen = rows.filter(i => partners[i.partnerId] && (P.can(s, 'view', 'crm.interaction', ctxOf(partners[i.partnerId])) || i.createdById === s.userId || i.nextOwnerId === s.userId));
+    const users = await names(seen.flatMap(i => [i.createdById, i.nextOwnerId]));
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({
+      rows: seen.map(i => ({ id: i.id, partner: { id: i.partnerId, name: partners[i.partnerId].name }, type: outEnum(ITYPES, i.type), date: i.date, summary: i.summary,
+        nextStep: i.nextStep, nextDue: i.nextDue, followUpDone: i.followUpDone, createdBy: { id: i.createdById, fullName: users[i.createdById] || null },
+        nextOwner: i.nextOwnerId ? { id: i.nextOwnerId, fullName: users[i.nextOwnerId] || null } : null })),
+      hidden: rows.length - seen.length,
+    });
+  });
+
   app.patch('/api/crm/partners/:id', auth, async (req, res) => {
     const s = await subject(req);
     const p = await loadPartner(req.params.id);

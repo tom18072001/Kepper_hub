@@ -177,12 +177,20 @@ function profileForm(p, m, full, done) {
 }
 
 // ---------- Chờ duyệt ----------
+// Cảnh báo cho người duyệt: việc đến hạn trong thời gian nghỉ, giao ban thứ Hai trùng ngày nghỉ (người nghỉ là lãnh đạo bộ phận).
+const conflictNote = c => {
+  if (!c || (!c.due?.length && !c.meetings?.length)) return '';
+  const parts = [];
+  if (c.due?.length) parts.push(`${c.due.length} việc đến hạn trong thời gian nghỉ: ${esc(c.due.join(', '))} — cần người làm thay / lùi hạn`);
+  if (c.meetings?.length) parts.push(`trùng giao ban ${esc(c.meetings.map(d => d.split('-').reverse().slice(0, 2).join('/')).join(', '))} — cần báo vắng, cử người dự thay`);
+  return `<div class="warn-text xs" data-testid="hrm-leave-conflict">⚠ ${parts.join('; ')}</div>`;
+};
 async function renderApprove(root, m) {
   const [leaves, atts] = await Promise.all([api('/api/hrm/leaves?scope=approve'), api('/api/hrm/attendance/pending')]);
   root.innerHTML = `<section class="card pg-section" data-testid="hrm-approve-leaves"><h3>Đơn nghỉ chờ duyệt</h3>
       ${leaves.length ? `<table class="table"><thead><tr><th>Người nghỉ</th><th>Loại</th><th>Ngày</th><th class="num">Số ngày</th><th>Lý do</th><th></th></tr></thead><tbody>
         ${leaves.map(l => `<tr><td><b>${esc(l.user.fullName)}</b><div class="muted xs">${esc(l.user.department?.name || '')}</div></td><td>${esc(l.type.label)}</td>
-          <td>${fmtDate(l.fromDate)}${l.toDate !== l.fromDate ? ' – ' + fmtDate(l.toDate) : ''}${l.halfDay !== 'NONE' ? ` (${l.halfDay === 'AM' ? 'sáng' : 'chiều'})` : ''}</td><td class="num">${num(l.days)}${l.balance ? `<div class="muted xs">phép còn ${num(l.balance.remaining)}/${num(l.balance.quota)}</div>` : ''}</td><td>${esc(l.reason || '')}</td>
+          <td>${fmtDate(l.fromDate)}${l.toDate !== l.fromDate ? ' – ' + fmtDate(l.toDate) : ''}${l.halfDay !== 'NONE' ? ` (${l.halfDay === 'AM' ? 'sáng' : 'chiều'})` : ''}${conflictNote(l.conflicts)}</td><td class="num">${num(l.days)}${l.balance ? `<div class="muted xs">phép còn ${num(l.balance.remaining)}/${num(l.balance.quota)}</div>` : ''}</td><td>${esc(l.reason || '')}</td>
           <td class="actions"><button class="btn btn-primary btn-sm" data-ldec="${l.id}" data-d="APPROVE" data-testid="hrm-approve">Duyệt</button><button class="btn btn-ghost btn-sm" data-ldec="${l.id}" data-d="REJECT">Từ chối</button></td></tr>`).join('')}</tbody></table>`
         : '<div class="empty">Không có đơn chờ duyệt.</div>'}</section>
     <section class="card pg-section"><h3>Giải trình chấm công chờ duyệt</h3>

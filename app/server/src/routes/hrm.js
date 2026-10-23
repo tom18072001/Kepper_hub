@@ -10,6 +10,7 @@ const H = require('../services/hrm');
 const WK = require('../services/weekly');
 const C = require('../lib/crypto-field');
 const { notify } = require('../services/events');
+const approval = require('../services/approval');
 
 const ACTIVE_USER = { isActive: true, isRootAdmin: false, role: { not: 'admin' } };
 const BASIC = ['employeeCode', 'startDate', 'status'];
@@ -342,6 +343,17 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     const rows = await prisma.user.findMany({ where: { id: { in: [...new Set(ids.filter(Boolean))] } }, include: { permissions: true, department: { select: { id: true, name: true } } } });
     return Object.fromEntries(rows.map(u => [u.id, u]));
   }
+  // Người duyệt thấy trước khi duyệt: việc người nghỉ đang chủ trì đến hạn trong thời gian nghỉ (chỉ mã việc — nội dung xem trong dự án
+  // theo quyền) và buổi giao ban thứ Hai trùng ngày nghỉ nếu người nghỉ là lãnh đạo bộ phận (cần cử người dự thay / báo vắng).
+  async function leaveConflicts(u, from, to) {
+    const items = await prisma.workItem.findMany({ where: { archivedAt: null, assignees: { some: { userId: u.id } }, state: { category: { notIn: ['COMPLETED', 'CANCELLED'] } },
+      dueDate: { gte: dayStart(from), lt: dayStart(WK.addDays(to, 1)) }, project: { archivedAt: null, deletedAt: null } },
+    select: { number: true, project: { select: { key: true } } }, orderBy: { dueDate: 'asc' }, take: 10 });
+    const leader = u.departmentId != null && (await approval.deptLeaderIds(prisma, u.departmentId)).includes(u.id);
+    const meetings = [];
+    if (leader) for (let d = from; d <= to && meetings.length < 10; d = WK.addDays(d, 1)) if (new Date(d + 'T00:00:00Z').getUTCDay() === 1) meetings.push(d);
+    return { due: items.map(i => `${i.project.key}-${i.number}`), meetings };
+  }
   // scope: mine (của tôi) | approve (chờ tôi duyệt) | team (bộ phận HIỆN TẠI của tôi / mọi người với HR, Ban GĐ)
   app.get('/api/hrm/leaves', auth, async (req, res) => {
     const { cfg, s } = await ctxFor(req);
@@ -366,6 +378,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
         if (!o.can.decide) continue;
         // Người duyệt thấy số phép còn lại (đã trừ chính đơn này nếu là phép năm) để biết đơn có vượt không.
         if (l.type === 'ANNUAL') { const prof = await prisma.hrProfile.findUnique({ where: { userId: u.id } }); o.balance = await balance(u, prof, cfg, Number(o.fromDate.slice(0, 4))); }
+        if (!req.via) o.conflicts = await leaveConflicts(u, o.fromDate, o.toDate);
       }
       out.push(o);
     }

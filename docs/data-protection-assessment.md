@@ -571,3 +571,17 @@ Chưa sửa (quyết định của chủ dự án): báo Ban GĐ khi IT đổi p
 - Người có quyền xem vẫn chụp màn hình / sao chép được (không có DRM) → quy chế + nhật ký.
 - Claude Desktop "luôn cho phép" công cụ ghi → Claude ghi nhật ký đối tác / tạo đơn nghỉ không hỏi lại. Nhật ký CRM không sửa được → khuyến cáo không bật "luôn cho phép" cho công cụ ghi.
 - Câu hỏi cho nhân sự / pháp chế: căn cứ xử lý hồ sơ (đồng ý hay hợp đồng); thời hạn lưu hồ sơ và bảng công sau nghỉ việc; có dùng máy chấm công sinh trắc không (nếu có: dữ liệu sinh trắc là DLCN nhạy cảm, cần đánh giá riêng cho thiết bị).
+
+## Chạy thử một dự án theo vai trò và các sửa đổi kèm theo (23/10/2026)
+
+Chạy thử dự án "Khu nhà ở Bình Minh (giả)" trên bản thử (dữ liệu giả): TGĐ giao việc → PMO nhập MTL → lãnh đạo bộ phận chi tiết hoá, phân công → nhân viên thực hiện (giao diện + Claude) → nghỉ phép → báo cáo tuần → giao ban. Không có tập dữ liệu mới; ba thay đổi chạm luồng dữ liệu:
+
+| Thay đổi | Dữ liệu | Đánh giá |
+|---|---|---|
+| Hạng mục MTL lập trên ứng dụng nhận kế hoạch gốc (+ migration bổ sung cho hạng mục cũ) | `mtl.plan` (Bảo mật, không DLCN) | Chỉ ghi trường kế hoạch gốc của hạng mục chưa có; quyền sửa kế hoạch giữ nguyên (lib/policy.js `mtl.plan`). Không đổi bên được xem |
+| Màn việc hiện nhật ký làm việc với đối tác gắn việc đó | `crm.interaction` (Bảo mật, DLCN cơ bản) | Cùng quy tắc xem như trang Đối tác: bộ phận phụ trách / Ban GĐ / người ghi / người được giao theo dõi. Người xem được việc nhưng không thuộc các nhóm trên chỉ thấy **số lượng** nhật ký ẩn |
+| Người duyệt đơn nghỉ thấy việc đến hạn trong thời gian nghỉ và buổi giao ban trùng ngày nghỉ | `hrm.leave` + mã việc | Chỉ mã việc (vd. BM-10), không tên / nội dung việc; không trả qua token Claude. Người duyệt vốn là lãnh đạo bộ phận / Ban GĐ / người phụ trách nhân sự |
+
+**Quyết định của chủ dự án (23/10/2026):** tạm chưa lập hồ sơ đánh giá tác động chuyển DLCN ra nước ngoài; không coi là điều kiện chặn cho bản thử (dữ liệu giả). Nghĩa vụ pháp lý vẫn còn (Luật BVDLCN Điều 20; Luật Dữ liệu Điều 23; NĐ 165/2025 Điều 12): phải có hồ sơ trước khi dữ liệu thật về nhân sự / đối tác đi qua Claude hoặc Viber. Các quyết định còn lại (quy chế dùng AI, người phụ trách nhân sự, thời hạn lưu hồ sơ, cấu hình Claude Team, cách đăng nhập) để sau.
+
+**Kết luận cổng cho thay đổi này:** ĐẠT (không thêm bên nhận, không thêm trường DLCN, không đổi quyền).
