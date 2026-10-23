@@ -130,7 +130,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
   const withProject = need => async (req, res, next) => { req.projectCtx = await loadProject(prisma, req.user, intParam(req.params.id), need); next(); };
 
   // ---------- Danh mục ----------
-  app.get('/api/settings', auth, async (req, res) => res.json({ ...(await R.getSettings(prisma)), canEdit: canEditCatalog(req.user), canCreateTemplate: canCreateTemplate(req.user) }));
+  app.get('/api/settings', auth, async (req, res) => res.json({ ...(await R.getSettings(prisma)), canEdit: canEditCatalog(req.user), canCreateTemplate: canCreateTemplate(req.user), modules: config?.modules || [] }));
   app.put('/api/settings', auth, async (req, res) => {
     if (!canEditCatalog(req.user)) fail(403, 'Chỉ Ban giám đốc hoặc quản trị được sửa danh mục', 'FORBIDDEN');
     const old = await R.getSettings(prisma);

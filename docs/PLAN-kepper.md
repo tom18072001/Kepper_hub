@@ -191,3 +191,18 @@ Còn mở:
 - quy chế sử dụng AI;
 - cảnh báo đọc dồn bất thường theo token;
 - connector từ xa (claude.ai web / điện thoại) khi đã có máy chủ + TLS.
+
+## Playground CRM đối tác + HRM (nhánh `kepper/playground-crm-hrm`)
+
+Chủ dự án (24/10/2026): mở playground riêng xây thêm CRM (đối tác, nhà thầu, cơ quan) và HRM (hồ sơ, hợp đồng, nghỉ phép, chấm công). Công ty ~40 người, cấp độ 2.
+
+| Hạng mục | Cách làm |
+|---|---|
+| Tách biệt | Module tuỳ chọn `MODULES=crm,hrm`, mặc định tắt (bản 4100 không đổi). Bản thử `deploy/playground.ps1`: thư mục, Docker project, image (`kepper-app:play`), CSDL, cổng 4200 riêng; dữ liệu GIẢ |
+| CRM | `CrmPartner` (một bộ phận phụ trách + người phụ trách), `CrmContact`, `CrmInteraction` (nhật ký không sửa; việc theo dõi có hạn + người theo dõi → nhắc 08:10), `CrmEngagement` (hợp đồng / gói thầu / MOU / hồ sơ cấp phép, gắn dự án) |
+| HRM | `HrProfile` (CCCD mã hoá), `HrContract` (lương mã hoá), `HrLeave` (tính ngày làm việc, phép năm BLLĐ Đ113–114, chặn trùng, lãnh đạo duyệt), `HrAttendance` (chấm vào / ra giờ máy chủ, giải trình → duyệt, nhập CSV máy chấm công), thiết lập (giờ làm, ngày làm, ngày lễ, mạng văn phòng, người phụ trách nhân sự do Ban GĐ chỉ định) |
+| Quyền | `lib/policy.js` thêm `crm.*`, `hrm.*`; test ma trận `policy-playground.test.js`; IT không có quyền nào |
+| Claude | 10 công cụ MCP mới (0.4.0): đối tác, chi tiết, việc theo dõi, ghi nhật ký, xong việc theo dõi; hồ sơ + phép của tôi, đơn nghỉ, tạo đơn nghỉ của mình, bảng công, tổng hợp công. Không chấm công / duyệt / sửa hồ sơ qua Claude; CCCD 4 số cuối; không lương; nghỉ ốm của người khác gộp |
+| Kiểm thử | unit (ma trận, ngày nghỉ, phép năm, đi muộn, CIDR, bảng công, mã hoá), e2e `08-playground-crm-hrm`, tích hợp MCP |
+
+Trước khi bật trên bản chạy thật: thông báo xử lý DLCN cho người lao động, chỉ định người phụ trách nhân sự + người chịu trách nhiệm bảo vệ DLCN, thời hạn lưu hồ sơ người nghỉ việc, khoá `HR_ENC_KEY` ngoài máy, hồ sơ đánh giá tác động (DPA mục Playground).

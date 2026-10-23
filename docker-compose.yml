@@ -43,6 +43,10 @@ services:
       ROOT_ADMIN_USERNAME: ${ROOT_ADMIN_USERNAME:-admin}
       ROOT_ADMIN_PASSWORD: ${ROOT_ADMIN_PASSWORD:?Đặt ROOT_ADMIN_PASSWORD trong .env}
       SEED_DEMO: ${SEED_DEMO:-false}
+      ALLOW_DEMO_SEED: ${ALLOW_DEMO_SEED:-}   # chỉ máy dùng thử (playground): yes
+      # Module tuỳ chọn: crm,hrm (mặc định tắt). Bật hrm cần HR_ENC_KEY (khoá mã hoá CCCD, lương — giữ cùng chỗ với khoá sao lưu).
+      MODULES: ${MODULES:-}
+      HR_ENC_KEY: ${HR_ENC_KEY:-}
       STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000

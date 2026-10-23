@@ -82,6 +82,7 @@ function createApp({ prisma, config }) {
     require('./routes/attachments'), require('./routes/approvals'), require('./routes/me'), require('./routes/notes'), require('./routes/dashboard'), require('./routes/kpi'), require('./routes/register'), require('./routes/dispatch'), require('./routes/excel'),
     require('./routes/cycles'), require('./routes/recurring'), require('./routes/views'), require('./routes/reports'), require('./routes/work'), require('./routes/search'),
     require('./routes/mtl'), require('./routes/sprint'), require('./routes/weekly'), require('./routes/viber'), require('./routes/realtime'), require('./routes/tokens'),
+    require('./routes/crm'), require('./routes/hrm'), // chỉ gắn khi bật trong MODULES
   ]) mount(app, ctx);
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'Không tìm thấy API', code: 'NOT_FOUND' }));
@@ -127,6 +128,8 @@ function loadConfig(env = process.env) {
     webDir: env.WEB_DIR ? path.resolve(env.WEB_DIR) : path.join(__dirname, '..', '..', 'web'),
     uploadTmpDir: env.UPLOAD_TMP_DIR || require('node:os').tmpdir(),
     enableCron: env.ENABLE_CRON !== 'false',
+    // Module tuỳ chọn (playground): MODULES=crm,hrm. Mặc định tắt — bản chạy thật không có CRM / HRM cho tới khi Ban GĐ quyết.
+    modules: String(env.MODULES || '').split(',').map(s => s.trim().toLowerCase()).filter(m => ['crm', 'hrm'].includes(m)),
   };
 }
 

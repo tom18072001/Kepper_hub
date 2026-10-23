@@ -452,3 +452,106 @@ Chờ chủ dự án quyết (không đổi trong mã):
   - thông báo cho người lao động về việc xử lý bằng AI.
 - **AI trong công việc** (Luật Trí tuệ nhân tạo 134/2025 Điều 7): kiểm soát dữ liệu AI truy cập → đã có bằng policy và token theo người.
 - **Sự cố DLCN** (lộ token, gửi nhầm dữ liệu): thông báo ≤ 72 giờ (Luật BVDLCN Điều 23).
+
+## Playground CRM đối tác + HRM (hồ sơ, hợp đồng, nghỉ phép, chấm công) — 24/10/2026
+
+**Phạm vi.** Module tuỳ chọn, MẶC ĐỊNH TẮT (`MODULES=crm,hrm`). Chạy trước trên **bản thử riêng** (cổng 4200, CSDL riêng, dữ liệu mẫu GIẢ — `deploy/playground.ps1`); bản đang chạy (4100) không có module này cho tới khi Ban GĐ duyệt.
+- CRM: đối tác B2B của dự án bất động sản — nhà thầu, tư vấn, cơ quan quản lý, ngân hàng, nhà cung cấp. Không có khách hàng cá nhân (người mua nhà).
+- HRM: hồ sơ, hợp đồng lao động, nghỉ phép, chấm công. **Không** tính lương, không bảo hiểm, không sinh trắc học.
+- Quy mô: ~40 người lao động; hệ thống thông tin cấp độ 2 (theo chủ dự án).
+
+**Giả định** (chưa có xác nhận của bộ phận nhân sự / pháp chế): bảng công dùng làm căn cứ tính lương ở hệ thống khác; máy chấm công vân tay / thẻ (nếu có) giữ dữ liệu sinh trắc trên thiết bị, Kepper chỉ nhận giờ.
+
+**Kết luận cổng:** ĐẠT CÓ ĐIỀU KIỆN cho bản thử (dữ liệu giả). **CHƯA ĐẠT** để bật trên bản chạy thật cho tới khi có: (1) thông báo xử lý DLCN cho người lao động; (2) chỉ định người phụ trách nhân sự trên hệ thống và người chịu trách nhiệm bảo vệ DLCN; (3) thời hạn lưu hồ sơ người đã nghỉ việc; (4) quản lý khoá `HR_ENC_KEY` ngoài máy chạy; (5) hồ sơ đánh giá tác động chuyển DLCN ra nước ngoài (GĐ3) bổ sung dữ liệu nhân sự / đối tác.
+
+### 1. Phân loại
+
+| Tập dữ liệu | Nhãn nội bộ | Phân loại pháp lý | Số chủ thể | Ghi chú |
+|---|---|---|---|---|
+| `crm.partner` (tên, loại, MST, địa chỉ, tổng đài tổ chức) | Nội bộ | Dữ liệu khác (tổ chức) | — | Mọi cán bộ xem để phối hợp; nhận xét nội bộ chỉ bộ phận phụ trách |
+| `crm.contact` (họ tên, chức danh, điện thoại, email công việc người của đối tác) | Bảo mật | DLCN cơ bản | vài trăm | Không ghi số định danh, địa chỉ nhà riêng |
+| `crm.interaction` (nhật ký làm việc, việc theo dõi) | Bảo mật | DLCN cơ bản; bí mật kinh doanh | — | Nhật ký không sửa / xoá |
+| `crm.engagement` (hợp đồng, gói thầu, MOU, hồ sơ cấp phép, giá trị) | Bảo mật | Bí mật kinh doanh | — | Chỉ lãnh đạo bộ phận phụ trách, người phụ trách, Ban GĐ |
+| `hrm.profile` (mã NV, ngày vào, trạng thái; riêng tư: ngày sinh, giới tính, liên hệ, địa chỉ, người liên hệ khẩn cấp, học vấn) | Bảo mật | DLCN cơ bản (cả người thân: họ tên + điện thoại khẩn cấp) | ~40 + người thân | Lãnh đạo bộ phận chỉ thấy trường cơ bản |
+| `hrm.identity` (số CCCD, ngày / nơi cấp) | **Hạn chế** | DLCN cơ bản — rủi ro mạo danh cao | ~40 | Mã hoá AES-256-GCM theo trường; chỉ chính người đó + người phụ trách nhân sự |
+| `hrm.contract` (hợp đồng lao động, **lương**) | **Hạn chế** | DLCN cơ bản + tài chính cá nhân | ~40 | Lương mã hoá theo trường; không bao giờ gửi Claude |
+| `hrm.leave` (đơn nghỉ) | Bảo mật; **nghỉ ốm / thai sản = Hạn chế** | DLCN cơ bản; loại nghỉ ốm / thai sản tiết lộ **tình trạng sức khoẻ → DLCN nhạy cảm** | ~40 | Lý do ≤ 200 ký tự, giao diện nhắc không ghi chẩn đoán |
+| `hrm.attendance` (giờ vào / ra, IP, đi muộn, giải trình) | Bảo mật | DLCN cơ bản (IP là dữ liệu vị trí gián tiếp) | ~40 | IP xoá sau 90 ngày |
+| `hrm.config` | Nội bộ | Dữ liệu khác | — | Người phụ trách nhân sự do Ban GĐ chỉ định |
+
+Số chủ thể rất thấp so với ngưỡng "dữ liệu quan trọng / cốt lõi" (QĐ 20/2025/QĐ-TTg) → không phát sinh nghĩa vụ của dữ liệu quan trọng; vẫn đủ nghĩa vụ DLCN (cơ bản + nhạy cảm).
+
+### 2. Dòng dữ liệu
+
+```
+Người dùng (trình duyệt, LAN) ──► Kepper API ──► lib/policy.js (crm.* / hrm.*) ──► PostgreSQL (CCCD, lương: bản mã) ──► bản sao lưu (age)
+                                                       │
+Claude Desktop (máy người dùng) ─ MCP + token ──►──────┘   trả về: CCCD 4 số cuối; KHÔNG lương; đơn của người khác:
+        │                                                  nghỉ ốm / thai sản → "Nghỉ theo chế độ", không lý do
+        └──► Anthropic (ngoài Việt Nam) — chặng chuyển DLCN ra nước ngoài (GĐ3)
+Máy chấm công ──CSV (mã NV, ngày, giờ)──► người phụ trách nhân sự ──► Kepper (không nhận dữ liệu sinh trắc)
+```
+
+### 3. Thiết kế kiểm soát
+
+- **Quyền theo dữ liệu, cưỡng chế ở máy chủ** (`lib/policy.js`, kiểm từng ô trong `policy-playground.test.js`; IT không có quyền nào):
+  - CRM: mỗi đối tác thuộc **một bộ phận phụ trách** + người phụ trách. Danh bạ tổ chức mọi cán bộ xem; người liên hệ / nhật ký / hợp đồng chỉ bộ phận phụ trách, người phụ trách, Ban GĐ; người được giao việc theo dõi chỉ thấy dòng của mình. Giá trị hợp đồng: lãnh đạo bộ phận phụ trách, người phụ trách, Ban GĐ. Chuyển bộ phận / ngừng theo dõi: lãnh đạo bộ phận, Ban GĐ.
+  - HRM: **người phụ trách nhân sự do Ban GĐ chỉ định** (không suy từ phòng ban — chống tự nâng quyền). Hồ sơ: chính người đó, người phụ trách nhân sự, Ban GĐ; lãnh đạo bộ phận chỉ trường cơ bản người trong bộ phận. Số CCCD: chính người đó + người phụ trách nhân sự (Ban GĐ không cần). Đơn nghỉ: lãnh đạo bộ phận duyệt nhân viên, Ban GĐ duyệt đơn của lãnh đạo bộ phận; không ai tự duyệt của mình. Giải trình chấm công: lãnh đạo bộ phận / người phụ trách nhân sự / Ban GĐ duyệt, không tự duyệt. Người phụ trách nhân sự không nhập / sửa chấm công của chính mình.
+- **Mã hoá theo trường** (`lib/crypto-field.js`): số CCCD, lương — AES-256-GCM, khoá `HR_ENC_KEY`. Máy chạy thiếu khoá → không khởi động. Bản sao lưu chỉ chứa bản mã. Xoá khoá = huỷ toàn bộ dữ liệu đã mã hoá.
+- **Xem số CCCD đầy đủ**: chỉ trên giao diện (bấm "Hiện"), **mỗi lượt ghi nhật ký** `HR_IDENTITY_VIEW`; không bao giờ qua token Claude (chặn ở `lib/tokens.js` và ở route).
+- **Claude (token)**: xem theo đúng quyền người dùng. Ghi được: nhật ký làm việc với đối tác, xong việc theo dõi, tạo đơn nghỉ của chính mình. **Không** qua Claude: chấm công, giải trình, duyệt đơn / giải trình, sửa hồ sơ / hợp đồng / CCCD, thiết lập, nhập máy chấm công, tạo / sửa đối tác.
+- **Tối thiểu hoá**: nhật ký hệ thống chỉ ghi tên trường thay đổi (không chép DLCN); người liên hệ rời đối tác → xoá hẳn; IP chấm công xoá sau 90 ngày; không thu sinh trắc, không GPS.
+- **Chấm công**: giờ lấy từ máy chủ; chỉ chính người đó bấm trên giao diện. Giới hạn "chỉ trong mạng văn phòng" là tuỳ chọn — **Docker Desktop thường che IP thật** của máy người dùng, trang Thiết lập hiện "IP Kepper đang thấy" để kiểm tra trước khi bật. Chấm công qua web là tự khai (có thể chấm từ xa nếu không giới hạn mạng) → nếu bảng công dùng tính lương, nên lấy giờ từ máy chấm công (nhập CSV).
+
+### 4. Rà năng lực (thay đổi so với GĐ3)
+
+| Mã | Trạng thái | Khuyến nghị cụ thể | Ưu tiên |
+|---|---|---|---|
+| GOV-01 | Một phần | Ma trận quyền trong mã + test. Ban hành **quy chế quản lý hồ sơ nhân sự trên Kepper** (ai xem gì, thời hạn lưu, xử lý khi nghỉ việc) | Bắt buộc |
+| GOV-02 | Một phần | Ban GĐ chỉ định người phụ trách nhân sự trên hệ thống (đã có chức năng) **và** người chịu trách nhiệm bảo vệ DLCN; mỗi đối tác có bộ phận / người phụ trách | Bắt buộc |
+| GOV-03 | Một phần | Danh mục tập dữ liệu ở bảng 1 + `DATASETS` trong `lib/policy.js` | Nên có |
+| GOV-04 | Một phần | Nhãn theo tập dữ liệu; loại nghỉ ốm / thai sản được xử lý như dữ liệu sức khoẻ | Nên có |
+| GOV-05 | Một phần | Sơ đồ mục 2; CSV máy chấm công là nguồn vào duy nhất từ ngoài | Nên có |
+| GOV-06 | Một phần | Dữ liệu đối tác chỉ dùng nội bộ, không chia sẻ tiếp; Anthropic là bên xử lý (GĐ3) | Bắt buộc |
+| PRE-01 | Đầy đủ | Quyền theo bộ phận phụ trách / người phụ trách nhân sự / lãnh đạo; không tự duyệt; e2e + test ma trận | Bắt buộc |
+| PRE-02 | Một phần | IT không xem nội dung nhân sự; DB vẫn là superuser (đã nêu GĐ2b) — tách role CSDL | Nên có |
+| PRE-03 | Một phần | CCCD, lương mã hoá theo trường. **Khoá `HR_ENC_KEY` đang nằm trong `.env` cùng máy** → bật BitLocker ổ máy chạy, giữ bản sao khoá ngoài máy cùng khoá sao lưu `age` | Bắt buộc |
+| PRE-04 | Một phần | CCCD chỉ 4 số cuối (giao diện + Claude); lương không qua Claude; nghỉ ốm của người khác gộp khi qua Claude; dữ liệu thử là dữ liệu giả | Bắt buộc |
+| PRE-05 | Một phần | Không có xuất tệp nhân sự; người dùng vẫn chụp / sao chép màn hình được → quy chế | Nên có |
+| PRE-06 | Đầy đủ | Duyệt / chấm công / sửa hồ sơ không qua Claude; mục đích gắn với vai trò | Bắt buộc |
+| PRE-07 | Một phần | Như GĐ3; thêm chặn `/api/hrm/people/:id/identity` với token | Bắt buộc |
+| DET-01 | Một phần | Nhật ký: tạo / sửa / duyệt / xem CCCD / nhập máy chấm công. Ban GĐ hoặc người được giao **rà nhật ký xem CCCD hằng tháng** | Bắt buộc |
+| DET-03 | Chưa có | Cảnh báo khi một người xem CCCD > 5 lượt / ngày | Nên có |
+| DET-04 | Một phần | Nhật ký truy cập ≥ 12 tháng (GĐ2b) | Bắt buộc |
+| PRI-01 | Chưa có | Hồ sơ nhân sự xử lý để thực hiện hợp đồng lao động — **pháp chế xác định căn cứ xử lý** (đồng ý hay ngoại lệ không cần đồng ý); ghi trong thông báo | Bắt buộc |
+| PRI-02 | Đầy đủ | Trường riêng tư tách khỏi trường cơ bản; lãnh đạo chỉ thấy cơ bản | Bắt buộc |
+| PRI-03 | Một phần | Người lao động tự xem hồ sơ, tự sửa liên hệ; yêu cầu sửa / xoá khác qua người phụ trách nhân sự | Nên có |
+| PRI-04 | Chưa có | **Thông báo xử lý DLCN cho người lao động**; bổ sung dữ liệu nhân sự / đối tác vào hồ sơ đánh giá tác động chuyển ra nước ngoài (GĐ3) | Bắt buộc |
+| RES-01 | Một phần | Bảng mới nằm trong sao lưu hằng ngày (mã hoá `age`); bản thử không sao lưu (dữ liệu giả) | Bắt buộc |
+| RES-02 | Một phần | IP 90 ngày; người liên hệ xoá hẳn khi hết mục đích. **Chưa có thời hạn lưu hồ sơ người đã nghỉ việc** — nhân sự / pháp chế quyết | Bắt buộc |
+| RES-03 | Một phần | Kịch bản lộ CCCD / lương: thu hồi quyền người phụ trách nhân sự, đổi khoá (mã hoá lại), thông báo ≤ 72 giờ | Bắt buộc |
+
+### 5. Nghĩa vụ pháp lý phát sinh (soát lại với Công báo trước khi trích dẫn chính thức)
+
+| Nghĩa vụ | Căn cứ | Hạn / ngưỡng | Người phụ trách |
+|---|---|---|---|
+| Hồ sơ đánh giá tác động xử lý DLCN (có dữ liệu sức khoẻ qua loại nghỉ) | Luật BVDLCN Điều 21 | ≤ 60 ngày từ khi bắt đầu xử lý (khi bật trên bản chạy thật) | Người chịu trách nhiệm bảo vệ DLCN |
+| Bổ sung hồ sơ chuyển DLCN ra nước ngoài (dữ liệu nhân sự / đối tác qua Claude) | Luật BVDLCN Điều 20; Luật Dữ liệu Điều 23; NĐ 165/2025 Điều 12 | Trước khi bật trên bản chạy thật | Như trên |
+| Thông báo vi phạm DLCN (lộ CCCD, lương, nghỉ ốm) | Luật BVDLCN Điều 23 | ≤ 72 giờ | Như trên + Ban GĐ |
+| Nghiêm cấm mua, bán DLCN (danh bạ người liên hệ đối tác) | Luật BVDLCN Điều 7 | — | Mọi người dùng |
+| Phép năm, thâm niên | BLLĐ 2019 Điều 113, 114 | 12 ngày; +1 ngày mỗi 5 năm | Người phụ trách nhân sự (số trên Kepper là tham khảo) |
+
+### 6. Khuyến nghị ưu tiên
+
+1. [Bắt buộc] Dùng thử trên bản 4200 với dữ liệu giả; **không nhập CCCD / lương thật** vào bản thử.
+2. [Bắt buộc] Trước khi bật trên bản chạy thật: thông báo xử lý DLCN cho người lao động; chỉ định người phụ trách nhân sự; quyết định thời hạn lưu; hồ sơ đánh giá tác động (mục 5).
+3. [Bắt buộc] `HR_ENC_KEY`: tạo trên máy chạy, bản sao giữ ngoài máy cùng khoá sao lưu; bật BitLocker.
+4. [Bắt buộc] Rà nhật ký "Xem số định danh" hằng tháng.
+5. [Nên có] Bảng công tính lương: lấy giờ từ máy chấm công (CSV), web chỉ để giải trình.
+6. [Nên có] Tách role CSDL (app không phải superuser) trước khi lưu dữ liệu Hạn chế thật.
+
+### 7. Rủi ro còn lại và câu hỏi mở
+
+- Người có quyền xem vẫn chụp màn hình / sao chép được (không có DRM) → quy chế + nhật ký.
+- Claude Desktop "luôn cho phép" công cụ ghi → Claude ghi nhật ký đối tác / tạo đơn nghỉ không hỏi lại. Nhật ký CRM không sửa được → khuyến cáo không bật "luôn cho phép" cho công cụ ghi.
+- Câu hỏi cho nhân sự / pháp chế: căn cứ xử lý hồ sơ (đồng ý hay hợp đồng); thời hạn lưu hồ sơ và bảng công sau nghỉ việc; có dùng máy chấm công sinh trắc không (nếu có: dữ liệu sinh trắc là DLCN nhạy cảm, cần đánh giá riêng cho thiết bị).

@@ -360,7 +360,7 @@ function fridaysOf(ym, now = new Date(), startWeek = null) {
 
 module.exports = {
   SOURCES, MTL_SOURCE, STATUSES, DONE, HELP_BGD, HELP_SELF, REASONS, NOTICE_TYPES, ATTENDANCE, DECISIONS, POINTS, POINT_LABEL,
-  isDay, addDays, dayOf, at, weekday, currentFriday, isFriday, fmtD, fmtTime, scheduleOf,
+  isDay, addDays, dayOf, at, weekday, currentFriday, isFriday, fmtD, fmtDY, fmtTime, scheduleOf,
   isOverdue, needsIssue, issueLabel, statusFromMtl, deptCandidates, buildPrefill, sanitize, validate, finalize, writeBacks,
   submissionStatus, absenceNoticed, SUBMITTED, buildSummary, briefSummary, summaryText, compliance, fridaysOf, stableStringify,
 };

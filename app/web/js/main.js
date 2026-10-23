@@ -15,6 +15,8 @@ import { renderQuick } from './views/quick.js';
 import { renderWeekly } from './views/weekly.js';
 import { renderTrash } from './views/trash.js';
 import { renderClaude } from './views/claude.js';
+import { renderCrm } from './views/crm.js';
+import { renderHrm } from './views/hrm.js';
 import { renderCatalog } from './views/catalog.js';
 import { renderWork } from './views/work.js';
 import { current as projectState, reloadProject } from './views/project.js';
@@ -104,6 +106,10 @@ function renderShell() {
   $('#navDashboard').classList.toggle('hidden', !can('reports.dashboard'));
   // Tổng thể công việc (mọi dự án, theo người / phòng): BGĐ và lãnh đạo phòng; cán bộ xem việc mình ở "Việc của tôi".
   $('#navWork').classList.toggle('hidden', !['SYSTEM', 'UNIT'].includes(workScope()));
+  // Module tuỳ chọn (playground): chỉ hiện khi máy chủ bật MODULES=crm,hrm.
+  const mods = store.settings?.modules || [];
+  $('#navCrm').classList.toggle('hidden', !mods.includes('crm'));
+  $('#navHrm').classList.toggle('hidden', !mods.includes('hrm'));
   // Admin IT: chỉ thấy phần quản trị, không thấy công việc / dự án / báo cáo.
   $('#workNav').classList.toggle('hidden', isItAdmin());
   $('#projectSection').classList.toggle('hidden', isItAdmin());
@@ -135,7 +141,7 @@ function highlightNav() {
   $$('.sb-nav a, .sb-projects a').forEach(a => {
     const href = a.getAttribute('href');
     a.classList.toggle('active', hash === href || hash.split('?')[0] === href || (href.startsWith('#/projects/') && hash.startsWith(href + '/')) || (href.startsWith('#/projects/') && hash.startsWith(href + '?'))
-      || (href === '#/tuan' && hash.startsWith('#/tuan')));
+      || (href === '#/tuan' && hash.startsWith('#/tuan')) || (href === '#/crm' && hash.startsWith('#/crm')) || (href === '#/hrm' && hash.startsWith('#/hrm')));
   });
   // Đang mở một trang trong "Công cụ khác" thì mở nhóm đó ra.
   const more = $('#navMore');
@@ -270,6 +276,8 @@ export async function route({ background = false } = {}) {
     else if (parts[0] === 'dashboard') { closeItem(); await renderDashboard(view, params, setCrumbs); }
     else if (parts[0] === 'trash') { closeItem(); await renderTrash(view, setCrumbs); }
     else if (parts[0] === 'claude') { closeItem(); await renderClaude(view, setCrumbs); }
+    else if (parts[0] === 'crm') { closeItem(); await renderCrm(view, parts[1] || null, params, setCrumbs); }
+    else if (parts[0] === 'hrm') { closeItem(); await renderHrm(view, parts, params, setCrumbs); }
     else if (parts[0] === 'catalog') { closeItem(); await renderCatalog(view, setCrumbs); }
     else if (parts[0] === 'work') { await renderWork(view, params, setCrumbs); syncPanel(); }
     else if (parts[0] === 'admin') { closeItem(); await renderAdmin(view, parts[1] || 'users', params, setCrumbs); }

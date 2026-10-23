@@ -1,0 +1,36 @@
+/* Playground CRM / HRM */
+.pg-section{margin-bottom:16px}
+.pg-section h3{margin:0 0 12px}
+.pg-section>.row:first-child{margin-bottom:10px}
+.pg-section>.row:first-child h3{margin:0}
+.pg-filters{margin:0 0 12px}
+.pg-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px;align-items:start}
+.pg-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.pg-grid .span2{grid-column:1/-1}
+.pg-grid fieldset{border:none;padding:0;margin:0 0 16px}
+.pg-grid fieldset legend{padding:0;margin-bottom:6px}
+.pg-iform{margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.pg-dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:0}
+.pg-dl dt{color:var(--muted);font-size:.85rem}
+.pg-dl dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.pre{white-space:pre-wrap}
+.pg-timeline{list-style:none;margin:0;padding:0}
+.pg-timeline li{padding:10px 0;border-top:1px solid var(--border)}
+.pg-timeline li:first-child{border-top:none}
+.pg-timeline .row{gap:8px}
+.pg-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.pg-day{border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 8px;min-height:70px;background:var(--surface);font-size:.85rem}
+.pg-day.off{background:var(--surface-3);color:var(--muted)}
+.pg-day.ok{border-left:3px solid var(--ok)}
+.pg-day.warn{border-left:3px solid var(--warn)}
+.pg-day.danger{border-left:3px solid var(--danger)}
+.pg-day.info{border-left:3px solid var(--brand)}
+.pg-day .btn{margin-top:4px;padding:2px 6px}
+@media (max-width:720px){
+  .pg-grid{grid-template-columns:1fr}
+  .pg-cal{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+.pg-filters>input{flex:1 1 240px;width:auto;min-width:0}
+.pg-filters>select{flex:0 0 auto;width:auto}
+.pg-section input[type=month]{width:auto}
+.pg-scroll{overflow-x:auto;max-width:100%}

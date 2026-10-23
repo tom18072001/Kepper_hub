@@ -14,7 +14,8 @@ const newToken = () => PREFIX + crypto.randomBytes(32).toString('base64url');
 const isToken = s => typeof s === 'string' && s.startsWith(PREFIX) && s.length > 20;
 
 // GET bị chặn với token: xuất tệp hàng loạt, luồng realtime (AI không cần), tải tệp đính kèm gốc.
-const READ_DENY = [/\.(xlsx|docx|pdf)$/, /^\/api\/stream$/, /^\/api\/attachments\/\d+\/download$/, /^\/api\/admin\//, /^\/api\/me\/tokens/];
+// Số định danh đầy đủ (CCCD): không bao giờ qua Claude — route cũng tự chặn (hai lớp).
+const READ_DENY = [/\.(xlsx|docx|pdf)$/, /^\/api\/stream$/, /^\/api\/attachments\/\d+\/download$/, /^\/api\/admin\//, /^\/api\/me\/tokens/, /^\/api\/hrm\/people\/\d+\/identity$/];
 // Ghi cho phép với phạm vi write (khớp method + đường dẫn). Mọi đường khác → 403 "làm trên giao diện".
 const WRITE_ALLOW = [
   ['PATCH', /^\/api\/items\/\d+$/],                 // % / nội dung / người phụ trách — vẫn qua mtl-guard + policy

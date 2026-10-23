@@ -63,6 +63,11 @@ async function start() {
       { name: 'ops_check', at: '09:00', run: p => require('./services/ops').runOpsCheck(p) },
       { name: 'retention_access_logs', at: '03:00', run: () => ({ count: require('./lib/access-log').purgeAccessLogs() }) },
     ];
+    // Module tuỳ chọn (playground): nhắc việc theo dõi đối tác; nhắc hợp đồng lao động sắp hết hạn; xoá IP chấm công quá 90 ngày.
+    if (config.modules.includes('crm')) daily.push({ name: 'crm_followups', at: '08:10', until: '18:00', run: p => require('./routes/crm').runCrmFollowups(p) });
+    if (config.modules.includes('hrm')) daily.push(
+      { name: 'hrm_reminders', at: '08:15', until: '18:00', run: p => require('./routes/hrm').runHrmReminders(p) },
+      { name: 'retention_hrm_ip', at: '03:10', run: p => require('./routes/hrm').purgeAttendanceIps(p) });
     jobs = require('./services/jobs').scheduler(prisma, daily);
     tasks.push(cron.schedule('* * * * *', () => jobs.tick(), { timezone: 'Asia/Ho_Chi_Minh' }));
     jobs.tick();

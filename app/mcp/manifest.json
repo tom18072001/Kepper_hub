@@ -2,44 +2,171 @@
   "manifest_version": "0.3",
   "name": "kepper-hub",
   "display_name": "Kepper Hub",
-  "version": "0.3.0",
-  "description": "Kepper Hub trong Claude: xem việc, cập nhật tiến độ, giao việc, nhắc việc, soạn nháp báo cáo tuần — đúng quyền tài khoản Kepper của bạn.",
+  "version": "0.4.0",
+  "description": "Kepper Hub trong Claude: xem việc, cập nhật tiến độ, giao việc, nhắc việc, soạn nháp báo cáo tuần; đối tác (CRM), nghỉ phép / bảng công (HRM) khi Kepper bật — đúng quyền tài khoản Kepper của bạn.",
   "long_description": "Chạy trên máy bạn, gọi Kepper trong mạng nội bộ bằng token cá nhân (Kepper → Kết nối Claude). Claude chỉ thấy và làm được những gì tài khoản Kepper của bạn được phép; nộp báo cáo, phê duyệt, xoá, xuất tệp vẫn làm trên giao diện Kepper.",
-  "author": { "name": "Kepper Hub" },
+  "author": {
+    "name": "Kepper Hub"
+  },
   "server": {
     "type": "node",
     "entry_point": "server.js",
     "mcp_config": {
       "command": "node",
-      "args": ["${__dirname}/server.js"],
-      "env": { "KEPPER_URL": "${user_config.kepper_url}", "KEPPER_TOKEN": "${user_config.kepper_token}" }
+      "args": [
+        "${__dirname}/server.js"
+      ],
+      "env": {
+        "KEPPER_URL": "${user_config.kepper_url}",
+        "KEPPER_TOKEN": "${user_config.kepper_token}"
+      }
     }
   },
   "user_config": {
-    "kepper_url": { "type": "string", "title": "Địa chỉ Kepper", "description": "Địa chỉ Kepper trong mạng nội bộ, vd. http://kepper.local hoặc http://localhost:4100", "required": true, "default": "http://localhost:4100" },
-    "kepper_token": { "type": "string", "title": "Token Kepper", "description": "Tạo trong Kepper → Công cụ khác → Kết nối Claude (bắt đầu bằng kpt_). Lưu mã hoá trong Windows Credential Manager / macOS Keychain.", "required": true, "sensitive": true }
+    "kepper_url": {
+      "type": "string",
+      "title": "Địa chỉ Kepper",
+      "description": "Địa chỉ Kepper trong mạng nội bộ, vd. http://kepper.local hoặc http://localhost:4100",
+      "required": true,
+      "default": "http://localhost:4100"
+    },
+    "kepper_token": {
+      "type": "string",
+      "title": "Token Kepper",
+      "description": "Tạo trong Kepper → Công cụ khác → Kết nối Claude (bắt đầu bằng kpt_). Lưu mã hoá trong Windows Credential Manager / macOS Keychain.",
+      "required": true,
+      "sensitive": true
+    }
   },
   "tools": [
-    { "name": "kepper_whoami", "description": "Tài khoản, bộ phận, vai trò giao ban" },
-    { "name": "kepper_my_tasks", "description": "Việc đang mở của tôi" },
-    { "name": "kepper_sprint_tasks", "description": "Việc trong kỳ (Cập nhật nhanh)" },
-    { "name": "kepper_get_item", "description": "Chi tiết một việc" },
-    { "name": "kepper_search", "description": "Tìm việc" },
-    { "name": "kepper_projects", "description": "Danh sách dự án" },
-    { "name": "kepper_project_status", "description": "Tiến độ dự án MTL" },
-    { "name": "kepper_notifications", "description": "Thông báo" },
-    { "name": "kepper_weekly_report", "description": "Báo cáo tuần của bộ phận" },
-    { "name": "kepper_weekly_summary", "description": "Tổng hợp giao ban (theo quyền)" },
-    { "name": "kepper_my_reminders", "description": "Nhắc việc cá nhân" },
-    { "name": "kepper_people", "description": "Danh bạ" },
-    { "name": "kepper_update_progress", "description": "Cập nhật tiến độ / checklist" },
-    { "name": "kepper_add_comment", "description": "Bình luận" },
-    { "name": "kepper_create_task", "description": "Tạo / giao việc" },
-    { "name": "kepper_assign", "description": "Phân công" },
-    { "name": "kepper_create_reminder", "description": "Tạo nhắc việc" },
-    { "name": "kepper_save_weekly_draft", "description": "Lưu nháp báo cáo tuần (không nộp)" }
+    {
+      "name": "kepper_whoami",
+      "description": "Tài khoản, bộ phận, vai trò giao ban"
+    },
+    {
+      "name": "kepper_my_tasks",
+      "description": "Việc đang mở của tôi"
+    },
+    {
+      "name": "kepper_sprint_tasks",
+      "description": "Việc trong kỳ (Cập nhật nhanh)"
+    },
+    {
+      "name": "kepper_get_item",
+      "description": "Chi tiết một việc"
+    },
+    {
+      "name": "kepper_search",
+      "description": "Tìm việc"
+    },
+    {
+      "name": "kepper_projects",
+      "description": "Danh sách dự án"
+    },
+    {
+      "name": "kepper_project_status",
+      "description": "Tiến độ dự án MTL"
+    },
+    {
+      "name": "kepper_notifications",
+      "description": "Thông báo"
+    },
+    {
+      "name": "kepper_weekly_report",
+      "description": "Báo cáo tuần của bộ phận"
+    },
+    {
+      "name": "kepper_weekly_summary",
+      "description": "Tổng hợp giao ban (theo quyền)"
+    },
+    {
+      "name": "kepper_my_reminders",
+      "description": "Nhắc việc cá nhân"
+    },
+    {
+      "name": "kepper_people",
+      "description": "Danh bạ"
+    },
+    {
+      "name": "kepper_update_progress",
+      "description": "Cập nhật tiến độ / checklist"
+    },
+    {
+      "name": "kepper_add_comment",
+      "description": "Bình luận"
+    },
+    {
+      "name": "kepper_create_task",
+      "description": "Tạo / giao việc"
+    },
+    {
+      "name": "kepper_assign",
+      "description": "Phân công"
+    },
+    {
+      "name": "kepper_create_reminder",
+      "description": "Tạo nhắc việc"
+    },
+    {
+      "name": "kepper_save_weekly_draft",
+      "description": "Lưu nháp báo cáo tuần (không nộp)"
+    },
+    {
+      "name": "kepper_crm_partners",
+      "description": "Danh bạ đối tác (CRM)"
+    },
+    {
+      "name": "kepper_crm_partner",
+      "description": "Chi tiết đối tác"
+    },
+    {
+      "name": "kepper_crm_followups",
+      "description": "Việc cần theo dõi với đối tác"
+    },
+    {
+      "name": "kepper_crm_log_interaction",
+      "description": "Ghi nhật ký làm việc với đối tác"
+    },
+    {
+      "name": "kepper_crm_followup_done",
+      "description": "Xong việc theo dõi"
+    },
+    {
+      "name": "kepper_hr_me",
+      "description": "Hồ sơ và phép của tôi (không CCCD đầy đủ, không lương)"
+    },
+    {
+      "name": "kepper_hr_leaves",
+      "description": "Đơn nghỉ"
+    },
+    {
+      "name": "kepper_hr_request_leave",
+      "description": "Tạo đơn nghỉ của tôi (không duyệt)"
+    },
+    {
+      "name": "kepper_hr_attendance",
+      "description": "Bảng công tháng"
+    },
+    {
+      "name": "kepper_hr_team_attendance",
+      "description": "Tổng hợp công bộ phận"
+    }
   ],
-  "keywords": ["kepper", "tiến độ", "báo cáo tuần"],
+  "keywords": [
+    "kepper",
+    "tiến độ",
+    "báo cáo tuần",
+    "đối tác",
+    "nghỉ phép"
+  ],
   "license": "UNLICENSED",
-  "compatibility": { "platforms": ["win32", "darwin"], "runtimes": { "node": ">=18.0.0" } }
+  "compatibility": {
+    "platforms": [
+      "win32",
+      "darwin"
+    ],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
 }

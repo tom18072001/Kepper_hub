@@ -12,37 +12,37 @@ datasource db {
 
 // ---------- Tổ chức ----------
 model Department {
-  id        Int          @id @default(autoincrement())
-  code      String       @unique
-  name      String
-  parentId  Int?
-  parent    Department?  @relation("DeptTree", fields: [parentId], references: [id])
-  children  Department[] @relation("DeptTree")
-  isActive  Boolean      @default(true)
-  supervisorId Int?      // Phó Giám đốc phụ trách phòng: nhận phiếu trình của phòng ở cấp Ban Giám đốc
-  createdAt DateTime     @default(now())
-  users     User[]
-  projects  Project[]
+  id           Int          @id @default(autoincrement())
+  code         String       @unique
+  name         String
+  parentId     Int?
+  parent       Department?  @relation("DeptTree", fields: [parentId], references: [id])
+  children     Department[] @relation("DeptTree")
+  isActive     Boolean      @default(true)
+  supervisorId Int? // Phó Giám đốc phụ trách phòng: nhận phiếu trình của phòng ở cấp Ban Giám đốc
+  createdAt    DateTime     @default(now())
+  users        User[]
+  projects     Project[]
 }
 
 model User {
-  id             Int       @id @default(autoincrement())
-  username       String    @unique
+  id             Int                   @id @default(autoincrement())
+  username       String                @unique
   passwordHash   String
   fullName       String
   displayTitle   String?
   email          String?
   phone          String?
-  role           String    @default("member") // admin | director | manager | deputy (phó phòng) | member
+  role           String                @default("member") // admin | director | manager | deputy (phó phòng) | member
   departmentId   Int?
-  department     Department? @relation(fields: [departmentId], references: [id])
-  isRootAdmin    Boolean   @default(false)
-  isActive       Boolean   @default(true)
+  department     Department?           @relation(fields: [departmentId], references: [id])
+  isRootAdmin    Boolean               @default(false)
+  isActive       Boolean               @default(true)
   deactivatedAt  DateTime? // thời điểm khoá tài khoản; ghi chú cá nhân bị xoá sau 30 ngày kể từ mốc này
-  mustChangePw   Boolean   @default(true)
-  sessionVersion Int       @default(0)
+  mustChangePw   Boolean               @default(true)
+  sessionVersion Int                   @default(0)
   lastLoginAt    DateTime?
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime              @default(now())
   permissions    UserPermission[]
   memberships    ProjectMember[]
   assigned       WorkItemAssignee[]
@@ -60,9 +60,9 @@ model UserPermission {
   userId        Int
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   permissionKey String
-  action        String   // VIEW | OPERATE
-  scope         String   // UNIT | SYSTEM (UNIT = phòng ban của tài khoản)
-  source        String?  // ROLE_PROFILE | CUSTOM
+  action        String // VIEW | OPERATE
+  scope         String // UNIT | SYSTEM (UNIT = phòng ban của tài khoản)
+  source        String? // ROLE_PROFILE | CUSTOM
   grantedById   Int?
   createdAt     DateTime @default(now())
 
@@ -71,40 +71,40 @@ model UserPermission {
 
 // ---------- Dự án & quy trình ----------
 model Project {
-  id            Int      @id @default(autoincrement())
-  key           String   @unique // VD: MKT -> mã việc MKT-12
-  name          String
-  description   String?
-  departmentId  Int
-  department    Department @relation(fields: [departmentId], references: [id])
-  leadId        Int?
-  visibility    String   @default("DEPARTMENT") // DEPARTMENT | PRIVATE | PUBLIC | ASSIGNED (sổ giao việc của đơn vị: mỗi người chỉ thấy việc liên quan đến mình)
-  nextNumber    Int      @default(1)
-  intakeEnabled Boolean  @default(false) // cho phép phòng ban khác gửi yêu cầu vào dự án
+  id                    Int                @id @default(autoincrement())
+  key                   String             @unique // VD: MKT -> mã việc MKT-12
+  name                  String
+  description           String?
+  departmentId          Int
+  department            Department         @relation(fields: [departmentId], references: [id])
+  leadId                Int?
+  visibility            String             @default("DEPARTMENT") // DEPARTMENT | PRIVATE | PUBLIC | ASSIGNED (sổ giao việc của đơn vị: mỗi người chỉ thấy việc liên quan đến mình)
+  nextNumber            Int                @default(1)
+  intakeEnabled         Boolean            @default(false) // cho phép phòng ban khác gửi yêu cầu vào dự án
   defaultApprovalLevels Int? // số cấp duyệt mặc định cho việc mới; null = đủ các cấp, 0 = không cần duyệt
   // ---- Kepper: dự án theo Master Timeline ----
-  kind          String   @default("BOARD") // BOARD = bảng công việc | MTL = dự án theo Master Timeline (tháng T từ T0)
-  t0Date        DateTime? // ngày T0 của MTL (đầu tháng T0)
-  alertConfig   Json?    // ngưỡng cảnh báo: { behindPct, aheadPct, startSoonDays, dueSoonDays, staleDays }
-  sprintPlan    Json?    // Kepper: sprint = nhóm bước MTL theo thứ tự [{ name, steps: "1-9", goal }] — PMO thiết lập
-  archivedAt    DateTime?
-  deletedAt     DateTime? // đã xoá (thùng rác): khôi phục được trong 7 ngày, sau đó xoá hẳn
-  deletedById   Int?
-  createdById   Int?
-  createdAt     DateTime @default(now())
-  members       ProjectMember[]
-  states        WorkflowState[]
-  items         WorkItem[]
-  approvalSteps ApprovalStep[]
-  cycles        Cycle[]
-  intakeRequests IntakeRequest[]
-  recurringRules RecurringRule[]
-  savedViews    SavedView[]
-  labels        Label[]
-  approvalRules ApprovalRule[]
-  plans         Plan[]
-  alerts        ProgressAlert[]
-  snapshots     ProgressSnapshot[]
+  kind                  String             @default("BOARD") // BOARD = bảng công việc | MTL = dự án theo Master Timeline (tháng T từ T0)
+  t0Date                DateTime? // ngày T0 của MTL (đầu tháng T0)
+  alertConfig           Json? // ngưỡng cảnh báo: { behindPct, aheadPct, startSoonDays, dueSoonDays, staleDays }
+  sprintPlan            Json? // Kepper: sprint = nhóm bước MTL theo thứ tự [{ name, steps: "1-9", goal }] — PMO thiết lập
+  archivedAt            DateTime?
+  deletedAt             DateTime? // đã xoá (thùng rác): khôi phục được trong 7 ngày, sau đó xoá hẳn
+  deletedById           Int?
+  createdById           Int?
+  createdAt             DateTime           @default(now())
+  members               ProjectMember[]
+  states                WorkflowState[]
+  items                 WorkItem[]
+  approvalSteps         ApprovalStep[]
+  cycles                Cycle[]
+  intakeRequests        IntakeRequest[]
+  recurringRules        RecurringRule[]
+  savedViews            SavedView[]
+  labels                Label[]
+  approvalRules         ApprovalRule[]
+  plans                 Plan[]
+  alerts                ProgressAlert[]
+  snapshots             ProgressSnapshot[]
 
   @@index([departmentId])
 }
@@ -122,13 +122,13 @@ model ProjectMember {
 }
 
 model WorkflowState {
-  id        Int      @id @default(autoincrement())
+  id        Int        @id @default(autoincrement())
   projectId Int
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name      String
-  category  String   // BACKLOG | UNSTARTED | STARTED | REVIEW | COMPLETED | CANCELLED | OTHER (cột tự do)
-  color     String   @default("#64748b")
-  position  Int      @default(0)
+  category  String // BACKLOG | UNSTARTED | STARTED | REVIEW | COMPLETED | CANCELLED | OTHER (cột tự do)
+  color     String     @default("#64748b")
+  position  Int        @default(0)
   wipLimit  Int?
   items     WorkItem[]
 
@@ -142,7 +142,7 @@ model ApprovalStep {
   project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   level          Int
   name           String
-  approverType   String  // PROJECT_LEAD | DEPARTMENT_MANAGER | DIRECTOR | USER
+  approverType   String // PROJECT_LEAD | DEPARTMENT_MANAGER | DIRECTOR | USER
   approverUserId Int?
 
   @@unique([projectId, level])
@@ -150,99 +150,99 @@ model ApprovalStep {
 
 // ---------- Công việc ----------
 model WorkItem {
-  id              Int       @id @default(autoincrement())
-  projectId       Int
-  project         Project   @relation(fields: [projectId], references: [id])
-  number          Int
-  title           String
-  descriptionHtml String    @default("")
-  descriptionText String    @default("")
-  stateId         Int
-  state           WorkflowState @relation(fields: [stateId], references: [id])
-  priority        String    @default("NONE") // URGENT | HIGH | MEDIUM | LOW | NONE
-  reporterId      Int?
-  parentId        Int?
-  parent          WorkItem?  @relation("SubItems", fields: [parentId], references: [id])
-  children        WorkItem[] @relation("SubItems")
-  startDate       DateTime?
-  dueDate         DateTime?
-  estimate        Float?
-  cycleId         Int?
-  cycle           Cycle?    @relation(fields: [cycleId], references: [id], onDelete: SetNull)
-  intakeRequest   IntakeRequest? @relation("IntakeItem")
-  recurringRuleId Int?
-  approvalLevels  Int?      // null = theo mặc định dự án; 0 = không cần duyệt; n = n cấp đầu
+  id                 Int                  @id @default(autoincrement())
+  projectId          Int
+  project            Project              @relation(fields: [projectId], references: [id])
+  number             Int
+  title              String
+  descriptionHtml    String               @default("")
+  descriptionText    String               @default("")
+  stateId            Int
+  state              WorkflowState        @relation(fields: [stateId], references: [id])
+  priority           String               @default("NONE") // URGENT | HIGH | MEDIUM | LOW | NONE
+  reporterId         Int?
+  parentId           Int?
+  parent             WorkItem?            @relation("SubItems", fields: [parentId], references: [id])
+  children           WorkItem[]           @relation("SubItems")
+  startDate          DateTime?
+  dueDate            DateTime?
+  estimate           Float?
+  cycleId            Int?
+  cycle              Cycle?               @relation(fields: [cycleId], references: [id], onDelete: SetNull)
+  intakeRequest      IntakeRequest?       @relation("IntakeItem")
+  recurringRuleId    Int?
+  approvalLevels     Int? // null = theo mặc định dự án; 0 = không cần duyệt; n = n cấp đầu
   // ---- Sổ theo dõi, kiểm soát giao việc (mẫu nghiệp vụ của chủ dự án) ----
-  assignedById    Int?      // người giao việc (mặc định = người tạo)
-  assignedAt      DateTime? // ngày giao
-  source          String?   // nguồn giao việc: Họp giao ban, Kế hoạch năm, Văn bản cấp trên…
-  progress        Int       @default(0) // tiến độ % do người chủ trì cập nhật
-  deliverable     String    @default("") // sản phẩm đầu ra
-  outputs         String    @default("") // sản phẩm đã có theo tiến độ (mỗi dòng một văn bản)
-  resultNote      String    @default("") // kết quả / khó khăn, kiến nghị
-  review          String    @default("") // đánh giá của người giao
-  reviewedById    Int?
-  reviewedAt      DateTime?
-  coordinatorText String    @default("") // đơn vị / người phối hợp ngoài hệ thống (ghi tự do)
-  note            String    @default("") // ghi chú
-  refCode         String?   // mã CV gốc khi nhập từ sổ Excel
+  assignedById       Int? // người giao việc (mặc định = người tạo)
+  assignedAt         DateTime? // ngày giao
+  source             String? // nguồn giao việc: Họp giao ban, Kế hoạch năm, Văn bản cấp trên…
+  progress           Int                  @default(0) // tiến độ % do người chủ trì cập nhật
+  deliverable        String               @default("") // sản phẩm đầu ra
+  outputs            String               @default("") // sản phẩm đã có theo tiến độ (mỗi dòng một văn bản)
+  resultNote         String               @default("") // kết quả / khó khăn, kiến nghị
+  review             String               @default("") // đánh giá của người giao
+  reviewedById       Int?
+  reviewedAt         DateTime?
+  coordinatorText    String               @default("") // đơn vị / người phối hợp ngoài hệ thống (ghi tự do)
+  note               String               @default("") // ghi chú
+  refCode            String? // mã CV gốc khi nhập từ sổ Excel
   // ---- Kế hoạch công tác năm ----
-  planId          Int?
-  plan            Plan?     @relation(fields: [planId], references: [id], onDelete: SetNull)
-  planCode        String?   // số thứ tự trong kế hoạch, vd. "2.2"
-  planSection     String?   // nhóm nhiệm vụ, vd. "2. Tổ chức các hội thi, cuộc thi…"
-  period          String?   // thời gian theo kế hoạch, vd. "Quý II, III (trước 31/8/2027)"
-  location        String?   // địa điểm
-  budget          Float?    // kinh phí (triệu đồng)
-  supervisorText  String?   // lãnh đạo phụ trách
+  planId             Int?
+  plan               Plan?                @relation(fields: [planId], references: [id], onDelete: SetNull)
+  planCode           String? // số thứ tự trong kế hoạch, vd. "2.2"
+  planSection        String? // nhóm nhiệm vụ, vd. "2. Tổ chức các hội thi, cuộc thi…"
+  period             String? // thời gian theo kế hoạch, vd. "Quý II, III (trước 31/8/2027)"
+  location           String? // địa điểm
+  budget             Float? // kinh phí (triệu đồng)
+  supervisorText     String? // lãnh đạo phụ trách
   // ---- Kepper: hạng mục Master Timeline ----
-  critical        Boolean   @default(false) // thuộc đường găng
-  milestone       Boolean   @default(false) // mốc ◆
-  milestoneNote   String?   // ghi chú cột "Mốc" (vd. "60 ngày")
-  ownerText       String    @default("") // cột "Đầu mối" nguyên văn (vd. "PL/Sở TC-KH")
-  externalParty   String    @default("") // cơ quan / đơn vị ngoài công ty trong đầu mối (vd. "UBND TP")
-  startT          Float?    // bắt đầu theo tháng T (từ T0)
-  endT            Float?    // kết thúc theo tháng T
-  baselineStart   DateTime? // kế hoạch gốc: ngày bắt đầu
-  baselineEnd     DateTime? // kế hoạch gốc: ngày kết thúc
-  forecastEnd     DateTime? // dự báo hoàn thành (người chủ trì cập nhật)
-  weight          Float?    // trọng số khi tính tiến độ / SPI (null = theo thời lượng)
-  progressAt      DateTime? // lần cập nhật tiến độ gần nhất
+  critical           Boolean              @default(false) // thuộc đường găng
+  milestone          Boolean              @default(false) // mốc ◆
+  milestoneNote      String? // ghi chú cột "Mốc" (vd. "60 ngày")
+  ownerText          String               @default("") // cột "Đầu mối" nguyên văn (vd. "PL/Sở TC-KH")
+  externalParty      String               @default("") // cơ quan / đơn vị ngoài công ty trong đầu mối (vd. "UBND TP")
+  startT             Float? // bắt đầu theo tháng T (từ T0)
+  endT               Float? // kết thúc theo tháng T
+  baselineStart      DateTime? // kế hoạch gốc: ngày bắt đầu
+  baselineEnd        DateTime? // kế hoạch gốc: ngày kết thúc
+  forecastEnd        DateTime? // dự báo hoàn thành (người chủ trì cập nhật)
+  weight             Float? // trọng số khi tính tiến độ / SPI (null = theo thời lượng)
+  progressAt         DateTime? // lần cập nhật tiến độ gần nhất
   // ---- GĐ3a: điều hành hai chiều BGĐ → phòng → cán bộ ----
-  taskType        String    @default("ADHOC") // PLAN = theo Kế hoạch năm | ADHOC = đột xuất (công việc khác theo chỉ đạo)
-  leadDepartmentId Int?     // đơn vị chủ trì khi giao về phòng
-  dispatchStatus  String?   // PENDING = chờ phòng tiếp nhận | ACCEPTED = phòng đã phân công | null = việc thường
-  dispatchedAt    DateTime?
-  acceptedAt      DateTime?
-  acceptedById    Int?
-  originalDueDate DateTime? // hạn gốc lúc giao; gia hạn được duyệt chỉ đổi dueDate
-  internalDueDate DateTime? // hạn nội bộ do lãnh đạo phòng chủ trì đặt khi phân công (không muộn hơn hạn chính thức)
-  returnedAt      DateTime? // bị trả lại ở bước duyệt (xoá khi nộp lại / hoàn thành)
-  returnNote      String?   // lý do trả lại gần nhất
-  rating          String?   // xếp loại khi nghiệm thu: EXCELLENT | GOOD | PASS | FAIL
-  ratedById       Int?
-  ratedAt         DateTime?
-  position        Float     @default(0)
-  startedAt       DateTime?
-  completedAt     DateTime?
-  archivedAt      DateTime? // đã xoá (thùng rác): khôi phục được trong 7 ngày, sau đó xoá hẳn
-  deletedById     Int?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  assignees       WorkItemAssignee[] // người chủ trì
-  supporters      WorkItemSupporter[] // người phối hợp (tài khoản trong hệ thống)
-  labels          WorkItemLabel[]
-  checklist       ChecklistItem[]
-  comments        Comment[]
-  activities      Activity[]
-  attachments     Attachment[]
-  approvals       ApprovalRequest[]
+  taskType           String               @default("ADHOC") // PLAN = theo Kế hoạch năm | ADHOC = đột xuất (công việc khác theo chỉ đạo)
+  leadDepartmentId   Int? // đơn vị chủ trì khi giao về phòng
+  dispatchStatus     String? // PENDING = chờ phòng tiếp nhận | ACCEPTED = phòng đã phân công | null = việc thường
+  dispatchedAt       DateTime?
+  acceptedAt         DateTime?
+  acceptedById       Int?
+  originalDueDate    DateTime? // hạn gốc lúc giao; gia hạn được duyệt chỉ đổi dueDate
+  internalDueDate    DateTime? // hạn nội bộ do lãnh đạo phòng chủ trì đặt khi phân công (không muộn hơn hạn chính thức)
+  returnedAt         DateTime? // bị trả lại ở bước duyệt (xoá khi nộp lại / hoàn thành)
+  returnNote         String? // lý do trả lại gần nhất
+  rating             String? // xếp loại khi nghiệm thu: EXCELLENT | GOOD | PASS | FAIL
+  ratedById          Int?
+  ratedAt            DateTime?
+  position           Float                @default(0)
+  startedAt          DateTime?
+  completedAt        DateTime?
+  archivedAt         DateTime? // đã xoá (thùng rác): khôi phục được trong 7 ngày, sau đó xoá hẳn
+  deletedById        Int?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  assignees          WorkItemAssignee[] // người chủ trì
+  supporters         WorkItemSupporter[] // người phối hợp (tài khoản trong hệ thống)
+  labels             WorkItemLabel[]
+  checklist          ChecklistItem[]
+  comments           Comment[]
+  activities         Activity[]
+  attachments        Attachment[]
+  approvals          ApprovalRequest[]
   supportDepartments WorkItemDepartment[]
-  progressReports ProgressReport[]
-  extensions      DueExtension[]
-  documents       WorkItemDocument[]
+  progressReports    ProgressReport[]
+  extensions         DueExtension[]
+  documents          WorkItemDocument[]
 
-  alerts          ProgressAlert[]
+  alerts ProgressAlert[]
 
   @@unique([projectId, number])
   @@index([leadDepartmentId])
@@ -255,63 +255,63 @@ model WorkItem {
 
 // ---------- GĐ2: chu kỳ, tiếp nhận yêu cầu, việc lặp lại, bộ lọc đã lưu ----------
 model Cycle {
-  id        Int      @id @default(autoincrement())
-  projectId Int
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name      String
-  startDate DateTime
-  endDate   DateTime // ngày cuối (bao gồm)
+  id          Int        @id @default(autoincrement())
+  projectId   Int
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  startDate   DateTime
+  endDate     DateTime // ngày cuối (bao gồm)
   createdById Int?
-  createdAt DateTime @default(now())
-  items     WorkItem[]
+  createdAt   DateTime   @default(now())
+  items       WorkItem[]
 
   @@index([projectId, startDate])
 }
 
 // Yêu cầu từ phòng ban khác gửi vào dự án; người trong dự án tiếp nhận (tạo việc) hoặc từ chối.
 model IntakeRequest {
-  id              Int      @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
   projectId       Int
-  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title           String
-  descriptionHtml String   @default("")
-  descriptionText String   @default("")
-  priority        String   @default("NONE")
+  descriptionHtml String    @default("")
+  descriptionText String    @default("")
+  priority        String    @default("NONE")
   dueDate         DateTime?
   requesterId     Int
-  status          String   @default("PENDING") // PENDING | ACCEPTED | DECLINED
+  status          String    @default("PENDING") // PENDING | ACCEPTED | DECLINED
   decisionNote    String?
   decidedById     Int?
   decidedAt       DateTime?
-  workItemId      Int?     @unique
+  workItemId      Int?      @unique
   workItem        WorkItem? @relation("IntakeItem", fields: [workItemId], references: [id], onDelete: SetNull)
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
 
   @@index([projectId, status])
   @@index([requesterId])
 }
 
 model RecurringRule {
-  id              Int      @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
   projectId       Int
-  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title           String
-  descriptionHtml String   @default("")
-  priority        String   @default("NONE")
-  assigneeIds     Int[]    @default([])
-  labelIds        Int[]    @default([])
-  frequency       String   // DAILY | WEEKLY | MONTHLY
-  interval        Int      @default(1)
-  weekday         Int?     // 1=Thứ 2 … 7=Chủ nhật (WEEKLY)
-  monthDay        Int?     // 1–28 (MONTHLY)
-  dueOffsetDays   Int      @default(0)
-  workdaysOnly    Boolean  @default(false) // hằng ngày: chỉ T2–T6
-  sourceItemId    Int?     // việc gốc khi bấm "Lặp lại việc này"
+  descriptionHtml String    @default("")
+  priority        String    @default("NONE")
+  assigneeIds     Int[]     @default([])
+  labelIds        Int[]     @default([])
+  frequency       String // DAILY | WEEKLY | MONTHLY
+  interval        Int       @default(1)
+  weekday         Int? // 1=Thứ 2 … 7=Chủ nhật (WEEKLY)
+  monthDay        Int? // 1–28 (MONTHLY)
+  dueOffsetDays   Int       @default(0)
+  workdaysOnly    Boolean   @default(false) // hằng ngày: chỉ T2–T6
+  sourceItemId    Int? // việc gốc khi bấm "Lặp lại việc này"
   nextRunAt       DateTime
   lastRunAt       DateTime?
-  isActive        Boolean  @default(true)
+  isActive        Boolean   @default(true)
   createdById     Int?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
 
   @@index([isActive, nextRunAt])
 }
@@ -343,38 +343,38 @@ model WorkItemSupporter {
 
 // Kế hoạch công tác năm (nhập từ văn bản Word): nguồn sinh ra các nhiệm vụ trong Sổ giao việc.
 model Plan {
-  id          Int       @id @default(autoincrement())
-  projectId   Int
-  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name        String
-  year        Int
-  kind        String    @default("ANNUAL") // ANNUAL (cũ) | MASTER = MTL tổng | DEPARTMENT = MTL bộ phận
-  departmentId Int?     // MTL bộ phận: bộ phận sở hữu
-  sheetName   String?
-  fileHash    String?   // SHA-256 của tệp nguồn (truy vết nguồn nhập)
-  fileName    String?
-  createdById Int?
-  createdAt   DateTime  @default(now())
-  items       WorkItem[]
+  id           Int        @id @default(autoincrement())
+  projectId    Int
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name         String
+  year         Int
+  kind         String     @default("ANNUAL") // ANNUAL (cũ) | MASTER = MTL tổng | DEPARTMENT = MTL bộ phận
+  departmentId Int? // MTL bộ phận: bộ phận sở hữu
+  sheetName    String?
+  fileHash     String? // SHA-256 của tệp nguồn (truy vết nguồn nhập)
+  fileName     String?
+  createdById  Int?
+  createdAt    DateTime   @default(now())
+  items        WorkItem[]
 
   @@index([projectId])
 }
 
 // Danh mục dùng chung của đơn vị (nguồn giao việc, ngưỡng "sắp đến hạn"…), dạng khoá → giá trị JSON.
 model AppSetting {
-  key       String   @id
-  value     Json
+  key         String   @id
+  value       Json
   updatedById Int?
-  updatedAt DateTime @updatedAt
+  updatedAt   DateTime @updatedAt
 }
 
 // Mẫu nhóm việc (vd. "Nhiệm vụ chuẩn – Cuộc thi/Hội thi"): danh sách việc nhánh kèm sản phẩm đầu ra.
 model TaskTemplate {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  items     Json     // [{ title, deliverable }]
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  items       Json // [{ title, deliverable }]
   createdById Int?
-  createdAt DateTime @default(now())
+  createdAt   DateTime @default(now())
 }
 
 model WorkItemAssignee {
@@ -388,14 +388,14 @@ model WorkItemAssignee {
 }
 
 model Label {
-  id        Int      @id @default(autoincrement())
-  name      String
-  color     String   @default("#2563eb")
-  projectId Int?     // null = nhãn chung toàn tổ chức (quản trị tạo); có giá trị = nhãn riêng của dự án
-  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id          Int             @id @default(autoincrement())
+  name        String
+  color       String          @default("#2563eb")
+  projectId   Int? // null = nhãn chung toàn tổ chức (quản trị tạo); có giá trị = nhãn riêng của dự án
+  project     Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdById Int?
-  createdAt DateTime @default(now())
-  items     WorkItemLabel[]
+  createdAt   DateTime        @default(now())
+  items       WorkItemLabel[]
 
   @@unique([projectId, name])
   @@index([projectId])
@@ -403,19 +403,19 @@ model Label {
 
 // Ghi chú / việc cá nhân trong "Việc của tôi": chỉ chủ sở hữu xem và sửa được (kể cả quản trị cũng không xem).
 model PersonalNote {
-  id          Int       @id @default(autoincrement())
-  userId      Int
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title       String
-  body        String    @default("")
-  done        Boolean   @default(false)
-  pinned      Boolean   @default(false)
-  dueDate     DateTime?
-  position    Float     @default(0)
-  convertedItemId Int?  // đã chuyển thành công việc trong dự án
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  doneAt      DateTime?
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title           String
+  body            String    @default("")
+  done            Boolean   @default(false)
+  pinned          Boolean   @default(false)
+  dueDate         DateTime?
+  position        Float     @default(0)
+  convertedItemId Int? // đã chuyển thành công việc trong dự án
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  doneAt          DateTime?
 
   @@index([userId, done])
 }
@@ -437,17 +437,18 @@ model ChecklistItem {
   done       Boolean  @default(false)
   position   Int      @default(0)
   createdAt  DateTime @default(now())
+
   @@index([workItemId])
 }
 
 model Comment {
-  id         Int      @id @default(autoincrement())
+  id         Int       @id @default(autoincrement())
   workItemId Int
-  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  workItem   WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   authorId   Int
   bodyHtml   String
   bodyText   String
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
   editedAt   DateTime?
 
   @@index([workItemId])
@@ -458,7 +459,7 @@ model Activity {
   workItemId Int
   workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   actorId    Int?
-  type       String   // CREATED | UPDATED | STATE | ASSIGNEES | COMMENT | ATTACHMENT | APPROVAL_*
+  type       String // CREATED | UPDATED | STATE | ASSIGNEES | COMMENT | ATTACHMENT | APPROVAL_*
   data       Json?
   createdAt  DateTime @default(now())
 
@@ -496,15 +497,15 @@ model ApprovalRule {
 }
 
 model ApprovalRequest {
-  id            Int      @id @default(autoincrement())
+  id            Int              @id @default(autoincrement())
   workItemId    Int
-  workItem      WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  status        String   @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
-  currentLevel  Int      @default(1)
+  workItem      WorkItem         @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  status        String           @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
+  currentLevel  Int              @default(1)
   totalLevels   Int
-  fromStateId   Int?     // trạng thái trước khi gửi duyệt, để trả lại khi bị từ chối
+  fromStateId   Int? // trạng thái trước khi gửi duyệt, để trả lại khi bị từ chối
   requestedById Int
-  createdAt     DateTime @default(now())
+  createdAt     DateTime         @default(now())
   closedAt      DateTime?
   actions       ApprovalAction[]
 
@@ -513,15 +514,16 @@ model ApprovalRequest {
 }
 
 model ApprovalAction {
-  id        Int      @id @default(autoincrement())
-  requestId Int
-  request   ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  level     Int
-  actorId   Int
-  decision  String   // APPROVE | REJECT | SUBMIT | CANCEL
-  comment   String?
-  onBehalfOfId Int?  // duyệt thay (uỷ quyền) cho người này
-  createdAt DateTime @default(now())
+  id           Int             @id @default(autoincrement())
+  requestId    Int
+  request      ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  level        Int
+  actorId      Int
+  decision     String // APPROVE | REJECT | SUBMIT | CANCEL
+  comment      String?
+  onBehalfOfId Int? // duyệt thay (uỷ quyền) cho người này
+  createdAt    DateTime        @default(now())
+
   @@index([requestId])
 }
 
@@ -538,41 +540,41 @@ model WorkItemDepartment {
 
 // Báo cáo tiến độ của cán bộ (mỗi lần một dòng, không ghi đè); kiến nghị chờ người giao trả lời.
 model ProgressReport {
-  id           Int      @id @default(autoincrement())
-  workItemId   Int
-  workItem     WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  authorId     Int
-  progress     Int
-  content      String
-  difficulties String   @default("")
-  proposals    String   @default("")
-  asSupporter  Boolean  @default(false) // báo cáo phần phối hợp: không đổi tiến độ chung của việc
-  answer       String?
-  answeredById Int?
-  answeredAt   DateTime?
+  id            Int       @id @default(autoincrement())
+  workItemId    Int
+  workItem      WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  authorId      Int
+  progress      Int
+  content       String
+  difficulties  String    @default("")
+  proposals     String    @default("")
+  asSupporter   Boolean   @default(false) // báo cáo phần phối hợp: không đổi tiến độ chung của việc
+  answer        String?
+  answeredById  Int?
+  answeredAt    DateTime?
   // Lãnh đạo phòng trình kiến nghị lên Ban Giám đốc (kèm ý kiến của phòng); BGĐ trả lời ở "answer".
   forwardedAt   DateTime?
   forwardedById Int?
   forwardNote   String?
-  createdAt    DateTime @default(now())
+  createdAt     DateTime  @default(now())
 
   @@index([workItemId, createdAt])
 }
 
 // Đề nghị gia hạn: người giao (hoặc quản lý) duyệt; hạn gốc giữ ở WorkItem.originalDueDate.
 model DueExtension {
-  id            Int      @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   workItemId    Int
-  workItem      WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  workItem      WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   requestedById Int
   oldDue        DateTime?
   newDue        DateTime
   reason        String
-  status        String   @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
+  status        String    @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
   decidedById   Int?
   decidedAt     DateTime?
   decisionNote  String?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime  @default(now())
 
   @@index([workItemId, status])
 }
@@ -582,7 +584,7 @@ model WorkItemDocument {
   id          Int       @id @default(autoincrement())
   workItemId  Int
   workItem    WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  kind        String    // BASIS | OUTPUT | ISSUED
+  kind        String // BASIS | OUTPUT | ISSUED
   number      String
   issuedOn    DateTime?
   summary     String
@@ -612,15 +614,15 @@ model Delegation {
 
 // ---------- Hệ thống ----------
 model Notification {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      String
   title     String
   body      String?
   link      String?
   readAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([userId, readAt])
   @@index([link])
@@ -645,23 +647,23 @@ model AuditLog {
 // Lịch công tác (GĐ3f): lịch tuần của Trung tâm và của từng phòng — họp, công tác, sự kiện; báo vắng / đi công tác cá nhân.
 // Một mục lịch là một sự kiện (có giờ, thành phần, chủ trì, địa điểm), không phải một việc.
 model ScheduleEvent {
-  id               Int       @id @default(autoincrement())
-  date             DateTime  @db.Date        // ngày (theo lịch Việt Nam)
-  endDate          DateTime? @db.Date        // nhiều ngày (vd. công tác 2 ngày)
-  timeText         String    @default("")    // "08h30", "09h30 - 11h30", "Cả ngày"
-  startMin         Int?                      // phút trong ngày, để sắp xếp; null = cả ngày / không rõ giờ
-  title            String                    // nội dung
-  participantsText String    @default("")    // thành phần (ghi như văn bản, nhiều dòng)
-  chairText        String    @default("")    // chủ trì
-  location         String    @default("")
-  note             String    @default("")
-  departmentId     Int?                      // null = lịch Trung tâm; có = lịch của phòng
-  kind             String    @default("EVENT") // EVENT | AWAY (vắng: công tác, nghỉ phép — cá nhân tự báo)
-  away             Boolean   @default(false) // thành phần vắng mặt ở cơ quan (công tác ngoài, họp nơi khác)
-  source           String    @default("MANUAL") // MANUAL | IMPORT
+  id               Int                   @id @default(autoincrement())
+  date             DateTime              @db.Date // ngày (theo lịch Việt Nam)
+  endDate          DateTime?             @db.Date // nhiều ngày (vd. công tác 2 ngày)
+  timeText         String                @default("") // "08h30", "09h30 - 11h30", "Cả ngày"
+  startMin         Int? // phút trong ngày, để sắp xếp; null = cả ngày / không rõ giờ
+  title            String // nội dung
+  participantsText String                @default("") // thành phần (ghi như văn bản, nhiều dòng)
+  chairText        String                @default("") // chủ trì
+  location         String                @default("")
+  note             String                @default("")
+  departmentId     Int? // null = lịch Trung tâm; có = lịch của phòng
+  kind             String                @default("EVENT") // EVENT | AWAY (vắng: công tác, nghỉ phép — cá nhân tự báo)
+  away             Boolean               @default(false) // thành phần vắng mặt ở cơ quan (công tác ngoài, họp nơi khác)
+  source           String                @default("MANUAL") // MANUAL | IMPORT
   createdById      Int
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
   participants     ScheduleParticipant[]
 
   @@index([date])
@@ -686,10 +688,10 @@ model ProgressAlert {
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   workItemId Int
   workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  kind       String   // START_SOON | LATE_START | DUE_SOON | BEHIND | AHEAD | OVERDUE | STALE
-  level      String   // INFO | WARN | DANGER
+  kind       String // START_SOON | LATE_START | DUE_SOON | BEHIND | AHEAD | OVERDUE | STALE
+  level      String // INFO | WARN | DANGER
   day        DateTime @db.Date
-  variance   Float?   // % thực tế − % kế hoạch lúc cảnh báo
+  variance   Float? // % thực tế − % kế hoạch lúc cảnh báo
   lateDays   Int?
   recipients Int      @default(0)
   createdAt  DateTime @default(now())
@@ -716,14 +718,14 @@ model ProgressSnapshot {
 
 // Liên kết tài khoản với Viber (chỉ khi người dùng tự liên kết và đồng ý; mặc định tính năng tắt).
 model ViberLink {
-  id        Int       @id @default(autoincrement())
-  userId    Int       @unique
-  viberId   String?   @unique
-  code      String?   @unique // mã liên kết một lần
+  id            Int       @id @default(autoincrement())
+  userId        Int       @unique
+  viberId       String?   @unique
+  code          String?   @unique // mã liên kết một lần
   codeExpiresAt DateTime?
-  consentAt DateTime?
-  linkedAt  DateTime?
-  createdAt DateTime  @default(now())
+  consentAt     DateTime?
+  linkedAt      DateTime?
+  createdAt     DateTime  @default(now())
 }
 
 // Kepper GĐ2b — Báo cáo tuần bộ phận (mẫu BM-TH-01): mỗi bộ phận × tuần (thứ Sáu, giờ VN) một bản.
@@ -732,10 +734,10 @@ model ViberLink {
 model WeeklyReport {
   id               Int       @id @default(autoincrement())
   departmentId     Int
-  week             String    // YYYY-MM-DD của thứ Sáu
+  week             String // YYYY-MM-DD của thứ Sáu
   status           String    @default("DRAFT") // DRAFT | SUBMITTED
   data             Json
-  preparerId       Int?      // người lưu gần nhất
+  preparerId       Int? // người lưu gần nhất
   firstSubmittedAt DateTime? // giờ nộp lần đầu — dùng để tính đúng hạn / muộn
   submittedAt      DateTime? // giờ nộp gần nhất
   submittedById    Int?
@@ -751,12 +753,12 @@ model WeeklyReport {
 model WeeklyNotice {
   id           Int       @id @default(autoincrement())
   departmentId Int
-  week         String    // YYYY-MM-DD của thứ Sáu
-  type         String    // LATE | ABSENT
-  reason       String    // CONG_TAC | NGHI_PHEP | DOT_XUAT | KHAC
+  week         String // YYYY-MM-DD của thứ Sáu
+  type         String // LATE | ABSENT
+  reason       String // CONG_TAC | NGHI_PHEP | DOT_XUAT | KHAC
   note         String    @default("")
   expectedAt   DateTime? // LATE: giờ nộp dự kiến
-  substituteId Int?      // ABSENT: người dự thay
+  substituteId Int? // ABSENT: người dự thay
   receivedAt   DateTime? // thư ký nhập hộ tin nhắn báo: giờ nhận tin (tính đúng hạn theo giờ này)
   createdById  Int
   createdAt    DateTime  @default(now())
@@ -781,7 +783,7 @@ model WeeklyMeeting {
 model WeeklyReportVersion {
   id            Int      @id @default(autoincrement())
   reportId      Int
-  n             Int      // lần nộp thứ n (1 = lần đầu)
+  n             Int // lần nộp thứ n (1 = lần đầu)
   departmentId  Int
   week          String
   data          Json
@@ -798,20 +800,193 @@ model WeeklyReportVersion {
 // Kepper GĐ3 — token cá nhân cho Claude (MCP trên máy người dùng). AI dùng ĐÚNG quyền của người dùng:
 // mọi lời gọi bằng token đi qua cùng API + lib/policy.js. Chỉ lưu băm SHA-256; token hiện một lần khi tạo.
 model ApiToken {
-  id         Int       @id @default(autoincrement())
-  userId     Int
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name       String
-  prefix     String
-  hash       String    @unique
-  scopes     String[]
-  expiresAt  DateTime
+  id             Int       @id @default(autoincrement())
+  userId         Int
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  prefix         String
+  hash           String    @unique
+  scopes         String[]
+  expiresAt      DateTime
   // sessionVersion của tài khoản lúc tạo: đổi / reset mật khẩu, khoá tài khoản → token tự mất hiệu lực.
-  sessionVersion Int    @default(0)
-  lastUsedAt DateTime?
-  lastIp     String?
-  revokedAt  DateTime?
-  createdAt  DateTime  @default(now())
+  sessionVersion Int       @default(0)
+  lastUsedAt     DateTime?
+  lastIp         String?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
 
   @@index([userId])
+}
+
+// ======================================================================
+// PLAYGROUND — CRM đối tác (nhà thầu, tư vấn, cơ quan, ngân hàng…) và HRM (hồ sơ, hợp đồng, nghỉ phép, chấm công).
+// Quyền: lib/policy.js (crm.*, hrm.*). Dữ liệu Hạn chế (số định danh, lương) mã hoá theo trường (lib/crypto-field.js).
+// Khoá ngoại tới User / Department / WorkItem để dạng số (không cascade) — tài khoản chỉ khoá, không xoá.
+// ======================================================================
+model CrmPartner {
+  id                Int              @id @default(autoincrement())
+  name              String
+  kind              String // CONTRACTOR | CONSULTANT | AUTHORITY | BANK | SUPPLIER | OTHER
+  taxCode           String?
+  address           String?
+  website           String?
+  phone             String? // số tổng đài / văn phòng của tổ chức (không phải cá nhân)
+  email             String?
+  status            String           @default("ACTIVE") // PROSPECT | ACTIVE | PAUSED
+  ownerDepartmentId Int
+  ownerUserId       Int?
+  rating            Int?
+  note              String           @default("")
+  createdById       Int
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  archivedAt        DateTime?
+  contacts          CrmContact[]
+  interactions      CrmInteraction[]
+  engagements       CrmEngagement[]
+
+  @@index([ownerDepartmentId])
+}
+
+model CrmContact {
+  id        Int        @id @default(autoincrement())
+  partnerId Int
+  partner   CrmPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  fullName  String
+  title     String?
+  phone     String?
+  email     String?
+  isPrimary Boolean    @default(false)
+  note      String     @default("")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([partnerId])
+}
+
+model CrmInteraction {
+  id           Int        @id @default(autoincrement())
+  partnerId    Int
+  partner      CrmPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  type         String // MEETING | CALL | EMAIL | LETTER | SITE_VISIT | OTHER
+  date         DateTime
+  summary      String
+  nextStep     String?
+  nextDue      DateTime?
+  nextOwnerId  Int?
+  followUpDone Boolean    @default(false)
+  workItemId   Int?
+  createdById  Int
+  createdAt    DateTime   @default(now())
+
+  @@index([partnerId])
+  @@index([nextOwnerId, followUpDone])
+}
+
+model CrmEngagement {
+  id          Int        @id @default(autoincrement())
+  partnerId   Int
+  partner     CrmPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  kind        String // CONTRACT | BID | MOU | PERMIT
+  code        String?
+  title       String
+  value       Float?
+  signedAt    DateTime?
+  startAt     DateTime?
+  endAt       DateTime?
+  status      String     @default("ACTIVE") // DRAFT | ACTIVE | DONE | CANCELLED
+  projectId   Int?
+  workItemId  Int?
+  note        String     @default("")
+  createdById Int
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([partnerId])
+}
+
+model HrProfile {
+  userId         Int       @id
+  employeeCode   String?
+  birthDate      DateTime?
+  gender         String?
+  phone          String?
+  personalEmail  String?
+  address        String?
+  idNumberEnc    String? // CCCD mã hoá AES-256-GCM (Hạn chế)
+  idNumberLast4  String?
+  idIssuedOn     DateTime?
+  idIssuedPlace  String?
+  startDate      DateTime?
+  status         String    @default("OFFICIAL") // PROBATION | OFFICIAL | LEFT
+  emergencyName  String?
+  emergencyPhone String?
+  education      String?
+  updatedById    Int?
+  updatedAt      DateTime  @updatedAt
+}
+
+model HrContract {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  number      String
+  type        String // PROBATION | FIXED | INDEFINITE | SERVICE
+  position    String?
+  startDate   DateTime
+  endDate     DateTime?
+  salaryEnc   String? // lương mã hoá (Hạn chế)
+  status      String    @default("ACTIVE") // ACTIVE | ENDED
+  signedAt    DateTime?
+  note        String    @default("")
+  createdById Int
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model HrLeave {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  departmentId Int?
+  type         String // ANNUAL | SICK | PERSONAL_PAID | UNPAID | MATERNITY | OTHER
+  fromDate     DateTime
+  toDate       DateTime
+  halfDay      String    @default("NONE") // NONE | AM | PM (chỉ khi một ngày)
+  days         Float
+  reason       String    @default("")
+  status       String    @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
+  approverId   Int?
+  decidedAt    DateTime?
+  decisionNote String?
+  createdById  Int
+  createdAt    DateTime  @default(now())
+
+  @@index([userId, fromDate])
+  @@index([departmentId, status])
+}
+
+model HrAttendance {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  departmentId Int?
+  day          String // YYYY-MM-DD giờ Việt Nam
+  checkIn      DateTime?
+  checkOut     DateTime?
+  inIp         String?
+  outIp        String?
+  minutesLate  Int       @default(0)
+  minutesEarly Int       @default(0)
+  note         String    @default("")
+  adjustStatus String? // PENDING | APPROVED | REJECTED (giải trình)
+  adjustReason String?
+  adjustIn     DateTime?
+  adjustOut    DateTime?
+  adjustById   Int?
+  adjustAt     DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, day])
+  @@index([departmentId, day])
 }

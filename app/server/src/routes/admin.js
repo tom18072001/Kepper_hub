@@ -82,10 +82,17 @@ const AUDIT_ACTIONS = {
   WEEKLY_REPORT_SUBMIT: 'Nộp báo cáo tuần', WEEKLY_NOTICE: 'Báo nộp muộn / vắng giao ban', WEEKLY_NOTICE_DELETE: 'Xoá thông báo muộn / vắng',
   WEEKLY_SUMMARY_COPY: 'Sao chép bản tổng hợp giao ban', WEEKLY_MEETING: 'Cập nhật giao ban (điểm danh, kết luận, Action Log)', WEEKLY_MEETING_PUBLISH: 'Phát hành kết luận giao ban',
   WEEKLY_CONFIG: 'Thiết lập báo cáo tuần', WEEKLY_COMPLIANCE_SUBMIT: 'Trình bảng điểm tuân thủ giao ban', WEEKLY_COMPLIANCE_APPROVE: 'Duyệt bảng điểm tuân thủ giao ban', TOKEN_CREATE: 'Tạo token Claude', TOKEN_REVOKE: 'Thu hồi token Claude',
+  CRM_PARTNER_CREATE: 'Thêm đối tác', CRM_PARTNER_UPDATE: 'Sửa đối tác', CRM_CONTACT_CREATE: 'Thêm người liên hệ đối tác', CRM_CONTACT_UPDATE: 'Sửa người liên hệ đối tác', CRM_CONTACT_DELETE: 'Xoá người liên hệ đối tác',
+  CRM_INTERACTION_CREATE: 'Ghi nhật ký làm việc với đối tác', CRM_FOLLOWUP_DONE: 'Xong việc theo dõi đối tác', CRM_ENGAGEMENT_CREATE: 'Thêm hợp đồng / gói thầu', CRM_ENGAGEMENT_UPDATE: 'Sửa hợp đồng / gói thầu',
+  HRM_CONFIG: 'Thiết lập nhân sự', HR_PROFILE_UPDATE: 'Sửa hồ sơ nhân sự', HR_IDENTITY_VIEW: 'Xem số định danh', HR_IDENTITY_UPDATE: 'Sửa số định danh', HR_CONTRACT_CREATE: 'Thêm hợp đồng lao động', HR_CONTRACT_UPDATE: 'Sửa hợp đồng lao động',
+  HR_LEAVE_CREATE: 'Tạo đơn nghỉ', HR_LEAVE_APPROVE: 'Duyệt đơn nghỉ', HR_LEAVE_REJECT: 'Từ chối đơn nghỉ', HR_LEAVE_CANCEL: 'Huỷ đơn nghỉ',
+  HR_ATT_APPROVE: 'Duyệt giải trình chấm công', HR_ATT_REJECT: 'Từ chối giải trình chấm công', HR_ATT_IMPORT: 'Nhập dữ liệu máy chấm công',
 };
 const AUDIT_ENTITIES = {
   User: 'Tài khoản', Auth: 'Đăng nhập', Department: 'Phòng ban', UserPermission: 'Phân quyền', Label: 'Nhãn', AppSetting: 'Danh mục',
-  TaskTemplate: 'Mẫu nhóm việc', Delegation: 'Uỷ quyền', WeeklyConfig: 'Thiết lập giao ban', ApiToken: 'Token Claude', WorkItem: 'Công việc', Project: 'Dự án / sổ', Attachment: 'Tệp đính kèm',
+  TaskTemplate: 'Mẫu nhóm việc', Delegation: 'Uỷ quyền', WeeklyConfig: 'Thiết lập giao ban', ApiToken: 'Token Claude',
+  CrmPartner: 'Đối tác', CrmContact: 'Người liên hệ đối tác', CrmInteraction: 'Nhật ký đối tác', CrmEngagement: 'Hợp đồng / gói thầu', HrmConfig: 'Thiết lập nhân sự',
+  HrProfile: 'Hồ sơ nhân sự', HrContract: 'Hợp đồng lao động', HrLeave: 'Đơn nghỉ', HrAttendance: 'Chấm công', WorkItem: 'Công việc', Project: 'Dự án / sổ', Attachment: 'Tệp đính kèm',
   ApprovalRequest: 'Yêu cầu duyệt', Cycle: 'Chu kỳ', RecurringRule: 'Việc lặp lại', IntakeRequest: 'Yêu cầu tiếp nhận', SavedView: 'Bộ lọc đã lưu',
   Plan: 'Kế hoạch năm', Summary: 'Tổng hợp giao việc', Kpi: 'KPI', WeeklyReport: 'Báo cáo tuần', WeeklyNotice: 'Thông báo muộn / vắng', WeeklyMeeting: 'Giao ban tuần', Ops: 'Trang Điều hành',
 };
