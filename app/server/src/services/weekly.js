@@ -130,6 +130,17 @@ function buildPrefill({ week: f, deptId, items = [], memberIds = new Set(), prev
     else if (s <= S.to) add(ongoing, mtlRow(i, { next: i.checklistNext || '' }));
     else if (s <= S.nextTo) { if (!seen.has(i.id)) { seen.add(i.id); plans.push({ key: `m${i.id}`, itemId: i.id, ref: i.code, step: i.planCode || '', task: i.title, basis: MTL_SOURCE, ownerIds: (i.assignees || []).map(a => a.id), due: e, output: '' }); } }
   }
+  // Nguyên nhân / giải pháp của tuần trước (bản đã nộp) cho cùng hạng mục còn chậm: điền sẵn để bộ phận xem lại, sửa nếu đã khác —
+  // không phải gõ lại mỗi tuần. Đề nghị hỗ trợ không chép (mỗi tuần Ban GĐ kết luận riêng).
+  if (prev) {
+    const last = new Map();
+    for (const r of [...(prev.results || []), ...(prev.ongoing || [])]) if (r && (r.cause || r.solution)) last.set(r.itemId ? `i${r.itemId}` : `k${r.key}`, r);
+    for (const r of [...results, ...ongoing]) {
+      const p = last.get(r.itemId ? `i${r.itemId}` : `k${r.key}`);
+      if (!p || r.status === DONE || r.cause || r.solution) continue;
+      r.cause = String(p.cause || ''); r.solution = String(p.solution || ''); r.carried = true;
+    }
+  }
   const rank = r => [r.status === DONE ? 2 : needsIssue(r, f) ? 0 : 1, r.due || '9999'];
   const order = (a, b) => { const x = rank(a), y = rank(b); return x[0] - y[0] || (x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0); };
   return { results: results.sort(order), ongoing: ongoing.sort(order), plans: plans.sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0)), other: '' };

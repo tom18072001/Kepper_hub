@@ -302,6 +302,11 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
         if (item.state.category !== 'COMPLETED') fail(409, 'Việc chưa hoàn thành', 'NOT_COMPLETED');
         data.completedAt = optionalDate(body.completedAt, 'Ngày hoàn thành') || item.completedAt;
       }
+      // MTL: hạng mục chưa có kế hoạch gốc — lần đầu người có quyền lập kế hoạch đặt hạn thì lấy làm kế hoạch gốc.
+      if (project.kind === 'MTL' && !item.baselineEnd && (data.dueDate !== undefined || data.startDate !== undefined)) {
+        const b = MTL.initialBaseline(data.startDate !== undefined ? data.startDate : item.startDate, data.dueDate !== undefined ? data.dueDate : item.dueDate);
+        if (b) Object.assign(data, b);
+      }
       for (const key of Object.keys(data)) if (String(item[key] ?? '') !== String(data[key] ?? '')) changed[key] = key === 'descriptionHtml' || key === 'descriptionText' ? true : data[key];
       let moved = null;
       // Kepper (MTL): cập nhật % tự chuyển cột — > 0% từ "Chưa bắt đầu" sang "Đang thực hiện"; 100% (không cần duyệt) sang "Hoàn thành".
