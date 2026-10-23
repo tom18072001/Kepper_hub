@@ -38,6 +38,13 @@ jobs:
       - name: Lỗ hổng thư viện (mức cao trở lên; gồm cả prisma CLI chạy trong image)
         working-directory: app/server
         run: npm audit --audit-level=high
+      - name: MCP cho Claude Desktop (cú pháp, manifest, lỗ hổng thư viện)
+        working-directory: app/mcp
+        run: |
+          npm ci --no-audit --no-fund
+          node --check server.js
+          npx mcpb validate manifest.json
+          npm audit --omit=dev --audit-level=high
       - name: Build image (app + sao lưu) và kiểm cú pháp script vận hành
         run: |
           docker build -t kepper-app:ci -f Dockerfile .

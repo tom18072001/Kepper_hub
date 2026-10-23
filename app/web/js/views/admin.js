@@ -11,9 +11,24 @@ const ICON = {
 };
 
 export async function renderAdmin(root, section, params, setCrumbs) {
-  const map = { users: renderUsers, departments: renderDepartments, labels: renderLabels, audit: renderAudit };
-  setCrumbs('<span class="muted">Quản trị /</span> ' + ({ users: 'Tài khoản', departments: 'Phòng ban', labels: 'Nhãn', audit: 'Nhật ký hệ thống' }[section] || ''));
+  const map = { users: renderUsers, departments: renderDepartments, labels: renderLabels, audit: renderAudit, tokens: renderTokens };
+  setCrumbs('<span class="muted">Quản trị /</span> ' + ({ users: 'Tài khoản', departments: 'Phòng ban', labels: 'Nhãn', audit: 'Nhật ký hệ thống', tokens: 'Token Claude' }[section] || ''));
   await (map[section] || renderUsers)(root, params);
+}
+
+// ---------- Token Claude (siêu dữ liệu — không thấy token, không thấy dữ liệu nghiệp vụ) ----------
+async function renderTokens(root) {
+  const rows = await api('/api/admin/tokens');
+  root.innerHTML = `<div class="page-head"><h1>Token Claude</h1><span class="muted sm">Mỗi người tự tạo trong "Kết nối Claude"; Claude dùng đúng quyền của người đó. Thu hồi khi mất máy, nghỉ việc hoặc dùng bất thường.</span></div>
+    <div class="admin-scroll"><table class="table admin-cards" data-testid="admin-tokens"><thead><tr><th>Người dùng</th><th>Tên</th><th>Mã đầu</th><th>Quyền</th><th>Hết hạn</th><th>Dùng gần nhất</th><th>IP</th><th></th></tr></thead><tbody>
+    ${rows.map(t => `<tr${t.active ? '' : ' class="muted"'}><td>${esc(t.user.fullName)} <span class="muted xs">${esc(t.user.username)}</span></td><td>${esc(t.name)}</td><td><code>${esc(t.prefix)}…</code></td>
+      <td>${t.scopes.includes('write') ? 'Đọc và cập nhật' : 'Chỉ đọc'}</td><td>${t.revokedAt ? 'Đã thu hồi' : esc(fmtDateTime(t.expiresAt))}</td><td>${t.lastUsedAt ? esc(fmtDateTime(t.lastUsedAt)) : '—'}</td><td>${esc(t.lastIp || '')}</td>
+      <td>${t.active ? `<button class="btn btn-ghost btn-sm" data-trevoke="${t.id}">Thu hồi</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">Chưa có token.</td></tr>'}</tbody></table></div>`;
+  root.onclick = async e => {
+    const b = e.target.closest('[data-trevoke]');
+    if (!b || !(await confirmDialog('Thu hồi token này? Người dùng được thông báo.', { okText: 'Thu hồi', danger: true }))) return;
+    try { await api(`/api/admin/tokens/${b.dataset.trevoke}/revoke`, { method: 'POST' }); toast('Đã thu hồi', 'ok'); await renderTokens(root); } catch (error) { toast(errorMessage(error), 'err'); }
+  };
 }
 
 // ---------- Quyền: nhãn tiếng Việt + so sánh với hồ sơ vai trò ----------

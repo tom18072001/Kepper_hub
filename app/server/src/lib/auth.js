@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const T = require('./tokens');
 
 const PASSWORD_ROUTES = new Set(['GET /api/me', 'POST /api/me/password']);
 
@@ -11,6 +12,21 @@ function createAuth(prisma, secret) {
     const header = req.headers.authorization || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : null;
     if (!token) return res.status(401).json({ error: 'Chưa đăng nhập' });
+    // Token cá nhân cho Claude (MCP): cùng danh tính + quyền của người tạo; phạm vi theo lib/tokens.js.
+    if (T.isToken(token)) {
+      try {
+        const row = await prisma.apiToken.findUnique({ where: { hash: T.sha256(token) }, include: { user: { include: { permissions: true } } } });
+        const now = new Date();
+        if (!row || row.revokedAt || row.expiresAt < now || !row.user?.isActive || row.sessionVersion !== Number(row.user.sessionVersion || 0))
+          return res.status(401).json({ error: 'Token Claude không hợp lệ, đã hết hạn hoặc đã thu hồi — tạo token mới trong "Tài khoản của tôi"', code: 'TOKEN_INVALID' });
+        if (row.user.mustChangePw) return res.status(403).json({ error: 'Tài khoản phải đổi mật khẩu trên giao diện trước', code: 'PASSWORD_CHANGE_REQUIRED' });
+        const denied = T.tokenDenied(req.method, req.originalUrl.split('?')[0], row.scopes);
+        if (denied) return res.status(403).json({ error: denied, code: 'NOT_VIA_AI' });
+        req.user = row.user; req.via = 'mcp'; req.tokenId = row.id;
+        if (!row.lastUsedAt || now - row.lastUsedAt > 60_000) prisma.apiToken.update({ where: { id: row.id }, data: { lastUsedAt: now, lastIp: req.ip || null } }).catch(() => {});
+        return next();
+      } catch { return res.status(401).json({ error: 'Token Claude không hợp lệ', code: 'TOKEN_INVALID' }); }
+    }
     try {
       const payload = jwt.verify(token, secret);
       const user = await prisma.user.findUnique({ where: { id: payload.id }, include: { permissions: true } });

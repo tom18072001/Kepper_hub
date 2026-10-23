@@ -20,8 +20,11 @@ const DATASETS = {
 };
 const ACTIONS = ['view', 'edit', 'export', 'ai', 'external'];
 
-// Không bao giờ gửi AI / ra ngoài, kể cả khi bật AI (quy tắc AI-03, EXT-02).
-const NEVER_AI = new Set(['weekly.notice', 'kpi.person', 'weekly.compliance', 'weekly.report', 'weekly.summary.detail', 'weekly.meeting', 'mtl.plan', 'mtl.progress']);
+// QĐ-AI (24/10/2026, chủ dự án quyết): AI DÙNG ĐÚNG QUYỀN CỦA NGƯỜI DÙNG. Người dùng dùng Claude (tài khoản Claude Team công ty)
+// với mọi dữ liệu họ được xem / sửa — qua MCP bằng token cá nhân (lib/tokens.js), mọi lời gọi đi qua cùng API + ma trận này.
+// Không có tài khoản AI riêng, không có quyền AI rộng hơn người dùng. Thao tác không hoàn tác / phê duyệt vẫn do người dùng làm trên giao diện.
+// Số định danh (CCCD, tài khoản ngân hàng) không gửi cho AI — MCP chỉ trả 4 số cuối (tối thiểu hoá khi chuyển dữ liệu ra nước ngoài).
+const NEVER_AI = new Set([]);
 const NEVER_EXTERNAL = new Set(['weekly.notice', 'kpi.person', 'weekly.compliance', 'weekly.summary.detail', 'weekly.report']);
 
 // subject = { it, director, secretary, pmo, leader, departmentId, userId } — dựng bằng weekly-data.rolesOf().
@@ -31,10 +34,7 @@ function can(s, action, dataset, ctx = {}, env = {}) { return !!rule(s, action, 
 function rule(s, action, dataset, ctx, env) {
   if (!s || s.it) return false; // QĐ-01: quản trị IT không xem / sửa / xuất nội dung nghiệp vụ
   if (!DATASETS[dataset] || !ACTIONS.includes(action)) return false;
-  if (action === 'ai') { // QĐ-AI: AI tắt mặc định; chỉ tập dữ liệu cho phép, chỉ người có quyền xem đầy đủ
-    if (!env.aiEnabled || NEVER_AI.has(dataset)) return false;
-    return dataset === 'weekly.summary' && (s.director || s.secretary);
-  }
+  if (action === 'ai') return rule(s, 'view', dataset, ctx, env); // QĐ-AI: AI = quyền xem của chính người dùng
   if (action === 'external') { // QĐ-EXT: gửi ra ngoài (mail / Teams / Viber) chỉ bản tóm tắt, do thư ký
     if (NEVER_EXTERNAL.has(dataset)) return false;
     return dataset === 'weekly.summary' && (s.secretary || s.director);

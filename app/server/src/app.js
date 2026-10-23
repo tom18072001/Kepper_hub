@@ -11,6 +11,7 @@ const { hasPermission, permissionScope } = require('./lib/permissions');
 const { HttpError } = require('./lib/http');
 const { auditFor } = require('./services/events');
 const { createAccessLog } = require('./lib/access-log');
+const { isToken, sha256 } = require('./lib/tokens');
 
 function createApp({ prisma, config }) {
   const app = express();
@@ -43,9 +44,12 @@ function createApp({ prisma, config }) {
   // Giới hạn tần suất chung cho API (không áp lên /api/auth để giữ nguyên tiêu chí đăng nhập).
   // Tính theo tài khoản (nhiều nhân viên văn phòng dùng chung một IP ra Internet); chưa đăng nhập thì theo IP.
   app.use('/api', rateLimit({
-    windowMs: 60_000, limit: config.apiRateLimit, standardHeaders: 'draft-7', legacyHeaders: false,
+    windowMs: 60_000, standardHeaders: 'draft-7', legacyHeaders: false,
+    // Token Claude: hạn mức thấp hơn người dùng (chống AI đọc dồn hàng loạt — khuếch đại truy cập).
+    limit: req => (isToken(String(req.headers.authorization || '').slice(7)) ? config.tokenRateLimit : config.apiRateLimit),
     keyGenerator: req => {
       const header = req.headers.authorization || '';
+      if (isToken(header.slice(7))) return 'tok:' + sha256(header.slice(7)).slice(0, 24);
       // Chỉ tin token đã xác minh chữ ký (token giả không đẩy được yêu cầu vào hạn mức của người khác).
       let payload = null;
       try { payload = header.startsWith('Bearer ') ? jwt.verify(header.slice(7), config.jwtSecret) : null; } catch { payload = null; }
@@ -77,7 +81,7 @@ function createApp({ prisma, config }) {
     require('./routes/auth'), require('./routes/admin'), require('./routes/labels'), require('./routes/projects'), require('./routes/items'), require('./routes/trash'),
     require('./routes/attachments'), require('./routes/approvals'), require('./routes/me'), require('./routes/notes'), require('./routes/dashboard'), require('./routes/kpi'), require('./routes/register'), require('./routes/dispatch'), require('./routes/excel'),
     require('./routes/cycles'), require('./routes/recurring'), require('./routes/views'), require('./routes/reports'), require('./routes/work'), require('./routes/search'),
-    require('./routes/mtl'), require('./routes/sprint'), require('./routes/weekly'), require('./routes/viber'), require('./routes/realtime'),
+    require('./routes/mtl'), require('./routes/sprint'), require('./routes/weekly'), require('./routes/viber'), require('./routes/realtime'), require('./routes/tokens'),
   ]) mount(app, ctx);
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'Không tìm thấy API', code: 'NOT_FOUND' }));
@@ -119,6 +123,7 @@ function loadConfig(env = process.env) {
     allowedOrigins: String(env.APP_ORIGIN || 'http://localhost:4000').split(',').map(s => s.trim()).filter(Boolean),
     trustProxy: trust === 'false' ? false : trust === 'true' ? true : /^\d+$/.test(trust) ? Number(trust) : trust,
     apiRateLimit: Number(env.API_RATE_LIMIT || 600),
+    tokenRateLimit: Number(env.TOKEN_RATE_LIMIT || 120),
     webDir: env.WEB_DIR ? path.resolve(env.WEB_DIR) : path.join(__dirname, '..', '..', 'web'),
     uploadTmpDir: env.UPLOAD_TMP_DIR || require('node:os').tmpdir(),
     enableCron: env.ENABLE_CRON !== 'false',

@@ -5,7 +5,8 @@ function auditFor(prisma) {
       await client.auditLog.create({ data: {
         userId: req.user ? req.user.id : null, action, entity, entityId: entityId != null ? String(entityId) : null,
         oldValue: oldValue != null ? JSON.stringify(oldValue) : null, newValue: newValue != null ? JSON.stringify(newValue) : null,
-        ip: req.ip || null, userAgent: String(req.headers['user-agent'] || '').slice(0, 300) || null,
+        // Thao tác qua Claude (token cá nhân) đánh dấu rõ trong nhật ký: [claude:token#id].
+        ip: req.ip || null, userAgent: ((req.via ? `[claude:token#${req.tokenId}] ` : '') + String(req.headers['user-agent'] || '')).slice(0, 300) || null,
       } });
     } catch (error) {
       // Ghi log lỗi audit ra stderr để thu gom tập trung; không chặn nghiệp vụ.
