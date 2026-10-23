@@ -315,7 +315,7 @@ a.cal-item{text-decoration:none}
   .sch-table tr.sch-row{position:relative}
 }
 @media print{
-  .sidebar,.topbar,.no-print,.sch-away,#panel,.panel,.toast-wrap{display:none!important}
+  .sidebar,.topbar,.appbar,.crumbs,.no-print,.sch-away,#panel,.panel,.toast-wrap{display:none!important}
   body,.view,.sch-card{background:#fff!important;box-shadow:none!important;padding:0!important}
   .sch-table td,.sch-table th{font-size:10.5pt;border:1px solid #999!important}
   .sch-dayhead th{background:#eee!important;color:#000!important}

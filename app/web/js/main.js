@@ -23,7 +23,8 @@ import { current as projectState, reloadProject } from './views/project.js';
 import { reloadOpenItem, openItemId } from './views/item-panel.js';
 import { startRealtime, stopRealtime, onRealtime } from './realtime.js';
 import { hydrateIcons } from './icons.js';
-import { initShortcuts } from './shortcuts.js';
+import { initShortcuts, help as showShortcuts, labelNavShortcuts } from './shortcuts.js';
+import { initShell, renderNav, renderMe, highlightNav, loadBrand } from './shell.js';
 
 hydrateIcons();
 initShortcuts();
@@ -81,7 +82,6 @@ $('#passwordForm').addEventListener('submit', async e => {
   } catch (error) { $('#pwError').textContent = errorMessage(error); }
 });
 $('#pwLogout').addEventListener('click', () => logout());
-$('#logoutBtn').addEventListener('click', () => logout());
 
 async function enter() {
   store.me = await api('/api/me');
@@ -101,30 +101,16 @@ async function enter() {
 function renderShell() {
   const me = store.me;
   $('#meAvatar').outerHTML = avatar(me).replace('class="avatar"', 'class="avatar" id="meAvatar"');
-  $('#meName').textContent = me.fullName;
-  $('#meDept').textContent = me.departmentName || (me.isRootAdmin ? 'Quản trị gốc' : '');
-  $('#navDashboard').classList.toggle('hidden', !can('reports.dashboard'));
-  // Tổng thể công việc (mọi dự án, theo người / phòng): BGĐ và lãnh đạo phòng; cán bộ xem việc mình ở "Việc của tôi".
-  $('#navWork').classList.toggle('hidden', !['SYSTEM', 'UNIT'].includes(workScope()));
-  // Module tuỳ chọn (playground): chỉ hiện khi máy chủ bật MODULES=crm,hrm.
-  const mods = store.settings?.modules || [];
-  $('#navCrm').classList.toggle('hidden', !mods.includes('crm'));
-  $('#navHrm').classList.toggle('hidden', !mods.includes('hrm'));
+  renderMe();
+  $('.ab-brand').setAttribute('href', isItAdmin() ? '#/admin/users' : '#/tuan');
   // Admin IT: chỉ thấy phần quản trị, không thấy công việc / dự án / báo cáo.
-  $('#workNav').classList.toggle('hidden', isItAdmin());
-  $('#projectSection').classList.toggle('hidden', isItAdmin());
   $('#paletteBtn').classList.toggle('hidden', isItAdmin());
-  let anyAdmin = false;
-  for (const a of $$('#adminNav [data-perm]')) { const ok = can(a.dataset.perm); a.classList.toggle('hidden', !ok); anyAdmin ||= ok; }
-  $('#adminNav').classList.toggle('hidden', !anyAdmin);
-  $('#newProjectBtn').classList.toggle('hidden', !can('projects.manage', 'operate'));
-  // Nhóm "Công cụ khác" nhớ trạng thái mở / đóng theo người dùng (mặc định thu gọn cho gọn mắt).
-  const more = $('#navMore');
-  more.open = !!uiPref('nav:more');
-  more.ontoggle = () => uiPref('nav:more', more.open || null);
+  renderNav({ onNewProject: () => openCreateProject(async project => { await reloadProjects(); renderProjectNav(); location.hash = `#/projects/${project.id}`; }) });
   renderProjectNav();
+  labelNavShortcuts();
 }
 export function renderProjectNav() {
+  if (!$('#projectNav')) return;
   const byDept = new Map();
   for (const p of store.projects) {
     const name = p.department?.name || '—';
@@ -132,20 +118,9 @@ export function renderProjectNav() {
     byDept.get(name).push(p);
   }
   $('#projectNav').innerHTML = [...byDept.entries()].map(([dept, list]) => `<div class="sb-dept">${esc(dept)}</div>` +
-    list.map(p => `<a href="#/projects/${p.id}" data-project="${p.id}" data-testid="nav-project-${esc(p.key)}"><span class="key">${esc(p.key)}</span><span>${esc(p.name)}</span></a>`).join('')).join('')
-    || '<div class="muted xs" style="padding:6px 10px">Chưa có dự án nào bạn được xem.</div>';
+    list.map(p => `<a href="#/projects/${p.id}" data-project="${p.id}" data-testid="nav-project-${esc(p.key)}" title="${esc(p.key + ' — ' + p.name)}"><span class="key">${esc(p.key)}</span><span class="t">${esc(p.name)}</span></a>`).join('')).join('')
+    || '<div class="muted xs sb-none">Chưa có dự án nào bạn được xem.</div>';
   highlightNav();
-}
-function highlightNav() {
-  const hash = location.hash;
-  $$('.sb-nav a, .sb-projects a').forEach(a => {
-    const href = a.getAttribute('href');
-    a.classList.toggle('active', hash === href || hash.split('?')[0] === href || (href.startsWith('#/projects/') && hash.startsWith(href + '/')) || (href.startsWith('#/projects/') && hash.startsWith(href + '?'))
-      || (href === '#/tuan' && hash.startsWith('#/tuan')) || (href === '#/crm' && hash.startsWith('#/crm')) || (href === '#/hrm' && hash.startsWith('#/hrm')));
-  });
-  // Đang mở một trang trong "Công cụ khác" thì mở nhóm đó ra.
-  const more = $('#navMore');
-  if (more && $('a.active', more)) more.open = true;
 }
 
 let countersBusy = false;
@@ -157,11 +132,9 @@ export async function refreshCounters() {
     const dot = $('#notifDot');
     dot.textContent = notif.unread > 9 ? '9+' : String(notif.unread);
     dot.classList.toggle('hidden', !notif.unread);
-    const badge = $('#approvalBadge');
-    badge.textContent = counts.total; badge.classList.toggle('hidden', !counts.total);
-    badge.title = `${counts.queue} chờ duyệt · ${counts.extensions} đề nghị gia hạn`;
-    // "Công cụ khác" đang thu gọn: hiện số việc chờ duyệt ngay trên tiêu đề nhóm.
-    const more = $('#moreBadge'); more.textContent = counts.total; more.classList.toggle('hidden', !counts.total); more.title = badge.title;
+    const title = `${counts.queue} chờ duyệt, ${counts.extensions} đề nghị gia hạn`;
+    // Số chờ duyệt: ở mục "Chờ tôi duyệt" và trên tiêu đề nhóm "Công việc" (hiện khi nhóm đang gập / sidebar thu gọn).
+    for (const b of [$('#approvalBadge'), $('#moreBadge')]) if (b) { b.textContent = counts.total; b.classList.toggle('hidden', !counts.total); b.title = title; }
     store.counts = counts;
     store.notifications = notif;
   } catch { /* bỏ qua lỗi đếm */ } finally { countersBusy = false; }
@@ -186,10 +159,8 @@ $('#notifPanel').addEventListener('click', async e => {
 });
 document.addEventListener('click', e => { if (!e.target.closest('.notif')) $('#notifPanel').classList.add('hidden'); });
 
-// Menu di động, tạo dự án, palette
-$('#menuBtn').addEventListener('click', () => $('#sidebar').classList.toggle('open'));
-$('#sidebar').addEventListener('click', e => { if (e.target.closest('a')) $('#sidebar').classList.remove('open'); });
-$('#newProjectBtn').addEventListener('click', () => openCreateProject(async project => { await reloadProjects(); renderProjectNav(); location.hash = `#/projects/${project.id}`; }));
+// Thanh đầu trang, sidebar (thu gọn / mở trượt), bảng Ứng dụng, menu tài khoản; palette
+initShell({ onLogout: () => logout(), onShortcuts: () => showShortcuts() });
 $('#paletteBtn').addEventListener('click', openPalette);
 $('#modalRoot').addEventListener('mousedown', e => { if (e.target.id === 'modalRoot') requestCloseModal(); });
 $('#paletteRoot').addEventListener('mousedown', e => { if (e.target.id === 'paletteRoot') closePalette(); });
@@ -311,6 +282,7 @@ window.addEventListener('workhub:hashreplaced', () => {
 });
 
 (async function init() {
+  await loadBrand();
   if (!getToken()) { show('loginPage'); return; }
   try { await enter(); } catch { logout(); }
 })();

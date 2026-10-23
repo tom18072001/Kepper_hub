@@ -24,6 +24,8 @@ export const HELP = [
 const singleOn = () => uiPref('kbd:single') !== 'off';
 const typing = el => !!el && (el.isContentEditable || (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) && !/^(checkbox|radio|range|button|submit)$/.test(el.type)) || !!el.closest?.('.multi-list, [role=listbox], [role=menu]'));
 const visible = el => !!el && !el.closest('.hidden') && el.getClientRects().length > 0;
+// Mục điều hướng (sidebar, menu tài khoản) chỉ được vẽ khi người dùng có quyền — có trong trang là đi được, kể cả khi nhóm đang gập.
+const navOk = el => !!el;
 const overlayOpen = () => !$('#modalRoot').classList.contains('hidden') || !$('#paletteRoot').classList.contains('hidden');
 const panelOpen = () => !$('#itemPanel').classList.contains('hidden');
 // Chữ cái theo vị trí phím (KeyJ → 'j'), không theo ký tự bộ gõ tạo ra.
@@ -97,13 +99,16 @@ function gHint(show) {
   clearTimeout(gHintTimer); $('#gHint')?.remove();
   if (!show) return;
   gHintTimer = setTimeout(() => {
-    const items = GO.filter(([, testid, , href]) => (testid ? visible($(`[data-testid="${testid}"]`)) : !!href?.()));
+    const items = GO.filter(([, testid, , href]) => (testid ? navOk($(`[data-testid="${testid}"]`)) : !!href?.()));
     document.body.insertAdjacentHTML('beforeend', `<div id="gHint" class="g-hint" role="status">G → ${items.map(([k, , label]) => `<kbd>${k.toUpperCase()}</kbd> ${esc(label)}`).join(' · ')}</div>`);
   }, 400);
 }
-export function initShortcuts() {
-  // Gợi ý phím tắt trên menu.
+// Gợi ý phím tắt trên menu (gọi lại sau mỗi lần vẽ sidebar).
+export function labelNavShortcuts() {
   for (const [k, testid] of GO) { if (!testid) continue; const a = $(`[data-testid="${testid}"]`); if (a) { a.title = `${a.textContent.trim()} (G ${k.toUpperCase()})`; a.setAttribute('aria-keyshortcuts', `g ${k}`); } }
+}
+export function initShortcuts() {
+  labelNavShortcuts();
   const pb = $('#paletteBtn'); if (pb) { pb.title = 'Tìm nhanh (Ctrl K hoặc /)'; pb.setAttribute('aria-keyshortcuts', 'Control+K /'); }
   $('#shortcutsBtn')?.addEventListener('click', help);
   window.addEventListener('workhub:shortcuts', help);
@@ -135,7 +140,7 @@ export function initShortcuts() {
       if (go) {
         const [, testid, , hrefFn] = go;
         const a = testid && $(`[data-testid="${testid}"]`);
-        const href = a && visible(a) ? a.getAttribute('href') : !testid ? hrefFn?.() : null;
+        const href = a && navOk(a) ? a.getAttribute('href') : !testid ? hrefFn?.() : null;
         if (href) { e.preventDefault(); location.hash = href; }
       }
       return;

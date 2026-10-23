@@ -120,7 +120,7 @@
 /* In: chỉ biểu đồ, khổ A4 ngang, không cuộn */
 @media print{
   @page gantt{size:A4 landscape;margin:10mm}
-  body:has(.gantt) :is(.sidebar,.topbar,.page-head,.ph-desc,.viewbar,.filters,.toasts){display:none!important}
+  body:has(.gantt) :is(.sidebar,.topbar,.appbar,.crumbs,.page-head,.ph-desc,.viewbar,.filters,.toasts){display:none!important}
   body:has(.gantt){background:var(--surface)}
   body:has(.gantt) .view{padding:0}
   .gantt{page:gantt;--gantt-name-w:420px;--gantt-row-h:26px;print-color-adjust:exact;-webkit-print-color-adjust:exact}

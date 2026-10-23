@@ -46,6 +46,8 @@ services:
       ALLOW_DEMO_SEED: ${ALLOW_DEMO_SEED:-}   # chỉ máy dùng thử (playground): yes
       # Module tuỳ chọn: crm,hrm (mặc định tắt). Bật hrm cần HR_ENC_KEY (khoá mã hoá CCCD, lương — giữ cùng chỗ với khoá sao lưu).
       MODULES: ${MODULES:-}
+      ORG_NAME: ${ORG_NAME:-}   # tên công ty hiện trên thanh đầu trang (chỉ ghi trong .env)
+      BRANDING_DIR: /data/branding   # logo công ty: logo.png, logo-light.png, mark.png, mark-light.png (thư mục BRANDING_PATH trên máy)
       HR_ENC_KEY: ${HR_ENC_KEY:-}
       STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
       MINIO_ENDPOINT: minio
@@ -63,6 +65,7 @@ services:
     volumes:
       - uploads:/data/uploads
       - ${LOG_PATH:-./logs}:/data/logs
+      - ${BRANDING_PATH:-./branding}:/data/branding:ro
     ports:
       - "127.0.0.1:${APP_PORT:-4100}:4000"
     restart: unless-stopped

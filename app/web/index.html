@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="css/kepper.css">
   <link rel="stylesheet" href="css/weekly.css">
   <link rel="stylesheet" href="css/playground.css">
+  <link rel="stylesheet" href="css/shell.css">
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
@@ -50,60 +51,35 @@
 
   <!-- Ứng dụng -->
   <div id="appShell" class="shell hidden">
-    <aside class="sidebar" id="sidebar">
-      <div class="sb-head">
-        <div class="brand-mark sm" aria-hidden="true">K</div>
-        <div><b>Kepper Hub</b><div class="muted xs" id="sbOrg">Tiến độ dự án</div></div>
+    <header class="appbar">
+      <button class="ab-btn" id="menuBtn" aria-controls="sidebar" aria-expanded="true" title="Thu gọn menu" data-testid="menu-toggle"><span data-icon="menu"></span></button>
+      <a class="ab-brand" href="#/" aria-label="Kepper Hub — trang chủ"><span class="brand-mark sm" aria-hidden="true">K</span><span class="ab-name"><b>Kepper Hub</b><span id="orgName" class="hidden"></span></span></a>
+      <div class="ab-pop">
+        <button class="ab-apps" id="appsBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="appsPanel" data-testid="apps-open"><span data-icon="grid"></span><span class="t">Ứng dụng</span></button>
+        <div class="launcher hidden" id="appsPanel" role="menu" aria-label="Ứng dụng"></div>
       </div>
-      <nav class="sb-nav" id="workNav" aria-label="Điều hướng chính">
-        <a href="#/tuan" data-nav="tuan" data-testid="nav-tuan"><span data-icon="calendar"></span>Báo cáo tuần</a>
-        <a href="#/home" data-nav="home" data-testid="nav-home" id="navHome"><span data-icon="dashboard"></span>Tiến độ dự án</a>
-        <a href="#/sprint" data-nav="sprint" data-testid="nav-sprint"><span data-icon="checklist"></span>Cập nhật nhanh</a>
-        <a href="#/crm" data-nav="crm" data-testid="nav-crm" id="navCrm" class="hidden"><span data-icon="building"></span>Đối tác</a>
-        <a href="#/hrm" data-nav="hrm" data-testid="nav-hrm" id="navHrm" class="hidden"><span data-icon="users"></span>Nhân sự</a>
-        <details class="sb-more" id="navMore">
-          <summary data-testid="nav-more"><span data-icon="list"></span>Công cụ khác<span class="badge hidden" id="moreBadge"></span></summary>
-          <div>
-            <a href="#/my" data-nav="my" data-testid="nav-my"><span data-icon="target"></span>Việc của tôi</a>
-            <a href="#/work" data-nav="work" data-testid="nav-work" id="navWork" class="hidden"><span data-icon="users"></span>Tổng thể công việc</a>
-            <a href="#/approvals" data-nav="approvals" data-testid="nav-approvals" id="navApprovals"><span data-icon="approve"></span>Chờ tôi duyệt<span class="badge hidden" id="approvalBadge"></span></a>
-            <a href="#/dashboard" data-nav="dashboard" data-testid="nav-dashboard" id="navDashboard"><span data-icon="chart"></span>Số liệu công việc</a>
-            <a href="#/trash" data-nav="trash" data-testid="nav-trash"><span data-icon="trash"></span>Thùng rác</a>
-            <a href="#/claude" data-nav="claude" data-testid="nav-claude"><span data-icon="send"></span>Kết nối Claude</a>
-            <a href="#/catalog" data-nav="catalog" data-testid="nav-catalog"><span data-icon="list"></span>Danh mục</a>
-          </div>
-        </details>
-      </nav>
-      <div class="sb-section" id="projectSection">
-        <div class="sb-title"><span>Dự án</span><button class="icon-btn" id="newProjectBtn" title="Tạo dự án" aria-label="Tạo dự án" data-testid="new-project"><span data-icon="plus"></span></button></div>
-        <div id="projectNav" class="sb-projects"></div>
-      </div>
-      <nav class="sb-nav sb-admin hidden" id="adminNav" aria-label="Quản trị">
-        <div class="sb-title"><span>Quản trị</span></div>
-        <a href="#/admin/users" data-nav="admin-users" data-perm="admin.users" data-testid="nav-admin-users"><span data-icon="users"></span>Tài khoản</a>
-        <a href="#/admin/departments" data-nav="admin-departments" data-perm="admin.departments" data-testid="nav-admin-departments"><span data-icon="building"></span>Phòng ban</a>
-        <a href="#/admin/labels" data-nav="admin-labels" data-perm="admin.labels"><span data-icon="tag"></span>Nhãn</a>
-        <a href="#/catalog" data-nav="catalog" data-perm="admin.departments"><span data-icon="list"></span>Danh mục</a>
-        <a href="#/admin/audit" data-nav="admin-audit" data-perm="admin.audit" data-testid="nav-admin-audit"><span data-icon="history"></span>Nhật ký hệ thống</a>
-        <a href="#/admin/tokens" data-nav="admin-tokens" data-perm="admin.users" data-testid="nav-admin-tokens"><span data-icon="send"></span>Token Claude</a>
-      </nav>
-      <div class="sb-foot">
-        <div class="me"><span class="avatar" id="meAvatar"></span><div class="who"><b id="meName"></b><div class="muted xs" id="meDept"></div></div>
-        <button class="icon-btn" id="logoutBtn" data-testid="logout" title="Đăng xuất" aria-label="Đăng xuất"><span data-icon="logout"></span></button></div>
-      </div>
-    </aside>
-    <div class="main">
-      <header class="topbar">
-        <button class="icon-btn menu-btn" id="menuBtn" aria-label="Mở menu"><span data-icon="menu"></span></button>
-        <div class="crumbs" id="crumbs"></div>
-        <button class="search-btn" id="paletteBtn" data-testid="palette-open"><span data-icon="search"></span><span class="lbl">Tìm nhanh…</span><kbd>Ctrl K</kbd></button>
-        <button class="icon-btn kbd-btn" id="shortcutsBtn" title="Phím tắt (?)" aria-label="Phím tắt" data-testid="shortcuts-open"><kbd>?</kbd></button>
+      <button class="ab-search" id="paletteBtn" data-testid="palette-open"><span data-icon="search"></span><span class="lbl">Tìm dự án, trang, mã việc…</span><kbd>Ctrl K</kbd></button>
+      <div class="ab-right">
+        <button class="ab-btn kbd-btn" id="shortcutsBtn" title="Phím tắt (?)" aria-label="Phím tắt" data-testid="shortcuts-open"><kbd>?</kbd></button>
         <div class="notif">
-          <button class="icon-btn" id="notifBtn" aria-label="Thông báo" data-testid="notif-btn"><span data-icon="bell"></span><span class="dot hidden" id="notifDot" data-testid="notif-count"></span></button>
+          <button class="ab-btn" id="notifBtn" aria-label="Thông báo" data-testid="notif-btn"><span data-icon="bell"></span><span class="dot hidden" id="notifDot" data-testid="notif-count"></span></button>
           <div class="popover hidden" id="notifPanel" role="dialog" aria-label="Thông báo"></div>
         </div>
-      </header>
-      <main id="view" class="view" tabindex="-1"></main>
+        <div class="ab-pop">
+          <button class="ab-user" id="userBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="userPanel" data-testid="user-menu"><span class="avatar" id="meAvatar"></span><span class="who"></span><span data-icon="down"></span></button>
+          <div class="popover user-pop hidden" id="userPanel" role="menu" aria-label="Tài khoản"></div>
+        </div>
+      </div>
+    </header>
+    <div class="frame">
+      <aside class="sidebar" id="sidebar" aria-label="Điều hướng">
+        <div id="sidebarNav" class="sb-scroll"></div>
+      </aside>
+      <div class="sb-scrim hidden" id="sbScrim"></div>
+      <div class="main">
+        <div class="crumbs" id="crumbs"></div>
+        <main id="view" class="view" tabindex="-1"></main>
+      </div>
     </div>
   </div>
 
