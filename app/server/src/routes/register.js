@@ -436,6 +436,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
   app.get('/api/projects/:id/register.xlsx', auth, async (req, res) => {
     const { project, member, rights } = await loadProject(prisma, req.user, intParam(req.params.id));
     if (!canExport(req.user, project, member, rights)) fail(403, 'Bạn không có quyền xuất Excel dự án này', 'FORBIDDEN');
+    MG.mtlExportGuard(req.user, project, rights); // MTL: quy định xuất (người quản lý dự án / Ban GĐ)
     const settings = await R.getSettings(prisma);
     const items = await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, AND: [itemVisibleWhere(req.user)] }, orderBy: { number: 'asc' },
       include: { state: true, assignees: { include: { user: true } }, supporters: { include: { user: true } },

@@ -24,7 +24,7 @@ if ($cid) {
 
 Write-Host "==> 3/5 Lấy mã mới"
 git fetch origin
-if ($Branch) { git checkout $Branch }
+if ($Branch) { git checkout $Branch; if ($LASTEXITCODE -ne 0) { throw "git checkout $Branch lỗi." } }
 git pull --ff-only
 if ($LASTEXITCODE -ne 0) { throw "git pull lỗi — xử lý thay đổi cục bộ rồi chạy lại." }
 git log --oneline -1
@@ -37,8 +37,8 @@ Write-Host "==> 5/5 Chờ app sẵn sàng"
 $ok = $false
 for ($i = 0; $i -lt 36; $i++) {
   Start-Sleep -Seconds 5
-  $st = docker compose ps app --format "{{.Status}}"
-  if ($st -match "healthy" -and $st -notmatch "unhealthy") { $ok = $true; break }
+  $id = docker compose ps -q app
+  if ($id) { $h = docker inspect -f "{{.State.Health.Status}}" $id; if ($h -eq "healthy") { $ok = $true; break } }
 }
 if (-not $ok) {
   Write-Host "!! App chưa sẵn sàng sau 3 phút. 40 dòng log cuối:" -ForegroundColor Red

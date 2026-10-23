@@ -28,8 +28,12 @@ function scheduler(prisma, jobs, { log = console } = {}) {
   const read = async (client = prisma) => asObj(await client.appSetting.findUnique({ where: { key: KEY } }));
   const write = (client, value) => client.appSetting.upsert({ where: { key: KEY }, create: { key: KEY, value }, update: { value } });
   // Trong transaction có khoá tư vấn (nếu CSDL hỗ trợ): đọc sổ → sửa → ghi.
-  const locked = fn => (typeof prisma.$transaction === 'function'
-    ? prisma.$transaction(async tx => { const [{ ok }] = await tx.$queryRaw`SELECT pg_try_advisory_xact_lock(${LOCK_ID}) AS ok`; return ok ? fn(tx) : null; })
+  // try = true: nhận việc (tiến trình khác đang giữ khoá thì bỏ lượt này); false: ghi kết quả (chờ khoá, không bỏ — tránh kẹt "running").
+  const locked = (fn, { tryOnly = true } = {}) => (typeof prisma.$transaction === 'function'
+    ? prisma.$transaction(async tx => {
+      if (!tryOnly) { await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_ID})`; return fn(tx); }
+      const [{ ok }] = await tx.$queryRaw`SELECT pg_try_advisory_xact_lock(${LOCK_ID}) AS ok`; return ok ? fn(tx) : null;
+    })
     : fn(prisma));
   async function tick(now = new Date()) {
     if (busy) return [];
@@ -57,7 +61,7 @@ function scheduler(prisma, jobs, { log = console } = {}) {
           entry = { day, at: startedAt, ok: false, tries, error: String(error?.message || error).slice(0, 300) };
           log.error(JSON.stringify({ level: 'error', msg: j.name + '_failed', tries, error: error?.message }));
         }
-        await locked(async tx => { const ledger = await read(tx); ledger[j.name] = entry; await write(tx, ledger); });
+        await locked(async tx => { const ledger = await read(tx); ledger[j.name] = entry; await write(tx, ledger); }, { tryOnly: false });
         ran.push(j.name);
       }
     } catch (error) {

@@ -68,6 +68,9 @@ function statusFromMtl(code, done) {
 // memberIds: tài khoản thuộc bộ phận. prev: báo cáo tuần trước (data). actions: Action Log của buổi giao ban vừa rồi giao cho bộ phận.
 let seq = 0;
 const newKey = p => `${p}${Date.now().toString(36)}${(seq++).toString(36)}`;
+// Khoá dòng chỉ gồm chữ / số / _ / - (dùng trong khoá kết luận "<bộ phận>:<dòng>" — dấu ":" thừa làm kết luận không lưu được).
+const KEY_RE = /^[\w-]{1,40}$/;
+const safeKey = k => String(k ?? '').replace(/[^\w-]/g, '_').slice(0, 40);
 const blankIssue = () => ({ cause: '', solution: '', helpFrom: '', helpWhat: '', helpBy: '' });
 
 function deptCandidates(items, deptId, memberIds) {
@@ -114,7 +117,7 @@ function buildPrefill({ week: f, deptId, items = [], memberIds = new Set(), prev
   }
   // 2) Action Log giao ban (mọi việc TGĐ giao còn mở, kể cả tuần trước bộ phận chưa nộp) → Phần I, nguồn "TGĐ giao" — bắt buộc báo cáo.
   const hasAction = ref => [...results, ...ongoing].some(r => r.actionRef === ref);
-  for (const a of actions) if (!hasAction(a.ref)) results.push({ key: `a${a.ref}`, actionRef: a.ref, itemId: null, task: a.task, source: 'TGĐ giao', ownerIds: a.ownerId ? [a.ownerId] : [],
+  for (const a of actions) if (!hasAction(a.ref)) results.push({ key: safeKey(`a${a.ref}`), actionRef: a.ref, itemId: null, task: a.task, source: 'TGĐ giao', ownerIds: a.ownerId ? [a.ownerId] : [],
     due: a.due || '', status: 'Đúng tiến độ', pct: '', ...blankIssue(), mandatory: true });
 
   // 3) MTL của bộ phận: đến hạn / quá hạn / xong trong tuần → I; đang chạy nhiều tuần → II; bắt đầu tuần tới → III.
@@ -144,7 +147,7 @@ function sanitize(data, { userIds = null, deptIds = new Set(), itemIds = null } 
   const base = r => {
     const itemId = Number.isInteger(r?.itemId) && (!itemIds || itemIds.has(r.itemId)) ? r.itemId : null;
     return {
-      key: str(r?.key, 40) || newKey('f'), itemId, ref: itemId ? str(r.ref, 40) : '', step: itemId ? str(r.step, 20) : '', project: itemId ? str(r.project, 20) : '',
+      key: KEY_RE.test(str(r?.key, 40)) ? str(r?.key, 40) : newKey('f'), itemId, ref: itemId ? str(r.ref, 40) : '', step: itemId ? str(r.step, 20) : '', project: itemId ? str(r.project, 20) : '',
       actionRef: str(r?.actionRef, 40) || null, task: str(r?.task, 500), ownerIds: idsOf(r?.ownerIds, userIds), due: day(r?.due),
       mandatory: !!r?.mandatory, ownerPicked: !!r?.ownerPicked,
     };
@@ -260,7 +263,7 @@ function buildSummary({ week: f, depts, reports, notices, meeting = null, action
     const nStuck = items.filter(x => x.status === 'Chậm' || x.status === 'Vướng').length, nOver = items.filter(x => isOverdue(x, f)).length;
     stuck += nStuck; overdue += nOver;
     for (const x of items) if (needsIssue(x, f) && x.helpFrom && x.helpFrom !== HELP_SELF)
-      helps.push({ key: `${d.id}:${x.key}`, fromId: d.id, from: d.name, to: helpTarget(x.helpFrom, deptName), toKey: x.helpFrom, task: x.task, ref: x.ref || '', what: x.helpWhat, by: x.helpBy, status: issueLabel(x, f), cause: x.cause, solution: x.solution, conclusion: md.conclusions?.[`${d.id}:${x.key}`] || null });
+      helps.push({ key: `${d.id}:${safeKey(x.key)}`, fromId: d.id, from: d.name, to: helpTarget(x.helpFrom, deptName), toKey: x.helpFrom, task: x.task, ref: x.ref || '', what: x.helpWhat, by: x.helpBy, status: issueLabel(x, f), cause: x.cause, solution: x.solution, conclusion: md.conclusions?.[`${d.id}:${safeKey(x.key)}`] || null });
     rows.push({ id: d.id, name: d.name, status: st, submittedAt: sent?.firstSubmittedAt || null, lastSubmittedAt: sent?.submittedAt || null, resubmits: sent ? Math.max(0, (sent.submitCount || 1) - 1) : 0,
       submittedBy: sent ? userName(sent.submittedById) : '', items: sent ? items.length : null, stuck: sent ? nStuck : null, overdue: sent ? nOver : null,
       absent: absent ? { reason: REASONS[absent.reason] || '', note: absent.note, substitute: userName(absent.substituteId), noticed: !!absenceNoticed([absent], S) } : null,

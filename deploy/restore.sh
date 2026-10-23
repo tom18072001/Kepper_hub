@@ -66,11 +66,13 @@ echo "[restore] đã đổi: $PGDATABASE ← bản khôi phục; bản trước 
 
 if [ -f "$uploads" ]; then
   echo "[restore] khôi phục tệp đính kèm vào $UPLOADS_DIR"
-  tmp="$UPLOADS_DIR/.restore-$ts"
-  mkdir -p "$tmp"
+  tmp="$UPLOADS_DIR/.restore-$ts"; keep="$UPLOADS_DIR/.before-$ts"
+  mkdir -p "$tmp" "$keep"
   tar -xzf "$uploads" -C "$tmp"
-  find "$UPLOADS_DIR" -mindepth 1 -maxdepth 1 ! -name ".restore-$ts" -exec rm -rf {} +
+  # Tệp hiện tại chuyển vào .before-<giờ> (cùng ổ, giữ lại để quay về như CSDL _before_), rồi đưa bản khôi phục vào.
+  find "$UPLOADS_DIR" -mindepth 1 -maxdepth 1 ! -name ".restore-$ts" ! -name ".before-*" -exec mv {} "$keep/" \;
   (cd "$tmp" && tar -cf - .) | tar -xf - -C "$UPLOADS_DIR"
   rm -rf "$tmp"
+  echo "[restore] tệp đính kèm cũ giữ ở $keep (xoá sau khi kiểm tra)"
 fi
 echo "[restore] xong — khởi động lại:  docker compose up -d"

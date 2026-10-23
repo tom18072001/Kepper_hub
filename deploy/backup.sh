@@ -47,7 +47,7 @@ run_backup() {
   pg_restore --list "$dir/workhub.dump" > /dev/null || { fail "dump không đọc được"; return 1; }
   if [ -d "$UPLOADS_DIR" ]; then
     echo "[backup] $stamp: nén tệp đính kèm"
-    tar -czf "$dir/uploads.tgz" -C "$UPLOADS_DIR" . || { fail "nén tệp đính kèm"; return 1; }
+    tar -czf "$dir/uploads.tgz" --exclude='./.before-*' --exclude='./.restore-*' -C "$UPLOADS_DIR" . || { fail "nén tệp đính kèm"; return 1; }
   fi
   encrypted=false
   if [ -n "$RECIPIENT" ]; then
@@ -69,7 +69,8 @@ run_backup() {
       echo "[backup] CẢNH BÁO: BACKUP_COPY_PATH trùng thư mục sao lưu — chưa có bản ngoài máy" >&2
     elif [ -d "$COPY_DIR" ] && cp -r "$dir" "$COPY_DIR/" && (cd "$COPY_DIR/$stamp" && sha256sum -c SHA256SUMS >/dev/null); then
       copied=true
-      find "$COPY_DIR" -mindepth 1 -maxdepth 1 -type d -mtime +"$COPY_KEEP_DAYS" -exec rm -rf {} +
+      # Chỉ dọn thư mục do backup.sh tạo (tên dạng 20261023-020000) — đặt nhầm BACKUP_COPY_PATH vào gốc ổ cũng không xoá thư mục khác.
+      find "$COPY_DIR" -mindepth 1 -maxdepth 1 -type d -name '20[0-9][0-9][01][0-9][0-3][0-9]-*' -mtime +"$COPY_KEEP_DAYS" -exec rm -rf {} + || echo "[backup] không dọn được bản cũ ở $COPY_DIR" >&2
     else
       echo "[backup] CẢNH BÁO: không chép được sang $COPY_DIR" >&2
     fi
@@ -78,8 +79,9 @@ run_backup() {
   date -u +%Y-%m-%dT%H:%M:%SZ > "$BACKUP_DIR/LAST_OK" && echo "$stamp" >> "$BACKUP_DIR/LAST_OK"
   status "{\"lastOk\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"stamp\":\"$stamp\",\"sizeKb\":$size,\"encrypted\":$encrypted,\"copied\":$copied,\"error\":null}"
   echo "[backup] $stamp: xong (${size} KB, mã hoá: $encrypted, bản ngoài máy: $copied)"
-  # Xoá bản cũ hơn KEEP_DAYS ngày — chỉ sau khi bản mới đạt.
-  find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -mtime +"$KEEP_DAYS" -exec rm -rf {} +
+  # Xoá bản cũ hơn KEEP_DAYS ngày — chỉ sau khi bản mới đạt; chỉ thư mục do backup.sh tạo; lỗi dọn không làm hỏng lần sao lưu đã đạt.
+  find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -name '20[0-9][0-9][01][0-9][0-3][0-9]-*' -mtime +"$KEEP_DAYS" -exec rm -rf {} + || echo "[backup] không dọn được bản cũ" >&2
+  return 0
 }
 
 if [ "${BACKUP_ONCE:-0}" = "1" ]; then run_backup || exit 1; exit 0; fi

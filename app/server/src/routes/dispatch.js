@@ -326,7 +326,7 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
     const created = await prisma.$transaction(async tx => {
       const parent = await itemWithProject(tx, id);
       if (parent.parentId) fail(422, 'Chỉ thêm việc nhánh cho việc gốc');
-      await MG.mtlCreateGuard(tx, req.user, project, rights, { parentId: id }); // MTL: quản lý dự án / lãnh đạo bộ phận chủ trì
+      const g = await MG.mtlCreateGuard(tx, req.user, project, rights, { parentId: id }); // MTL: quản lý dự án / lãnh đạo bộ phận chủ trì
       const leaders = await leadersOf(tx, parent);
       if (!(rights.canManage || parent.assignedById === req.user.id || leaders.includes(req.user.id) || parent.assignees.some(a => a.userId === req.user.id)))
         fail(403, 'Chỉ lãnh đạo phòng chủ trì, người chủ trì hoặc người giao được chia việc nhánh', 'FORBIDDEN');
@@ -337,6 +337,8 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
         const item = await W.createWorkItem(tx, { project, user: req.user, rights, source: 'BULK', input: {
           title: r.title, parentId: id, assigneeIds: r.assigneeIds || parent.assignees.map(a => a.userId), dueDate, priority: parent.priority, assignedById: req.user.id,
           deliverable: r.deliverable || '', overrideWip: 'bulk',
+          // MTL: việc con đầu tiên của bước đang làm dở nhận % hiện tại của bước (tiến độ bước không tụt).
+          ...(project.kind === 'MTL' && !out.length && g.progress ? { progress: g.progress } : {}),
         } });
         out.push({ id: item.id, code: code(project, item), title: item.title, dueDate: item.dueDate });
       }

@@ -235,6 +235,8 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
       let first = existing?.firstSubmittedAt || now, receivedAt = null;
       if (!existing?.firstSubmittedAt && acc.onBehalf && req.body?.receivedAt) first = receivedAt = new Date(req.body.receivedAt);
       const updated = [], conflicts = [];
+      // Khoá hạng mục theo thứ tự id (hai bộ phận nộp cùng lúc có chung hạng mục không khoá chéo nhau → không deadlock).
+      plan.sort((a, b) => a.w.itemId - b.w.itemId);
       for (const p of plan) {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'item:' + p.w.itemId}))`;
         const item = await tx.workItem.findUnique({ where: { id: p.w.itemId }, include: { state: true, _count: { select: { children: { where: { archivedAt: null } } } } } });
@@ -375,7 +377,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
       await D.meetingLock(tx, week);
       const existing = await tx.weeklyMeeting.findUnique({ where: { week } });
       // Action Log do người khác vừa sửa (so phiên bản lúc tải) → không ghi đè cả danh sách.
-      if (b.actions !== undefined && b.baseActions && b.baseActions !== sha256(existing?.data?.actions || []))
+      if (b.actions !== undefined && b.baseActions !== sha256(existing?.data?.actions || []))
         fail(409, 'Action Log vừa được người khác cập nhật — tải lại trước khi lưu', 'MEETING_CONFLICT');
       const data = { ...(existing?.data || {}) };
       // Đổi lịch (tuần nghỉ, hạn nộp, ngày họp) sau hạn nộp làm đổi điểm đã phát sinh → chỉ TGĐ / Ban GĐ.
@@ -394,7 +396,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
         // Gộp theo từng yêu cầu (khoá "<bộ phận>:<dòng>"); giá trị null = xoá kết luận đó.
         const c = { ...(data.conclusions || {}) };
         for (const [k, v] of Object.entries(b.conclusions || {})) {
-          if (!/^\d+:[\w-]{1,40}$/.test(k)) continue;
+          if (!/^\d+:[\w-]{1,40}$/.test(k)) fail(422, 'Mã yêu cầu hỗ trợ không hợp lệ — tải lại trang', 'INVALID_KEY');
           if (v === null || !v.decision) { delete c[k]; continue; }
           if (!WK.DECISIONS[v.decision]) continue;
           c[k] = { decision: v.decision, departmentId: v.decision === 'ASSIGN' && depts.has(Number(v.departmentId)) ? Number(v.departmentId) : null, note: String(v.note ?? '').trim().slice(0, 500) };
@@ -528,7 +530,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
       if (req.params.action === 'submit') v = { status: 'SUBMITTED', rows, submittedById: req.user.id, submittedAt: now.toISOString() };
       else {
         if (cur?.status !== 'SUBMITTED') fail(409, 'Thư ký chưa trình bảng điểm tháng này', 'NOT_SUBMITTED');
-        if (req.body?.sha256 && req.body.sha256 !== sha256(cur.rows)) fail(409, 'Bảng điểm vừa được trình lại — tải lại trước khi duyệt', 'STALE');
+        if (req.body?.sha256 !== sha256(cur.rows)) fail(409, 'Bảng điểm vừa được trình lại — tải lại trước khi duyệt', 'STALE');
         v = { ...cur, status: 'APPROVED', approvedById: req.user.id, approvedAt: now.toISOString() };
       }
       await tx.appSetting.upsert({ where: { key }, create: { key, value: v, updatedById: req.user.id }, update: { value: v, updatedById: req.user.id } });

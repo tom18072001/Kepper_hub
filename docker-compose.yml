@@ -101,7 +101,7 @@ services:
   # Khôi phục (chạy tay): docker compose stop app
   #   docker compose --profile restore run --rm -e RESTORE_FROM=/backups/<thư-mục> restore
   #   Bản đã mã hoá: thêm  -v <thư-mục-chứa-khoá>:/key:ro -e AGE_IDENTITY=/key/kepper-backup.key
-  #   Thử khôi phục mỗi quý vào một CSDL tạm (đặt PGDATABASE=workhub_restore_test) và ghi biên bản.
+  #   Thử khôi phục mỗi quý (không đụng dữ liệu đang dùng): thêm  -e RESTORE_TEST=1  — ghi kết quả để "Tình trạng vận hành" nhắc khi quá 3 tháng.
   restore:
     profiles: ["restore"]
     image: kepper-backup:${APP_VERSION:-0.2.0}

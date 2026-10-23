@@ -10,14 +10,22 @@ const H7 = 7 * 3_600_000;
 const dayOf = d => new Date(d.getTime() + H7).toISOString().slice(0, 10);
 
 // Có thư mục → chỉ ghi tệp (bền qua vòng đời container); không có thư mục → stdout trên máy chạy (production), im lặng khi phát triển / kiểm thử.
-function createAccessLog({ dir = process.env.ACCESS_LOG_DIR, out = dir || process.env.NODE_ENV !== 'production' ? null : process.stdout } = {}) {
+function createAccessLog({ dir = process.env.ACCESS_LOG_DIR, out: out0 } = {}) {
+  let out = out0 !== undefined ? out0 : dir || process.env.NODE_ENV !== 'production' ? null : process.stdout;
   let day = null, stream = null, disabled = !dir;
+  // Không ghi được tệp (thư mục thuộc root, ổ đầy…): báo một lần và chuyển sang stdout — không âm thầm mất nhật ký.
+  const fallback = error => {
+    if (disabled) return;
+    disabled = true;
+    process.stdout.write(JSON.stringify({ level: 'error', msg: 'access_log_file_failed', dir, error: error?.message }) + '\n');
+    out = out || process.stdout;
+  };
   const fileStream = now => {
     if (disabled) return null;
     const d = dayOf(now);
     if (d !== day) {
-      try { stream?.end(); fs.mkdirSync(dir, { recursive: true }); stream = fs.createWriteStream(path.join(dir, `access-${d}.jsonl`), { flags: 'a' }); day = d; stream.on('error', () => { disabled = true; }); }
-      catch (error) { disabled = true; process.stdout.write(JSON.stringify({ level: 'warn', msg: 'access_log_disabled', error: error.message }) + '\n'); return null; }
+      try { stream?.end(); fs.mkdirSync(dir, { recursive: true }); fs.accessSync(dir, fs.constants.W_OK); stream = fs.createWriteStream(path.join(dir, `access-${d}.jsonl`), { flags: 'a' }); day = d; stream.on('error', fallback); }
+      catch (error) { fallback(error); return null; }
     }
     return stream;
   };

@@ -89,7 +89,9 @@ module.exports = function mountProjects(app, { prisma, auth, audit }) {
 
   app.post('/api/projects', auth, async (req, res) => {
     const departmentId = intParam(req.body.departmentId ?? req.user.departmentId, 'Phòng ban');
-    if (!canCreateProjectIn(req.user, departmentId)) fail(403, 'Bạn không có quyền tạo dự án cho phòng ban này', 'FORBIDDEN');
+    const mtlReq = req.body.kind === 'MTL' || req.body.template === 'MTL';
+    // Dự án MTL: quyền tạo theo vai trò giao ban (Ban GĐ / quản lý toàn công ty / PMO chỉ định — kiểm bên dưới), không theo phòng ban.
+    if (!mtlReq && !canCreateProjectIn(req.user, departmentId)) fail(403, 'Bạn không có quyền tạo dự án cho phòng ban này', 'FORBIDDEN');
     const dept = await prisma.department.findFirst({ where: { id: departmentId, isActive: true } });
     if (!dept) fail(422, 'Phòng ban không hợp lệ', 'INVALID_DEPARTMENT');
     const leadId = optionalInt(req.body.leadId, 'Trưởng dự án') ?? req.user.id;
@@ -133,6 +135,8 @@ module.exports = function mountProjects(app, { prisma, auth, audit }) {
     if (req.body.name !== undefined) data.name = text(req.body.name, 'Tên dự án', { required: true, max: 160 });
     if (req.body.description !== undefined) data.description = text(req.body.description, 'Mô tả', { max: 2000 }) || null;
     if (req.body.visibility !== undefined) data.visibility = oneOf(req.body.visibility, VISIBILITY, 'Phạm vi');
+    // MTL không dùng phạm vi "sổ giao việc" (luồng giao về phòng / tiếp nhận cũ không đi qua quy định MTL).
+    if (project.kind === 'MTL' && data.visibility === 'ASSIGNED') fail(422, 'Dự án MTL không dùng phạm vi sổ giao việc', 'INVALID_VALUE');
     if (req.body.leadId !== undefined) data.leadId = optionalInt(req.body.leadId, 'Trưởng dự án');
     if (req.body.archived !== undefined) data.archivedAt = req.body.archived ? new Date() : null;
     if (req.body.intakeEnabled !== undefined) data.intakeEnabled = !!req.body.intakeEnabled;

@@ -48,9 +48,10 @@ module.exports = function mountExcel(app, { prisma, auth, audit, config }) {
   const upload = multer({ dest: path.join(config.uploadTmpDir, 'workhub-import'), limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
 
   app.get('/api/projects/:id/export.xlsx', auth, async (req, res) => {
-    const { project } = await loadProject(prisma, req.user, intParam(req.params.id));
-    if (!canExport(req.user, project)) fail(403, 'Bạn không có quyền xuất Excel dự án này', 'FORBIDDEN');
-    MG.mtlExportGuard(req.user, project, (await loadProject(prisma, req.user, project.id)).rights); // MTL: quản lý dự án / Ban GĐ
+    const { project, rights } = await loadProject(prisma, req.user, intParam(req.params.id));
+    // MTL: quy định xuất riêng (người quản lý dự án / Ban GĐ — lib/policy.js); dự án khác: quyền xuất Excel thường.
+    if (project.kind === 'MTL') MG.mtlExportGuard(req.user, project, rights);
+    else if (!canExport(req.user, project)) fail(403, 'Bạn không có quyền xuất Excel dự án này', 'FORBIDDEN');
     const items = await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, AND: [itemVisibleWhere(req.user)] }, orderBy: { number: 'asc' },
       include: { state: true, assignees: { include: { user: true } }, labels: { include: { label: true } } } });
     const wb = new ExcelJS.Workbook();

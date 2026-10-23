@@ -18,6 +18,13 @@ function opsProblems({ backup, ledger, now, demoActive = [] }) {
   const failed = Object.entries(ledger || {}).filter(([, v]) => v && v.ok === false && now - new Date(v.at) < 2 * 86_400_000).map(([k]) => k);
   if (failed.length) out.push(`Job lịch chạy lỗi: ${failed.join(', ')}.`);
   if (demoActive.length) out.push(`Tài khoản mẫu (mật khẩu công khai trong README) còn hoạt động: ${demoActive.slice(0, 8).join(', ')} — khoá trước khi dùng với dữ liệu thật.`);
+  if (process.env.ACCESS_LOG_DIR) {
+    // Nhật ký truy cập phải có tệp mới trong 3 ngày (cuối tuần không ai dùng vẫn qua); không có → thư mục không ghi được.
+    const fs = require('node:fs'), path = require('node:path'), dir = process.env.ACCESS_LOG_DIR;
+    let latest = 0;
+    try { for (const f of fs.readdirSync(dir)) if (/^access-.*\.jsonl$/.test(f)) latest = Math.max(latest, fs.statSync(path.join(dir, f)).mtimeMs); } catch { latest = 0; }
+    if (now - latest > 3 * 86_400_000) out.push('Nhật ký truy cập không có tệp mới trong 3 ngày — kiểm tra quyền ghi thư mục LOG_PATH.');
+  }
   const stuck = Object.entries(ledger || {}).filter(([, v]) => v?.running && now - new Date(v.at) > 3_600_000).map(([k]) => k);
   if (stuck.length) out.push(`Job dừng giữa chừng (tiến trình tắt khi đang chạy): ${stuck.join(', ')}.`);
   return out;

@@ -13,7 +13,7 @@ const { stageOf } = require('../services/stage');
 const { setProgress } = require('../services/mtl-progress');
 
 // Kepper (MTL) — mọi kiểm quy định phân quyền dữ liệu đi qua services/mtl-guard.js (lib/policy.js).
-const { MTL_PLAN_KEYS, mtlGuard, mtlCreateGuard } = require('../services/mtl-guard');
+const { MTL_PLAN_KEYS, MTL_WORK_KEYS, mtlGuard, mtlCreateGuard } = require('../services/mtl-guard');
 const sameIds = (a, b) => { const x = [...new Set(a.map(Number))].sort(), y = [...new Set(b.map(Number))].sort(); return x.length === y.length && x.every((v, i) => v === y[i]); };
 const dayOf = v => (v == null || v === '' ? null : new Date(v).getTime());
 const DATE_KEYS = new Set(['dueDate', 'startDate']);
@@ -202,6 +202,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       const pctChanged = body.progress !== undefined && Number(body.progress) !== item.progress;
       const stateChanged = body.stateId !== undefined && Number(body.stateId) !== item.stateId;
       const planChanged = MTL_PLAN_KEYS.some(k => fieldChanged(body, item, k));
+      const workChanged = MTL_WORK_KEYS.some(k => fieldChanged(body, item, k));
       let structChanged = false, assignChanged = false;
       if (project.kind === 'MTL') {
         const supports = body.supportDepartmentIds !== undefined ? (await tx.workItemDepartment.findMany({ where: { workItemId: id } })).map(d => d.departmentId) : [];
@@ -212,7 +213,9 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
           || (Array.isArray(body.supporterIds) && !sameIds(body.supporterIds, (await tx.workItemSupporter.findMany({ where: { workItemId: id } })).map(x => x.userId)))
           || (body.assignedById !== undefined && Number(body.assignedById || 0) !== Number(item.assignedById || 0));
       }
-      await mtlGuard(tx, req.user, project, rights, id, { progress: pctChanged || stateChanged, plan: planChanged, struct: structChanged, assign: assignChanged, manualPct: pctChanged });
+      const toStateG = stateChanged ? toStateEarly : null;
+      await mtlGuard(tx, req.user, project, rights, id, { progress: pctChanged || workChanged, plan: planChanged, struct: structChanged, assign: assignChanged, manualPct: pctChanged,
+        toState: toStateG, fromCategory: item.state.category });
       const data = {}, changed = {};
       if (body.title !== undefined) data.title = text(body.title, 'Tiêu đề', { required: true, max: 300 });
       if (body.descriptionHtml !== undefined) { data.descriptionHtml = sanitizeHtml(body.descriptionHtml); data.descriptionText = htmlToText(data.descriptionHtml); }
@@ -376,7 +379,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       if (item.archivedAt) fail(409, 'Việc đã được lưu trữ', 'ARCHIVED');
       const toState = await tx.workflowState.findFirst({ where: { id: intParam(req.body.stateId, 'Trạng thái'), projectId: project.id } });
       if (!toState) fail(422, 'Trạng thái không hợp lệ', 'INVALID_STATE');
-      if (toState.id !== item.stateId) await mtlGuard(tx, req.user, project, rights, id, { progress: true });
+      if (toState.id !== item.stateId) await mtlGuard(tx, req.user, project, rights, id, { progress: true, toState, fromCategory: item.state.category });
       if (toState.id !== item.stateId) assertDispatchChange(await dispatchRole(tx, req.user, rights, project, { ...item, assignees: await tx.workItemAssignee.findMany({ where: { workItemId: id } }) }), { toState });
       const t = await W.transition(tx, { project, rights, item, toState, overrideWip: req.body.overrideWip });
       const position = await W.positionBetween(tx, toState.id, optionalInt(req.body.afterId, 'Thẻ phía trên'), optionalInt(req.body.beforeId, 'Thẻ phía dưới'));

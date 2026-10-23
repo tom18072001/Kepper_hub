@@ -211,7 +211,8 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   await expect(hc.getByTestId('wk-score-open')).toBeVisible();
   await expect(hc.getByTestId('wk-score-submit')).toHaveCount(0);
   expect((await apiAs(hc, '/api/weekly/compliance/submit', { method: 'POST', headers: { 'content-type': 'application/json' }, data: { month: week.slice(0, 7) } })).status()).toBe(409);
-  const prevMonth = new Date(Date.UTC(Number(week.slice(0, 4)), Number(week.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
+  // Hai tháng trước: luôn đã khép (tháng liền trước có thể chưa khép vào sáng thứ Hai đầu tháng).
+  const prevMonth = new Date(Date.UTC(Number(week.slice(0, 4)), Number(week.slice(5, 7)) - 3, 1)).toISOString().slice(0, 7);
   await hc.goto(`/#/tuan/diem?m=${prevMonth}`);
   await hc.getByTestId('wk-score-submit').click();
   await toast(hc, 'Đã trình TGĐ bảng điểm');

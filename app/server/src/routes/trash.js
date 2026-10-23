@@ -5,12 +5,14 @@ const { activity } = require('../services/events');
 const approval = require('../services/approval');
 const bus = require('../services/bus');
 const T = require('../services/trash');
+const MG = require('../services/mtl-guard');
 
 module.exports = function mountTrash(app, { prisma, auth, audit }) {
   // Xoá việc → thùng rác (kèm việc con). Thay cho "Lưu trữ" trước đây.
   app.delete('/api/items/:id', auth, async (req, res) => {
     const id = intParam(req.params.id);
-    const { project } = await loadItem(prisma, req.user, id, 'delete');
+    const { project, rights } = await loadItem(prisma, req.user, id, 'delete');
+    await MG.mtlDeleteGuard(prisma, req.user, project, rights, id); // MTL: xoá bước tổng = người quản lý dự án
     const ids = await prisma.$transaction(async tx => {
       const item = await tx.workItem.findUnique({ where: { id } });
       if (item.archivedAt) fail(409, 'Việc đã ở trong thùng rác', 'ALREADY_DELETED');
@@ -26,7 +28,8 @@ module.exports = function mountTrash(app, { prisma, auth, audit }) {
 
   app.post('/api/items/:id/restore', auth, async (req, res) => {
     const id = intParam(req.params.id);
-    const { project } = await loadItem(prisma, req.user, id, 'delete');
+    const { project, rights } = await loadItem(prisma, req.user, id, 'delete');
+    await MG.mtlDeleteGuard(prisma, req.user, project, rights, id);
     await prisma.$transaction(async tx => {
       const item = await tx.workItem.findUnique({ where: { id } });
       if (!item.archivedAt) fail(409, 'Việc không nằm trong thùng rác', 'NOT_DELETED');
