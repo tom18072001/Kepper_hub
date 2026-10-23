@@ -55,6 +55,8 @@ async function start() {
       { name: 'retention_weekly_notices', at: '02:35', run: p => purgeOldWeeklyNotices(p).then(count => ({ count })) },
       { name: 'trash_purge', at: '02:45', run: p => purgeTrash(p) },
       { name: 'retention_notifications', at: '02:50', run: p => purgeOldNotifications(p).then(count => ({ count })) },
+      // Báo quản trị IT khi sao lưu quá 36 giờ / lỗi, hoặc một job lịch chạy lỗi (máy đơn lẻ, chưa có giám sát ngoài).
+      { name: 'ops_check', at: '09:00', run: p => require('./services/ops').runOpsCheck(p) },
     ];
     const jobs = require('./services/jobs').scheduler(prisma, daily);
     cron.schedule('* * * * *', () => jobs.tick(), { timezone: 'Asia/Ho_Chi_Minh' });

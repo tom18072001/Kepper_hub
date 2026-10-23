@@ -1,0 +1,4 @@
+# ---- Kepper Hub: sao lưu / khôi phục ----
+# postgres:16-alpine (pg_dump, pg_restore, psql) + age để mã hoá bản sao lưu bằng khoá công khai.
+FROM postgres:16-alpine
+RUN apk add --no-cache age

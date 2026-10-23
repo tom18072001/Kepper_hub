@@ -16,8 +16,10 @@ function validSignature(rawBody, signature, token = process.env.VIBER_AUTH_TOKEN
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+const TIMEOUT_MS = 10_000; // máy chủ Viber treo không được giữ job cảnh báo / webhook
 async function call(method, body, fetchImpl = globalThis.fetch) {
-  const r = await fetchImpl(`${API}/${method}`, { method: 'POST', headers: { 'X-Viber-Auth-Token': process.env.VIBER_AUTH_TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const r = await fetchImpl(`${API}/${method}`, { method: 'POST', signal: AbortSignal.timeout(TIMEOUT_MS),
+    headers: { 'X-Viber-Auth-Token': process.env.VIBER_AUTH_TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
   if (j.status !== 0) throw new Error(`viber_${method}_${j.status ?? r.status}: ${j.status_message || ''}`);
   return j;
@@ -35,4 +37,18 @@ async function sendToUsers(prisma, userIds, textValue) {
 }
 const newCode = () => crypto.randomInt(100000, 999999).toString();
 
-module.exports = { enabled, appLink, validSignature, sendText, sendToUsers, newCode, call };
+// Chống dò mã liên kết: tối đa 5 lần gửi mã sai mỗi Viber ID mỗi giờ (mã 6 số sống 15 phút).
+const LINK_MAX_FAILS = 5, LINK_WINDOW_MS = 3_600_000;
+const linkFails = new Map();
+function linkBlocked(viberId, now = Date.now()) {
+  const f = linkFails.get(viberId);
+  if (f && now - f.at > LINK_WINDOW_MS) { linkFails.delete(viberId); return false; }
+  return !!f && f.n >= LINK_MAX_FAILS;
+}
+function linkFailed(viberId, now = Date.now()) {
+  const f = linkFails.get(viberId);
+  if (!f || now - f.at > LINK_WINDOW_MS) linkFails.set(viberId, { n: 1, at: now }); else f.n++;
+  if (linkFails.size > 10_000) linkFails.delete(linkFails.keys().next().value);
+}
+
+module.exports = { enabled, appLink, validSignature, sendText, sendToUsers, newCode, call, linkBlocked, linkFailed };

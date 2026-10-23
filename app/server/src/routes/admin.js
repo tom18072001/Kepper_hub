@@ -414,6 +414,15 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
     res.json({ ok: true, grants });
   });
 
+  // ---------- Tình trạng vận hành (sao lưu, job lịch chạy) — chỉ thông tin hệ thống ----------
+  app.get('/api/admin/ops', auth, requirePermission('admin.audit', 'VIEW', 'SYSTEM'), async (req, res) => {
+    const Ops = require('../services/ops'), { KEY } = require('../services/jobs');
+    const [b, l] = await Promise.all([prisma.appSetting.findUnique({ where: { key: Ops.BACKUP_KEY } }), prisma.appSetting.findUnique({ where: { key: KEY } })]);
+    const backup = b?.value || null, jobs = l?.value || {};
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({ backup, jobs, problems: Ops.opsProblems({ backup, ledger: jobs, now: new Date() }) });
+  });
+
   // ---------- Nhật ký ----------
   app.get('/api/admin/audit', auth, requirePermission('admin.audit', 'VIEW', 'SYSTEM'), async (req, res) => {
     const page = Math.max(1, Number(req.query.page) || 1), pageSize = [50, 100].includes(Number(req.query.pageSize)) ? Number(req.query.pageSize) : 50;

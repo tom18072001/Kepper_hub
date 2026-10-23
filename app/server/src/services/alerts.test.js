@@ -52,3 +52,14 @@ test('nhắc cập nhật hằng tuần: mỗi người một thông báo, chỉ
   assert.match(by[20].title, /1 việc/);
   assert.equal(by[12], undefined); assert.equal(by[13], undefined); assert.equal(by[14], undefined);
 });
+
+test('Viber: chặn dò mã liên kết sau 5 lần sai trong 1 giờ; gọi API có timeout', async () => {
+  const V = require('./viber');
+  const id = 'dò-' + Date.now(), t0 = 1_000_000;
+  for (let i = 0; i < 5; i++) { assert.equal(V.linkBlocked(id, t0), false); V.linkFailed(id, t0); }
+  assert.equal(V.linkBlocked(id, t0 + 1000), true);
+  assert.equal(V.linkBlocked(id, t0 + 3_600_001), false, 'hết khung giờ thì mở lại');
+  let opts;
+  await V.call('x', {}, async (_u, o) => { opts = o; return { json: async () => ({ status: 0 }) }; });
+  assert.ok(opts.signal instanceof AbortSignal);
+});

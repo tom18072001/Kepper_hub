@@ -64,7 +64,10 @@ services:
   # Sao lưu hằng ngày: CSDL + tệp đính kèm vào thư mục ./backups trên máy (giữ BACKUP_KEEP_DAYS ngày).
   # Nên chép thêm ./backups sang ổ/máy khác (quy tắc 3-2-1). Khôi phục: xem README.
   backup:
-    image: postgres:16-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.backup
+    image: kepper-backup:${APP_VERSION:-0.2.0}
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,19 +78,27 @@ services:
       PGDATABASE: workhub
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
       BACKUP_HOUR: ${BACKUP_HOUR:-02}
+      # Mã hoá: khoá công khai age (age-keygen tạo cặp khoá; khoá bí mật giữ ngoài máy chạy). Trống = không mã hoá.
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
+      # Bản ngoài máy: đặt BACKUP_COPY_PATH là ổ / thư mục mạng khác (vd. E:/kepper-backups) → tự chép bản đạt sang đó.
+      BACKUP_COPY: ${BACKUP_COPY:-0}
+      BACKUP_COPY_KEEP_DAYS: ${BACKUP_COPY_KEEP_DAYS:-90}
       TZ: ICT-7   # chuỗi POSIX (UTC+7), không cần gói tzdata trong image alpine
     volumes:
       - ./deploy:/deploy:ro
       - ${BACKUP_PATH:-./backups}:/backups
+      - ${BACKUP_COPY_PATH:-./backups}:/backups-copy
       - uploads:/data/uploads:ro
     entrypoint: ["sh", "/deploy/backup.sh"]
     restart: unless-stopped
 
   # Khôi phục (chạy tay): docker compose stop app
   #   docker compose --profile restore run --rm -e RESTORE_FROM=/backups/<thư-mục> restore
+  #   Bản đã mã hoá: thêm  -v <thư-mục-chứa-khoá>:/key:ro -e AGE_IDENTITY=/key/kepper-backup.key
+  #   Thử khôi phục mỗi quý vào một CSDL tạm (đặt PGDATABASE=workhub_restore_test) và ghi biên bản.
   restore:
     profiles: ["restore"]
-    image: postgres:16-alpine
+    image: kepper-backup:${APP_VERSION:-0.2.0}
     depends_on:
       postgres:
         condition: service_healthy
@@ -96,6 +107,7 @@ services:
       PGUSER: workhub
       PGPASSWORD: ${POSTGRES_PASSWORD}
       PGDATABASE: workhub
+      AGE_IDENTITY: ${AGE_IDENTITY:-}
     volumes:
       - ./deploy:/deploy:ro
       - ${BACKUP_PATH:-./backups}:/backups:ro

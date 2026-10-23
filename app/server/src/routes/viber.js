@@ -33,7 +33,9 @@ module.exports = function mountViber(app, { prisma, auth, audit }) {
     if (ev.event === 'unsubscribed' && viberId) await prisma.viberLink.updateMany({ where: { viberId }, data: { viberId: null, linkedAt: null } });
     if (ev.event === 'message' && viberId) {
       const code = String(ev.message?.text || '').trim();
+      if (V.linkBlocked(viberId)) return res.json({ ok: true }); // dò mã quá nhiều lần: im lặng tới hết khung giờ
       const link = /^\d{6}$/.test(code) ? await prisma.viberLink.findFirst({ where: { code, codeExpiresAt: { gt: new Date() } } }) : null;
+      if (!link && /^\d{6}$/.test(code)) V.linkFailed(viberId);
       if (link) {
         await prisma.$transaction([prisma.viberLink.updateMany({ where: { viberId, NOT: { id: link.id } }, data: { viberId: null, linkedAt: null } }),
           prisma.viberLink.update({ where: { id: link.id }, data: { viberId, linkedAt: new Date(), code: null, codeExpiresAt: null } })]);
