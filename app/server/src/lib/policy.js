@@ -32,6 +32,16 @@ const NEVER_EXTERNAL = new Set(['weekly.notice', 'kpi.person', 'weekly.complianc
 //   item = { assigneeIds: [], leadDepartmentId, leadLeaderIds: [], projectManager: bool }.
 function can(s, action, dataset, ctx = {}, env = {}) { return !!rule(s, action, dataset, ctx, env); }
 function rule(s, action, dataset, ctx, env) {
+  if (dataset === 'mtl.compare' || dataset === 'mtl.portfolio' || dataset === 'mtl.baseline') {
+    if (!s || s.it) return false;
+    if (env.via === 'mcp' && action !== 'view' && action !== 'ai') return false;
+    if (action === 'ai') return rule(s, 'view', dataset, ctx, env);
+    if (dataset === 'mtl.portfolio') return action === 'view' && !!(s.director || s.pmo);
+    if (dataset === 'mtl.compare') return action === 'view' || (action === 'export' && !!(s.director || s.pmo || ctx.projectManager));
+    if (action === 'view') return !!(s.director || s.pmo || ctx.projectManager);
+    if (action === 'edit') return !!s.pmo;
+    return false;
+  }
   if (!s || s.it) return false; // QĐ-01: quản trị IT không xem / sửa / xuất nội dung nghiệp vụ
   if (!DATASETS[dataset] || !ACTIONS.includes(action)) return false;
   if (action === 'ai') return rule(s, 'view', dataset, ctx, env); // QĐ-AI: AI = quyền xem của chính người dùng

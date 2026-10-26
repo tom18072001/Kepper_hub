@@ -74,8 +74,14 @@ function createApp({ prisma, config }) {
   const ctx = { prisma, config, auth, audit, requirePermission, hasPermission };
 
   app.get('/api/health', async (req, res) => {
-    await prisma.$queryRaw`SELECT 1`;
-    res.json({ ok: true });
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      const { checkWritable } = require('./lib/health');
+      await checkWritable(process.env.UPLOAD_DIR || '/data/uploads');
+      res.json({ ok: true, version: process.env.APP_VERSION || '0.2.0' });
+    } catch (error) {
+      res.status(503).json({ ok: false, version: process.env.APP_VERSION || '0.2.0' });
+    }
   });
   for (const mount of [
     require('./routes/auth'), require('./routes/admin'), require('./routes/labels'), require('./routes/projects'), require('./routes/items'), require('./routes/trash'),
