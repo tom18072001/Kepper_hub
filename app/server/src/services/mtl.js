@@ -23,6 +23,16 @@ function tToDates(t0Date, startT, endT) {
   const end = new Date(monthStart(t0Date, Math.floor(endT) + 1).getTime() - 1); // 23:59:59.999 ngày cuối tháng
   return { start, end };
 }
+// Kế hoạch gốc cho hạng mục lập trên ứng dụng (việc con lãnh đạo bộ phận chi tiết hoá, việc Ban GĐ giao đột xuất) — không qua nhập MTL:
+// lần đầu có hạn thì kế hoạch gốc = [ngày bắt đầu (không có: hôm nay), hạn]. Không có kế hoạch gốc = "Chưa có kế hoạch" → hạng mục
+// biến khỏi báo cáo tuần, cập nhật nhanh, KPI, cảnh báo. Đổi kế hoạch gốc sau đó: gia hạn / lập lại kế hoạch (có lý do, ghi nhật ký).
+function initialBaseline(start, due, now = new Date()) {
+  if (!due) return null;
+  const p = vnParts(now);
+  let s = start || vnMidnight(p.y, p.m, p.d);
+  if (s > due) s = due;
+  return { baselineStart: s, baselineEnd: due };
+}
 // Tháng T hiện tại (0-based) của một ngày so với T0.
 function currentT(t0Date, day = new Date()) {
   if (!t0Date) return null;
@@ -299,7 +309,7 @@ function sprintLane(item, sprint, next = null, { current = false } = {}) {
 const sprintTarget = (item, sprint) => ({ from: plannedPct(item, new Date(sprint.start.getTime() - 1)), to: plannedPct(item, sprint.end) });
 
 module.exports = {
-  DEFAULT_ALERTS, alertConfigOf, STATUS, vnDay, vnMidnight, monthStart, tToDates, currentT, timeValue, parseMtlRows, splitOwner,
+  DEFAULT_ALERTS, alertConfigOf, STATUS, vnDay, vnMidnight, monthStart, tToDates, initialBaseline, currentT, timeValue, parseMtlRows, splitOwner,
   plannedPct, durationDays, weightOf, rollup, statusOf, spiOf, leavesOf, treeProgress, kpiOf, plannedCurve, isDone, isCancelled,
   sprintOf, sprintState, sprintLane, sprintTarget,
 };

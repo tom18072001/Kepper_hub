@@ -11,7 +11,7 @@ const { verifyUpload } = require('../lib/files');
 const { loadProject, loadItem, visibleProjectsWhere, itemVisibleWhere } = require('../services/access');
 const MP = require('../services/mtl-project');
 const S = require('../services/mtl-sprints');
-const { activity } = require('../services/events');
+const { activity, notify } = require('../services/events');
 const { matchPeople } = require('../services/people');
 const approval = require('../services/approval');
 const bus = require('../services/bus');
@@ -147,6 +147,12 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
             created++;
           }
         }
+        // Hạng mục mới chưa có người phụ trách: báo lãnh đạo bộ phận chủ trì để phân công (nhập MTL chỉ ghi bộ phận đầu mối).
+        const newSteps = plan.filter(p => !p.existingId && p.leadDepartmentId && !p.assigneeIds.length);
+        const byDept = new Map();
+        for (const p of newSteps) byDept.set(p.leadDepartmentId, (byDept.get(p.leadDepartmentId) || 0) + 1);
+        for (const [d, n] of byDept) await notify(tx, (await approval.deptLeaderIds(tx, d)).filter(id => id !== req.user.id),
+          { type: 'MTL_ASSIGN', title: `Bộ phận được giao chủ trì ${n} hạng mục MTL ${project.key} — cần phân công người phụ trách`, body: project.name, link: `#/projects/${project.id}?view=mtl` }, req.user.id);
         // Dự án dùng chung: cán bộ các bộ phận có hạng mục trở thành thành viên (cowork, cập nhật hạng mục của bộ phận mình).
         const deptIds = [...new Set(plan.flatMap(p => [p.leadDepartmentId, ...p.supportDepartmentIds]).filter(Boolean))];
         const staff = await tx.user.findMany({ where: { isActive: true, role: { not: 'admin' }, isRootAdmin: false, departmentId: { in: deptIds } }, select: { id: true } });

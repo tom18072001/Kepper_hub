@@ -129,3 +129,19 @@ test('sprint theo tháng T: khung ngày, trạng thái, làn phải xong / đang
   const tg2 = M.sprintTarget(item(5, 6), sp);
   assert.equal(tg2.from, 0); assert.ok(tg2.to > 47 && tg2.to < 51, String(tg2.to));
 });
+
+test('kế hoạch gốc cho hạng mục lập trên ứng dụng: [bắt đầu || hôm nay, hạn]; không có hạn → không có kế hoạch', () => {
+  const now = new Date('2026-10-23T10:00:00+07:00');
+  assert.equal(M.initialBaseline(null, null, now), null);
+  const due = new Date('2026-10-30');
+  const b = M.initialBaseline(null, due, now);
+  assert.equal(b.baselineStart.toISOString(), new Date('2026-10-23T00:00:00+07:00').toISOString());
+  assert.equal(b.baselineEnd, due);
+  const s = new Date('2026-10-01');
+  assert.equal(M.initialBaseline(s, due, now).baselineStart, s);
+  // Bắt đầu sau hạn (nhập nhầm): kế hoạch gốc không đảo ngược.
+  assert.equal(M.initialBaseline(new Date('2026-11-05'), due, now).baselineStart, due);
+  // Có kế hoạch gốc → hạng mục có trạng thái tiến độ (không còn "Chưa có kế hoạch").
+  assert.notEqual(M.statusOf({ ...b, progress: 0, state: { category: 'UNSTARTED' } }, 0, now, M.DEFAULT_ALERTS).code, 'NO_PLAN');
+  assert.equal(M.statusOf({ progress: 0, state: { category: 'UNSTARTED' } }, 0, now, M.DEFAULT_ALERTS).code, 'NO_PLAN');
+});
