@@ -23,5 +23,5 @@ test('từ chối nội dung quá lớn và kiểu dữ liệu sai', () => {
 
 test('chuyển HTML sang văn bản và đọc @mention', () => {
   assert.equal(htmlToText('<p>Dòng 1</p><p>Dòng &amp; 2</p>'), 'Dòng 1\nDòng & 2');
-  assert.deepEqual(mentions('@tp.kinhdoanh xem giúp, cc @NV.KT và email a@b.com'), ['tp.kinhdoanh', 'nv.kt']);
+  assert.deepEqual(mentions('@tp.kinhdoanh xem giúp, cc @NV.KT và email a@example.com'), ['tp.kinhdoanh', 'nv.kt']);
 });

@@ -75,8 +75,14 @@ function createApp({ prisma, config }) {
   const ctx = { prisma, config, auth, audit, requirePermission, hasPermission };
 
   app.get('/api/health', async (req, res) => {
-    await prisma.$queryRaw`SELECT 1`;
-    res.json({ ok: true });
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      const { checkWritable } = require('./lib/health');
+      await checkWritable(process.env.UPLOAD_DIR || '/data/uploads');
+      res.json({ ok: true, version: process.env.APP_VERSION || '0.2.0' });
+    } catch (error) {
+      res.status(503).json({ ok: false, version: process.env.APP_VERSION || '0.2.0' });
+    }
   });
   // Nhận diện công ty (tên, logo) — đặt trên máy chạy (ORG_NAME, thư mục BRANDING_DIR), không nằm trong mã nguồn.
   // Công khai (trang đăng nhập cần), chỉ 4 tệp ảnh cố định, không liệt kê thư mục.

@@ -13,6 +13,8 @@
     "test": "node --test \"src/**/*.test.js\" \"src/**/*.test.mjs\"",
     "migrate": "prisma migrate deploy",
     "seed": "node src/seed.js",
+    "seed:demo": "node src/seed-demo.js",
+    "scan:demo": "node ../../scripts/scan-real-data.mjs",
     "seed:showcase": "node src/seed-showcase.js",
     "setup": "prisma migrate deploy && node src/seed.js",
     "audit": "npm audit --omit=dev --audit-level=high",
