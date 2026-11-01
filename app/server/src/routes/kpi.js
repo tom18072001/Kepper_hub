@@ -8,22 +8,35 @@ const { getSettings } = require('../services/register');
 const S = require('../services/stats');
 
 const DAY = S.DAY;
+// Truy vấn phẳng (không nạp quan hệ lồng nhau — Prisma nạp lồng chậm trên hàng nghìn việc) rồi ghép bằng Map; hình dạng kết quả giữ nguyên.
 const KPI_SELECT = {
   id: true, taskType: true, leadDepartmentId: true, dueDate: true, assignedAt: true, createdAt: true, startedAt: true, completedAt: true,
-  rating: true, ratedAt: true, state: { select: { category: true } }, project: { select: { departmentId: true } },
-  assignees: { select: { userId: true } },
+  rating: true, ratedAt: true, stateId: true, projectId: true,
 };
 
 // Việc có thể liên quan đến kỳ: đến hạn / hoàn thành / được giao / được xếp loại trong kỳ, hoặc đang mở.
 async function loadItems(prisma, { from, to, where = [] }) {
   const range = { gte: from, lte: to };
-  const items = await prisma.workItem.findMany({
-    where: { archivedAt: null, project: { archivedAt: null, deletedAt: null },
-      AND: [...where, { OR: [{ dueDate: range }, { completedAt: range }, { assignedAt: range }, { assignedAt: null, createdAt: range }, { ratedAt: range },
-        { state: { category: { notIn: ['COMPLETED', 'CANCELLED'] } } }] }] },
-    select: { ...KPI_SELECT, approvals: { select: { actions: { where: { decision: 'REJECT', createdAt: range }, select: { createdAt: true } } } } },
-  });
-  for (const i of items) { i.rejectionDates = i.approvals.flatMap(r => r.actions.map(a => a.createdAt)); delete i.approvals; }
+  const itemWhere = { archivedAt: null, project: { archivedAt: null, deletedAt: null },
+    AND: [...where, { OR: [{ dueDate: range }, { completedAt: range }, { assignedAt: range }, { assignedAt: null, createdAt: range }, { ratedAt: range },
+      { state: { category: { notIn: ['COMPLETED', 'CANCELLED'] } } }] }] };
+  const [items, states, projects, assignees, rejects] = await Promise.all([
+    prisma.workItem.findMany({ where: itemWhere, orderBy: { id: 'asc' }, select: KPI_SELECT }),
+    prisma.workflowState.findMany({ select: { id: true, category: true } }),
+    prisma.project.findMany({ select: { id: true, departmentId: true } }),
+    prisma.workItemAssignee.findMany({ where: { workItem: itemWhere }, select: { workItemId: true, userId: true } }),
+    prisma.approvalAction.findMany({ where: { decision: 'REJECT', createdAt: range, request: { workItem: itemWhere } }, select: { createdAt: true, request: { select: { workItemId: true } } } }),
+  ]);
+  const stateOf = new Map(states.map(s => [s.id, { category: s.category }]));
+  const projectOf = new Map(projects.map(p => [p.id, { departmentId: p.departmentId }]));
+  const group = (list, key, val) => { const m = new Map(); for (const r of list) { const k = key(r); (m.get(k) || m.set(k, []).get(k)).push(val(r)); } return m; };
+  const assigneesOf = group(assignees, r => r.workItemId, r => ({ userId: r.userId }));
+  const rejectsOf = group(rejects, r => r.request.workItemId, r => r.createdAt);
+  for (const i of items) {
+    i.state = stateOf.get(i.stateId); i.project = projectOf.get(i.projectId);
+    i.assignees = assigneesOf.get(i.id) || []; i.rejectionDates = rejectsOf.get(i.id) || [];
+    delete i.stateId; delete i.projectId;
+  }
   return items;
 }
 const userRow = u => ({ id: u.id, fullName: u.fullName, displayTitle: u.displayTitle, isActive: u.isActive, departmentId: u.department?.id ?? null, departmentName: u.department?.name || '—' });
@@ -99,3 +112,4 @@ module.exports = function mountKpi(app, { prisma, auth, audit }) {
   });
 };
 module.exports.metrics = S.metrics;
+module.exports.loadItems = loadItems;
