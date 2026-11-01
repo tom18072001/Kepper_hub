@@ -75,3 +75,31 @@ test('báo cáo tuần: chia theo phòng chủ trì và loại nhiệm vụ, kh�
   assert.equal(d.issues[0].report.answer, 'Đồng ý');
   assert.equal(MAX_DAYS, 93);
 });
+
+// Route /api/dashboard nạp truy vấn phẳng rồi ghép: kết quả phải giống summarize trên việc lồng sẵn; tiêu đề chỉ bổ sung cho các việc lên danh sách.
+test('route dashboard: ghép hàng phẳng cho kết quả như summarize và bổ sung tiêu đề', async () => {
+  const handlers = {};
+  const app = { get: (path, ...fns) => { handlers[path] = fns[fns.length - 1]; } };
+  const rows = [
+    { id: 1, number: 1, projectId: 1, dueDate: new Date(Date.now() - 3 * DAY), startedAt: new Date(Date.now() - 10 * DAY), completedAt: null, taskType: 'PLAN', leadDepartmentId: null, dispatchStatus: null, stateId: 2 },
+    { id: 2, number: 2, projectId: 1, dueDate: null, startedAt: null, completedAt: new Date(Date.now() - DAY), taskType: 'ADHOC', leadDepartmentId: null, dispatchStatus: null, stateId: 3 },
+  ];
+  const prisma = {
+    project: { findMany: async () => [{ id: 1, key: 'KD', name: 'Q4', departmentId: 1, visibility: null }] },
+    workItem: { findMany: async ({ select }) => (select.title ? [{ id: 1, title: 'Việc 1' }] : rows) },
+    workflowState: { findMany: async () => [{ id: 2, category: 'STARTED' }, { id: 3, category: 'COMPLETED' }] },
+    workItemAssignee: { findMany: async () => [{ workItemId: 1, user: { id: 9, fullName: 'An' } }] },
+    approvalRequest: { count: async () => 4 },
+    department: { findMany: async () => [{ id: 1, name: 'Kinh doanh' }] },
+  };
+  require('./dashboard')(app, { prisma, auth: (q, r, n) => n() });
+  let body;
+  await handlers['/api/dashboard']({ user: { id: 1, role: 'director', isRootAdmin: false, permissions: [{ permissionKey: 'reports.dashboard', action: 'VIEW', scope: 'SYSTEM' }, { permissionKey: 'work.approve', action: 'OPERATE', scope: 'SYSTEM' }] }, query: {} }, { json: b => { body = b; } });
+  assert.equal(body.pendingApprovals, 4);
+  assert.equal(body.totals.total, 2);
+  assert.equal(body.totals.overdue, 1);
+  assert.equal(body.totals.completed, 1);
+  assert.equal(body.overdueItems[0].code, 'KD-1');
+  assert.equal(body.overdueItems[0].title, 'Việc 1');
+  assert.equal(body.aging[0].title, 'Việc 1');
+});
