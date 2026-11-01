@@ -18,6 +18,8 @@ export async function renderWork(root, params, setCrumbs) {
   const q = new URLSearchParams();
   for (const k of SUBJECT_KEYS) if (params.get(k)) q.set(k, params.get(k));
   const d = await api('/api/work?' + q);
+  // Server gửi dự án / trạng thái / tên phòng một lần (giảm dung lượng) → ghép lại cho từng dòng.
+  for (const i of d.items) { i.project = d.projects[i.projectId]; i.state = d.states[i.stateId]; i.leadDepartmentName = d.deptNames[i.leadDeptId] || ''; }
   const isUser = d.subject.type === 'user';
   const self = isUser && d.subject.id === store.me.id;
   const items = d.items;

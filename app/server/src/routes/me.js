@@ -1,7 +1,7 @@
 // Việc của tôi + thông báo.
 const { intParam } = require('../lib/http');
 const { visibleProjectsWhere, itemVisibleWhere } = require('../services/access');
-const { BOARD_INCLUDE, boardItem } = require('../services/workitems');
+const { BOARD_INCLUDE, boardItem, aggregateItem } = require('../services/workitems');
 const { stageOf } = require('../services/stage');
 
 module.exports = function mountMe(app, { prisma, auth }) {
@@ -13,7 +13,7 @@ module.exports = function mountMe(app, { prisma, auth }) {
       ...(req.query.open === 'false' ? {} : { state: { category: { notIn: ['COMPLETED', 'CANCELLED'] } } }),
     };
     const rows = await prisma.workItem.findMany({ where, include: { ...BOARD_INCLUDE, _count: { select: { ...BOARD_INCLUDE._count.select, progressReports: true } }, project: { include: { approvalSteps: { select: { level: true, name: true, approverType: true } } } }, state: true }, orderBy: [{ dueDate: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }], take: 500 });
-    res.json(rows.map(r => ({ ...boardItem(r.project, r), stage: stageOf({ ...r, pendingApproval: r.approvals[0] }, r.project.approvalSteps), reportCount: r._count.progressReports, myRole: r.assignees.some(a => a.userId === req.user.id) ? 'LEAD' : r.supporters.some(a => a.userId === req.user.id) ? 'SUPPORT' : null, project: { id: r.project.id, key: r.project.key, name: r.project.name }, state: { id: r.state.id, name: r.state.name, category: r.state.category, color: r.state.color } })));
+    res.json(rows.map(r => aggregateItem({ ...boardItem(r.project, r), stage: stageOf({ ...r, pendingApproval: r.approvals[0] }, r.project.approvalSteps), reportCount: r._count.progressReports, myRole: r.assignees.some(a => a.userId === req.user.id) ? 'LEAD' : r.supporters.some(a => a.userId === req.user.id) ? 'SUPPORT' : null, project: { id: r.project.id, key: r.project.key, name: r.project.name }, state: { id: r.state.id, name: r.state.name, category: r.state.category, color: r.state.color } })));
   });
 
   app.get('/api/notifications', auth, async (req, res) => {

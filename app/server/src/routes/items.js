@@ -74,7 +74,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
     // Bị cắt: báo tổng số để giao diện nhắc dùng bộ lọc (không âm thầm bỏ việc).
     if (rows.length === ITEMS_LIMIT) res.setHeader('X-Total-Count', String(await prisma.workItem.count({ where })));
     const steps = await approval.stepsOf(prisma, project.id);
-    res.json(rows.map(r => { const { state, ...rest } = r; return { ...boardItem(project, rest), stage: stageOf({ ...r, pendingApproval: r.approvals[0] }, steps) }; }));
+    res.json(rows.map(r => { const { state, ...rest } = r; return W.compactItem({ ...boardItem(project, rest), stage: stageOf({ ...r, pendingApproval: r.approvals[0] }, steps) }); }));
   });
 
   app.post('/api/projects/:id/items', auth, async (req, res) => {
