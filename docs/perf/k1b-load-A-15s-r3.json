@@ -1,0 +1,117 @@
+{
+ "base": "http://127.0.0.1:4390",
+ "at": "2026-11-01T10:58:44.314Z",
+ "single": {},
+ "load": {
+  "vus": 50,
+  "durationS": 60,
+  "intervalS": 15,
+  "requests": 3600,
+  "rps": 48,
+  "errors": 630,
+  "errByStatus": {
+   "0": 630
+  },
+  "p50": 30,
+  "p95": 87,
+  "p99": 357,
+  "page": {
+   "n": 200,
+   "p50": 50,
+   "p95": 249,
+   "p99": 723
+  },
+  "perApi": {
+   "/api/weekly/report": {
+    "p50": 43,
+    "p95": 247,
+    "p99": 721
+   },
+   "/api/mtl/portfolio": {
+    "p50": 32,
+    "p95": 180,
+    "p99": 576
+   },
+   "/api/my/items": {
+    "p50": 43,
+    "p95": 152,
+    "p99": 370
+   },
+   "/api/approvals/counts": {
+    "p50": 37,
+    "p95": 134,
+    "p99": 379
+   },
+   "/api/approvals/queue": {
+    "p50": 37,
+    "p95": 124,
+    "p99": 377
+   },
+   "/api/approvals/proposals": {
+    "p50": 36,
+    "p95": 117,
+    "p99": 378
+   },
+   "/api/weekly/context": {
+    "p50": 33,
+    "p95": 106,
+    "p99": 379
+   },
+   "/api/approvals/extensions": {
+    "p50": 34,
+    "p95": 96,
+    "p99": 379
+   },
+   "/api/departments": {
+    "p50": 31,
+    "p95": 85,
+    "p99": 368
+   },
+   "/api/projects": {
+    "p50": 32,
+    "p95": 85,
+    "p99": 357
+   },
+   "/api/weekly/summary": {
+    "p50": 29,
+    "p95": 80,
+    "p99": 278
+   },
+   "/api/templates": {
+    "p50": 25,
+    "p95": 77,
+    "p99": 341
+   },
+   "/api/notifications": {
+    "p50": 32,
+    "p95": 63,
+    "p99": 356
+   },
+   "/api/users/directory": {
+    "p50": 25,
+    "p95": 58,
+    "p99": 355
+   },
+   "/api/me": {
+    "p50": 16,
+    "p95": 53,
+    "p99": 262
+   },
+   "/api/labels": {
+    "p50": 14,
+    "p95": 39,
+    "p99": 278
+   },
+   "/api/settings": {
+    "p50": 13,
+    "p95": 39,
+    "p99": 275
+   },
+   "/api/brand": {
+    "p50": 1,
+    "p95": 13,
+    "p99": 147
+   }
+  }
+ }
+}
