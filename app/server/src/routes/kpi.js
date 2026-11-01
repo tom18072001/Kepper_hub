@@ -6,6 +6,8 @@ const { permissionScope, isItAdmin } = require('../lib/permissions');
 const { visibleProjectsWhere, itemVisibleWhere } = require('../services/access');
 const { getSettings } = require('../services/register');
 const S = require('../services/stats');
+const { stepTimer } = require('../services/step-log');
+const { isSystemWide, kpiItems } = require('../services/kpi-data');
 
 const DAY = S.DAY;
 // Truy vấn phẳng (không nạp quan hệ lồng nhau — Prisma nạp lồng chậm trên hàng nghìn việc) rồi ghép bằng Map; hình dạng kết quả giữ nguyên.
@@ -15,17 +17,18 @@ const KPI_SELECT = {
 };
 
 // Việc có thể liên quan đến kỳ: đến hạn / hoàn thành / được giao / được xếp loại trong kỳ, hoặc đang mở.
-async function loadItems(prisma, { from, to, where = [] }) {
+async function loadItems(prisma, { from, to, where = [], timer }) {
+  const T = timer || stepTimer('loadItems');
   const range = { gte: from, lte: to };
   const itemWhere = { archivedAt: null, project: { archivedAt: null, deletedAt: null },
     AND: [...where, { OR: [{ dueDate: range }, { completedAt: range }, { assignedAt: range }, { assignedAt: null, createdAt: range }, { ratedAt: range },
       { state: { category: { notIn: ['COMPLETED', 'CANCELLED'] } } }] }] };
   const [items, states, projects, assignees, rejects] = await Promise.all([
-    prisma.workItem.findMany({ where: itemWhere, orderBy: { id: 'asc' }, select: KPI_SELECT }),
-    prisma.workflowState.findMany({ select: { id: true, category: true } }),
-    prisma.project.findMany({ select: { id: true, departmentId: true } }),
-    prisma.workItemAssignee.findMany({ where: { workItem: itemWhere }, select: { workItemId: true, userId: true } }),
-    prisma.approvalAction.findMany({ where: { decision: 'REJECT', createdAt: range, request: { workItem: itemWhere } }, select: { createdAt: true, request: { select: { workItemId: true } } } }),
+    T.step('sql.items', () => prisma.workItem.findMany({ where: itemWhere, orderBy: { id: 'asc' }, select: KPI_SELECT })),
+    T.step('sql.states', () => prisma.workflowState.findMany({ select: { id: true, category: true } })),
+    T.step('sql.projects', () => prisma.project.findMany({ select: { id: true, departmentId: true } })),
+    T.step('sql.assignees', () => prisma.workItemAssignee.findMany({ where: { workItem: itemWhere }, select: { workItemId: true, userId: true } })),
+    T.step('sql.rejects', () => prisma.approvalAction.findMany({ where: { decision: 'REJECT', createdAt: range, request: { workItem: itemWhere } }, select: { createdAt: true, request: { select: { workItemId: true } } } })),
   ]);
   const stateOf = new Map(states.map(s => [s.id, { category: s.category }]));
   const projectOf = new Map(projects.map(p => [p.id, { departmentId: p.departmentId }]));
@@ -61,18 +64,28 @@ module.exports = function mountKpi(app, { prisma, auth, audit }) {
     const weights = S.normalizeWeights(kpiWeights);
 
     // Tôn trọng quyền xem: chỉ đếm việc người xem thấy được (Ban giám đốc: toàn bộ).
-    const items = await loadItems(prisma, { from, to, where: [{ project: visibleProjectsWhere(req.user) }, itemVisibleWhere(req.user)] });
-    const departments = await prisma.department.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } });
-    const userIds = [...new Set(items.flatMap(i => i.assignees.map(a => a.userId)))];
-    const users = (await prisma.user.findMany({ where: { id: { in: userIds } }, select: USER_SELECT })).map(userRow);
+    const T = stepTimer('kpi');
+    const departmentsP = prisma.department.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } });
+    let items, users;
+    if (isSystemWide(req.user)) {
+      // Ban giám đốc xem toàn bộ: một tập dữ liệu nền dùng chung với dashboard, đệm theo phiên bản dữ liệu (services/kpi-data.js).
+      const data = await T.step('load', () => kpiItems(prisma, { from, to }));
+      items = data.items; users = data.users.map(userRow);
+    } else {
+      items = await T.step('load', () => loadItems(prisma, { from, to, where: [{ project: visibleProjectsWhere(req.user) }, itemVisibleWhere(req.user)], timer: T }));
+      const userIds = [...new Set(items.flatMap(i => i.assignees.map(a => a.userId)))];
+      users = (await T.step('sql.users', () => prisma.user.findMany({ where: { id: { in: userIds } }, select: USER_SELECT }))).map(userRow);
+    }
+    const departments = await T.step('sql.departments', () => departmentsP);
     // Tính trên toàn bộ rồi mới lọc phòng: điểm khối lượng cần bình quân của cả phòng / các phòng.
-    const kpi = S.computeKpi(items, { users, departments, from, to, now, weights });
+    const kpi = await T.step('compute', async () => S.computeKpi(items, { users, departments, from, to, now, weights }));
     const byDepartment = departmentId ? kpi.byDepartment.filter(r => r.id === departmentId) : kpi.byDepartment;
     const byPerson = departmentId ? kpi.byPerson.filter(r => r.departmentId === departmentId) : kpi.byPerson;
     const total = departmentId ? S.metrics(items.filter(i => S.inDepartment(i, departmentId) && S.relevant(i, { from, to })), { from, to, now }) : kpi.total;
 
     // Xem số liệu cá nhân là thao tác trên dữ liệu cá nhân → ghi nhật ký (không ghi số liệu).
-    await audit(req, 'VIEW_KPI', 'Kpi', null, null, { from, to, departmentId: departmentId ?? null, people: byPerson.length });
+    await T.step('audit', () => audit(req, 'VIEW_KPI', 'Kpi', null, null, { from, to, departmentId: departmentId ?? null, people: byPerson.length }));
+    T.finish(res);
     res.json({ from, to, generatedAt: now, weights, ratingPoints: S.RATING_POINTS, minPeers: S.MIN_PEERS, total, byDepartment, byPerson });
   });
 

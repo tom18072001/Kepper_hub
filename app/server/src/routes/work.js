@@ -7,6 +7,7 @@ const { aggregateItem } = require('../services/workitems');
 const { stageOf } = require('../services/stage');
 const { getSettings, deadlineStatus } = require('../services/register');
 const W = require('../services/work');
+const { attachRelations, uniq } = W;
 const S = require('../services/stats');
 
 const LIMIT = 500, DAY = 86_400_000;
@@ -14,14 +15,27 @@ const LIMIT = 500, DAY = 86_400_000;
 const COLS = ['id', 'projectId', 'number', 'title', 'priority', 'parentId', 'startDate', 'dueDate', 'baselineStart', 'baselineEnd', 'progress', 'critical', 'internalDueDate', 'dispatchStatus', 'taskType',
   'completedAt', 'returnedAt', 'returnNote', 'leadDepartmentId', 'stateId', 'assignedById', 'assignedAt', 'createdAt', 'ratedAt', 'rating'];
 const SCALARS = Object.fromEntries(COLS.map(k => [k, true]));
-const PERSON = { select: { userId: true, user: { select: { id: true, fullName: true } } } };
+// Pha 1 (mọi việc trong phạm vi, tới 3000 dòng): chỉ cột cần để đếm / lọc trạng thái, vai trò, chỉ số theo kỳ. Pha 2: đủ cột + quan hệ cho tối đa LIMIT việc được trả.
+const LEAN = Object.fromEntries(['id', 'dueDate', 'completedAt', 'stateId', 'assignedById', 'assignedAt', 'createdAt', 'ratedAt', 'rating'].map(k => [k, true]));
 const ROLE_KEYS = ['LEAD', 'SUPPORT', 'ASSIGNER'];
+
+// PERF_TRACE=1: ghi thời gian từng bước của /api/work ra stderr (tắt mặc định).
+function trace() {
+  const f = () => {};
+  if (process.env.PERF_TRACE !== '1') { f.on = false; return f; }
+  let t0 = process.hrtime.bigint(), last = t0; const steps = {};
+  const mark = name => { const n = process.hrtime.bigint(); steps[name] = Number(n - last) / 1e6; last = n; };
+  mark.on = true;
+  mark.done = (count, bytes) => console.error('[work-trace]', JSON.stringify({ ...Object.fromEntries(Object.entries(steps).map(([k, v]) => [k, +v.toFixed(1)])), total: +(Number(process.hrtime.bigint() - t0) / 1e6).toFixed(1), count, bytes }));
+  return mark;
+}
 
 module.exports = function mountWork(app, { prisma, auth, audit }) {
   app.get('/api/work', auth, async (req, res) => {
     const scope = W.workScope(req.user);
     if (!scope) fail(403, 'Tài khoản quản trị hệ thống không có số liệu công việc', 'FORBIDDEN');
     const now = new Date();
+    const T = trace();
     const settings = await getSettings(prisma);
     const departments = await prisma.department.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } });
     const deptName = Object.fromEntries(departments.map(d => [d.id, d.name]));
@@ -61,16 +75,25 @@ module.exports = function mountWork(app, { prisma, auth, audit }) {
         : {};
     // Việc đang mở + việc xong / xếp loại trong ~13 tháng gần đây (đủ cho "Đã xong" và chỉ số theo kỳ).
     const since = new Date(now.getTime() - 400 * DAY);
-    const rows = await prisma.workItem.findMany({
+    T('pre');
+    const lean = await prisma.workItem.findMany({
       where: { archivedAt: null, project: { ...visibleProjectsWhere(req.user), archivedAt: null }, AND: [itemVisibleWhere(req.user), involve, { OR: [
         { state: { category: { notIn: ['COMPLETED', 'CANCELLED'] } } }, { completedAt: { gte: since } }, { ratedAt: { gte: since } }, { dueDate: { gte: since } },
       ] }] },
-      select: { ...SCALARS, assignees: PERSON, supporters: PERSON, labels: { select: { label: true } }, approvals: { where: { status: 'PENDING' }, select: { currentLevel: true } }, state: { select: { id: true, name: true, category: true, color: true } },
-        project: { select: { id: true, key: true, name: true, departmentId: true, approvalSteps: { select: { level: true, name: true, approverType: true } } } } },
-      orderBy: [{ dueDate: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }], take: 3000,
+      select: LEAN, orderBy: [{ dueDate: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }], take: 3000,
     });
-    const rolesOf = r => (subject.type === 'user' ? W.rolesOf({ assignees: r.assignees.map(a => ({ userId: a.userId })), supporters: r.supporters.map(a => ({ userId: a.userId })), assignedById: r.assignedById }, subject.id) : []);
-    let base = rows.map(r => ({ r, roles: rolesOf(r) }));
+    T('sql');
+    // Vai trò chỉ cần khi xem một người: chỉ nạp các dòng chủ trì / phối hợp của đúng người đó.
+    const leanIds = { in: lean.map(r => r.id) }, mine = { workItemId: leanIds, userId: subject.id };
+    const [stateRows, myLead, mySupport] = await Promise.all([
+      prisma.workflowState.findMany({ where: { id: { in: uniq(lean, 'stateId') } }, select: { id: true, category: true } }),
+      subject.type === 'user' && lean.length ? prisma.workItemAssignee.findMany({ where: mine, select: { workItemId: true } }) : [],
+      subject.type === 'user' && lean.length ? prisma.workItemSupporter.findMany({ where: mine, select: { workItemId: true } }) : [],
+    ]);
+    const stateOf = new Map(stateRows.map(x => [x.id, x])), leadSet = new Set(myLead.map(x => x.workItemId)), supportSet = new Set(mySupport.map(x => x.workItemId));
+    T('rows');
+    const rolesOf = r => (subject.type === 'user' ? W.rolesOf({ assignees: leadSet.has(r.id) ? [{ userId: subject.id }] : [], supporters: supportSet.has(r.id) ? [{ userId: subject.id }] : [], assignedById: r.assignedById }, subject.id) : []);
+    let base = lean.map(r => { const x = { ...r, state: stateOf.get(r.stateId) }; return { r: x, roles: rolesOf(x) }; });
     if (metric) { const ok = W.metricPredicate(metric, { ...period, now }); base = base.filter(x => ok(x.r)); }
 
     const statusMatch = x => W.matchStatus(x.r, status, now, settings.dueSoonDays);
@@ -81,7 +104,12 @@ module.exports = function mountWork(app, { prisma, auth, audit }) {
     if (status === 'done') list.sort((a, b) => (b.r.completedAt?.getTime() || 0) - (a.r.completedAt?.getTime() || 0));
     const truncated = list.length > LIMIT;
     list = list.slice(0, LIMIT);
+    // Pha 2: đủ cột + quan hệ cho các việc được trả, giữ nguyên thứ tự của danh sách.
+    const full = await prisma.workItem.findMany({ where: { id: { in: list.map(x => x.r.id) } }, select: SCALARS });
+    const fullById = new Map((await attachRelations(prisma, full)).map(r => [r.id, r]));
+    list = list.map(x => ({ r: fullById.get(x.r.id), roles: x.roles }));
 
+    T('filter');
     // Danh sách đối tượng chọn được (theo phạm vi) cho ô chọn người / phòng.
     const userWhere = { isActive: true, role: { not: 'admin' }, isRootAdmin: false,
       ...(scope === 'SYSTEM' ? {} : scope === 'UNIT' ? { departmentId: req.user.departmentId } : { id: req.user.id }) };
@@ -106,11 +134,13 @@ module.exports = function mountWork(app, { prisma, auth, audit }) {
       return aggregateItem({ ...rest, code: `${project.key}-${r.number}`, assignees: assignees.map(a => a.user), supporters: supporters.map(a => a.user), labels: labels.map(l => l.label), roles,
         stage: stageOf({ ...r, pendingApproval: approvals[0] }, project.approvalSteps), deadline: deadlineStatus(r, now, settings.dueSoonDays).code, leadDeptId });
     });
-    res.json({
+    T('build');
+    const body = {
       scope, subject, status, role, generatedAt: now, dueSoonDays: settings.dueSoonDays, truncated,
       metric: metric ? { key: metric, label: W.METRICS[metric], ...period } : null,
       counts, roleCounts, subjects,
       projects, states, deptNames, items,
-    });
+    };
+    if (T.on) { const json = JSON.stringify(body); T('json'); T.done(items.length, json.length); res.type('json').send(json); } else res.json(body);
   });
 };
