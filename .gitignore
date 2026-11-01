@@ -49,4 +49,4 @@ branding/
 
 # Đo hiệu năng tạm (không commit)
 .perf-base/
-.tmp-*/
+.tmp-*
