@@ -1,0 +1,36 @@
+✗ [tb.qlxd] /api/dashboard: 8 khác biệt
+    overdueItems[7].code  [giá trị]  A="PF11-257"  B="PF03-31"
+    overdueItems[7].id  [giá trị]  A=3613  B=277
+    overdueItems[7].projectId  [giá trị]  A=23  B=15
+    overdueItems[7].title  [giá trị]  A="Theo dõi kết quả — Thi công móng, tầng hầm — phân kỳ 3 (…  B="Lựa chọn nhà thầu thi công — phân kỳ 1 (giả)"
+    overdueItems[8].code  [giá trị]  A="PF03-31"  B="PF11-257"
+    overdueItems[8].id  [giá trị]  A=277  B=3613
+    overdueItems[8].projectId  [giá trị]  A=15  B=23
+    overdueItems[8].title  [giá trị]  A="Lựa chọn nhà thầu thi công — phân kỳ 1 (giả)"  B="Theo dõi kết quả — Thi công móng, tầng hầm — phân kỳ 3 (…
+✗ [nv.qlxd] /api/dashboard: 8 khác biệt
+    overdueItems[7].code  [giá trị]  A="PF11-257"  B="PF03-31"
+    overdueItems[7].id  [giá trị]  A=3613  B=277
+    overdueItems[7].projectId  [giá trị]  A=23  B=15
+    overdueItems[7].title  [giá trị]  A="Theo dõi kết quả — Thi công móng, tầng hầm — phân kỳ 3 (…  B="Lựa chọn nhà thầu thi công — phân kỳ 1 (giả)"
+    overdueItems[8].code  [giá trị]  A="PF03-31"  B="PF11-257"
+    overdueItems[8].id  [giá trị]  A=277  B=3613
+    overdueItems[8].projectId  [giá trị]  A=15  B=23
+    overdueItems[8].title  [giá trị]  A="Lựa chọn nhà thầu thi công — phân kỳ 1 (giả)"  B="Theo dõi kết quả — Thi công móng, tầng hầm — phân kỳ 3 (…
+✗ [tb.phaply] /api/dashboard: 6 khác biệt
+    overdueItems[2].code  [giá trị]  A="PF06-190"  B="PF06-3"
+    overdueItems[2].id  [giá trị]  A=2521  B=429
+    overdueItems[2].title  [giá trị]  A="Nộp hồ sơ — Thẩm định báo cáo ĐTM — phân kỳ 3 (giả)"  B="Thẩm định báo cáo ĐTM — phân kỳ 3 (giả)"
+    overdueItems[3].code  [giá trị]  A="PF06-3"  B="PF06-190"
+    overdueItems[3].id  [giá trị]  A=429  B=2521
+    overdueItems[3].title  [giá trị]  A="Thẩm định báo cáo ĐTM — phân kỳ 3 (giả)"  B="Nộp hồ sơ — Thẩm định báo cáo ĐTM — phân kỳ 3 (giả)"
+✗ [nv.pf01] /api/dashboard: 8 khác biệt
+    overdueItems[7].code  [giá trị]  A="PF11-257"  B="PF03-31"
+    overdueItems[7].id  [giá trị]  A=3613  B=277
+    overdueItems[7].projectId  [giá trị]  A=23  B=15
+    overdueItems[7].title  [giá trị]  A="Theo dõi kết quả — Thi công móng, tầng hầm — phân kỳ 3 (…  B="Lựa chọn nhà thầu thi công — phân kỳ 1 (giả)"
+    overdueItems[8].code  [giá trị]  A="PF03-31"  B="PF11-257"
+    overdueItems[8].id  [giá trị]  A=277  B=3613
+    overdueItems[8].projectId  [giá trị]  A=15  B=23
+    overdueItems[8].title  [giá trị]  A="Lựa chọn nhà thầu thi công — phân kỳ 1 (giả)"  B="Theo dõi kết quả — Thi công móng, tầng hầm — phân kỳ 3 (…
+
+Đã so 204 lời gọi (6 vai trò × 34 đường dẫn). Khác biệt ngoài danh sách cho phép: 30; được phép: 274977.

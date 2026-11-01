@@ -38,6 +38,7 @@ services:
     environment:
       DATABASE_URL: postgresql://workhub:${POSTGRES_PASSWORD}@postgres:5432/workhub?connection_limit=10&pool_timeout=20
       JWT_SECRET: ${JWT_SECRET:?Đặt JWT_SECRET trong .env}
+      APP_VERSION: ${APP_VERSION:-0.2.0}   # /api/health trả version này; cùng biến với tag image
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:4100}
       TRUST_PROXY: ${TRUST_PROXY:-false}   # sau reverse proxy: 1 (một tầng) hoặc IP của proxy
       ACCESS_LOG_DIR: /data/logs          # nhật ký truy cập ≥ 12 tháng (giữ 400 ngày), ra thư mục LOG_PATH trên máy

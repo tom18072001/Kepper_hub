@@ -46,3 +46,7 @@ backups-manual/
 app/web/downloads/*.mcpb
 # Logo công ty thật: chỉ trên máy chạy
 branding/
+
+# Đo hiệu năng tạm (không commit)
+.perf-base/
+.tmp-*
