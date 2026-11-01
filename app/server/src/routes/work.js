@@ -3,13 +3,18 @@
 // Luôn giao với quyền xem từng việc của người xem. Xem việc của người khác là thao tác trên dữ liệu cá nhân → ghi nhật ký.
 const { fail, optionalInt, optionalDate } = require('../lib/http');
 const { visibleProjectsWhere, itemVisibleWhere } = require('../services/access');
-const { BOARD_INCLUDE, boardItem } = require('../services/workitems');
+const { aggregateItem } = require('../services/workitems');
 const { stageOf } = require('../services/stage');
 const { getSettings, deadlineStatus } = require('../services/register');
 const W = require('../services/work');
 const S = require('../services/stats');
 
 const LIMIT = 500, DAY = 86_400_000;
+// Chỉ cột cần cho tính trạng thái hạn / chỉ số theo kỳ / hiển thị (đọc cả ~65 cột dài của 3000 dòng tốn ~200 ms).
+const COLS = ['id', 'projectId', 'number', 'title', 'priority', 'parentId', 'startDate', 'dueDate', 'baselineStart', 'baselineEnd', 'progress', 'critical', 'internalDueDate', 'dispatchStatus', 'taskType',
+  'completedAt', 'returnedAt', 'returnNote', 'leadDepartmentId', 'stateId', 'assignedById', 'assignedAt', 'createdAt', 'ratedAt', 'rating'];
+const SCALARS = Object.fromEntries(COLS.map(k => [k, true]));
+const PERSON = { select: { userId: true, user: { select: { id: true, fullName: true } } } };
 const ROLE_KEYS = ['LEAD', 'SUPPORT', 'ASSIGNER'];
 
 module.exports = function mountWork(app, { prisma, auth, audit }) {
@@ -60,7 +65,8 @@ module.exports = function mountWork(app, { prisma, auth, audit }) {
       where: { archivedAt: null, project: { ...visibleProjectsWhere(req.user), archivedAt: null }, AND: [itemVisibleWhere(req.user), involve, { OR: [
         { state: { category: { notIn: ['COMPLETED', 'CANCELLED'] } } }, { completedAt: { gte: since } }, { ratedAt: { gte: since } }, { dueDate: { gte: since } },
       ] }] },
-      include: { ...BOARD_INCLUDE, state: true, project: { include: { approvalSteps: { select: { level: true, name: true, approverType: true } } } } },
+      select: { ...SCALARS, assignees: PERSON, supporters: PERSON, labels: { select: { label: true } }, approvals: { where: { status: 'PENDING' }, select: { currentLevel: true } }, state: { select: { id: true, name: true, category: true, color: true } },
+        project: { select: { id: true, key: true, name: true, departmentId: true, approvalSteps: { select: { level: true, name: true, approverType: true } } } } },
       orderBy: [{ dueDate: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }], take: 3000,
     });
     const rolesOf = r => (subject.type === 'user' ? W.rolesOf({ assignees: r.assignees.map(a => ({ userId: a.userId })), supporters: r.supporters.map(a => ({ userId: a.userId })), assignedById: r.assignedById }, subject.id) : []);
@@ -89,17 +95,22 @@ module.exports = function mountWork(app, { prisma, auth, audit }) {
     const isSelf = subject.type === 'user' && subject.id === req.user.id;
     if (!isSelf) await audit(req, 'VIEW_WORK', subject.type === 'user' ? 'User' : subject.type === 'dept' ? 'Department' : 'Work', subject.id ?? null, null, { status, role: role || null, metric, count: list.length });
     res.setHeader('Cache-Control', 'private, no-store');
+    // Dự án / trạng thái / tên phòng lặp lại ở mọi dòng → gửi một lần, giao diện ghép lại theo projectId / stateId / leadDeptId.
+    const projects = {}, states = {}, deptNames = {};
+    const items = list.map(({ r, roles }) => {
+      const { project, state, assignees, supporters, labels, approvals, ...rest } = r;
+      const leadDeptId = r.leadDepartmentId ?? project.departmentId ?? null;
+      projects[project.id] = { id: project.id, key: project.key, name: project.name };
+      states[state.id] = { name: state.name, category: state.category, color: state.color };
+      if (leadDeptId != null) deptNames[leadDeptId] = deptName[leadDeptId] || '';
+      return aggregateItem({ ...rest, code: `${project.key}-${r.number}`, assignees: assignees.map(a => a.user), supporters: supporters.map(a => a.user), labels: labels.map(l => l.label), roles,
+        stage: stageOf({ ...r, pendingApproval: approvals[0] }, project.approvalSteps), deadline: deadlineStatus(r, now, settings.dueSoonDays).code, leadDeptId });
+    });
     res.json({
       scope, subject, status, role, generatedAt: now, dueSoonDays: settings.dueSoonDays, truncated,
       metric: metric ? { key: metric, label: W.METRICS[metric], ...period } : null,
       counts, roleCounts, subjects,
-      items: list.map(({ r, roles }) => {
-        const { project, state, ...rest } = r;
-        return { ...boardItem(project, rest), roles, stage: stageOf({ ...r, pendingApproval: r.approvals[0] }, project.approvalSteps),
-          deadline: deadlineStatus(r, now, settings.dueSoonDays).code,
-          leadDeptId: r.leadDepartmentId ?? project.departmentId ?? null, leadDepartmentName: deptName[r.leadDepartmentId ?? project.departmentId] || '',
-          project: { id: project.id, key: project.key, name: project.name }, state: { id: state.id, name: state.name, category: state.category, color: state.color } };
-      }),
+      projects, states, deptNames, items,
     });
   });
 };

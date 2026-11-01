@@ -28,6 +28,30 @@ function boardItem(project, item) {
     counts: { comments: _count.comments, attachments: _count.attachments, children: _count.children, checklistDone: checklist.filter(c => c.done).length, checklistTotal: checklist.length },
   };
 }
+// Bản gọn cho danh sách (giảm dung lượng phản hồi): bỏ trường giao diện không đọc, bỏ giá trị null / false (đọc ra undefined — cùng nghĩa falsy).
+// Chi tiết một việc (/api/items/:id) vẫn trả đủ.
+const LIST_DROP = ['recurringRuleId', 'reviewedById', 'milestoneNote', 'weight', 'ratedById', 'deletedById', 'startedAt', 'reporterId', 'reviewedAt', 'ratedAt', 'dispatchedAt', 'acceptedAt', 'acceptedById', 'originalDueDate', 'updatedAt', 'progressAt'];
+// Chuỗi rỗng ở các cột văn bản tự do cũng bỏ (giao diện luôn đọc kiểu x || '').
+const LIST_EMPTY_TEXT = new Set(['deliverable', 'outputs', 'resultNote', 'review', 'coordinatorText', 'note', 'externalParty', 'ownerText', 'excerpt']);
+function compactItem(it) {
+  const out = {};
+  for (const k of Object.keys(it)) { const v = it[k]; if (v === null || v === false || LIST_DROP.includes(k) || (v === '' && LIST_EMPTY_TEXT.has(k))) continue; out[k] = v; }
+  return out;
+}
+// Danh sách tổng hợp (/api/work, /api/my/items): chỉ các trường mà màn Việc của tôi / Hôm nay / Tổng thể công việc / MCP đọc.
+const AGG_KEYS = ['id', 'projectId', 'code', 'title', 'priority', 'parentId', 'startDate', 'dueDate', 'baselineStart', 'baselineEnd', 'progress', 'critical',
+  'internalDueDate', 'dispatchStatus', 'taskType', 'completedAt', 'returnedAt', 'returnNote', 'assignees', 'supporters', 'labels', 'roles', 'myRole', 'reportCount',
+  'stage', 'deadline', 'leadDeptId', 'leadDepartmentName', 'project', 'state', 'stateId'];
+function aggregateItem(it) {
+  const out = {};
+  for (const k of AGG_KEYS) { const v = it[k]; if (v !== undefined && v !== null && v !== false) out[k] = v; }
+  // Mốc kế hoạch gốc trùng hạn / ngày bắt đầu hiện tại thì bỏ (MCP dùng baselineEnd khi thiếu dueDate → chỉ giữ khi khác); state bỏ id (trùng stateId đã bỏ).
+  if (out.baselineStart && it.startDate && new Date(out.baselineStart).getTime() === new Date(it.startDate).getTime()) delete out.baselineStart;
+  if (out.baselineEnd && it.dueDate && new Date(out.baselineEnd).getTime() === new Date(it.dueDate).getTime()) delete out.baselineEnd;
+  for (const k of ['assignees', 'supporters']) if (out[k]) out[k] = out[k].map(u => ({ id: u.id, fullName: u.fullName }));
+  if (out.state) out.state = { name: out.state.name, category: out.state.category, color: out.state.color };
+  return out;
+}
 const link = (project, item) => `#/projects/${project.id}?item=${item.id}`;
 const endPosition = (client, stateId) => approval.endPosition(client, stateId);
 
@@ -241,4 +265,4 @@ async function createWorkItem(tx, { project, user, rights, input, reporterId = u
   return item;
 }
 
-module.exports = { TASK_TYPES, departmentIdOf, departmentIds, registerFields, PRIORITIES, BOARD_INCLUDE, boardItem, link, endPosition, positionBetween, transition, afterTransition, activeUsers, idList, cycleOf, labelsOf, approvalLevelsInput, createWorkItem };
+module.exports = { TASK_TYPES, departmentIdOf, departmentIds, registerFields, PRIORITIES, BOARD_INCLUDE, boardItem, compactItem, aggregateItem, AGG_KEYS, link, endPosition, positionBetween, transition, afterTransition, activeUsers, idList, cycleOf, labelsOf, approvalLevelsInput, createWorkItem };
