@@ -10,7 +10,7 @@ const { fail, intParam } = require('../lib/http');
 const { isItAdmin } = require('../lib/permissions');
 const { Prisma } = require('@prisma/client');
 const bus = require('../services/bus');
-const { loadProject, visibleProjectsWhere } = require('../services/access');
+const { loadProject, visibleProjectsWhere, projectRights } = require('../services/access');
 const approval = require('../services/approval');
 const M = require('../services/mtl');
 const MP = require('../services/mtl-project');
@@ -48,11 +48,14 @@ const row = (i, depth, deptName, canProgress) => ({ canProgress: canProgress ? c
 
 // Ai được bấm cập nhật % trên thẻ (lib/policy.js mtl.progress): việc lá không dùng checklist; người được giao,
 // lãnh đạo bộ phận chủ trì hoặc người quản lý dự án. Máy chủ vẫn kiểm lại ở PATCH.
-async function progressRule(prisma, user, rights, items) {
+async function progressRule(prisma, user, rights, items, leaderMemo = new Map()) {
   const ids = items.filter(i => !i.children).map(i => i.id);
   const withChecklist = new Set(ids.length ? (await prisma.checklistItem.findMany({ where: { workItemId: { in: ids } }, distinct: ['workItemId'], select: { workItemId: true } })).map(c => c.workItemId) : []);
   const leaders = new Map();
-  for (const d of new Set(items.map(i => i.leadDepartmentId).filter(x => x != null))) leaders.set(d, await approval.deptLeaderIds(prisma, d));
+  // leaderMemo: dùng chung giữa các dự án trong cùng một lời gọi (lãnh đạo mỗi phòng chỉ tra một lần).
+  const depts = [...new Set(items.map(i => i.leadDepartmentId).filter(x => x != null))];
+  for (const d of depts) if (!leaderMemo.has(d)) leaderMemo.set(d, approval.deptLeaderIds(prisma, d));
+  await Promise.all(depts.map(async d => leaders.set(d, await leaderMemo.get(d))));
   return i => !i.children && !withChecklist.has(i.id) && P.can({ userId: user.id, it: false }, 'edit', 'mtl.progress',
     { item: { assigneeIds: (i.assignees || []).map(a => a.id), leadLeaderIds: leaders.get(i.leadDepartmentId) || [], projectManager: rights.canManage } });
 }
@@ -191,13 +194,28 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
     const projects = await prisma.project.findMany({ where: { ...visibleProjectsWhere(req.user), kind: 'MTL', archivedAt: null, t0Date: { not: null } }, orderBy: { name: 'asc' } });
     const dept = await departmentsMap();
     const out = [];
-    for (const p of projects) {
-      const { rights } = await loadProject(prisma, req.user, p.id);
-      const { items, actualOf, cfg } = await MP.computeProject(prisma, p, req.user, now);
+    // Bỏ sớm dự án không có hạng mục nào tôi phụ trách (hoặc, nếu là lãnh đạo bộ phận, do bộ phận tôi chủ trì): vòng lặp dưới
+    // chỉ giữ hạng mục có người phụ trách là tôi hoặc (lãnh đạo) bộ phận chủ trì là bộ phận tôi — không có thì kết quả dự án rỗng.
+    const related = projects.length ? await prisma.workItem.findMany({
+      where: { projectId: { in: projects.map(p => p.id) }, archivedAt: null,
+        OR: [{ assignees: { some: { userId: req.user.id } } }, ...(leader && req.user.departmentId != null ? [{ leadDepartmentId: req.user.departmentId }] : [])] },
+      distinct: ['projectId'], select: { projectId: true } }) : [];
+    const relatedIds = new Set(related.map(r => r.projectId));
+    const todo = projects.filter(p => relatedIds.has(p.id));
+    const computed = await MP.computeProjects(prisma, todo, req.user, now);
+    // Quyền trên từng dự án: một truy vấn thành viên thay cho loadProject từng dự án (cùng kiểm tra xem được / chưa xoá).
+    const members = todo.length ? await prisma.projectMember.findMany({ where: { userId: req.user.id, projectId: { in: todo.map(p => p.id) } } }) : [];
+    const memberOf = new Map(members.map(m => [m.projectId, m]));
+    const leaderMemo = new Map();
+    const perProject = await Promise.all(todo.map(async p => {
+      if (p.deletedAt) return null;
+      const rights = projectRights(req.user, p, memberOf.get(p.id));
+      if (!rights.canView) return null;
+      const { items, actualOf, cfg } = computed.get(p.id);
       const t = Math.max(0, M.currentT(p.t0Date, now));
       const sprint = M.sprintOf(p.t0Date, t), next = M.sprintOf(p.t0Date, t + 1);
       const byId = new Map(items.map(i => [i.id, i]));
-      const ctx = { sprint, project: p, deptName: dept.name, byId, sprintNameOf: S.buildSprints(p, items, actualOf, now, cfg).nameOf, canProgress: await progressRule(prisma, req.user, rights, items) };
+      const ctx = { sprint, project: p, deptName: dept.name, byId, sprintNameOf: S.buildSprints(p, items, actualOf, now, cfg).nameOf, canProgress: await progressRule(prisma, req.user, rights, items, leaderMemo) };
       const rows = [];
       for (const i of M.leavesOf(items)) {
         if (i.status === 'CANCELLED') continue;
@@ -208,9 +226,10 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
         if (M.isDone(i) && !(i.completedAt && i.completedAt >= sprint.start)) continue;
         rows.push({ ...card(i, ctx), lane, mineAs });
       }
-      if (rows.length) out.push({ project: { id: p.id, key: p.key, name: p.name }, canEdit: rights.canEdit,
-        sprint: { t, start: sprint.start, end: sprint.end, daysLeft: M.vnDay(sprint.end) - M.vnDay(now) }, items: rows.sort(byRank) });
-    }
+      return rows.length ? { project: { id: p.id, key: p.key, name: p.name }, canEdit: rights.canEdit,
+        sprint: { t, start: sprint.start, end: sprint.end, daysLeft: M.vnDay(sprint.end) - M.vnDay(now) }, items: rows.sort(byRank) } : null;
+    }));
+    out.push(...perProject.filter(Boolean));
     res.setHeader('Cache-Control', 'private, no-store');
     res.json({ generatedAt: now, leader, projects: out });
   });

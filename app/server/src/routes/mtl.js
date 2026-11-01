@@ -281,8 +281,9 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
     const now = new Date();
     const projects = await prisma.project.findMany({ where: { ...visibleProjectsWhere(req.user), kind: 'MTL', archivedAt: null }, orderBy: { name: 'asc' } });
     const out = [];
+    const computed = await MP.computeProjects(prisma, projects, req.user, now);
     for (const p of projects) {
-      const { items, cfg, actualOf } = await computeProject(p, req.user, now);
+      const { items, cfg, actualOf } = computed.get(p.id);
       const leaves = M.leavesOf(items);
       const mine = leaves.filter(i => i.assignees.some(a => a.id === req.user.id) || (req.user.departmentId != null && i.leadDepartmentId === req.user.departmentId));
       const next = items.filter(i => i.milestone && !i.completedAt && i.baselineEnd).sort((a, b) => a.baselineEnd - b.baselineEnd)[0];
