@@ -37,16 +37,42 @@ Ba rủi ro lớn nhất:
 | `/api/mtl/portfolio` | 330 / 403 / 403 / 395 | 22 / 20 / 25 / 21 | ≤ 100 | có |
 | `/api/weekly/report` | — / 383 / 392 / 379 | — / 18 / 20 / 18 | ≤ 100 | có |
 | `/api/dashboard` | 228 / 14 / 67 / 64 | 87 / 15 / 35 / 30 | ≤ 100 | có |
-| `/api/kpi` (giám đốc) | 217 | 130 | ≤ 100 | **chưa** |
-| `/api/work` | 707 / 250 / 282 / 69 | 320 / 126 / 137 / 30 | giám đốc ≤ 250 | **chưa** |
+| `/api/kpi` (giám đốc) | 217 | 130 | ≤ 100 | xem K1-b bên dưới |
+| `/api/work` | 707 / 250 / 282 / 69 | 320 / 126 / 137 / 30 | giám đốc ≤ 250 | xem K1-b bên dưới |
 
-Kích thước phản hồi: `/api/work` giám đốc 993 → 238 KB; `/api/my/items` lãnh đạo bộ phận 584 → 177 KB; `/api/projects/:id/items` 506 → 238 KB. **`/api/projects/:id/mtl` vẫn 327,5 KB** (mục tiêu ≤ 300 KB).
+Kích thước phản hồi: `/api/work` giám đốc 993 → 238 KB; `/api/my/items` lãnh đạo bộ phận 584 → 177 KB; `/api/projects/:id/items` 506 → 238 KB. `/api/projects/:id/mtl` 327,5 KB trước K1-b (xem K1-b bên dưới).
 
 *So JSON hai máy chủ (`scripts/perf-compare.mjs`, 6 vai trò × 34 đường dẫn = 204 lời gọi, chạy lại trên aea4331):* mọi API giống hệt, trừ `/api/work`, `/api/my/items`, `/api/projects/:id/items` chỉ khác ở các trường đã bỏ có lý do (`docs/perf/allow-s2.txt`) và `/api/dashboard` đổi **thứ tự** các việc quá hạn cùng hạn (`orderBy id` làm thứ tự xác định; đã kiểm các cặp đổi chỗ có `dueDate` bằng nhau). `/api/work` đổi hợp đồng (thêm `projects`/`states`/`deptNames` ở cấp trên, client ghép lại) — chỉ `views/work.js` đọc; MCP và xuất Excel không đổi.
 
 Bộ nhớ sau khi chịu tải (Docker): app ~396 MB (trước ~220 MB ở dữ liệu nhỏ — nay có bộ đệm MTL và dữ liệu lớn hơn), Postgres ~327 MB. NAS cần ≥ 2 GB RAM trống cho Kepper.
 
-Còn mở (K1-b/c/d): `/api/work` giám đốc ≤ 250 ms, `/api/kpi` giám đốc ≤ 100 ms, `/api/projects/:id/mtl` ≤ 300 KB; e2e màn "Tổng thể công việc" chưa chạy. Giới hạn bộ đệm: script ghi thẳng CSDL bằng PrismaClient riêng (`seed*.js`, `tidy-demo.js`, `perf-data.mjs`) khi máy chủ đang chạy có thể làm số cũ tối đa 20 giây.
+**K1-b (01/11/2026, máy chủ chạy thẳng trên Windows, cùng phiên, CSDL giả `kepper_perf`; QA đo)** — TRƯỚC = bản xuất phát 3d7a687 (cổng 4390), SAU = nhánh nhiệm vụ gộp S1–S3. Một người, p50 (ms) của 3 lượt xen kẽ TRƯỚC/SAU (mỗi lượt 5 lần gọi), số liệu thô `docs/perf/k1b-single-{A,B}-r{1,2,3}.json`:
+
+| API | giám đốc TRƯỚC → SAU (3 lượt) | pmo | tb.qlxd | nv.qlxd | Mục tiêu | Đạt |
+|---|---|---|---|---|---|---|
+| `/api/work` | 384 / 570 / 317 → **128 / 135 / 135** | 121 → 77 | 136 → 76 | 44 → 31 | giám đốc ≤ 250 | có |
+| `/api/kpi` | 128 / 86 / 83 → **33 / 35 / 38** | 3 → 3 | 3 → 3 | 3 → 3 | ≤ 100 | có |
+| `/api/dashboard` | 101 / 75 / 63 → **22 / 26 / 28** | 14 → 17 | 31 → 36 | 34 → 29 | ≤ 100 | có |
+| `/api/projects/:id/mtl` (dự án lớn nhất) | 34–43 → 41 ms; **327,5 → 230,2 KB** | 327,5 → 230,2 KB | 327,5 → 230,2 KB | 327,5 → 230,2 KB | ≤ 300 KB | có |
+
+Ghi chú: pmo / tb.qlxd / nv.qlxd ở `/api/kpi`, `/api/dashboard` không đổi trong sai số đo (đường truy vấn riêng, không đổi). Kích thước `/api/work`, `/api/kpi`, `/api/dashboard` không đổi (JSON giống hệt).
+
+So JSON (`docs/perf/compare-k1b.txt`): 204 lời gọi, 0 khác biệt ngoài danh sách cho phép ở mọi API trừ `/api/projects/:id/mtl-kpi` (42 dòng, giám đốc / pmo / tb.qlxd): cùng tập dòng và cùng điểm, chỉ khác thứ tự các dòng bằng điểm — route này không đổi trong K1-b, `users.findMany` không có `orderBy` nên thứ tự hoà phụ thuộc CSDL (lỗi có sẵn).
+
+Tải 50 người, 60 giây mỗi kịch bản, TRƯỚC → SAU (`docs/perf/k1b-load-*.json`):
+
+| Kịch bản | p50 | p95 | p99 | Trang chủ p95 | Lỗi |
+|---|---|---|---|---|---|
+| Mỗi 5 giây | 55 → 62 ms | **916 → 173 ms** | 1.752 → 305 ms | 1.794 → 313 ms | 0 → 0 |
+| Mỗi 15 giây — lượt 1 | 34 → 59 ms | 76 → **316 ms** | 171 → 1.691 ms | 234 → 571 ms | 0 → 0 |
+| Mỗi 15 giây — lượt 2 (SAU chạy trước) | 33 → 36 ms | 71 → 153 ms | 153 → 267 ms | 165 → 287 ms | 0 → 0 |
+| Mỗi 15 giây — lượt 3 (SAU chạy trước) | 30 → 35 ms | 87 → 119 ms | 357 → 264 ms | 249 → 291 ms | 630 (kết nối bị ngắt) → 0 |
+
+**Chưa đạt "tải 15 giây không xấu hơn bản xuất phát":** cả 3 lượt cho p95 SAU > TRƯỚC (316 / 153 / 119 so với 76 / 71 / 87 ms) và lượt 1 vượt mục tiêu p95 ≤ 150. Mức chậm giảm dần theo lượt và có mặt ở mọi API (kể cả `/api/brand`), gợi ý tiến trình / CSDL mới khởi động còn lạnh, nhưng chưa được kiểm chứng. Máy chủ TRƯỚC (4390) và cả máy chủ SAU (4341) bị tắt sau lượt 3 (không rõ nguyên nhân, không phải do lệnh của QA) nên không đo thêm được; cần đo lại cả hai ở trạng thái nguội/ấm có kiểm soát và trên Docker. Ở kịch bản 5 giây bản SAU tốt hơn rõ rệt.
+
+e2e (Playwright) màn "Tổng thể công việc": **chưa chạy** (`app/e2e` chưa cài `node_modules` / trình duyệt; không tự tải). `npm test`: 203 test (202 pass, 1 skip, 0 lỗi; trước K1-b 189).
+
+Còn mở: đo lại tải 15 giây (xem trên); e2e màn "Tổng thể công việc". Giới hạn bộ đệm: script ghi thẳng CSDL bằng PrismaClient riêng (`seed*.js`, `tidy-demo.js`, `perf-data.mjs`) khi máy chủ đang chạy có thể làm số cũ tối đa 20 giây.
 
 **Đã sửa trong vòng này:** biến `APP_BIND`, `PGDATA_PATH`, `UPLOADS_PATH`; `deploy/nas-setup.sh`, `deploy/upgrade.sh` (bản Linux); `docs/deploy-nas.md`;
 báo lỗi rõ khi mở sai địa chỉ ("Địa chỉ … chưa được phép — mở Kepper bằng …"); app báo khi thư mục mount không ghi được;

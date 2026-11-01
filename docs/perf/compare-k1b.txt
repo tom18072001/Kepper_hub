@@ -1,0 +1,55 @@
+✗ [giamdoc] /api/projects/:big/mtl-kpi: 17 khác biệt
+    rows[26].actualPct  [giá trị]  A=0  B=2.2
+    rows[26].department  [giá trị]  A="Ban Quản lý xây dựng"  B="Ban Tài chính"
+    rows[26].departmentId  [giá trị]  A=8  B=6
+    rows[26].fullName  [giá trị]  A="Đỗ Gia Sơn"  B="Đỗ Gia Trung"
+    rows[26].id  [giá trị]  A=32  B=35
+    rows[26].items  [giá trị]  A=10  B=9
+    rows[27].actualPct  [giá trị]  A=2.2  B=0
+    rows[27].department  [giá trị]  A="Ban Tài chính"  B="Ban Quản lý xây dựng"
+    rows[27].departmentId  [giá trị]  A=6  B=8
+    rows[27].fullName  [giá trị]  A="Đỗ Gia Trung"  B="Lã Văn Công"
+    rows[27].id  [giá trị]  A=35  B=15
+    rows[27].items  [giá trị]  A=9  B=15
+    rows[27].title  [giá trị]  A="Chuyên viên"  B="Kỹ sư giám sát"
+    rows[28].fullName  [giá trị]  A="Lã Văn Công"  B="Đỗ Gia Sơn"
+    rows[28].id  [giá trị]  A=15  B=32
+    rows[28].items  [giá trị]  A=15  B=10
+    rows[28].title  [giá trị]  A="Kỹ sư giám sát"  B="Chuyên viên"
+✗ [pmo] /api/projects/:big/mtl-kpi: 17 khác biệt
+    rows[26].actualPct  [giá trị]  A=0  B=2.2
+    rows[26].department  [giá trị]  A="Ban Quản lý xây dựng"  B="Ban Tài chính"
+    rows[26].departmentId  [giá trị]  A=8  B=6
+    rows[26].fullName  [giá trị]  A="Đỗ Gia Sơn"  B="Đỗ Gia Trung"
+    rows[26].id  [giá trị]  A=32  B=35
+    rows[26].items  [giá trị]  A=10  B=9
+    rows[27].actualPct  [giá trị]  A=2.2  B=0
+    rows[27].department  [giá trị]  A="Ban Tài chính"  B="Ban Quản lý xây dựng"
+    rows[27].departmentId  [giá trị]  A=6  B=8
+    rows[27].fullName  [giá trị]  A="Đỗ Gia Trung"  B="Lã Văn Công"
+    rows[27].id  [giá trị]  A=35  B=15
+    rows[27].items  [giá trị]  A=9  B=15
+    rows[27].title  [giá trị]  A="Chuyên viên"  B="Kỹ sư giám sát"
+    rows[28].fullName  [giá trị]  A="Lã Văn Công"  B="Đỗ Gia Sơn"
+    rows[28].id  [giá trị]  A=15  B=32
+    rows[28].items  [giá trị]  A=15  B=10
+    rows[28].title  [giá trị]  A="Kỹ sư giám sát"  B="Chuyên viên"
+✗ [tb.qlxd] /api/projects/:big/mtl-kpi: 8 khác biệt
+    rows[4].fullName  [giá trị]  A="Đỗ Gia Sơn"  B="Lã Văn Công"
+    rows[4].id  [giá trị]  A=32  B=15
+    rows[4].items  [giá trị]  A=10  B=15
+    rows[4].title  [giá trị]  A="Chuyên viên"  B="Kỹ sư giám sát"
+    rows[5].fullName  [giá trị]  A="Lã Văn Công"  B="Đỗ Gia Sơn"
+    rows[5].id  [giá trị]  A=15  B=32
+    rows[5].items  [giá trị]  A=15  B=10
+    rows[5].title  [giá trị]  A="Kỹ sư giám sát"  B="Chuyên viên"
+
+Đã so 204 lời gọi (6 vai trò × 34 đường dẫn). Khác biệt ngoài danh sách cho phép: 42; được phép: 23088.
+
+--- Ghi chú QA (S4) ---
+Lệnh: BASE_A=http://127.0.0.1:4390 BASE_B=http://127.0.0.1:4341 node scripts/perf-compare.mjs --allow <allow-s2.txt + allow-k1b.txt gộp thành một tệp>
+(perf-compare chỉ đọc MỘT cờ --allow đầu tiên; truyền hai cờ thì allow-k1b.txt bị bỏ qua và /mtl báo 23.158 khác biệt giả — nên phải gộp tệp.)
+Kết quả: 204 lời gọi, được phép 23.088, ngoài danh sách 42; toàn bộ 42 nằm ở /api/projects/:big/mtl-kpi (giamdoc 17, pmo 17, tb.qlxd 8).
+Nguyên nhân đã kiểm: cùng tập 29 dòng (id + nội dung giống hệt), chuỗi `score` giống hệt; chỉ khác THỨ TỰ các dòng bằng điểm.
+Route mtl-kpi không bị S1–S3 sửa (git diff 3d7a687..HEAD không đụng); users.findMany không có orderBy và sort chỉ theo score nên thứ tự hoà phụ thuộc vị trí vật lý trong CSDL
+(hai CSDL là hai bản sao khác nhau). Lỗi có sẵn từ trước K1-b, không do thay đổi này. Ngoài mtl-kpi: 0 khác biệt ở /api/work, /api/my/items, /api/kpi, /api/dashboard.
