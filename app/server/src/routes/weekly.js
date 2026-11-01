@@ -71,8 +71,9 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
   async function mtlItemsFor(user, now) {
     const projects = await prisma.project.findMany({ where: { kind: 'MTL', archivedAt: null, ...visibleProjectsWhere(user) } });
     const out = [];
+    const computed = await MP.computeProjects(prisma, projects, user, now);
     for (const p of projects) {
-      const { items, cfg } = await MP.computeProject(prisma, p, user, now);
+      const { items, cfg } = computed.get(p.id);
       for (const i of items) out.push({ ...i, projectKey: p.key, projectId: p.id, cfg, done: M.isDone(i), cancelled: M.isCancelled(i) });
     }
     return out;

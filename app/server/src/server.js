@@ -3,6 +3,7 @@ const path = require('node:path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const cron = require('node-cron');
 const { PrismaClient } = require('@prisma/client');
+const { withMtlCache } = require('./services/mtl-cache');
 const { createApp, loadConfig } = require('./app');
 const { notify } = require('./services/events');
 const { runDue } = require('./services/recurring');
@@ -36,7 +37,8 @@ async function remindDueSoon(prisma, now = new Date()) {
 async function start() {
   const config = loadConfig();
   // errorFormat minimal: lỗi kiểm tra đầu vào của Prisma không in lại dữ liệu (tên người, nội dung báo cáo) vào log.
-  const prisma = new PrismaClient({ errorFormat: 'minimal' });
+  // withMtlCache: bộ đệm tính MTL, tự vô hiệu khi có ghi qua client này (mọi route/job/giao dịch đều dùng client này).
+  const prisma = withMtlCache(new PrismaClient({ errorFormat: 'minimal' }));
   await prisma.$connect();
   const app = createApp({ prisma, config });
   const tasks = [];
