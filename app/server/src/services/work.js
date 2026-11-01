@@ -1,5 +1,5 @@
 // Tổng thể công việc theo người / phòng trên mọi dự án: phạm vi được xem, lọc trạng thái, lọc theo chỉ số "Số liệu của tôi".
-// Hàm thuần — kiểm thử được, không đụng CSDL.
+// Phần lớn là hàm thuần (kiểm thử được); riêng attachRelations nhận client Prisma để ghép quan hệ bằng truy vấn phẳng.
 const { permissionScope, isItAdmin } = require('../lib/permissions');
 const { deadlineStatus } = require('./register');
 const S = require('./stats');
@@ -64,4 +64,29 @@ function metricPredicate(metric, { from, to, now = new Date() }) {
   }
 }
 
-module.exports = { workScope, canViewSubject, rolesOf, STATUSES, statusOf, matchStatus, METRICS, metricPredicate };
+const uniq = (rows, k) => [...new Set(rows.map(r => r[k]))];
+const groupBy = (list, k) => { const m = new Map(); for (const x of list) { const g = m.get(x[k]); if (g) g.push(x); else m.set(x[k], [x]); } return m; };
+// Truy vấn phẳng + ghép bằng Map (thay cho nạp quan hệ lồng của Prisma, mỗi quan hệ một truy vấn riêng theo danh sách id).
+// Kết quả cùng hình dạng như select lồng: assignees / supporters [{ userId, user }], labels [{ label }], approvals (chờ duyệt đầu tiên), state, project.
+async function attachRelations(prisma, flat) {
+  if (!flat.length) return [];
+  const ids = flat.map(r => r.id), inIds = { in: ids };
+  const [asg, sup, lab, apr, states, projects] = await Promise.all([
+    prisma.workItemAssignee.findMany({ where: { workItemId: inIds }, select: { workItemId: true, userId: true }, orderBy: [{ workItemId: 'asc' }, { userId: 'asc' }] }),
+    prisma.workItemSupporter.findMany({ where: { workItemId: inIds }, select: { workItemId: true, userId: true }, orderBy: [{ workItemId: 'asc' }, { userId: 'asc' }] }),
+    prisma.workItemLabel.findMany({ where: { workItemId: inIds }, select: { workItemId: true, label: true }, orderBy: [{ workItemId: 'asc' }, { labelId: 'asc' }] }),
+    prisma.approvalRequest.findMany({ where: { workItemId: inIds, status: 'PENDING' }, select: { workItemId: true, currentLevel: true }, orderBy: { id: 'asc' } }),
+    prisma.workflowState.findMany({ where: { id: { in: uniq(flat, 'stateId') } }, select: { id: true, name: true, category: true, color: true } }),
+    prisma.project.findMany({ where: { id: { in: uniq(flat, 'projectId') } }, select: { id: true, key: true, name: true, departmentId: true, approvalSteps: { select: { level: true, name: true, approverType: true }, orderBy: { level: 'asc' } } } }),
+  ]);
+  const userIds = [...new Set([...asg, ...sup].map(a => a.userId))];
+  const users = new Map((userIds.length ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, fullName: true } }) : []).map(u => [u.id, u]));
+  const person = a => ({ userId: a.userId, user: users.get(a.userId) });
+  const A = groupBy(asg, 'workItemId'), Su = groupBy(sup, 'workItemId'), L = groupBy(lab, 'workItemId'), Ap = groupBy(apr, 'workItemId');
+  const stateMap = new Map(states.map(x => [x.id, x])), projectMap = new Map(projects.map(x => [x.id, x]));
+  return flat.map(r => ({ ...r, assignees: (A.get(r.id) || []).map(person), supporters: (Su.get(r.id) || []).map(person),
+    labels: (L.get(r.id) || []).map(l => ({ label: l.label })), approvals: (Ap.get(r.id) || []).slice(0, 1).map(a => ({ currentLevel: a.currentLevel })),
+    state: stateMap.get(r.stateId), project: projectMap.get(r.projectId) }));
+}
+
+module.exports = { attachRelations, uniq, workScope, canViewSubject, rolesOf, STATUSES, statusOf, matchStatus, METRICS, metricPredicate };
