@@ -2,7 +2,7 @@
 //   BASE_A=http://127.0.0.1:4310 BASE_B=http://127.0.0.1:4311 node scripts/perf-compare.mjs [--allow allow.txt] [--max 20]
 // Hai máy chủ phải chạy trên hai bản sao CÙNG một CSDL mẫu (kepper_perf) và không ai ghi vào giữa chừng.
 // Chuẩn hoá: bỏ khoá generatedAt, sắp khoá đối tượng theo thứ tự chữ; mảng giữ nguyên thứ tự (thứ tự là một phần của API).
-// --allow <tệp>: mỗi dòng một luật, '#' là chú thích:
+// --allow <tệp> (lặp được nhiều lần): mỗi dòng một luật, '#' là chú thích:
 //     <đường-dẫn-trường>                  áp cho mọi endpoint
 //     <glob-endpoint> <đường-dẫn-trường>   chỉ áp cho endpoint khớp (vd. /api/work* items[].description)
 //   đường dẫn trường dạng a.b[].c (chỉ số mảng viết là []), '*' khớp mọi ký tự; luật cũng bao các trường con.
@@ -21,8 +21,8 @@ if (!A || !Bb) { console.error('Thiếu BASE_A / BASE_B'); process.exit(2); }
 
 const globRe = g => new RegExp('^' + g.replace(/[.+?^${}()|\\]/g, '\\$&').replace(/\[\]/g, '\\[\\]').replace(/\*/g, '.*') + '$');
 const rules = [];
-const allowFile = arg('--allow');
-if (allowFile) {
+const allowFiles = process.argv.flatMap((a, i, v) => a === '--allow' && v[i + 1] ? [v[i + 1]] : []);
+for (const allowFile of allowFiles) {
   for (const raw of fs.readFileSync(allowFile, 'utf8').split(/\r?\n/)) {
     const l = raw.replace(/#.*/, '').trim(); if (!l) continue;
     const parts = l.split(/\s+/);

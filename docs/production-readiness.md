@@ -68,11 +68,11 @@ Tải 50 người, 60 giây mỗi kịch bản, TRƯỚC → SAU (`docs/perf/k1b
 | Mỗi 15 giây — lượt 2 (SAU chạy trước) | 33 → 36 ms | 71 → 153 ms | 153 → 267 ms | 165 → 287 ms | 0 → 0 |
 | Mỗi 15 giây — lượt 3 (SAU chạy trước) | 30 → 35 ms | 87 → 119 ms | 357 → 264 ms | 249 → 291 ms | 630 (kết nối bị ngắt) → 0 |
 
-**Chưa đạt "tải 15 giây không xấu hơn bản xuất phát":** cả 3 lượt cho p95 SAU > TRƯỚC (316 / 153 / 119 so với 76 / 71 / 87 ms) và lượt 1 vượt mục tiêu p95 ≤ 150. Mức chậm giảm dần theo lượt và có mặt ở mọi API (kể cả `/api/brand`), gợi ý tiến trình / CSDL mới khởi động còn lạnh, nhưng chưa được kiểm chứng. Máy chủ TRƯỚC (4390) và cả máy chủ SAU (4341) bị tắt sau lượt 3 (không rõ nguyên nhân, không phải do lệnh của QA) nên không đo thêm được; cần đo lại cả hai ở trạng thái nguội/ấm có kiểm soát và trên Docker. Ở kịch bản 5 giây bản SAU tốt hơn rõ rệt.
+**Tải 15 giây — chưa chứng minh "không xấu hơn" bằng A/B cùng phiên.** Ba lượt A/B đầu cho p95 SAU > TRƯỚC (316 / 153 / 119 so với 76 / 71 / 87 ms); mức chậm giảm dần theo lượt và có ở mọi API (kể cả `/api/brand`). Đo bổ sung bản SAU **sau khi làm nóng** (một lượt 30 giây bỏ đi, rồi 60 giây; `docs/perf/k1b-load-B-15s-warm.json`): p50 33 ms, **p95 69 ms**, p99 99 ms, trang chủ p95 107 ms, 0 lỗi — đạt mục tiêu p95 ≤ 150 và thấp hơn p95 TRƯỚC của 3 lượt trước (71–87 ms). Điều này ủng hộ giả thuyết "khởi động nguội" cho lượt 1–3, nhưng **không phải A/B cùng phiên**: máy chủ TRƯỚC (4390) đã tắt và nhiệm vụ cấm tự dựng lại bản gốc, nên chưa có số TRƯỚC ấm cùng phiên. Cần đo lại A/B ấm trên Docker. Kịch bản 5 giây bản SAU tốt hơn rõ rệt.
 
 e2e (Playwright) màn "Tổng thể công việc": **chưa chạy** (`app/e2e` chưa cài `node_modules` / trình duyệt; không tự tải). `npm test`: 203 test (202 pass, 1 skip, 0 lỗi; trước K1-b 189).
 
-Còn mở: đo lại tải 15 giây (xem trên); e2e màn "Tổng thể công việc". Giới hạn bộ đệm: script ghi thẳng CSDL bằng PrismaClient riêng (`seed*.js`, `tidy-demo.js`, `perf-data.mjs`) khi máy chủ đang chạy có thể làm số cũ tối đa 20 giây.
+Còn mở: đo A/B ấm cùng phiên cho tải 15 giây (có bản TRƯỚC); e2e màn "Tổng thể công việc" (chưa chạy). Giới hạn bộ đệm: script ghi thẳng CSDL bằng PrismaClient riêng (`seed*.js`, `tidy-demo.js`, `perf-data.mjs`) khi máy chủ đang chạy có thể làm số cũ tối đa 20 giây.
 
 **Đã sửa trong vòng này:** biến `APP_BIND`, `PGDATA_PATH`, `UPLOADS_PATH`; `deploy/nas-setup.sh`, `deploy/upgrade.sh` (bản Linux); `docs/deploy-nas.md`;
 báo lỗi rõ khi mở sai địa chỉ ("Địa chỉ … chưa được phép — mở Kepper bằng …"); app báo khi thư mục mount không ghi được;
