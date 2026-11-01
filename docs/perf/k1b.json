@@ -1,0 +1,1847 @@
+{
+ "note": "K1-b, dữ liệu giả kepper_perf, máy chủ chạy thẳng trên Windows. A = 3d7a687 (cổng 4390), B = K1-b (4921800). \"qa\" = số S4 của CCoding (tệp gốc đã gộp vào đây). \"dieuphoi\" = đo xác nhận 18:20–18:28: làm nóng mỗi bản, rồi xen kẽ 15 s A1/B1/B2/A2; cùng lúc máy có phiên khác chạy benchmark nên số tuyệt đối cao hơn K1; l5-B1 không chạy được (máy chủ bị một tiến trình ngoài tắt).",
+ "qa": {
+  "k1b-load-A-15s-r2": {
+   "vus": 50,
+   "intervalS": 15,
+   "requests": 3600,
+   "rps": 48,
+   "errors": 0,
+   "p50": 33,
+   "p95": 71,
+   "p99": 153,
+   "page": {
+    "n": 200,
+    "p50": 61,
+    "p95": 165,
+    "p99": 459
+   }
+  },
+  "k1b-load-A-15s-r3": {
+   "vus": 50,
+   "intervalS": 15,
+   "requests": 3600,
+   "rps": 48,
+   "errors": 630,
+   "p50": 30,
+   "p95": 87,
+   "p99": 357,
+   "page": {
+    "n": 200,
+    "p50": 50,
+    "p95": 249,
+    "p99": 723
+   }
+  },
+  "k1b-load-A-15s": {
+   "vus": 50,
+   "intervalS": 15,
+   "requests": 3600,
+   "rps": 48,
+   "errors": 0,
+   "p50": 34,
+   "p95": 76,
+   "p99": 171,
+   "page": {
+    "n": 200,
+    "p50": 59,
+    "p95": 234,
+    "p99": 476
+   }
+  },
+  "k1b-load-A-5s": {
+   "vus": 50,
+   "intervalS": 5,
+   "requests": 10800,
+   "rps": 166,
+   "errors": 0,
+   "p50": 55,
+   "p95": 916,
+   "p99": 1752,
+   "page": {
+    "n": 600,
+    "p50": 100,
+    "p95": 1794,
+    "p99": 2443
+   }
+  },
+  "k1b-load-B-15s-r2": {
+   "vus": 50,
+   "intervalS": 15,
+   "requests": 3600,
+   "rps": 48,
+   "errors": 0,
+   "p50": 36,
+   "p95": 153,
+   "p99": 267,
+   "page": {
+    "n": 200,
+    "p50": 64,
+    "p95": 287,
+    "p99": 459
+   }
+  },
+  "k1b-load-B-15s-r3": {
+   "vus": 50,
+   "intervalS": 15,
+   "requests": 3600,
+   "rps": 48,
+   "errors": 0,
+   "p50": 35,
+   "p95": 119,
+   "p99": 264,
+   "page": {
+    "n": 200,
+    "p50": 56,
+    "p95": 291,
+    "p99": 500
+   }
+  },
+  "k1b-load-B-15s-warm": {
+   "vus": 50,
+   "intervalS": 15,
+   "requests": 3582,
+   "rps": 48,
+   "errors": 0,
+   "p50": 33,
+   "p95": 69,
+   "p99": 99,
+   "page": {
+    "n": 199,
+    "p50": 53,
+    "p95": 107,
+    "p99": 452
+   }
+  },
+  "k1b-load-B-15s": {
+   "vus": 50,
+   "intervalS": 15,
+   "requests": 3600,
+   "rps": 48,
+   "errors": 0,
+   "p50": 59,
+   "p95": 316,
+   "p99": 1691,
+   "page": {
+    "n": 200,
+    "p50": 114,
+    "p95": 571,
+    "p99": 2108
+   }
+  },
+  "k1b-load-B-5s": {
+   "vus": 50,
+   "intervalS": 5,
+   "requests": 10800,
+   "rps": 167,
+   "errors": 0,
+   "p50": 62,
+   "p95": 173,
+   "p99": 305,
+   "page": {
+    "n": 600,
+    "p50": 108,
+    "p95": 313,
+    "p99": 541
+   }
+  },
+  "k1b-single-A-r1": {
+   "giamdoc": {
+    "/api/work": {
+     "status": 200,
+     "p50": 384,
+     "max": 418,
+     "kb": 238.1
+    },
+    "/api/kpi": {
+     "status": 200,
+     "p50": 128,
+     "max": 180,
+     "kb": 27.2
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 101,
+     "max": 112,
+     "kb": 11.5
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 43,
+     "max": 48,
+     "kb": 327.5
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 27,
+     "max": 407,
+     "kb": 19.2
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 19,
+     "max": 22,
+     "kb": 1.6
+    },
+    "/api/weekly/report": {
+     "status": 422,
+     "p50": 4,
+     "max": 5,
+     "kb": 0.1
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 23,
+     "max": 33,
+     "kb": 1.1
+    }
+   },
+   "pmo": {
+    "/api/work": {
+     "status": 200,
+     "p50": 121,
+     "max": 132,
+     "kb": 220.3
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 5,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 14,
+     "max": 15,
+     "kb": 3.2
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 49,
+     "max": 50,
+     "kb": 327.5
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 25,
+     "max": 355,
+     "kb": 19.2
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 10,
+     "max": 11,
+     "kb": 0.1
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 21,
+     "max": 25,
+     "kb": 2
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 13,
+     "max": 13,
+     "kb": 0
+    }
+   },
+   "tb.qlxd": {
+    "/api/work": {
+     "status": 200,
+     "p50": 165,
+     "max": 178,
+     "kb": 229
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 4,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 36,
+     "max": 40,
+     "kb": 5.9
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 44,
+     "max": 49,
+     "kb": 327.5
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 25,
+     "max": 441,
+     "kb": 20.9
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 33,
+     "max": 44,
+     "kb": 4.9
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 24,
+     "max": 28,
+     "kb": 7.4
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 108,
+     "max": 112,
+     "kb": 177.4
+    }
+   },
+   "nv.qlxd": {
+    "/api/work": {
+     "status": 200,
+     "p50": 44,
+     "max": 50,
+     "kb": 55.9
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 3,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 36,
+     "max": 39,
+     "kb": 5.4
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 43,
+     "max": 46,
+     "kb": 327.5
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 29,
+     "max": 441,
+     "kb": 20.9
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 26,
+     "max": 28,
+     "kb": 2.9
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 21,
+     "max": 23,
+     "kb": 7.4
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 54,
+     "max": 65,
+     "kb": 68.3
+    }
+   }
+  },
+  "k1b-single-A-r2": {
+   "giamdoc": {
+    "/api/work": {
+     "status": 200,
+     "p50": 570,
+     "max": 757,
+     "kb": 238.1
+    },
+    "/api/kpi": {
+     "status": 200,
+     "p50": 86,
+     "max": 179,
+     "kb": 27.2
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 75,
+     "max": 105,
+     "kb": 11.5
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 36,
+     "max": 65,
+     "kb": 327.5
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 27,
+     "max": 422,
+     "kb": 19.2
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 23,
+     "max": 32,
+     "kb": 1.6
+    },
+    "/api/weekly/report": {
+     "status": 422,
+     "p50": 4,
+     "max": 5,
+     "kb": 0.1
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 22,
+     "max": 30,
+     "kb": 1.1
+    }
+   },
+   "pmo": {
+    "/api/work": {
+     "status": 200,
+     "p50": 104,
+     "max": 116,
+     "kb": 220.3
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 5,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 15,
+     "max": 16,
+     "kb": 3.2
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 45,
+     "max": 49,
+     "kb": 327.5
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 15,
+     "max": 253,
+     "kb": 19.2
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 10,
+     "max": 10,
+     "kb": 0.1
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 19,
+     "max": 19,
+     "kb": 2
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 10,
+     "max": 11,
+     "kb": 0
+    }
+   },
+   "tb.qlxd": {
+    "/api/work": {
+     "status": 200,
+     "p50": 136,
+     "max": 152,
+     "kb": 229
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 4,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 31,
+     "max": 33,
+     "kb": 5.9
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 41,
+     "max": 48,
+     "kb": 327.5
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 19,
+     "max": 339,
+     "kb": 20.9
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 29,
+     "max": 31,
+     "kb": 4.9
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 22,
+     "max": 24,
+     "kb": 7.4
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 84,
+     "max": 92,
+     "kb": 177.4
+    }
+   },
+   "nv.qlxd": {
+    "/api/work": {
+     "status": 200,
+     "p50": 30,
+     "max": 40,
+     "kb": 55.9
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 3,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 32,
+     "max": 38,
+     "kb": 5.4
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 45,
+     "max": 52,
+     "kb": 327.5
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 16,
+     "max": 235,
+     "kb": 20.9
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 29,
+     "max": 32,
+     "kb": 2.9
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 21,
+     "max": 21,
+     "kb": 7.4
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 43,
+     "max": 50,
+     "kb": 68.3
+    }
+   }
+  },
+  "k1b-single-A-r3": {
+   "giamdoc": {
+    "/api/work": {
+     "status": 200,
+     "p50": 317,
+     "max": 368,
+     "kb": 238.1
+    },
+    "/api/kpi": {
+     "status": 200,
+     "p50": 83,
+     "max": 99,
+     "kb": 27.2
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 63,
+     "max": 80,
+     "kb": 11.5
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 34,
+     "max": 42,
+     "kb": 327.5
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 22,
+     "max": 305,
+     "kb": 19.2
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 19,
+     "max": 24,
+     "kb": 1.6
+    },
+    "/api/weekly/report": {
+     "status": 422,
+     "p50": 4,
+     "max": 4,
+     "kb": 0.1
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 23,
+     "max": 31,
+     "kb": 1.1
+    }
+   },
+   "pmo": {
+    "/api/work": {
+     "status": 200,
+     "p50": 139,
+     "max": 139,
+     "kb": 220.3
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 4,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 14,
+     "max": 16,
+     "kb": 3.2
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 43,
+     "max": 54,
+     "kb": 327.5
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 17,
+     "max": 201,
+     "kb": 19.2
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 10,
+     "max": 10,
+     "kb": 0.1
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 18,
+     "max": 22,
+     "kb": 2
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 10,
+     "max": 11,
+     "kb": 0
+    }
+   },
+   "tb.qlxd": {
+    "/api/work": {
+     "status": 200,
+     "p50": 131,
+     "max": 157,
+     "kb": 229
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 4,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 31,
+     "max": 36,
+     "kb": 5.9
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 40,
+     "max": 46,
+     "kb": 327.5
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 17,
+     "max": 343,
+     "kb": 20.9
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 28,
+     "max": 31,
+     "kb": 4.9
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 23,
+     "max": 28,
+     "kb": 7.4
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 106,
+     "max": 110,
+     "kb": 177.4
+    }
+   },
+   "nv.qlxd": {
+    "/api/work": {
+     "status": 200,
+     "p50": 46,
+     "max": 49,
+     "kb": 55.9
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 4,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 34,
+     "max": 42,
+     "kb": 5.4
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 40,
+     "max": 46,
+     "kb": 327.5
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 22,
+     "max": 307,
+     "kb": 20.9
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 31,
+     "max": 34,
+     "kb": 2.9
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 23,
+     "max": 26,
+     "kb": 7.4
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 59,
+     "max": 66,
+     "kb": 68.3
+    }
+   }
+  },
+  "k1b-single-B-r1": {
+   "giamdoc": {
+    "/api/work": {
+     "status": 200,
+     "p50": 128,
+     "max": 132,
+     "kb": 238.1
+    },
+    "/api/kpi": {
+     "status": 200,
+     "p50": 33,
+     "max": 36,
+     "kb": 27.2
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 22,
+     "max": 142,
+     "kb": 11.5
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 41,
+     "max": 41,
+     "kb": 230.2
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 22,
+     "max": 359,
+     "kb": 19.2
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 18,
+     "max": 22,
+     "kb": 1.6
+    },
+    "/api/weekly/report": {
+     "status": 422,
+     "p50": 4,
+     "max": 5,
+     "kb": 0.1
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 23,
+     "max": 33,
+     "kb": 1.1
+    }
+   },
+   "pmo": {
+    "/api/work": {
+     "status": 200,
+     "p50": 74,
+     "max": 90,
+     "kb": 220.3
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 3,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 18,
+     "max": 18,
+     "kb": 3.2
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 36,
+     "max": 40,
+     "kb": 230.2
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 28,
+     "max": 377,
+     "kb": 19.2
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 11,
+     "max": 12,
+     "kb": 0.1
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 22,
+     "max": 26,
+     "kb": 2
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 13,
+     "max": 14,
+     "kb": 0
+    }
+   },
+   "tb.qlxd": {
+    "/api/work": {
+     "status": 200,
+     "p50": 79,
+     "max": 92,
+     "kb": 229
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 4,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 37,
+     "max": 45,
+     "kb": 5.9
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 46,
+     "max": 48,
+     "kb": 230.2
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 17,
+     "max": 265,
+     "kb": 20.9
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 30,
+     "max": 33,
+     "kb": 4.9
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 26,
+     "max": 27,
+     "kb": 7.4
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 105,
+     "max": 112,
+     "kb": 177.4
+    }
+   },
+   "nv.qlxd": {
+    "/api/work": {
+     "status": 200,
+     "p50": 37,
+     "max": 40,
+     "kb": 55.9
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 4,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 39,
+     "max": 42,
+     "kb": 5.4
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 45,
+     "max": 50,
+     "kb": 230.2
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 16,
+     "max": 429,
+     "kb": 20.9
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 32,
+     "max": 34,
+     "kb": 2.9
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 26,
+     "max": 28,
+     "kb": 7.4
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 50,
+     "max": 59,
+     "kb": 68.3
+    }
+   }
+  },
+  "k1b-single-B-r2": {
+   "giamdoc": {
+    "/api/work": {
+     "status": 200,
+     "p50": 135,
+     "max": 142,
+     "kb": 238.1
+    },
+    "/api/kpi": {
+     "status": 200,
+     "p50": 35,
+     "max": 39,
+     "kb": 27.2
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 26,
+     "max": 144,
+     "kb": 11.5
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 41,
+     "max": 45,
+     "kb": 230.2
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 26,
+     "max": 363,
+     "kb": 19.2
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 21,
+     "max": 22,
+     "kb": 1.6
+    },
+    "/api/weekly/report": {
+     "status": 422,
+     "p50": 4,
+     "max": 4,
+     "kb": 0.1
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 26,
+     "max": 34,
+     "kb": 1.1
+    }
+   },
+   "pmo": {
+    "/api/work": {
+     "status": 200,
+     "p50": 77,
+     "max": 86,
+     "kb": 220.3
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 4,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 16,
+     "max": 17,
+     "kb": 3.2
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 42,
+     "max": 50,
+     "kb": 230.2
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 29,
+     "max": 373,
+     "kb": 19.2
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 10,
+     "max": 10,
+     "kb": 0.1
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 22,
+     "max": 24,
+     "kb": 2
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 12,
+     "max": 14,
+     "kb": 0
+    }
+   },
+   "tb.qlxd": {
+    "/api/work": {
+     "status": 200,
+     "p50": 76,
+     "max": 84,
+     "kb": 229
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 4,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 30,
+     "max": 35,
+     "kb": 5.9
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 84,
+     "max": 96,
+     "kb": 230.2
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 29,
+     "max": 411,
+     "kb": 20.9
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 77,
+     "max": 111,
+     "kb": 4.9
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 22,
+     "max": 23,
+     "kb": 7.4
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 92,
+     "max": 102,
+     "kb": 177.4
+    }
+   },
+   "nv.qlxd": {
+    "/api/work": {
+     "status": 200,
+     "p50": 31,
+     "max": 32,
+     "kb": 55.9
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 3,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 27,
+     "max": 31,
+     "kb": 5.4
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 32,
+     "max": 35,
+     "kb": 230.2
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 22,
+     "max": 293,
+     "kb": 20.9
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 26,
+     "max": 30,
+     "kb": 2.9
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 22,
+     "max": 27,
+     "kb": 7.4
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 47,
+     "max": 63,
+     "kb": 68.3
+    }
+   }
+  },
+  "k1b-single-B-r3": {
+   "giamdoc": {
+    "/api/work": {
+     "status": 200,
+     "p50": 135,
+     "max": 150,
+     "kb": 238.1
+    },
+    "/api/kpi": {
+     "status": 200,
+     "p50": 38,
+     "max": 40,
+     "kb": 27.2
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 28,
+     "max": 135,
+     "kb": 11.5
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 41,
+     "max": 45,
+     "kb": 230.2
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 26,
+     "max": 437,
+     "kb": 19.2
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 17,
+     "max": 19,
+     "kb": 1.6
+    },
+    "/api/weekly/report": {
+     "status": 422,
+     "p50": 3,
+     "max": 4,
+     "kb": 0.1
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 24,
+     "max": 30,
+     "kb": 1.1
+    }
+   },
+   "pmo": {
+    "/api/work": {
+     "status": 200,
+     "p50": 80,
+     "max": 99,
+     "kb": 220.3
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 2,
+     "max": 3,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 17,
+     "max": 19,
+     "kb": 3.2
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 37,
+     "max": 46,
+     "kb": 230.2
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 27,
+     "max": 433,
+     "kb": 19.2
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 10,
+     "max": 14,
+     "kb": 0.1
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 17,
+     "max": 22,
+     "kb": 2
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 13,
+     "max": 15,
+     "kb": 0
+    }
+   },
+   "tb.qlxd": {
+    "/api/work": {
+     "status": 200,
+     "p50": 66,
+     "max": 104,
+     "kb": 229
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 3,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 36,
+     "max": 39,
+     "kb": 5.9
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 33,
+     "max": 35,
+     "kb": 230.2
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 31,
+     "max": 425,
+     "kb": 20.9
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 29,
+     "max": 33,
+     "kb": 4.9
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 24,
+     "max": 29,
+     "kb": 7.4
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 115,
+     "max": 130,
+     "kb": 177.4
+    }
+   },
+   "nv.qlxd": {
+    "/api/work": {
+     "status": 200,
+     "p50": 29,
+     "max": 32,
+     "kb": 55.9
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 2,
+     "max": 3,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 29,
+     "max": 30,
+     "kb": 5.4
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 28,
+     "max": 34,
+     "kb": 230.2
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 16,
+     "max": 249,
+     "kb": 20.9
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 26,
+     "max": 27,
+     "kb": 2.9
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 20,
+     "max": 22,
+     "kb": 7.4
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 39,
+     "max": 43,
+     "kb": 68.3
+    }
+   }
+  }
+ },
+ "dieuphoi": {
+  "l15-A1": {
+   "vus": 50,
+   "intervalS": 15,
+   "requests": 3600,
+   "rps": 48,
+   "errors": 0,
+   "p50": 33,
+   "p95": 291,
+   "p99": 552,
+   "page": {
+    "n": 200,
+    "p50": 54,
+    "p95": 693,
+    "p99": 800
+   }
+  },
+  "l15-A2": {
+   "vus": 50,
+   "intervalS": 15,
+   "requests": 3600,
+   "rps": 48,
+   "errors": 0,
+   "p50": 36,
+   "p95": 246,
+   "p99": 367,
+   "page": {
+    "n": 200,
+    "p50": 70,
+    "p95": 424,
+    "p99": 567
+   }
+  },
+  "l15-B1": {
+   "vus": 50,
+   "intervalS": 15,
+   "requests": 3600,
+   "rps": 48,
+   "errors": 0,
+   "p50": 38,
+   "p95": 176,
+   "p99": 388,
+   "page": {
+    "n": 200,
+    "p50": 60,
+    "p95": 388,
+    "p99": 848
+   }
+  },
+  "l15-B2": {
+   "vus": 50,
+   "intervalS": 15,
+   "requests": 3600,
+   "rps": 48,
+   "errors": 0,
+   "p50": 32,
+   "p95": 112,
+   "p99": 205,
+   "page": {
+    "n": 200,
+    "p50": 52,
+    "p95": 283,
+    "p99": 391
+   }
+  },
+  "l5-A1": {
+   "vus": 50,
+   "intervalS": 5,
+   "requests": 10782,
+   "rps": 166,
+   "errors": 0,
+   "p50": 45,
+   "p95": 710,
+   "p99": 1201,
+   "page": {
+    "n": 599,
+    "p50": 73,
+    "p95": 1335,
+    "p99": 1916
+   }
+  },
+  "single-A": {
+   "giamdoc": {
+    "/api/work": {
+     "status": 200,
+     "p50": 435,
+     "max": 455,
+     "kb": 238.1
+    },
+    "/api/kpi": {
+     "status": 200,
+     "p50": 152,
+     "max": 155,
+     "kb": 27.2
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 116,
+     "max": 137,
+     "kb": 11.5
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 39,
+     "max": 45,
+     "kb": 327.5
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 24,
+     "max": 392,
+     "kb": 19.2
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 20,
+     "max": 22,
+     "kb": 1.6
+    },
+    "/api/weekly/report": {
+     "status": 422,
+     "p50": 4,
+     "max": 5,
+     "kb": 0.1
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 27,
+     "max": 31,
+     "kb": 1.1
+    }
+   },
+   "pmo": {
+    "/api/work": {
+     "status": 200,
+     "p50": 135,
+     "max": 141,
+     "kb": 220.3
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 5,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 16,
+     "max": 18,
+     "kb": 3.2
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 49,
+     "max": 52,
+     "kb": 327.5
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 21,
+     "max": 424,
+     "kb": 19.2
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 10,
+     "max": 11,
+     "kb": 0.1
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 20,
+     "max": 23,
+     "kb": 2
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 13,
+     "max": 14,
+     "kb": 0
+    }
+   },
+   "tb.qlxd": {
+    "/api/work": {
+     "status": 200,
+     "p50": 120,
+     "max": 131,
+     "kb": 229
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 3,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 32,
+     "max": 33,
+     "kb": 5.9
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 45,
+     "max": 51,
+     "kb": 327.5
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 16,
+     "max": 371,
+     "kb": 20.9
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 27,
+     "max": 30,
+     "kb": 4.9
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 24,
+     "max": 29,
+     "kb": 7.4
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 107,
+     "max": 113,
+     "kb": 177.4
+    }
+   },
+   "nv.qlxd": {
+    "/api/work": {
+     "status": 200,
+     "p50": 43,
+     "max": 44,
+     "kb": 55.9
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 3,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 39,
+     "max": 39,
+     "kb": 5.4
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 47,
+     "max": 49,
+     "kb": 327.5
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 30,
+     "max": 436,
+     "kb": 20.9
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 30,
+     "max": 39,
+     "kb": 2.9
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 23,
+     "max": 26,
+     "kb": 7.4
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 50,
+     "max": 67,
+     "kb": 68.3
+    }
+   }
+  },
+  "single-B": {
+   "giamdoc": {
+    "/api/work": {
+     "status": 200,
+     "p50": 122,
+     "max": 137,
+     "kb": 238.1
+    },
+    "/api/kpi": {
+     "status": 200,
+     "p50": 30,
+     "max": 41,
+     "kb": 27.2
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 29,
+     "max": 159,
+     "kb": 11.5
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 43,
+     "max": 51,
+     "kb": 230.2
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 27,
+     "max": 450,
+     "kb": 19.2
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 20,
+     "max": 22,
+     "kb": 1.6
+    },
+    "/api/weekly/report": {
+     "status": 422,
+     "p50": 4,
+     "max": 4,
+     "kb": 0.1
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 22,
+     "max": 30,
+     "kb": 1.1
+    }
+   },
+   "pmo": {
+    "/api/work": {
+     "status": 200,
+     "p50": 80,
+     "max": 88,
+     "kb": 220.3
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 2,
+     "max": 3,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 17,
+     "max": 19,
+     "kb": 3.2
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 42,
+     "max": 48,
+     "kb": 230.2
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 24,
+     "max": 382,
+     "kb": 19.2
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 10,
+     "max": 11,
+     "kb": 0.1
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 21,
+     "max": 27,
+     "kb": 2
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 12,
+     "max": 13,
+     "kb": 0
+    }
+   },
+   "tb.qlxd": {
+    "/api/work": {
+     "status": 200,
+     "p50": 61,
+     "max": 69,
+     "kb": 229
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 2,
+     "max": 3,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 30,
+     "max": 31,
+     "kb": 5.9
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 48,
+     "max": 50,
+     "kb": 230.2
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 20,
+     "max": 332,
+     "kb": 20.9
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 32,
+     "max": 33,
+     "kb": 4.9
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 23,
+     "max": 32,
+     "kb": 7.4
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 90,
+     "max": 99,
+     "kb": 177.4
+    }
+   },
+   "nv.qlxd": {
+    "/api/work": {
+     "status": 200,
+     "p50": 33,
+     "max": 37,
+     "kb": 55.9
+    },
+    "/api/kpi": {
+     "status": 403,
+     "p50": 3,
+     "max": 3,
+     "kb": 0.1
+    },
+    "/api/dashboard": {
+     "status": 200,
+     "p50": 24,
+     "max": 44,
+     "kb": 5.4
+    },
+    "/api/projects/:big/mtl": {
+     "status": 200,
+     "p50": 45,
+     "max": 47,
+     "kb": 230.2
+    },
+    "/api/mtl/portfolio": {
+     "status": 200,
+     "p50": 22,
+     "max": 388,
+     "kb": 20.9
+    },
+    "/api/my/sprint": {
+     "status": 200,
+     "p50": 28,
+     "max": 42,
+     "kb": 2.9
+    },
+    "/api/weekly/report": {
+     "status": 200,
+     "p50": 20,
+     "max": 24,
+     "kb": 7.4
+    },
+    "/api/my/items": {
+     "status": 200,
+     "p50": 47,
+     "max": 60,
+     "kb": 68.3
+    }
+   }
+  }
+ }
+}
