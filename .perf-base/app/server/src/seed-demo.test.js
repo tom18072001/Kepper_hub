@@ -1,0 +1,14 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
+const path = require('node:path');
+
+const entry = path.join(__dirname, 'seed-demo.js');
+test('demo seed refuses databases not named test or demo', () => {
+  const result = spawnSync(process.execPath, [entry], {
+    env: { ...process.env, DATABASE_URL: 'postgresql://localhost/company', NODE_ENV: 'development' },
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /requires a test\/demo database/);
+});

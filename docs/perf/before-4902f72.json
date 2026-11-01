@@ -1,0 +1,1468 @@
+{
+ "commit": "4902f72",
+ "note": "Đo TRƯỚC tối ưu. Dữ liệu giả (kepper_perf), máy chủ Node chạy thẳng trên Windows, Postgres 127.0.0.1:5437. Chỉ số đo, không có dữ liệu nghiệp vụ.",
+ "at": "2026-11-01T09:11:00.870Z",
+ "tests": {
+  "total": 171,
+  "pass": 171,
+  "fail": 0
+ },
+ "single": {
+  "giamdoc": {
+   "/api/me": {
+    "status": 200,
+    "p50": 7,
+    "max": 7,
+    "kb": 0.9
+   },
+   "/api/brand": {
+    "status": 200,
+    "p50": 1,
+    "max": 2,
+    "kb": 0
+   },
+   "/api/approvals/counts": {
+    "status": 200,
+    "p50": 26,
+    "max": 47,
+    "kb": 0
+   },
+   "/api/notifications": {
+    "status": 200,
+    "p50": 18,
+    "max": 19,
+    "kb": 13.8
+   },
+   "/api/departments": {
+    "status": 200,
+    "p50": 7,
+    "max": 9,
+    "kb": 2.6
+   },
+   "/api/labels": {
+    "status": 200,
+    "p50": 4,
+    "max": 7,
+    "kb": 1.2
+   },
+   "/api/projects": {
+    "status": 200,
+    "p50": 10,
+    "max": 12,
+    "kb": 14.5
+   },
+   "/api/settings": {
+    "status": 200,
+    "p50": 5,
+    "max": 5,
+    "kb": 0.2
+   },
+   "/api/templates": {
+    "status": 200,
+    "p50": 5,
+    "max": 6,
+    "kb": 0.8
+   },
+   "/api/users/directory": {
+    "status": 200,
+    "p50": 4,
+    "max": 5,
+    "kb": 7.5
+   },
+   "/api/approvals/extensions": {
+    "status": 200,
+    "p50": 10,
+    "max": 14,
+    "kb": 0.5
+   },
+   "/api/approvals/proposals": {
+    "status": 200,
+    "p50": 17,
+    "max": 20,
+    "kb": 1.1
+   },
+   "/api/approvals/queue": {
+    "status": 200,
+    "p50": 17,
+    "max": 21,
+    "kb": 0.6
+   },
+   "/api/mtl/portfolio": {
+    "status": 200,
+    "p50": 290,
+    "max": 302,
+    "kb": 19.2
+   },
+   "/api/my/items": {
+    "status": 200,
+    "p50": 25,
+    "max": 38,
+    "kb": 3.8
+   },
+   "/api/weekly/context": {
+    "status": 200,
+    "p50": 7,
+    "max": 15,
+    "kb": 2.5
+   },
+   "/api/weekly/report": {
+    "status": 422,
+    "p50": 5,
+    "max": 6,
+    "kb": 0.1
+   },
+   "/api/weekly/summary": {
+    "status": 200,
+    "p50": 12,
+    "max": 13,
+    "kb": 3.7
+   },
+   "/api/dashboard": {
+    "status": 200,
+    "p50": 229,
+    "max": 257,
+    "kb": 11.5
+   },
+   "/api/work": {
+    "status": 200,
+    "p50": 640,
+    "max": 775,
+    "kb": 993.3
+   },
+   "/api/kpi": {
+    "status": 200,
+    "p50": 198,
+    "max": 235,
+    "kb": 27.2
+   },
+   "/api/kpi/me": {
+    "status": 200,
+    "p50": 12,
+    "max": 18,
+    "kb": 1
+   },
+   "/api/my/sprint": {
+    "status": 200,
+    "p50": 582,
+    "max": 644,
+    "kb": 1.6
+   },
+   "/api/search?q=thi%20c%C3%B4ng": {
+    "status": 200,
+    "p50": 13,
+    "max": 16,
+    "kb": 3
+   },
+   "/api/weekly/compliance": {
+    "status": 200,
+    "p50": 42,
+    "max": 54,
+    "kb": 1.7
+   },
+   "/api/dispatch/inbox": {
+    "status": 403,
+    "p50": 4,
+    "max": 5,
+    "kb": 0.1
+   },
+   "/api/projects/:big": {
+    "status": 200,
+    "p50": 20,
+    "max": 22,
+    "kb": 6.7
+   },
+   "/api/projects/:big/mtl": {
+    "status": 200,
+    "p50": 53,
+    "max": 64,
+    "kb": 327.5
+   },
+   "/api/projects/:big/mtl-kpi": {
+    "status": 200,
+    "p50": 30,
+    "max": 35,
+    "kb": 8.3
+   },
+   "/api/projects/:big/mtl-sprints": {
+    "status": 200,
+    "p50": 45,
+    "max": 54,
+    "kb": 11.7
+   },
+   "/api/projects/:big/mtl-month": {
+    "status": 200,
+    "p50": 48,
+    "max": 56,
+    "kb": 22.4
+   },
+   "/api/projects/:big/items": {
+    "status": 200,
+    "p50": 67,
+    "max": 78,
+    "kb": 506.4
+   },
+   "/api/projects/:big/cycles": {
+    "status": 200,
+    "p50": 7,
+    "max": 10,
+    "kb": 0
+   },
+   "/api/items/:item": {
+    "status": 200,
+    "p50": 55,
+    "max": 67,
+    "kb": 5.5
+   }
+  },
+  "pmo": {
+   "/api/me": {
+    "status": 200,
+    "p50": 5,
+    "max": 5,
+    "kb": 0.9
+   },
+   "/api/brand": {
+    "status": 200,
+    "p50": 1,
+    "max": 1,
+    "kb": 0
+   },
+   "/api/approvals/counts": {
+    "status": 200,
+    "p50": 19,
+    "max": 22,
+    "kb": 0
+   },
+   "/api/notifications": {
+    "status": 200,
+    "p50": 11,
+    "max": 15,
+    "kb": 13.7
+   },
+   "/api/departments": {
+    "status": 200,
+    "p50": 7,
+    "max": 8,
+    "kb": 2.6
+   },
+   "/api/labels": {
+    "status": 200,
+    "p50": 4,
+    "max": 6,
+    "kb": 0.4
+   },
+   "/api/projects": {
+    "status": 200,
+    "p50": 8,
+    "max": 11,
+    "kb": 9.5
+   },
+   "/api/settings": {
+    "status": 200,
+    "p50": 3,
+    "max": 4,
+    "kb": 0.3
+   },
+   "/api/templates": {
+    "status": 200,
+    "p50": 4,
+    "max": 6,
+    "kb": 0.8
+   },
+   "/api/users/directory": {
+    "status": 200,
+    "p50": 5,
+    "max": 5,
+    "kb": 7.5
+   },
+   "/api/approvals/extensions": {
+    "status": 200,
+    "p50": 8,
+    "max": 9,
+    "kb": 0
+   },
+   "/api/approvals/proposals": {
+    "status": 200,
+    "p50": 9,
+    "max": 12,
+    "kb": 0
+   },
+   "/api/approvals/queue": {
+    "status": 200,
+    "p50": 14,
+    "max": 18,
+    "kb": 0
+   },
+   "/api/mtl/portfolio": {
+    "status": 200,
+    "p50": 351,
+    "max": 414,
+    "kb": 19.2
+   },
+   "/api/my/items": {
+    "status": 200,
+    "p50": 9,
+    "max": 10,
+    "kb": 0
+   },
+   "/api/weekly/context": {
+    "status": 200,
+    "p50": 12,
+    "max": 13,
+    "kb": 2.5
+   },
+   "/api/weekly/report": {
+    "status": 200,
+    "p50": 324,
+    "max": 342,
+    "kb": 2
+   },
+   "/api/weekly/summary": {
+    "status": 200,
+    "p50": 12,
+    "max": 13,
+    "kb": 3.7
+   },
+   "/api/dashboard": {
+    "status": 200,
+    "p50": 17,
+    "max": 18,
+    "kb": 3.2
+   },
+   "/api/work": {
+    "status": 200,
+    "p50": 187,
+    "max": 220,
+    "kb": 979.9
+   },
+   "/api/kpi": {
+    "status": 403,
+    "p50": 3,
+    "max": 6,
+    "kb": 0.1
+   },
+   "/api/kpi/me": {
+    "status": 200,
+    "p50": 18,
+    "max": 22,
+    "kb": 1
+   },
+   "/api/my/sprint": {
+    "status": 200,
+    "p50": 623,
+    "max": 679,
+    "kb": 0.1
+   },
+   "/api/search?q=thi%20c%C3%B4ng": {
+    "status": 200,
+    "p50": 18,
+    "max": 28,
+    "kb": 3.1
+   },
+   "/api/weekly/compliance": {
+    "status": 403,
+    "p50": 5,
+    "max": 6,
+    "kb": 0.1
+   },
+   "/api/dispatch/inbox": {
+    "status": 403,
+    "p50": 3,
+    "max": 5,
+    "kb": 0.1
+   },
+   "/api/projects/:big": {
+    "status": 200,
+    "p50": 12,
+    "max": 13,
+    "kb": 6.7
+   },
+   "/api/projects/:big/mtl": {
+    "status": 200,
+    "p50": 63,
+    "max": 75,
+    "kb": 327.5
+   },
+   "/api/projects/:big/mtl-kpi": {
+    "status": 200,
+    "p50": 39,
+    "max": 47,
+    "kb": 8.3
+   },
+   "/api/projects/:big/mtl-sprints": {
+    "status": 200,
+    "p50": 45,
+    "max": 53,
+    "kb": 11.7
+   },
+   "/api/projects/:big/mtl-month": {
+    "status": 200,
+    "p50": 51,
+    "max": 62,
+    "kb": 22.4
+   },
+   "/api/projects/:big/items": {
+    "status": 200,
+    "p50": 81,
+    "max": 89,
+    "kb": 506.4
+   },
+   "/api/projects/:big/cycles": {
+    "status": 200,
+    "p50": 6,
+    "max": 8,
+    "kb": 0
+   },
+   "/api/items/:item": {
+    "status": 200,
+    "p50": 44,
+    "max": 56,
+    "kb": 5.5
+   }
+  },
+  "tb.qlxd": {
+   "/api/me": {
+    "status": 200,
+    "p50": 6,
+    "max": 7,
+    "kb": 0.9
+   },
+   "/api/brand": {
+    "status": 200,
+    "p50": 1,
+    "max": 1,
+    "kb": 0
+   },
+   "/api/approvals/counts": {
+    "status": 200,
+    "p50": 16,
+    "max": 21,
+    "kb": 0.1
+   },
+   "/api/notifications": {
+    "status": 200,
+    "p50": 13,
+    "max": 16,
+    "kb": 13.8
+   },
+   "/api/departments": {
+    "status": 200,
+    "p50": 5,
+    "max": 8,
+    "kb": 2.6
+   },
+   "/api/labels": {
+    "status": 200,
+    "p50": 4,
+    "max": 6,
+    "kb": 0.4
+   },
+   "/api/projects": {
+    "status": 200,
+    "p50": 9,
+    "max": 10,
+    "kb": 9.6
+   },
+   "/api/settings": {
+    "status": 200,
+    "p50": 4,
+    "max": 5,
+    "kb": 0.3
+   },
+   "/api/templates": {
+    "status": 200,
+    "p50": 4,
+    "max": 6,
+    "kb": 0.8
+   },
+   "/api/users/directory": {
+    "status": 200,
+    "p50": 5,
+    "max": 5,
+    "kb": 7.5
+   },
+   "/api/approvals/extensions": {
+    "status": 200,
+    "p50": 9,
+    "max": 10,
+    "kb": 0
+   },
+   "/api/approvals/proposals": {
+    "status": 200,
+    "p50": 20,
+    "max": 23,
+    "kb": 7.9
+   },
+   "/api/approvals/queue": {
+    "status": 200,
+    "p50": 19,
+    "max": 22,
+    "kb": 0
+   },
+   "/api/mtl/portfolio": {
+    "status": 200,
+    "p50": 424,
+    "max": 447,
+    "kb": 20.9
+   },
+   "/api/my/items": {
+    "status": 200,
+    "p50": 98,
+    "max": 115,
+    "kb": 584.4
+   },
+   "/api/weekly/context": {
+    "status": 200,
+    "p50": 8,
+    "max": 11,
+    "kb": 2.5
+   },
+   "/api/weekly/report": {
+    "status": 200,
+    "p50": 323,
+    "max": 369,
+    "kb": 7.4
+   },
+   "/api/weekly/summary": {
+    "status": 200,
+    "p50": 12,
+    "max": 19,
+    "kb": 3.7
+   },
+   "/api/dashboard": {
+    "status": 200,
+    "p50": 59,
+    "max": 70,
+    "kb": 5.9
+   },
+   "/api/work": {
+    "status": 200,
+    "p50": 283,
+    "max": 297,
+    "kb": 979.3
+   },
+   "/api/kpi": {
+    "status": 403,
+    "p50": 4,
+    "max": 5,
+    "kb": 0.1
+   },
+   "/api/kpi/me": {
+    "status": 200,
+    "p50": 60,
+    "max": 62,
+    "kb": 1.1
+   },
+   "/api/my/sprint": {
+    "status": 200,
+    "p50": 651,
+    "max": 709,
+    "kb": 4.9
+   },
+   "/api/search?q=thi%20c%C3%B4ng": {
+    "status": 200,
+    "p50": 16,
+    "max": 16,
+    "kb": 3.1
+   },
+   "/api/weekly/compliance": {
+    "status": 403,
+    "p50": 5,
+    "max": 5,
+    "kb": 0.1
+   },
+   "/api/dispatch/inbox": {
+    "status": 200,
+    "p50": 16,
+    "max": 20,
+    "kb": 0.2
+   },
+   "/api/projects/:big": {
+    "status": 200,
+    "p50": 21,
+    "max": 25,
+    "kb": 6.7
+   },
+   "/api/projects/:big/mtl": {
+    "status": 200,
+    "p50": 63,
+    "max": 75,
+    "kb": 327.5
+   },
+   "/api/projects/:big/mtl-kpi": {
+    "status": 200,
+    "p50": 38,
+    "max": 39,
+    "kb": 1.8
+   },
+   "/api/projects/:big/mtl-sprints": {
+    "status": 200,
+    "p50": 51,
+    "max": 69,
+    "kb": 11.7
+   },
+   "/api/projects/:big/mtl-month": {
+    "status": 200,
+    "p50": 48,
+    "max": 58,
+    "kb": 22.4
+   },
+   "/api/projects/:big/items": {
+    "status": 200,
+    "p50": 73,
+    "max": 92,
+    "kb": 506.4
+   },
+   "/api/projects/:big/cycles": {
+    "status": 200,
+    "p50": 8,
+    "max": 15,
+    "kb": 0
+   },
+   "/api/items/:item": {
+    "status": 200,
+    "p50": 42,
+    "max": 83,
+    "kb": 5.5
+   }
+  },
+  "nv.qlxd": {
+   "/api/me": {
+    "status": 200,
+    "p50": 5,
+    "max": 5,
+    "kb": 0.9
+   },
+   "/api/brand": {
+    "status": 200,
+    "p50": 1,
+    "max": 1,
+    "kb": 0
+   },
+   "/api/approvals/counts": {
+    "status": 200,
+    "p50": 20,
+    "max": 26,
+    "kb": 0
+   },
+   "/api/notifications": {
+    "status": 200,
+    "p50": 11,
+    "max": 18,
+    "kb": 13.9
+   },
+   "/api/departments": {
+    "status": 200,
+    "p50": 7,
+    "max": 8,
+    "kb": 2.6
+   },
+   "/api/labels": {
+    "status": 200,
+    "p50": 4,
+    "max": 5,
+    "kb": 0.4
+   },
+   "/api/projects": {
+    "status": 200,
+    "p50": 8,
+    "max": 9,
+    "kb": 9.6
+   },
+   "/api/settings": {
+    "status": 200,
+    "p50": 4,
+    "max": 7,
+    "kb": 0.3
+   },
+   "/api/templates": {
+    "status": 200,
+    "p50": 9,
+    "max": 9,
+    "kb": 0.8
+   },
+   "/api/users/directory": {
+    "status": 200,
+    "p50": 5,
+    "max": 11,
+    "kb": 7.5
+   },
+   "/api/approvals/extensions": {
+    "status": 200,
+    "p50": 8,
+    "max": 9,
+    "kb": 0
+   },
+   "/api/approvals/proposals": {
+    "status": 200,
+    "p50": 11,
+    "max": 15,
+    "kb": 0
+   },
+   "/api/approvals/queue": {
+    "status": 200,
+    "p50": 16,
+    "max": 25,
+    "kb": 0
+   },
+   "/api/mtl/portfolio": {
+    "status": 200,
+    "p50": 313,
+    "max": 346,
+    "kb": 20.9
+   },
+   "/api/my/items": {
+    "status": 200,
+    "p50": 44,
+    "max": 64,
+    "kb": 217.4
+   },
+   "/api/weekly/context": {
+    "status": 200,
+    "p50": 7,
+    "max": 8,
+    "kb": 2.5
+   },
+   "/api/weekly/report": {
+    "status": 200,
+    "p50": 340,
+    "max": 422,
+    "kb": 7.4
+   },
+   "/api/weekly/summary": {
+    "status": 403,
+    "p50": 4,
+    "max": 5,
+    "kb": 0.1
+   },
+   "/api/dashboard": {
+    "status": 200,
+    "p50": 62,
+    "max": 79,
+    "kb": 5.4
+   },
+   "/api/work": {
+    "status": 200,
+    "p50": 71,
+    "max": 79,
+    "kb": 226.3
+   },
+   "/api/kpi": {
+    "status": 403,
+    "p50": 2,
+    "max": 3,
+    "kb": 0.1
+   },
+   "/api/kpi/me": {
+    "status": 200,
+    "p50": 57,
+    "max": 59,
+    "kb": 1.1
+   },
+   "/api/my/sprint": {
+    "status": 200,
+    "p50": 589,
+    "max": 598,
+    "kb": 2.9
+   },
+   "/api/search?q=thi%20c%C3%B4ng": {
+    "status": 200,
+    "p50": 18,
+    "max": 22,
+    "kb": 3.1
+   },
+   "/api/weekly/compliance": {
+    "status": 403,
+    "p50": 3,
+    "max": 4,
+    "kb": 0.1
+   },
+   "/api/dispatch/inbox": {
+    "status": 403,
+    "p50": 3,
+    "max": 4,
+    "kb": 0.1
+   },
+   "/api/projects/:big": {
+    "status": 200,
+    "p50": 10,
+    "max": 19,
+    "kb": 6.7
+   },
+   "/api/projects/:big/mtl": {
+    "status": 200,
+    "p50": 66,
+    "max": 75,
+    "kb": 327.5
+   },
+   "/api/projects/:big/mtl-kpi": {
+    "status": 403,
+    "p50": 5,
+    "max": 10,
+    "kb": 0.1
+   },
+   "/api/projects/:big/mtl-sprints": {
+    "status": 200,
+    "p50": 49,
+    "max": 58,
+    "kb": 11.7
+   },
+   "/api/projects/:big/mtl-month": {
+    "status": 200,
+    "p50": 59,
+    "max": 61,
+    "kb": 22.4
+   },
+   "/api/projects/:big/items": {
+    "status": 200,
+    "p50": 101,
+    "max": 112,
+    "kb": 506.4
+   },
+   "/api/projects/:big/cycles": {
+    "status": 200,
+    "p50": 6,
+    "max": 10,
+    "kb": 0
+   },
+   "/api/items/:item": {
+    "status": 200,
+    "p50": 34,
+    "max": 50,
+    "kb": 5.5
+   }
+  },
+  "tb.phaply": {
+   "/api/me": {
+    "status": 200,
+    "p50": 6,
+    "max": 9,
+    "kb": 0.9
+   },
+   "/api/brand": {
+    "status": 200,
+    "p50": 1,
+    "max": 1,
+    "kb": 0
+   },
+   "/api/approvals/counts": {
+    "status": 200,
+    "p50": 20,
+    "max": 27,
+    "kb": 0.1
+   },
+   "/api/notifications": {
+    "status": 200,
+    "p50": 14,
+    "max": 17,
+    "kb": 14.1
+   },
+   "/api/departments": {
+    "status": 200,
+    "p50": 7,
+    "max": 10,
+    "kb": 2.6
+   },
+   "/api/labels": {
+    "status": 200,
+    "p50": 4,
+    "max": 5,
+    "kb": 0.4
+   },
+   "/api/projects": {
+    "status": 200,
+    "p50": 9,
+    "max": 10,
+    "kb": 9.6
+   },
+   "/api/settings": {
+    "status": 200,
+    "p50": 3,
+    "max": 4,
+    "kb": 0.3
+   },
+   "/api/templates": {
+    "status": 200,
+    "p50": 5,
+    "max": 6,
+    "kb": 0.8
+   },
+   "/api/users/directory": {
+    "status": 200,
+    "p50": 6,
+    "max": 6,
+    "kb": 7.5
+   },
+   "/api/approvals/extensions": {
+    "status": 200,
+    "p50": 12,
+    "max": 15,
+    "kb": 0
+   },
+   "/api/approvals/proposals": {
+    "status": 200,
+    "p50": 24,
+    "max": 27,
+    "kb": 39.5
+   },
+   "/api/approvals/queue": {
+    "status": 200,
+    "p50": 15,
+    "max": 21,
+    "kb": 0
+   },
+   "/api/mtl/portfolio": {
+    "status": 200,
+    "p50": 337,
+    "max": 342,
+    "kb": 39.3
+   },
+   "/api/my/items": {
+    "status": 200,
+    "p50": 54,
+    "max": 72,
+    "kb": 315.8
+   },
+   "/api/weekly/context": {
+    "status": 200,
+    "p50": 8,
+    "max": 11,
+    "kb": 2.5
+   },
+   "/api/weekly/report": {
+    "status": 200,
+    "p50": 376,
+    "max": 432,
+    "kb": 50.5
+   },
+   "/api/weekly/summary": {
+    "status": 200,
+    "p50": 13,
+    "max": 18,
+    "kb": 3.7
+   },
+   "/api/dashboard": {
+    "status": 200,
+    "p50": 56,
+    "max": 58,
+    "kb": 6.6
+   },
+   "/api/work": {
+    "status": 200,
+    "p50": 191,
+    "max": 197,
+    "kb": 813
+   },
+   "/api/kpi": {
+    "status": 403,
+    "p50": 3,
+    "max": 7,
+    "kb": 0.1
+   },
+   "/api/kpi/me": {
+    "status": 200,
+    "p50": 42,
+    "max": 57,
+    "kb": 1.1
+   },
+   "/api/my/sprint": {
+    "status": 200,
+    "p50": 634,
+    "max": 687,
+    "kb": 26.2
+   },
+   "/api/search?q=thi%20c%C3%B4ng": {
+    "status": 200,
+    "p50": 21,
+    "max": 23,
+    "kb": 3.1
+   },
+   "/api/weekly/compliance": {
+    "status": 403,
+    "p50": 4,
+    "max": 4,
+    "kb": 0.1
+   },
+   "/api/dispatch/inbox": {
+    "status": 200,
+    "p50": 12,
+    "max": 14,
+    "kb": 0.1
+   },
+   "/api/projects/:big": {
+    "status": 200,
+    "p50": 13,
+    "max": 20,
+    "kb": 6.7
+   },
+   "/api/projects/:big/mtl": {
+    "status": 200,
+    "p50": 70,
+    "max": 80,
+    "kb": 327.5
+   },
+   "/api/projects/:big/mtl-kpi": {
+    "status": 200,
+    "p50": 37,
+    "max": 43,
+    "kb": 1.4
+   },
+   "/api/projects/:big/mtl-sprints": {
+    "status": 200,
+    "p50": 55,
+    "max": 84,
+    "kb": 11.7
+   },
+   "/api/projects/:big/mtl-month": {
+    "status": 200,
+    "p50": 66,
+    "max": 78,
+    "kb": 22.4
+   },
+   "/api/projects/:big/items": {
+    "status": 200,
+    "p50": 85,
+    "max": 87,
+    "kb": 506.4
+   },
+   "/api/projects/:big/cycles": {
+    "status": 200,
+    "p50": 5,
+    "max": 9,
+    "kb": 0
+   },
+   "/api/items/:item": {
+    "status": 200,
+    "p50": 56,
+    "max": 90,
+    "kb": 5.5
+   }
+  },
+  "nv.pf01": {
+   "/api/me": {
+    "status": 200,
+    "p50": 5,
+    "max": 8,
+    "kb": 0.9
+   },
+   "/api/brand": {
+    "status": 200,
+    "p50": 0,
+    "max": 1,
+    "kb": 0
+   },
+   "/api/approvals/counts": {
+    "status": 200,
+    "p50": 15,
+    "max": 20,
+    "kb": 0
+   },
+   "/api/notifications": {
+    "status": 200,
+    "p50": 7,
+    "max": 9,
+    "kb": 13.8
+   },
+   "/api/departments": {
+    "status": 200,
+    "p50": 7,
+    "max": 8,
+    "kb": 2.6
+   },
+   "/api/labels": {
+    "status": 200,
+    "p50": 4,
+    "max": 5,
+    "kb": 0.4
+   },
+   "/api/projects": {
+    "status": 200,
+    "p50": 8,
+    "max": 9,
+    "kb": 9.6
+   },
+   "/api/settings": {
+    "status": 200,
+    "p50": 3,
+    "max": 4,
+    "kb": 0.3
+   },
+   "/api/templates": {
+    "status": 200,
+    "p50": 3,
+    "max": 4,
+    "kb": 0.8
+   },
+   "/api/users/directory": {
+    "status": 200,
+    "p50": 4,
+    "max": 6,
+    "kb": 7.5
+   },
+   "/api/approvals/extensions": {
+    "status": 200,
+    "p50": 8,
+    "max": 11,
+    "kb": 0
+   },
+   "/api/approvals/proposals": {
+    "status": 200,
+    "p50": 9,
+    "max": 11,
+    "kb": 0
+   },
+   "/api/approvals/queue": {
+    "status": 200,
+    "p50": 14,
+    "max": 19,
+    "kb": 0
+   },
+   "/api/mtl/portfolio": {
+    "status": 200,
+    "p50": 324,
+    "max": 365,
+    "kb": 20.9
+   },
+   "/api/my/items": {
+    "status": 200,
+    "p50": 44,
+    "max": 51,
+    "kb": 198.2
+   },
+   "/api/weekly/context": {
+    "status": 200,
+    "p50": 7,
+    "max": 12,
+    "kb": 2.5
+   },
+   "/api/weekly/report": {
+    "status": 200,
+    "p50": 365,
+    "max": 395,
+    "kb": 7.4
+   },
+   "/api/weekly/summary": {
+    "status": 403,
+    "p50": 4,
+    "max": 5,
+    "kb": 0.1
+   },
+   "/api/dashboard": {
+    "status": 200,
+    "p50": 57,
+    "max": 62,
+    "kb": 5.4
+   },
+   "/api/work": {
+    "status": 200,
+    "p50": 61,
+    "max": 69,
+    "kb": 206.4
+   },
+   "/api/kpi": {
+    "status": 403,
+    "p50": 2,
+    "max": 3,
+    "kb": 0.1
+   },
+   "/api/kpi/me": {
+    "status": 200,
+    "p50": 48,
+    "max": 58,
+    "kb": 1.1
+   },
+   "/api/my/sprint": {
+    "status": 200,
+    "p50": 669,
+    "max": 693,
+    "kb": 1
+   },
+   "/api/search?q=thi%20c%C3%B4ng": {
+    "status": 200,
+    "p50": 20,
+    "max": 22,
+    "kb": 3.1
+   },
+   "/api/weekly/compliance": {
+    "status": 403,
+    "p50": 3,
+    "max": 4,
+    "kb": 0.1
+   },
+   "/api/dispatch/inbox": {
+    "status": 403,
+    "p50": 3,
+    "max": 4,
+    "kb": 0.1
+   },
+   "/api/projects/:big": {
+    "status": 200,
+    "p50": 12,
+    "max": 15,
+    "kb": 6.7
+   },
+   "/api/projects/:big/mtl": {
+    "status": 200,
+    "p50": 74,
+    "max": 81,
+    "kb": 327.5
+   },
+   "/api/projects/:big/mtl-kpi": {
+    "status": 403,
+    "p50": 4,
+    "max": 5,
+    "kb": 0.1
+   },
+   "/api/projects/:big/mtl-sprints": {
+    "status": 200,
+    "p50": 52,
+    "max": 58,
+    "kb": 11.7
+   },
+   "/api/projects/:big/mtl-month": {
+    "status": 200,
+    "p50": 55,
+    "max": 62,
+    "kb": 22.4
+   },
+   "/api/projects/:big/items": {
+    "status": 200,
+    "p50": 101,
+    "max": 107,
+    "kb": 506.4
+   },
+   "/api/projects/:big/cycles": {
+    "status": 200,
+    "p50": 6,
+    "max": 7,
+    "kb": 0
+   },
+   "/api/items/:item": {
+    "status": 200,
+    "p50": 42,
+    "max": 62,
+    "kb": 5.5
+   }
+  }
+ },
+ "load15s": {
+  "vus": 50,
+  "durationS": 60,
+  "intervalS": 15,
+  "requests": 3600,
+  "rps": 48,
+  "errors": 0,
+  "errByStatus": {},
+  "p50": 30,
+  "p95": 344,
+  "p99": 394,
+  "page": {
+   "n": 200,
+   "p50": 355,
+   "p95": 420,
+   "p99": 766
+  },
+  "perApi": {
+   "/api/weekly/report": {
+    "p50": 352,
+    "p95": 415,
+    "p99": 765
+   },
+   "/api/mtl/portfolio": {
+    "p50": 332,
+    "p95": 391,
+    "p99": 732
+   },
+   "/api/my/items": {
+    "p50": 61,
+    "p95": 111,
+    "p99": 159
+   },
+   "/api/approvals/proposals": {
+    "p50": 37,
+    "p95": 81,
+    "p99": 157
+   },
+   "/api/weekly/context": {
+    "p50": 34,
+    "p95": 80,
+    "p99": 174
+   },
+   "/api/approvals/queue": {
+    "p50": 38,
+    "p95": 76,
+    "p99": 159
+   },
+   "/api/approvals/counts": {
+    "p50": 38,
+    "p95": 74,
+    "p99": 146
+   },
+   "/api/approvals/extensions": {
+    "p50": 34,
+    "p95": 74,
+    "p99": 158
+   },
+   "/api/weekly/summary": {
+    "p50": 28,
+    "p95": 74,
+    "p99": 162
+   },
+   "/api/departments": {
+    "p50": 28,
+    "p95": 53,
+    "p99": 122
+   },
+   "/api/projects": {
+    "p50": 28,
+    "p95": 50,
+    "p99": 103
+   },
+   "/api/notifications": {
+    "p50": 27,
+    "p95": 47,
+    "p99": 100
+   },
+   "/api/users/directory": {
+    "p50": 25,
+    "p95": 47,
+    "p99": 98
+   },
+   "/api/templates": {
+    "p50": 24,
+    "p95": 42,
+    "p99": 90
+   },
+   "/api/labels": {
+    "p50": 18,
+    "p95": 35,
+    "p99": 64
+   },
+   "/api/me": {
+    "p50": 19,
+    "p95": 33,
+    "p99": 56
+   },
+   "/api/settings": {
+    "p50": 17,
+    "p95": 33,
+    "p99": 66
+   },
+   "/api/brand": {
+    "p50": 2,
+    "p95": 10,
+    "p99": 15
+   }
+  }
+ },
+ "load5s": {
+  "vus": 50,
+  "durationS": 60,
+  "intervalS": 5,
+  "requests": 9522,
+  "rps": 147,
+  "errors": 0,
+  "errByStatus": {},
+  "p50": 1092,
+  "p95": 4529,
+  "p99": 6052,
+  "page": {
+   "n": 529,
+   "p50": 5692,
+   "p95": 6312,
+   "p99": 6520
+  },
+  "perApi": {
+   "/api/weekly/report": {
+    "p50": 5691,
+    "p95": 6312,
+    "p99": 6519
+   },
+   "/api/mtl/portfolio": {
+    "p50": 4257,
+    "p95": 4736,
+    "p99": 4849
+   },
+   "/api/weekly/summary": {
+    "p50": 752,
+    "p95": 2434,
+    "p99": 2695
+   },
+   "/api/approvals/proposals": {
+    "p50": 1626,
+    "p95": 2049,
+    "p99": 2276
+   },
+   "/api/weekly/context": {
+    "p50": 1737,
+    "p95": 2032,
+    "p99": 2378
+   },
+   "/api/approvals/extensions": {
+    "p50": 1603,
+    "p95": 1859,
+    "p99": 2234
+   },
+   "/api/approvals/queue": {
+    "p50": 1388,
+    "p95": 1662,
+    "p99": 2036
+   },
+   "/api/approvals/counts": {
+    "p50": 1375,
+    "p95": 1614,
+    "p99": 1870
+   },
+   "/api/departments": {
+    "p50": 1299,
+    "p95": 1537,
+    "p99": 1789
+   },
+   "/api/my/items": {
+    "p50": 1061,
+    "p95": 1274,
+    "p99": 1353
+   },
+   "/api/notifications": {
+    "p50": 1080,
+    "p95": 1268,
+    "p99": 1424
+   },
+   "/api/projects": {
+    "p50": 1081,
+    "p95": 1268,
+    "p99": 1425
+   },
+   "/api/users/directory": {
+    "p50": 1080,
+    "p95": 1268,
+    "p99": 1425
+   },
+   "/api/templates": {
+    "p50": 919,
+    "p95": 1084,
+    "p99": 1123
+   },
+   "/api/labels": {
+    "p50": 690,
+    "p95": 924,
+    "p99": 1188
+   },
+   "/api/me": {
+    "p50": 684,
+    "p95": 814,
+    "p99": 868
+   },
+   "/api/settings": {
+    "p50": 687,
+    "p95": 814,
+    "p99": 867
+   },
+   "/api/brand": {
+    "p50": 221,
+    "p95": 265,
+    "p99": 291
+   }
+  }
+ }
+}
