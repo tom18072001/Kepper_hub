@@ -5,15 +5,21 @@
 //        mỗi INTERVAL giây trong DURATION giây → p50/p95/p99 tổng và theo API, số lỗi.
 // Chỉ ĐỌC (GET) — không đổi dữ liệu. Không chạy vào bản thật.
 import fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 const B = process.env.BASE || 'http://127.0.0.1:4300';
 const PW = process.env.PERF_PW || 'Perf@2026';
 const OUT = process.argv[2] || 'perf-result.json';
 const VUS = +(process.env.VUS || 50), DURATION = +(process.env.DURATION || 60), INTERVAL = +(process.env.INTERVAL || 5);
 const ROLES = (process.env.ROLES || 'giamdoc,pmo,tb.qlxd,nv.qlxd').split(',');
-const HOME = ['/api/me', '/api/brand', '/api/approvals/counts', '/api/notifications', '/api/departments', '/api/labels', '/api/projects', '/api/settings', '/api/templates',
+export const HOME = ['/api/me', '/api/brand', '/api/approvals/counts', '/api/notifications', '/api/departments', '/api/labels', '/api/projects', '/api/settings', '/api/templates',
   '/api/users/directory', '/api/approvals/extensions', '/api/approvals/proposals', '/api/approvals/queue', '/api/mtl/portfolio', '/api/my/items', '/api/weekly/context',
   '/api/weekly/report', '/api/weekly/summary'];
+// Bộ GET dùng chung với perf-compare.mjs (một nguồn duy nhất).
+export const buildPages = (big, firstItem) => [...HOME, '/api/dashboard', '/api/work', '/api/kpi', '/api/kpi/me', '/api/my/sprint', '/api/search?q=thi%20c%C3%B4ng', '/api/weekly/compliance', '/api/dispatch/inbox',
+  ...(big ? [`/api/projects/${big.id}`, `/api/projects/${big.id}/mtl`, `/api/projects/${big.id}/mtl-kpi`, `/api/projects/${big.id}/mtl-sprints`, `/api/projects/${big.id}/mtl-month`,
+    `/api/projects/${big.id}/items`, `/api/projects/${big.id}/cycles`] : []),
+  ...(firstItem ? [`/api/items/${firstItem.id}`] : [])];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const q = (a, p) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return Math.round(s[Math.min(s.length - 1, Math.floor(p * s.length))]); };
 
@@ -38,10 +44,7 @@ async function main() {
   const mtls = projects.filter(p => p.kind === 'MTL');
   const big = mtls.find(p => /^PF/.test(p.key)) || mtls[0];
   const firstItem = big ? (json((await get(admin, `/api/projects/${big.id}/mtl`)).body)?.items || [])[0] : null;
-  const PAGES = [...HOME, '/api/dashboard', '/api/work', '/api/kpi', '/api/kpi/me', '/api/my/sprint', '/api/search?q=thi%20c%C3%B4ng', '/api/weekly/compliance', '/api/dispatch/inbox',
-    ...(big ? [`/api/projects/${big.id}`, `/api/projects/${big.id}/mtl`, `/api/projects/${big.id}/mtl-kpi`, `/api/projects/${big.id}/mtl-sprints`, `/api/projects/${big.id}/mtl-month`,
-      `/api/projects/${big.id}/items`, `/api/projects/${big.id}/cycles`] : []),
-    ...(firstItem ? [`/api/items/${firstItem.id}`] : [])];
+  const PAGES = buildPages(big, firstItem);
   for (const role of (process.env.SINGLE === '0' ? [] : ROLES)) {
     const tk = await login(role);
     const rows = {};
@@ -93,4 +96,5 @@ async function main() {
   fs.writeFileSync(OUT, JSON.stringify(result, null, 1));
   console.log('\n→', OUT);
 }
-main().catch(e => { console.error(e); process.exitCode = 1; });
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch(e => { console.error(e); process.exitCode = 1; });
+
