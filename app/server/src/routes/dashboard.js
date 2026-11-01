@@ -3,6 +3,8 @@
 const { fail, optionalInt } = require('../lib/http');
 const { visibleProjectsWhere, itemVisibleWhere, dashboardScope } = require('../services/access');
 const { permissionScope } = require('../lib/permissions');
+const { stepTimer } = require('../services/step-log');
+const { isSystemWide, dashboardItems } = require('../services/kpi-data');
 const { departmentOf, departmentWhere, isOpen, isOverdue, vnDay } = require('../services/stats');
 
 const DAY = 86_400_000;
@@ -75,34 +77,45 @@ module.exports = function mountDashboard(app, { prisma, auth }) {
     const projectId = optionalInt(req.query.projectId, 'Dự án');
     const projectWhere = { ...visibleProjectsWhere(req.user), archivedAt: null };
     if (projectId) projectWhere.id = projectId;
-    const projects = await prisma.project.findMany({ where: projectWhere, select: { id: true, key: true, name: true, departmentId: true, visibility: true } });
-    // Phạm vi UNIT ("phòng ban của tôi"): việc phòng tôi chủ trì, hoặc không có đơn vị chủ trì mà dự án thuộc phòng tôi.
-    // Luôn chỉ đếm việc người xem thấy được (itemVisibleWhere + visibleProjectsWhere).
+    const T = stepTimer('dashboard');
     const unit = scope === 'UNIT' ? (req.user.departmentId ?? -1) : departmentId;
-    const itemWhere = { archivedAt: null, projectId: { in: projects.map(p => p.id) }, AND: [itemVisibleWhere(req.user), ...(unit != null ? [departmentWhere(unit)] : [])] };
-    // Truy vấn phẳng rồi ghép bằng Map (nạp quan hệ lồng nhau của Prisma chậm trên hàng nghìn việc); tiêu đề chỉ lấy cho các việc lên danh sách rút gọn.
-    const [rows, states, assigneeRows, pendingApprovals] = await Promise.all([
-      prisma.workItem.findMany({ where: itemWhere, orderBy: { id: 'asc' }, select: { id: true, number: true, projectId: true, dueDate: true, startedAt: true, completedAt: true, taskType: true, leadDepartmentId: true, dispatchStatus: true, stateId: true } }),
-      prisma.workflowState.findMany({ select: { id: true, category: true } }),
-      prisma.workItemAssignee.findMany({ where: { workItem: itemWhere }, select: { workItemId: true, user: { select: { id: true, fullName: true } } } }),
-      prisma.approvalRequest.count({ where: { status: 'PENDING', workItem: itemWhere } }),
-    ]);
-    const stateOf = new Map(states.map(s => [s.id, { category: s.category }]));
-    const projectOf = new Map(projects.map(p => [p.id, { key: p.key, departmentId: p.departmentId }]));
-    const assigneesOf = new Map();
-    for (const r of assigneeRows) (assigneesOf.get(r.workItemId) || assigneesOf.set(r.workItemId, []).get(r.workItemId)).push({ user: r.user });
-    const items = rows.map(i => ({ ...i, state: stateOf.get(i.stateId), project: projectOf.get(i.projectId), assignees: assigneesOf.get(i.id) || [] }));
+    let items, projects, pendingApprovals;
+    if (unit == null && !projectId && isSystemWide(req.user)) {
+      // Ban giám đốc xem toàn bộ, không lọc: dùng chung tập dữ liệu nền với /api/kpi, đệm theo phiên bản dữ liệu (services/kpi-data.js).
+      const live = await T.step('load', () => dashboardItems(prisma));
+      items = live.items; projects = live.projects;
+      pendingApprovals = await T.step('sql.pending', () => prisma.approvalRequest.count({ where: { status: 'PENDING', workItem: { archivedAt: null, projectId: { in: projects.map(p => p.id) } } } }));
+    } else {
+      projects = await T.step('sql.projects', () => prisma.project.findMany({ where: projectWhere, select: { id: true, key: true, name: true, departmentId: true, visibility: true } }));
+      // Phạm vi UNIT ("phòng ban của tôi"): việc phòng tôi chủ trì, hoặc không có đơn vị chủ trì mà dự án thuộc phòng tôi.
+      // Luôn chỉ đếm việc người xem thấy được (itemVisibleWhere + visibleProjectsWhere).
+      const itemWhere = { archivedAt: null, projectId: { in: projects.map(p => p.id) }, AND: [itemVisibleWhere(req.user), ...(unit != null ? [departmentWhere(unit)] : [])] };
+      // Truy vấn phẳng rồi ghép bằng Map (nạp quan hệ lồng nhau của Prisma chậm trên hàng nghìn việc); tiêu đề chỉ lấy cho các việc lên danh sách rút gọn.
+      const [rows, states, assigneeRows, pending] = await Promise.all([
+        T.step('sql.items', () => prisma.workItem.findMany({ where: itemWhere, orderBy: { id: 'asc' }, select: { id: true, number: true, projectId: true, dueDate: true, startedAt: true, completedAt: true, taskType: true, leadDepartmentId: true, dispatchStatus: true, stateId: true } })),
+        T.step('sql.states', () => prisma.workflowState.findMany({ select: { id: true, category: true } })),
+        T.step('sql.assignees', () => prisma.workItemAssignee.findMany({ where: { workItem: itemWhere }, select: { workItemId: true, user: { select: { id: true, fullName: true } } } })),
+        T.step('sql.pending', () => prisma.approvalRequest.count({ where: { status: 'PENDING', workItem: itemWhere } })),
+      ]);
+      const stateOf = new Map(states.map(s => [s.id, { category: s.category }]));
+      const projectOf = new Map(projects.map(p => [p.id, { key: p.key, departmentId: p.departmentId }]));
+      const assigneesOf = new Map();
+      for (const r of assigneeRows) (assigneesOf.get(r.workItemId) || assigneesOf.set(r.workItemId, []).get(r.workItemId)).push({ user: r.user });
+      items = await T.step('join', async () => rows.map(i => ({ ...i, state: stateOf.get(i.stateId), project: projectOf.get(i.projectId), assignees: assigneesOf.get(i.id) || [] })));
+      pendingApprovals = pending;
+    }
     const deptIds = [...new Set(items.map(departmentOf).filter(id => id != null))];
-    const departments = await prisma.department.findMany({ where: { id: { in: deptIds } }, select: { id: true, name: true } });
-    const summary = summarize(items, { departments, projects });
+    const departments = await T.step('sql.departments', () => prisma.department.findMany({ where: { id: { in: deptIds } }, select: { id: true, name: true } }));
+    const summary = await T.step('summarize', async () => summarize(items, { departments, projects }));
     const briefs = [...summary.overdueItems, ...summary.dueSoonItems, ...summary.aging];
     if (briefs.length) {
-      const titles = new Map((await prisma.workItem.findMany({ where: { id: { in: [...new Set(briefs.map(b => b.id))] } }, select: { id: true, title: true } })).map(t => [t.id, t.title]));
+      const titles = new Map((await T.step('sql.titles', () => prisma.workItem.findMany({ where: { id: { in: [...new Set(briefs.map(b => b.id))] } }, select: { id: true, title: true } }))).map(t => [t.id, t.title]));
       for (const b of briefs) b.title = titles.get(b.id);
     }
     // Khối lượng việc theo TÊN từng người là dữ liệu cá nhân: chỉ người có quyền duyệt (trưởng phòng trở lên) mới xem.
     const peopleVisible = !!permissionScope(req.user, 'work.approve', 'OPERATE');
     if (!peopleVisible) summary.workload = [];
+    T.finish(res);
     res.json({ scope, departmentId: scope === 'UNIT' ? req.user.departmentId ?? null : departmentId, generatedAt: new Date(), pendingApprovals, peopleVisible, ...summary });
   });
 };
