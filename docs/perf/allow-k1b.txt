@@ -1,0 +1,19 @@
+# K1-b S3 — GET /api/projects/:id/mtl: trường hạng mục (items[]) đã bỏ để payload ≤ 300 KB.
+# Định dạng --allow của scripts/perf-compare.mjs. Các JSON khác ngoài items[] giữ nguyên.
+# Đã rà (grep): app/web/js (chỉ views/mtl.js gọi /mtl; gantt.js, sprint*.js dùng /mtl-sprints, /mtl-month, /api/items/:id — không dùng payload này),
+#   app/mcp/server.js:171 (chỉ đọc project/summary/byDepartment/nextMilestone/currentSprint/milestones/alerts, không đọc items),
+#   app/e2e (04, 05 chỉ đọc items[].planCode/code/id/parentId/children/actual/baselineStart/externalParty), xuất Excel/Word (không dùng route này).
+# Chi tiết đầy đủ từng việc vẫn lấy ở GET /api/items/:id (panel chi tiết), nên không mất dữ liệu.
+/api/projects/*/mtl items[].state               # object {id,name,category,color} lặp mỗi dòng; màn MTL không đọc (panel chi tiết dùng /api/items/:id)
+/api/projects/*/mtl items[].stateId             # chỉ đi kèm state
+/api/projects/*/mtl items[].number              # đã có code = KEY-number
+/api/projects/*/mtl items[].progress            # % nhập tay; UI dùng actual (đã cuộn từ cây)
+/api/projects/*/mtl items[].progressAt          # chỉ sprint-card đọc, nguồn /mtl-sprints và /api/my/sprint
+/api/projects/*/mtl items[].startedAt           # chỉ item-panel đọc, nguồn /api/items/:id
+/api/projects/*/mtl items[].startDate           # Gantt MTL dùng baselineStart/End
+/api/projects/*/mtl items[].dueDate             # Gantt MTL dùng baselineEnd
+/api/projects/*/mtl items[].weight              # trọng số chỉ dùng khi tính ở server
+/api/projects/*/mtl items[].milestoneNote       # không màn nào đọc trên payload này
+/api/projects/*/mtl items[].planSection         # register/item-panel đọc từ nguồn khác, không từ /mtl
+/api/projects/*/mtl items[].daysLeft            # dẫn xuất; UI hiển thị lateDays/variance
+/api/projects/*/mtl items[].startsIn            # dẫn xuất; không màn nào đọc trên payload này

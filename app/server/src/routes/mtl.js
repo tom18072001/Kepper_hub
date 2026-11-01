@@ -21,6 +21,13 @@ const A = require('../services/alerts');
 // Xem KPI theo người: Ban lãnh đạo (SYSTEM) mọi người; trưởng / phó bộ phận (UNIT) bộ phận mình.
 const kpiScope = user => (isItAdmin(user) ? null : permissionScope(user, 'reports.kpi', 'VIEW') === 'SYSTEM' || permissionScope(user, 'work.approve', 'OPERATE') === 'SYSTEM' ? 'SYSTEM' : permissionScope(user, 'work.approve', 'OPERATE') === 'UNIT' ? 'UNIT' : null);
 
+// Hạng mục trả cho màn MTL (bảng, Gantt, mốc): bỏ các trường giao diện / MCP / e2e không đọc (xem docs/perf/allow-k1b.txt);
+// chi tiết đầy đủ vẫn có ở GET /api/items/:id. Dùng chung cho test payload.
+const mtlRow = (i, leadDepartmentName, sprint) => {
+  const { state, stateId, number, progress, progressAt, startedAt, startDate, dueDate, weight, milestoneNote, planSection, daysLeft, startsIn, ...row } = i;
+  return { ...row, leadDepartmentName, sprint };
+};
+
 module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
   const upload = multer({ dest: path.join(config.uploadTmpDir, 'workhub-import'), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
   const mtlProject = async (req, need = 'view') => {
@@ -188,7 +195,7 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
     res.json({
       project: { id: project.id, key: project.key, name: project.name, t0Date: project.t0Date, currentT: M.currentT(project.t0Date, now), totalT, alertConfig: cfg },
       generatedAt: now, summary, byDepartment, milestones, nextMilestone, curve, actualCurve: snaps,
-      items: items.map(i => ({ ...i, leadDepartmentName: deptName[i.leadDepartmentId] || '', sprint: sp.indexOf.get(i.id) ?? null })),
+      items: items.map(i => mtlRow(i, deptName[i.leadDepartmentId] || '', sp.indexOf.get(i.id) ?? null)),
       sprints: sp.list, sprintConfigured: sp.configured, currentSprint: sp.current,
       alerts: alerts.map(a => ({ ...a, label: A.KIND_LABEL[a.kind], item: { id: a.workItem.id, code: `${project.key}-${a.workItem.number}`, title: a.workItem.title, department: deptName[a.workItem.leadDepartmentId] || '' }, workItem: undefined })),
       plans: await prisma.plan.findMany({ where: { projectId: project.id }, select: { id: true, name: true, kind: true, departmentId: true, sheetName: true, fileName: true, createdAt: true }, orderBy: { id: 'asc' } }),
@@ -308,3 +315,4 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
   });
 };
 module.exports.kpiScope = kpiScope;
+module.exports.mtlRow = mtlRow;
