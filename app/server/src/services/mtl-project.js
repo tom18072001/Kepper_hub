@@ -32,29 +32,51 @@ function computeFromRows(project, rows, day) {
 // Trả bản sao nông từng hạng mục: caller được phép gán thêm trường / sắp xếp lại mà không làm bẩn bộ đệm.
 const present = ({ items, cfg, actual }) => ({ items: items.map(i => ({ ...i })), cfg, actualOf: i => actual.get(i.id) ?? i.progress });
 
-// Tính nhiều dự án bằng MỘT truy vấn (projectId in […]); trả Map(projectId → { items, cfg, actualOf }).
-// Dùng bộ đệm nếu prisma là client đã qua withMtlCache (khoá: dự án + phạm vi xem + ngày VN + phiên bản dữ liệu).
+// Phạm vi xem theo TỪNG dự án (tương đương chính xác itemVisibleWhere): SYSTEM, hoặc dự án không phải ASSIGNED
+// (nhánh { project: { visibility: { not: 'ASSIGNED' } } } luôn đúng) ⇒ "ALL" — mọi người cùng một mục bộ đệm, truy vấn không kèm itemVisibleWhere.
+// Chỉ dự án ASSIGNED (sổ giao việc) mới khoá theo phạm vi của từng người.
+const ALL = 'ALL';
+
+// Tính nhiều dự án bằng ≤ 2 truy vấn phẳng (nhóm "ALL" và nhóm ASSIGNED); trả Map(projectId → { items, cfg, actualOf }).
+// Dùng bộ đệm nếu prisma là client đã qua withMtlCache (khoá: dự án + phạm vi + ngày VN + phiên bản dữ liệu),
+// có single-flight: yêu cầu đến khi khoá đang được tính thì chờ chung Promise đó.
 async function computeProjects(prisma, projects, user, day = new Date()) {
   const out = new Map();
   if (!projects.length) return out;
   const cache = typeof prisma.$mtlCache === 'function' ? prisma.$mtlCache() : null;
   const where = itemVisibleWhere(user);
-  const scope = cache ? JSON.stringify(where) : '', dayKey = M.vnDay(day), version = cache ? cache.version() : 0;
-  const miss = [];
+  const systemWide = Object.keys(where).length === 0;
+  const userScope = cache ? JSON.stringify(where) : '', dayKey = M.vnDay(day), version = cache ? cache.version() : 0;
+  const waits = [];
+  const groups = { all: [], scoped: [] }; // dự án cần tính (miss)
   for (const p of projects) {
-    const hit = cache?.get(cache.key(version, p.id, scope, dayKey));
-    if (hit) out.set(p.id, present(hit)); else miss.push(p);
+    const scope = systemWide || p.visibility !== undefined && p.visibility !== 'ASSIGNED' ? ALL : userScope;
+    const key = cache?.key(version, p.id, scope, dayKey);
+    const hit = cache?.get(key);
+    if (hit) { out.set(p.id, present(hit)); continue; }
+    const flying = cache?.flight(key);
+    if (flying) { waits.push(flying.then(c => out.set(p.id, present(c)))); continue; }
+    (scope === ALL ? groups.all : groups.scoped).push({ p, key });
   }
-  if (!miss.length) return out;
-  const rows = await prisma.workItem.findMany({ where: { projectId: { in: miss.map(p => p.id) }, archivedAt: null, AND: [where] }, select: { ...ITEM_SELECT, projectId: true } });
-  const byProject = new Map(miss.map(p => [p.id, []]));
-  for (const { projectId, ...r } of rows) byProject.get(projectId)?.push(r); // bỏ projectId để hạng mục giống hệt bản tính từng dự án
-  for (const p of miss) {
-    const computed = computeFromRows(p, byProject.get(p.id), day);
-    // Khoá theo phiên bản đọc TRƯỚC truy vấn: nếu có ghi xen giữa, mục này mang phiên bản cũ và không bao giờ được dùng lại.
-    cache?.set(cache.key(version, p.id, scope, dayKey), computed);
-    out.set(p.id, present(computed));
-  }
+  const load = (group, scoped) => {
+    if (!group.length) return;
+    const rowsP = prisma.workItem.findMany({
+      where: { projectId: { in: group.map(g => g.p.id) }, archivedAt: null, ...(scoped ? { AND: [where] } : {}) }, select: { ...ITEM_SELECT, projectId: true } })
+      .then(rows => {
+        const byProject = new Map(group.map(g => [g.p.id, []]));
+        for (const { projectId, ...r } of rows) byProject.get(projectId)?.push(r); // bỏ projectId để hạng mục giống hệt bản tính từng dự án
+        return byProject;
+      });
+    for (const { p, key } of group) {
+      // Khoá theo phiên bản đọc TRƯỚC truy vấn: nếu có ghi xen giữa, mục này mang phiên bản cũ và không bao giờ được dùng lại.
+      const computing = rowsP.then(byProject => computeFromRows(p, byProject.get(p.id), day));
+      cache?.fly(key, computing);
+      waits.push(computing.then(c => { cache?.set(key, c); out.set(p.id, present(c)); }));
+    }
+  };
+  load(groups.all, false);
+  load(groups.scoped, true);
+  await Promise.all(waits);
   return out;
 }
 

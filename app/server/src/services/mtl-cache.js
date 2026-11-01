@@ -9,16 +9,28 @@ const WATCHED = new Set([
   'Project', 'ProjectMember', 'WorkflowState', 'User', 'UserPermission', 'Plan',
 ]);
 const WRITE_OPS = new Set(['create', 'createMany', 'createManyAndReturn', 'update', 'updateMany', 'upsert', 'delete', 'deleteMany']);
-const MAX_ENTRIES = 600;
+// Khoá chủ yếu theo (dự án, ngày) vì phạm vi "ALL" dùng chung; chỉ sổ giao việc ASSIGNED mới theo người.
+const MAX_ENTRIES = 2000;
+// Ghi User chỉ đổi các trường này thì không ảnh hưởng kết quả MTL (vd. đăng nhập ghi lastLoginAt).
+const IRRELEVANT_USER_FIELDS = new Set(['lastLoginAt']);
+const onlyIrrelevant = (model, args) => model === 'User' && args?.data && typeof args.data === 'object'
+  && Object.keys(args.data).length > 0 && Object.keys(args.data).every(k => IRRELEVANT_USER_FIELDS.has(k));
 // Lưới an toàn (không phải cơ chế chính): giao dịch tương tác ghi trước khi commit có thể để lọt một lần đọc cũ vào bộ đệm.
 const SAFETY_MS = 20000;
 
 function createMtlCache({ max = MAX_ENTRIES, safetyMs = SAFETY_MS, now = Date.now } = {}) {
   let version = 0;
   const map = new Map(); // key → { value, at }
+  const flights = new Map(); // key → Promise đang tính (single-flight)
   return {
     version: () => version,
-    bump() { version++; map.clear(); },
+    bump() { version++; map.clear(); flights.clear(); },
+    flight: key => flights.get(key),
+    fly(key, promise) {
+      flights.set(key, promise);
+      const done = () => { if (flights.get(key) === promise) flights.delete(key); };
+      promise.then(done, done);
+    },
     key: (v, projectId, scope, day) => `${v}|${projectId}|${day}|${scope}`,
     get(key) {
       const e = map.get(key);
@@ -43,13 +55,13 @@ const isReadSql = args => {
 
 // Gắn bộ đệm + bộ chặn ghi vào một PrismaClient; trả client đã mở rộng (dùng thay client gốc).
 function withMtlCache(client, cache = createMtlCache()) {
-  return client.$extends({
+  const extended = client.$extends({
     name: 'mtl-cache',
     client: { $mtlCache() { return cache; } },
     query: {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
-          if (!WRITE_OPS.has(operation) || !WATCHED.has(model)) return query(args);
+          if (!WRITE_OPS.has(operation) || !WATCHED.has(model) || (operation === 'update' || operation === 'updateMany') && onlyIrrelevant(model, args)) return query(args);
           cache.bump(); // trước: đọc xen giữa không còn dùng mục cũ
           try { return await query(args); } finally { cache.bump(); } // sau: kể cả khi lỗi (ghi dở trong giao dịch)
         },
@@ -61,6 +73,14 @@ function withMtlCache(client, cache = createMtlCache()) {
         cache.bump();
         try { return await query(args); } finally { cache.bump(); }
       },
+    },
+  });
+  // Giao dịch: ghi bên trong đã bump nhưng chưa commit nên có thể lọt một lần đọc cũ → bump thêm khi giao dịch xong (commit/rollback).
+  return new Proxy(extended, {
+    get(target, prop, receiver) {
+      const v = Reflect.get(target, prop, receiver);
+      if (prop !== '$transaction' || typeof v !== 'function') return v;
+      return async (...a) => { try { return await v.apply(target, a); } finally { cache.bump(); } };
     },
   });
 }

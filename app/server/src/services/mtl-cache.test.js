@@ -94,6 +94,51 @@ test('ghi xen giữa lúc đang tải: kết quả cũ không được dùng l�
   assert.equal(pr.calls.length, 2);
 });
 
+test('dự án không phải ASSIGNED: mọi người dùng chung một mục, truy vấn không kèm itemVisibleWhere; kết quả như phạm vi cũ', async () => {
+  const open = PROJECTS.map(p => ({ ...p, visibility: 'DEPARTMENT' }));
+  const pr = fakePrisma(DATA());
+  const a = await MP.computeProjects(pr, open, staffA, day1);
+  const b = await MP.computeProjects(pr, open, staffB, day1);
+  await MP.computeProjects(pr, open, director, day1);
+  assert.equal(pr.calls.length, 1);
+  assert.equal(pr.calls[0].where.AND, undefined);
+  assert.deepEqual(b.get(1).items, a.get(1).items);
+});
+
+test('dự án ASSIGNED vẫn khoá theo người: nhân viên bộ phận A và B không lấy mục của nhau', async () => {
+  const sổ = PROJECTS.map(p => ({ ...p, visibility: 'ASSIGNED' }));
+  const pr = fakePrisma(DATA());
+  const orig = pr.workItem.findMany;
+  // prisma giả mô phỏng quyền: mỗi người chỉ thấy việc có bộ phận chủ trì của mình
+  pr.workItem.findMany = async args => (await orig(args)).filter(r => !args.where.AND || args.where.AND[0].OR.some(c => JSON.stringify(c).includes('"userId"')) && r.leadDepartmentId === (args.where.AND[0].OR.find(c => c.leadDepartmentId)?.leadDepartmentId ?? r.leadDepartmentId));
+  await MP.computeProjects(pr, sổ, staffA, day1);
+  await MP.computeProjects(pr, sổ, staffB, day1);
+  assert.equal(pr.calls.length, 2);
+  assert.ok(pr.calls.every(c => c.where.AND));
+  await MP.computeProjects(pr, sổ, { ...staffA }, day1);
+  assert.equal(pr.calls.length, 2);
+});
+
+test('single-flight: nhiều yêu cầu đồng thời cùng khoá chỉ tính một lần', async () => {
+  const open = PROJECTS.map(p => ({ ...p, visibility: 'DEPARTMENT' }));
+  const pr = fakePrisma(DATA());
+  const orig = pr.workItem.findMany;
+  pr.workItem.findMany = async a => { await new Promise(r => setTimeout(r, 20)); return orig(a); };
+  const rs = await Promise.all([staffA, staffB, director, staffA].map(u => MP.computeProjects(pr, open, u, day1)));
+  assert.equal(pr.calls.length, 1);
+  assert.deepEqual(rs[1].get(2).items, rs[0].get(2).items);
+});
+
+test('không bump khi chỉ ghi User.lastLoginAt; có bump khi ghi trường khác; $transaction bump khi xong', async () => {
+  const cache = createMtlCache();
+  const base = { $extends(def) { this.def = def; return { $transaction: async fn => fn({}), def, $mtlCache: () => cache }; } };
+  const c = withMtlCache(base, cache), op = c.def.query.$allModels.$allOperations;
+  const run = (model, operation, args) => op({ model, operation, args, query: async () => 'ok' });
+  await run('User', 'update', { data: { lastLoginAt: new Date() } }); assert.equal(cache.version(), 0);
+  await run('User', 'update', { data: { fullName: 'X' } }); assert.equal(cache.version(), 2);
+  const v = cache.version(); await c.$transaction(async () => { assert.equal(cache.version(), v); }); assert.equal(cache.version(), v + 1);
+});
+
 test('LRU giới hạn kích thước và lưới an toàn hết hạn', () => {
   let t = 0;
   const c = createMtlCache({ max: 2, safetyMs: 100, now: () => t });
