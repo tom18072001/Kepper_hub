@@ -39,7 +39,7 @@ async function runOpsCheck(prisma, now = new Date()) {
   if (!serious.length && new Date(now.getTime() + 7 * 3_600_000).getUTCDay() !== 1) return { problems: problems.length, notified: 0 };
   if (!problems.length) return { problems: 0, notified: 0 };
   const admins = await prisma.user.findMany({ where: { isActive: true, OR: [{ isRootAdmin: true }, { role: 'admin' }] }, select: { id: true } });
-  const notified = await notify(prisma, admins.map(a => a.id), { type: 'SYSTEM_OPS', title: 'Kiểm tra vận hành Kepper Hub', body: problems.join(' '), link: '#/admin/audit' });
+  const notified = await notify(prisma, admins.map(a => a.id), { type: 'SYSTEM_OPS', title: 'Kiểm tra vận hành Kepler Hub', body: problems.join(' '), link: '#/admin/audit' });
   return { problems: problems.length, notified };
 }
 

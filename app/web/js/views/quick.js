@@ -18,7 +18,7 @@ export async function renderQuick(root, params, setCrumbs) {
     ${done(g).length ? `<details class="qk-done-list"><summary class="muted sm">Đã xong trong tháng (${done(g).length})</summary><div class="qk-list">${done(g).map(i => sprintCard(i, { t: g.sprint.t, href: x => href(g, x), showSprint: true })).join('')}</div></details>` : ''}
   </section>`;
   root.onclick = null; root.onchange = null;
-  root.innerHTML = `<div class="page-head"><h1>Cập nhật nhanh</h1><span class="muted sm">${total ? `${total} việc của bạn${d.leader ? ' và của ban chưa giao người' : ''} đang trong kỳ thực hiện — xong việc nào bấm <b>✓ Xong</b> việc đó (đang làm dở thì chọn %); vạch trên thanh là mục tiêu cuối tháng` : 'Việc của bạn đang trong kỳ thực hiện'}</span></div>
+  root.innerHTML = `<div class="page-head"><h1>Cập nhật nhanh</h1><span class="muted sm">${total ? `${total} việc tháng này${d.leader ? ' (gồm việc ban chưa giao ai)' : ''}. Xong thì bấm <b>✓ Xong</b>, đang làm thì chọn %. Vạch trên thanh là mục tiêu cuối tháng.` : 'Việc của bạn tháng này'}</span></div>
     <div class="qk-page" data-testid="quick-page">${d.projects.length ? d.projects.map(group).join('')
       : `<div class="card empty" data-testid="quick-empty"><p>Bạn không có việc nào đang trong kỳ thực hiện.</p><p><a class="btn" href="#/home">${icon('dashboard')}Dashboard dự án</a></p></div>`}</div>`;
   bindQuick(root.querySelector('.qk-page'), () => renderQuick(root, params, setCrumbs));

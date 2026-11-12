@@ -1,4 +1,4 @@
-# Kepper Hub — chạy trên máy cá nhân / máy chủ nội bộ.
+# Kepler Hub — chạy trên máy cá nhân / máy chủ nội bộ.
 #   cp .env.example .env   (sửa mật khẩu, JWT_SECRET)
 #   docker compose up -d --build                      # Postgres + app, tệp lưu trên volume
 #   docker compose --profile full up -d --build       # thêm MinIO + bộ xem trước Word (LibreOffice)
@@ -62,7 +62,7 @@ services:
       # Kepper: Viber bot (mặc định tắt — xem docs/data-protection-assessment.md)
       VIBER_ENABLED: ${VIBER_ENABLED:-0}
       VIBER_AUTH_TOKEN: ${VIBER_AUTH_TOKEN:-}
-      VIBER_BOT_NAME: ${VIBER_BOT_NAME:-Kepper Hub}
+      VIBER_BOT_NAME: ${VIBER_BOT_NAME:-Kepler Hub}
     volumes:
       - ${UPLOADS_PATH:-uploads}:/data/uploads   # NAS: vd. /volume1/kepper/uploads
       - ${LOG_PATH:-./logs}:/data/logs

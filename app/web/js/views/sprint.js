@@ -98,7 +98,7 @@ async function drawPhases(body, project, params, modes) {
     ${modes}
     ${!d.configured ? `<div class="card sp-note" data-testid="sp-suggested">${icon('bell')}<span>Đây là <b>sprint gợi ý</b> (cắt theo mốc ◆ trên đường găng). ${project.rights.canManage ? 'Bấm <b>Thiết lập sprint</b> để đặt tên và gộp bước, ví dụ <code>Chuyển nhượng DA | 1-9</code>.' : 'PMO sẽ đặt tên và gộp bước cho đúng các giai đoạn của dự án.'}</span></div>` : ''}
     ${d.unassigned.length && d.configured ? `<div class="card sp-note warn">Bước chưa thuộc sprint nào: ${d.unassigned.map(esc).join(', ')}</div>` : ''}
-    <section class="card sp-road" data-testid="sp-road"><div class="mtl-h"><h3>Lộ trình ${d.sprints.length} sprint</h3><span class="muted xs">thanh = thời gian kế hoạch · phần tô = % thực tế (theo đầu việc) · vạch = % kế hoạch hôm nay · ◆ mốc · đỏ dọc = hôm nay</span></div>
+    <section class="card sp-road" data-testid="sp-road"><div class="mtl-h"><h3>Lộ trình ${d.sprints.length} sprint</h3><span class="muted xs">Thanh: thời gian kế hoạch · phần tô: đã làm · vạch: kế hoạch hôm nay · ◆ mốc · vạch đỏ: hôm nay</span></div>
       <div class="rd"><div class="rd-row rd-head"><span class="rd-name"></span><span class="rd-track rd-axis">${axis}</span><span class="rd-num"></span></div>${road}</div></section>
     <section class="card sp-head">
       <div class="sp-nav">
@@ -222,7 +222,7 @@ async function drawMonth(body, project, params, modes) {
     ${ms}
     <div class="sp-lanes">
       <section class="sp-lane" data-testid="sp-lane-due"><div class="sp-lh"><h3>Phải xong trong tháng</h3><span class="pill">${lanes.due.length}</span></div><p class="muted xs">Kế hoạch gốc kết thúc trong T${t}${s.state === 'CURRENT' ? ', và việc trễ từ tháng trước' : ''}</p>${cards(lanes.due, 'Không có hạng mục phải xong.')}</section>
-      <section class="sp-lane" data-testid="sp-lane-running"><div class="sp-lh"><h3>Đang chạy</h3><span class="pill">${lanes.running.length}</span></div><p class="muted xs">Kết thúc sau T${t} · vạch trên thanh = mục tiêu % cuối tháng</p>${cards(lanes.running, 'Không có hạng mục đang chạy.')}</section>
+      <section class="sp-lane" data-testid="sp-lane-running"><div class="sp-lh"><h3>Đang chạy</h3><span class="pill">${lanes.running.length}</span></div><p class="muted xs">Còn chạy sau T${t} · vạch = mục tiêu cuối tháng</p>${cards(lanes.running, 'Không có hạng mục đang chạy.')}</section>
       <section class="sp-lane sp-lane-next" data-testid="sp-lane-next"><div class="sp-lh"><h3>Chuẩn bị cho T${t + 1}</h3><span class="pill">${lanes.next.length}</span></div><p class="muted xs">Bắt đầu ở tháng sau — chuẩn bị hồ sơ, nguồn lực</p>${cards(lanes.next, 'Tháng sau chưa có hạng mục bắt đầu.')}</section>
     </div>
     <section class="card"><div class="mtl-h"><h3>Tổng kết tháng T${t} theo ban</h3><span class="muted xs">${s.state === 'PAST' ? '"Đã xong" = xong trước khi hết tháng · SPI theo ảnh chụp tiến độ ngày cuối tháng' : s.state === 'CURRENT' ? 'tính đến hôm nay' : 'tháng chưa bắt đầu'}</span></div>

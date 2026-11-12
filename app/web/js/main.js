@@ -242,7 +242,7 @@ export async function route({ background = false } = {}) {
       }
       if (params.get('item')) openItem(Number(params.get('item'))); else closeItem();
     } else if (parts[0] === 'approvals') { await renderApprovals(view, params, setCrumbs); syncPanel(); }
-    else if (['requests', 'schedule', 'ops', 'dept', 'summary', 'kpi'].includes(parts[0])) { location.replace('#/home'); return; } // nghiệp vụ NQ57 đã bỏ (Kepper)
+    else if (['requests', 'schedule', 'ops', 'dept', 'summary', 'kpi'].includes(parts[0])) { location.replace('#/home'); return; } // nghiệp vụ NQ57 đã bỏ (Kepler Hub)
     else if (parts[0] === 'tuan') { closeItem(); await renderWeekly(view, parts[1] || '', params, setCrumbs); }
     else if (parts[0] === 'home') { await renderHome(view, params, setCrumbs); syncPanel(); }
     else if (parts[0] === 'today') { closeItem(); await renderToday(view, params, setCrumbs, () => token === renderToken); }

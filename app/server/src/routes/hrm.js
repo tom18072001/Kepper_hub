@@ -35,7 +35,7 @@ const fmtRange = (a, b) => WK.fmtD(a) + (b && b !== a ? '–' + WK.fmtD(b) : '')
 // Sai 5 lần → khoá chức năng hiện 15 phút (theo tài khoản).
 const revealFails = new Map();
 async function stepUp(req, audit) {
-  if (req.via) fail(403, 'Không hiện số định danh / lương qua Claude — xem trên giao diện Kepper', 'NOT_VIA_AI');
+  if (req.via) fail(403, 'Không hiện số định danh / lương qua Claude — xem trên giao diện Kepler Hub', 'NOT_VIA_AI');
   const now = Date.now(), f = revealFails.get(req.user.id);
   if (f && f.until > now) fail(429, 'Nhập sai mật khẩu nhiều lần — thử lại sau 15 phút', 'RATE_LIMITED');
   if (!(await bcrypt.compare(String(req.body?.password || ''), req.user.passwordHash || ''))) {
@@ -91,7 +91,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     });
   });
   app.put('/api/hrm/config', auth, async (req, res) => {
-    if (req.via) fail(403, 'Thiết lập nhân sự làm trên giao diện Kepper', 'NOT_VIA_AI');
+    if (req.via) fail(403, 'Thiết lập nhân sự làm trên giao diện Kepler Hub', 'NOT_VIA_AI');
     const { cfg, s } = await ctxFor(req);
     P.assertCan(s, 'edit', 'hrm.config');
     const b = req.body || {}, next = { ...cfg };
@@ -124,7 +124,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     }
     await audit(req, 'HRM_CONFIG', 'HrmConfig', null, { hrUserIds: cfg.hrUserIds }, { fields: Object.keys(b), hrUserIds: next.hrUserIds, recalculated });
     const added = next.hrUserIds.filter(id => !cfg.hrUserIds.includes(id));
-    if (added.length) await notify(prisma, added, { type: 'HRM_ROLE', title: 'Bạn được Ban giám đốc chỉ định phụ trách nhân sự trên Kepper', body: 'Bạn xem / sửa hồ sơ, hợp đồng, số định danh của nhân sự (trừ của chính mình). Mọi lượt xem số định danh / lương được ghi nhật ký.', link: '#/hrm/people' });
+    if (added.length) await notify(prisma, added, { type: 'HRM_ROLE', title: 'Bạn được Ban giám đốc chỉ định phụ trách nhân sự trên Kepler Hub', body: 'Bạn xem / sửa hồ sơ, hợp đồng, số định danh của nhân sự (trừ của chính mình). Mọi lượt xem số định danh / lương được ghi nhật ký.', link: '#/hrm/people' });
     res.json({ ok: true, recalculated });
   });
 
@@ -205,7 +205,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     res.json(out);
   });
   app.put('/api/hrm/people/:userId/profile', auth, async (req, res) => {
-    if (req.via) fail(403, 'Hồ sơ nhân sự sửa trên giao diện Kepper', 'NOT_VIA_AI');
+    if (req.via) fail(403, 'Hồ sơ nhân sự sửa trên giao diện Kepler Hub', 'NOT_VIA_AI');
     const { cfg, s } = await ctxFor(req);
     const u = await target(intParam(req.params.userId));
     const full = P.can(s, 'edit', 'hrm.profile', tctx(u, cfg));
@@ -246,7 +246,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     res.json({ idNumber: prof?.idNumberEnc ? C.tryDecrypt(prof.idNumberEnc, C.AAD.identity(u.id)) : null, issuedOn: prof?.idIssuedOn || null, issuedPlace: prof?.idIssuedPlace || null });
   });
   app.put('/api/hrm/people/:userId/identity', auth, async (req, res) => {
-    if (req.via) fail(403, 'Số định danh cập nhật trên giao diện Kepper', 'NOT_VIA_AI');
+    if (req.via) fail(403, 'Số định danh cập nhật trên giao diện Kepler Hub', 'NOT_VIA_AI');
     const { cfg, s } = await ctxFor(req);
     const u = await target(intParam(req.params.userId));
     P.assertCan(s, 'edit', 'hrm.identity', tctx(u, cfg));
@@ -286,7 +286,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     return String(Math.round(n));
   };
   app.post('/api/hrm/people/:userId/contracts', auth, async (req, res) => {
-    if (req.via) fail(403, 'Hợp đồng lao động cập nhật trên giao diện Kepper', 'NOT_VIA_AI');
+    if (req.via) fail(403, 'Hợp đồng lao động cập nhật trên giao diện Kepler Hub', 'NOT_VIA_AI');
     const { cfg, s } = await ctxFor(req);
     const u = await target(intParam(req.params.userId));
     P.assertCan(s, 'edit', 'hrm.contract', tctx(u, cfg));
@@ -300,7 +300,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     res.status(201).json({ id: row.id });
   });
   app.patch('/api/hrm/contracts/:id', auth, async (req, res) => {
-    if (req.via) fail(403, 'Hợp đồng lao động cập nhật trên giao diện Kepper', 'NOT_VIA_AI');
+    if (req.via) fail(403, 'Hợp đồng lao động cập nhật trên giao diện Kepler Hub', 'NOT_VIA_AI');
     const { cfg, s } = await ctxFor(req);
     const k = await prisma.hrContract.findUnique({ where: { id: intParam(req.params.id) } });
     if (!k) fail(404, 'Không tìm thấy hợp đồng', 'NOT_FOUND');
@@ -423,13 +423,13 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     }, { timeout: 20_000 });
     await audit(req, 'HR_LEAVE_CREATE', 'HrLeave', row.id, null, { userId: u.id, type, from, to, days, forced: type === 'ANNUAL' && s.hr && b.force === true });
     // Thông báo trung tính (không ghi loại nghỉ — nghỉ ốm là thông tin sức khoẻ; thông báo còn đi qua Claude / ứng dụng khác).
-    await notify(prisma, await approverIds(u, cfg), { type: 'HR_LEAVE_REQUEST', title: `${u.fullName} gửi đơn nghỉ ${String(days).replace('.', ',')} ngày (${fmtRange(from, to)})`, body: 'Duyệt trên Kepper → Nhân sự → Chờ duyệt', link: '#/hrm/approve' }, req.user.id);
+    await notify(prisma, await approverIds(u, cfg), { type: 'HR_LEAVE_REQUEST', title: `${u.fullName} gửi đơn nghỉ ${String(days).replace('.', ',')} ngày (${fmtRange(from, to)})`, body: 'Duyệt trên Kepler Hub → Nhân sự → Chờ duyệt', link: '#/hrm/approve' }, req.user.id);
     const noHoliday = H.yearsOf(from, to).filter(y => !H.hasHolidays(y, cfg));
     res.status(201).json({ id: row.id, days, status: 'PENDING', next: 'Đơn đã gửi người duyệt (Claude không duyệt thay).',
       warning: noHoliday.length ? `Năm ${noHoliday.join(', ')} chưa có danh sách ngày lễ — số ngày sẽ được tính lại khi người phụ trách nhân sự cập nhật` : undefined });
   });
   app.post('/api/hrm/leaves/:id/decide', auth, async (req, res) => {
-    if (req.via) fail(403, 'Duyệt đơn làm trên giao diện Kepper', 'NOT_VIA_AI');
+    if (req.via) fail(403, 'Duyệt đơn làm trên giao diện Kepler Hub', 'NOT_VIA_AI');
     const { cfg, s } = await ctxFor(req);
     const l = await prisma.hrLeave.findUnique({ where: { id: intParam(req.params.id) } });
     if (!l) fail(404, 'Không tìm thấy đơn', 'NOT_FOUND');
@@ -445,7 +445,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     res.json({ ok: true });
   });
   app.post('/api/hrm/leaves/:id/cancel', auth, async (req, res) => {
-    if (req.via) fail(403, 'Huỷ đơn làm trên giao diện Kepper', 'NOT_VIA_AI');
+    if (req.via) fail(403, 'Huỷ đơn làm trên giao diện Kepler Hub', 'NOT_VIA_AI');
     const { cfg, s } = await ctxFor(req);
     const l = await prisma.hrLeave.findUnique({ where: { id: intParam(req.params.id) } });
     if (!l) fail(404, 'Không tìm thấy đơn', 'NOT_FOUND');
@@ -470,7 +470,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
   }
   // Chấm công: chỉ chính người đó, trên giao diện (không qua Claude); giờ lấy từ máy chủ, không tin giờ máy người dùng.
   app.post('/api/hrm/attendance/check', auth, async (req, res) => {
-    if (req.via) fail(403, 'Chấm công không làm qua Claude — bấm trên Kepper', 'NOT_VIA_AI');
+    if (req.via) fail(403, 'Chấm công không làm qua Claude — bấm trên Kepler Hub', 'NOT_VIA_AI');
     const { cfg, s } = await ctxFor(req);
     const u = await target(req.user.id);
     P.assertCan(s, 'edit', 'hrm.attendance', tctx(u, cfg, { op: 'check' }));
@@ -494,7 +494,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
   });
   // Giải trình (quên chấm, đi công tác, đi muộn có lý do) — ngày trong 31 ngày gần nhất.
   app.post('/api/hrm/attendance/explain', auth, async (req, res) => {
-    if (req.via) fail(403, 'Giải trình chấm công làm trên giao diện Kepper', 'NOT_VIA_AI');
+    if (req.via) fail(403, 'Giải trình chấm công làm trên giao diện Kepler Hub', 'NOT_VIA_AI');
     const { cfg, s } = await ctxFor(req);
     const u = await target(req.user.id);
     P.assertCan(s, 'edit', 'hrm.attendance', tctx(u, cfg, { op: 'explain' }));
@@ -507,11 +507,11 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     const cur = await prisma.hrAttendance.findUnique({ where: { userId_day: { userId: u.id, day } } });
     if (cur?.adjustStatus === 'APPROVED') fail(409, 'Ngày này đã được duyệt giải trình', 'CONFLICT');
     const row = await prisma.hrAttendance.upsert({ where: { userId_day: { userId: u.id, day } }, update: data, create: { userId: u.id, departmentId: u.departmentId, day, ...data } });
-    await notify(prisma, await approverIds(u, cfg), { type: 'HR_ATT_EXPLAIN', title: `${u.fullName} gửi giải trình chấm công ${WK.fmtDY(day)}`, body: 'Duyệt trên Kepper → Nhân sự → Chờ duyệt', link: '#/hrm/approve' }, req.user.id);
+    await notify(prisma, await approverIds(u, cfg), { type: 'HR_ATT_EXPLAIN', title: `${u.fullName} gửi giải trình chấm công ${WK.fmtDY(day)}`, body: 'Duyệt trên Kepler Hub → Nhân sự → Chờ duyệt', link: '#/hrm/approve' }, req.user.id);
     res.json(attOut(row, s, req));
   });
   app.post('/api/hrm/attendance/:id/decide', auth, async (req, res) => {
-    if (req.via) fail(403, 'Duyệt giải trình làm trên giao diện Kepper', 'NOT_VIA_AI');
+    if (req.via) fail(403, 'Duyệt giải trình làm trên giao diện Kepler Hub', 'NOT_VIA_AI');
     const { cfg, s } = await ctxFor(req);
     const r = await prisma.hrAttendance.findUnique({ where: { id: intParam(req.params.id) } });
     if (!r || r.adjustStatus !== 'PENDING') fail(404, 'Không có giải trình chờ duyệt', 'NOT_FOUND');
@@ -578,7 +578,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
   // Gộp theo (mã NV, ngày): giờ vào = sớm nhất, giờ ra = muộn nhất (≥ 2 lần chấm). Không ghi đè giá trị có sẵn bằng ô trống.
   // Người phụ trách nhân sự nhập; dòng của chính họ: Ban GĐ nhập.
   app.post('/api/hrm/attendance/import', auth, async (req, res) => {
-    if (req.via) fail(403, 'Nhập chấm công làm trên giao diện Kepper', 'NOT_VIA_AI');
+    if (req.via) fail(403, 'Nhập chấm công làm trên giao diện Kepler Hub', 'NOT_VIA_AI');
     const { cfg, s } = await ctxFor(req);
     if (!s.hr && !s.director) fail(403, 'Chỉ người phụ trách nhân sự (hoặc Ban giám đốc) nhập dữ liệu máy chấm công', 'FORBIDDEN');
     const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];

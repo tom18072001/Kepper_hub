@@ -23,7 +23,7 @@ export async function renderCrm(root, id, params, setCrumbs) {
   const q = params.get('q') || '', kind = params.get('kind') || '', status = params.get('status') || '', mine = params.get('mine') === '1', archived = params.get('archived') === '1', scope = params.get('fu') === 'dept' ? 'dept' : 'mine';
   const qs = new URLSearchParams({ ...(q && { q }), ...(kind && { kind }), ...(status && { status }), ...(mine && { mine: '1' }), ...(archived && { archived: '1' }) });
   const [rows, fus] = await Promise.all([api('/api/crm/partners?' + qs), api('/api/crm/followups?scope=' + scope)]);
-  root.innerHTML = `<div class="page-head"><h1>Đối tác</h1><span class="muted sm">Nhà thầu, tư vấn, cơ quan quản lý, ngân hàng, nhà cung cấp. Người liên hệ, nhật ký, hợp đồng chỉ bộ phận phụ trách xem.</span>
+  root.innerHTML = `<div class="page-head"><h1>Đối tác</h1><span class="muted sm">Nhà thầu, tư vấn, cơ quan, ngân hàng, nhà cung cấp. Liên hệ, nhật ký và hợp đồng chỉ ban phụ trách xem.</span>
       ${m.canCreate ? '<button class="btn btn-primary" id="crmNew" data-testid="crm-new">Thêm đối tác</button>' : ''}</div>
     <section class="card pg-section" data-testid="crm-followups">
       <div class="row"><h3 class="grow" style="margin:0">Việc cần theo dõi</h3>

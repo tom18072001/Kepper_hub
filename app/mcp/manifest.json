@@ -1,12 +1,12 @@
 {
   "manifest_version": "0.3",
   "name": "kepper-hub",
-  "display_name": "Kepper Hub",
+  "display_name": "Kepler Hub",
   "version": "0.5.0",
-  "description": "Kepper Hub trong Claude: xem việc, cập nhật tiến độ, giao việc, nhắc việc, soạn nháp báo cáo tuần; đối tác (CRM), nghỉ phép / bảng công (HRM) khi Kepper bật — đúng quyền tài khoản Kepper của bạn.",
-  "long_description": "Chạy trên máy bạn, gọi Kepper trong mạng nội bộ. Kết nối nhanh: lần đầu hỏi Claude, Kepper mở trên trình duyệt — bấm \"Cho phép\" là xong (không phải tạo / dán token). Claude chỉ thấy và làm được những gì tài khoản Kepper của bạn được phép; nộp báo cáo, phê duyệt, xoá, xuất tệp vẫn làm trên giao diện Kepper.",
+  "description": "Kepler Hub trong Claude: xem việc, cập nhật tiến độ, giao việc, nhắc việc, soạn nháp báo cáo tuần; đối tác (CRM), nghỉ phép / bảng công (HRM) khi Kepler Hub bật — đúng quyền tài khoản Kepler Hub của bạn.",
+  "long_description": "Chạy trên máy bạn, gọi Kepler Hub trong mạng nội bộ. Kết nối nhanh: lần đầu hỏi Claude, Kepler Hub mở trên trình duyệt — bấm \"Cho phép\" là xong (không phải tạo / dán token). Claude chỉ thấy và làm được những gì tài khoản Kepler Hub của bạn được phép; nộp báo cáo, phê duyệt, xoá, xuất tệp vẫn làm trên giao diện Kepler Hub.",
   "author": {
-    "name": "Kepper Hub"
+    "name": "Kepler Hub"
   },
   "server": {
     "type": "node",
@@ -25,15 +25,15 @@
   "user_config": {
     "kepper_url": {
       "type": "string",
-      "title": "Địa chỉ Kepper",
-      "description": "Địa chỉ Kepper trong mạng nội bộ, vd. http://kepper.local hoặc http://localhost:4100",
+      "title": "Địa chỉ Kepler Hub",
+      "description": "Địa chỉ Kepler Hub trong mạng nội bộ, vd. http://kepper.local hoặc http://localhost:4100",
       "required": true,
       "default": "http://localhost:4100"
     },
     "kepper_token": {
       "type": "string",
-      "title": "Token Kepper (không bắt buộc)",
-      "description": "Để trống: lần đầu hỏi Claude, Kepper mở trên trình duyệt — bấm \"Cho phép\". Chỉ điền khi quản trị cấp token thủ công (bắt đầu bằng kpt_).",
+      "title": "Token Kepler Hub (không bắt buộc)",
+      "description": "Để trống: lần đầu hỏi Claude, Kepler Hub mở trên trình duyệt — bấm \"Cho phép\". Chỉ điền khi quản trị cấp token thủ công (bắt đầu bằng kpt_).",
       "required": false,
       "sensitive": true
     }

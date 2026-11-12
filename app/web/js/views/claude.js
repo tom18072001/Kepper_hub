@@ -24,7 +24,7 @@ export async function renderClaude(root, setCrumbs, params = new URLSearchParams
     : `<section class="card cl-req" data-testid="claude-connect">
         <div class="cl-req-h">${icon('send')}<div><h2>Claude Desktop xin kết nối với tài khoản của bạn</h2>
           <p class="muted sm">Máy <b>${esc(req.device)}</b> · mã <b class="cl-code">${esc(req.code)}</b> · lúc ${esc(fmtDateTime(req.createdAt))}</p></div></div>
-        ${req.sameMachine ? '' : '<p class="warn-text sm">Yêu cầu này đến từ <b>máy khác</b> với máy bạn đang mở Kepper — chỉ bấm "Cho phép" trên chính máy chạy Claude Desktop.</p>'}
+        ${req.sameMachine ? '' : '<p class="warn-text sm">Yêu cầu này đến từ <b>máy khác</b> với máy bạn đang mở Kepler Hub — chỉ bấm "Cho phép" trên chính máy chạy Claude Desktop.</p>'}
         <p class="sm">Claude sẽ xem được những gì bạn xem được; không nộp báo cáo, phê duyệt, xoá, xuất tệp. Kết nối có hiệu lực 30 ngày, thu hồi được bất cứ lúc nào ở danh sách bên dưới.</p>
         <div class="row cl-req-act">
           <label class="check sm"><input type="radio" name="clScope" value="write" checked> Xem và cập nhật (%, checklist, bình luận, nháp báo cáo)</label>
@@ -37,12 +37,12 @@ export async function renderClaude(root, setCrumbs, params = new URLSearchParams
   root.innerHTML = `<div class="page-head"><h1>Kết nối Claude</h1></div>
     ${connectCard}
     <section class="card cl-steps">
-      <p><b>Claude làm việc với Kepper bằng chính quyền của bạn.</b> Claude chỉ xem được những gì bạn xem được, sửa được những gì bạn sửa được.
-        Các bước <b>nộp báo cáo, phê duyệt, phát hành, xoá, xuất tệp</b> bạn vẫn tự làm trên Kepper.</p>
+      <p><b>Claude dùng đúng quyền của bạn</b>: bạn xem, sửa được gì thì Claude được đúng như vậy.
+        Nộp báo cáo, duyệt, phát hành, xoá, xuất tệp vẫn do bạn tự bấm.</p>
       <ol class="cl-ol">
         <li><b>Cài tiện ích:</b> tải <a href="/downloads/kepper-claude.mcpb" download data-testid="claude-mcpb">kepper-claude.mcpb</a>, kéo thả vào cửa sổ Claude Desktop → Install.
-          Ô <b>Địa chỉ Kepper</b> đã điền sẵn <code>${esc(origin)}</code>; ô Token để trống.</li>
-        <li><b>Hỏi Claude</b>, ví dụ: "Việc nào của tôi trễ hạn tuần này?". Lần đầu, Kepper tự mở trên trình duyệt — bấm <b>Cho phép</b>. Xong.</li>
+          Ô <b>Địa chỉ Kepler Hub</b> đã điền sẵn <code>${esc(origin)}</code>; ô Token để trống.</li>
+        <li><b>Hỏi Claude</b>, ví dụ: "Việc nào của tôi trễ hạn tuần này?". Lần đầu, Kepler Hub tự mở trên trình duyệt — bấm <b>Cho phép</b>. Xong.</li>
       </ol>
     </section>
     <section class="card cl-list">
@@ -52,7 +52,7 @@ export async function renderClaude(root, setCrumbs, params = new URLSearchParams
         <td>${t.revokedAt ? 'Đã thu hồi' : esc(fmtDateTime(t.expiresAt))}</td><td>${t.lastUsedAt ? esc(fmtDateTime(t.lastUsedAt)) : '—'}</td>
         <td>${t.active ? `<button class="btn btn-ghost btn-sm" data-revoke="${t.id}">Thu hồi</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">Chưa có máy nào kết nối.</td></tr>'}
       </tbody></table>
-      <p class="muted xs">${active.length}/5 kết nối còn hiệu lực. Mất máy hoặc nghi lộ: thu hồi ngay. Đổi mật khẩu cũng làm mọi kết nối mất hiệu lực.</p>
+      <p class="muted xs">${active.length}/5 kết nối đang dùng. Mất máy hoặc nghi lộ thì thu hồi ngay. Đổi mật khẩu sẽ ngắt mọi kết nối.</p>
       <details class="cl-manual" data-testid="claude-manual"><summary>Tạo token thủ công (chỉ khi máy không mở được trình duyệt)</summary>
         <form id="tkForm" class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">
           <label>Tên (máy / mục đích)<input id="tkName" maxlength="60" required placeholder="Laptop văn phòng" data-testid="claude-token-name"></label>
@@ -61,7 +61,7 @@ export async function renderClaude(root, setCrumbs, params = new URLSearchParams
           <button class="btn btn-primary" data-testid="claude-token-create">Tạo token</button>
         </form>
         <div id="tkNew" hidden class="card" style="margin-top:12px;padding:12px;border:1px solid var(--warn-line)">
-          <b>Sao chép token ngay — Kepper không hiện lại.</b> Dán vào ô Token của tiện ích.
+          <b>Sao chép token ngay — Kepler Hub không hiện lại.</b> Dán vào ô Token của tiện ích.
           <div class="row" style="gap:8px;margin-top:6px"><input id="tkValue" readonly style="flex:1;font-family:monospace" data-testid="claude-token-value"><button class="btn" type="button" id="tkCopy">Sao chép</button></div>
         </div>
       </details>
@@ -92,7 +92,7 @@ export async function renderClaude(root, setCrumbs, params = new URLSearchParams
     }
     const b = e.target.closest('[data-revoke]');
     if (!b) return;
-    if (!(await confirmDialog('Thu hồi kết nối này? Claude trên máy đó sẽ không truy cập Kepper được nữa (hỏi lại Claude để kết nối lại).', { okText: 'Thu hồi', danger: true }))) return;
+    if (!(await confirmDialog('Thu hồi kết nối này? Claude trên máy đó sẽ không truy cập Kepler Hub được nữa (hỏi lại Claude để kết nối lại).', { okText: 'Thu hồi', danger: true }))) return;
     try { await api(`/api/me/tokens/${b.dataset.revoke}`, { method: 'DELETE' }); toast('Đã thu hồi', 'ok'); await renderClaude(root, setCrumbs); } catch (error) { toast(errorMessage(error), 'err'); }
   };
 }

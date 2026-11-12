@@ -1,4 +1,4 @@
-# Phản biện: Kepper Hub lên production — 40–50 người, laptop, NAS công ty (23/10/2026)
+# Phản biện: Kepler Hub lên production — 40–50 người, laptop, NAS công ty (23/10/2026)
 
 Phạm vi: bản `kepper/ui-shell` (gồm GĐ2a sprint, GĐ2b báo cáo tuần, GĐ3 Claude, playground CRM / HRM, giao diện mới).
 Bối cảnh triển khai: nhân viên dùng laptop trong văn phòng, hệ thống chạy trên NAS công ty, tài liệu để trên NAS và máy cá nhân,

@@ -74,7 +74,7 @@ module.exports = function mountProfile(app, { prisma, auth, audit }) {
   });
 
   app.put('/api/me/avatar', auth, async (req, res) => {
-    if (req.via) fail(403, 'Đổi ảnh đại diện trên giao diện Kepper', 'NOT_VIA_AI');
+    if (req.via) fail(403, 'Đổi ảnh đại diện trên giao diện Kepler Hub', 'NOT_VIA_AI');
     const m = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(req.body?.image || ''));
     if (!m) fail(422, 'Ảnh không hợp lệ', 'INVALID_IMAGE');
     const buf = Buffer.from(m[2], 'base64');
@@ -89,7 +89,7 @@ module.exports = function mountProfile(app, { prisma, auth, audit }) {
     res.json({ avatarUrl: '/' + saved.objectKey });
   });
   app.delete('/api/me/avatar', auth, async (req, res) => {
-    if (req.via) fail(403, 'Đổi ảnh đại diện trên giao diện Kepper', 'NOT_VIA_AI');
+    if (req.via) fail(403, 'Đổi ảnh đại diện trên giao diện Kepler Hub', 'NOT_VIA_AI');
     const prev = await prisma.user.findUnique({ where: { id: req.user.id }, select: { avatarFile: true } });
     if (prev?.avatarFile) {
       await prisma.user.update({ where: { id: req.user.id }, data: { avatarFile: null } });

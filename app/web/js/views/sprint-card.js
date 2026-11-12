@@ -61,7 +61,7 @@ export function sprintCard(i, { t, goal = 'month', href, canEdit = false, showDe
     ${progressBar(i, { t, goal })}
     ${!i.done && i.progressAt ? `<div class="muted xs">cập nhật ${ago(i.progressAt)}</div>` : !i.done && !i.actual ? '<div class="muted xs">chưa cập nhật tiến độ</div>' : ''}
     ${canEdit && !i.done && i.canProgress !== false ? quickControls(i) : ''}
-    ${canEdit && !i.done && i.canProgress === false ? '<div class="muted xs">Người được giao / lãnh đạo bộ phận chủ trì cập nhật % (việc có checklist: đánh dấu checklist)</div>' : ''}
+    ${canEdit && !i.done && i.canProgress === false ? '<div class="muted xs">Người được giao hoặc lãnh đạo ban cập nhật % (việc có checklist thì tích checklist)</div>' : ''}
   </article>`;
 }
 

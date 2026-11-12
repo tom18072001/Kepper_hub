@@ -10,14 +10,14 @@ const mods = () => store.settings?.modules || [];
 const NAV = [
   { id: 'progress', name: 'Tiến độ', color: '#2E6DB4', icon: 'trend', items: [
     { href: '#/home', label: 'Tiến độ dự án', icon: 'dashboard', testid: 'nav-home', id: 'navHome', desc: 'Dashboard các dự án theo MTL' },
-    { href: '#/sprint', label: 'Cập nhật nhanh', icon: 'checklist', testid: 'nav-sprint', desc: 'Bấm % việc trong kỳ' },
+    { href: '#/sprint', label: 'Cập nhật nhanh', icon: 'checklist', testid: 'nav-sprint', desc: 'Cập nhật % việc tháng này' },
     { href: '#/tuan', label: 'Báo cáo tuần', icon: 'calendar', testid: 'nav-tuan', match: '#/tuan', desc: 'BM-TH-01, tổng hợp giao ban' },
   ] },
   { id: 'work', name: 'Công việc', color: '#1E8A6E', icon: 'briefcase', items: [
     { href: '#/my', label: 'Việc của tôi', icon: 'target', testid: 'nav-my', desc: 'Việc được giao, ghi chú' },
     { href: '#/approvals', label: 'Chờ tôi duyệt', icon: 'approve', testid: 'nav-approvals', id: 'navApprovals', badge: 'approvalBadge', desc: 'Duyệt, gia hạn, kiến nghị' },
-    { href: '#/work', label: 'Tổng thể công việc', icon: 'users', testid: 'nav-work', id: 'navWork', show: () => ['SYSTEM', 'UNIT'].includes(workScope()), desc: 'Theo người, theo phòng' },
-    { href: '#/dashboard', label: 'Số liệu công việc', icon: 'chart', testid: 'nav-dashboard', id: 'navDashboard', show: () => can('reports.dashboard'), desc: 'Thống kê, KPI' },
+    { href: '#/work', label: 'Việc toàn đơn vị', icon: 'users', testid: 'nav-work', id: 'navWork', show: () => ['SYSTEM', 'UNIT'].includes(workScope()), desc: 'Theo người, theo phòng' },
+    { href: '#/dashboard', label: 'Thống kê', icon: 'chart', testid: 'nav-dashboard', id: 'navDashboard', show: () => can('reports.dashboard'), desc: 'Thống kê, KPI' },
   ] },
   { id: 'biz', name: 'Nghiệp vụ', color: '#B8641C', icon: 'building', items: [
     { href: '#/crm', label: 'Đối tác', icon: 'building', testid: 'nav-crm', id: 'navCrm', match: '#/crm', show: () => mods().includes('crm'), desc: 'Nhà thầu, cơ quan, ngân hàng' },
@@ -176,5 +176,5 @@ export function renderMe() {
   $('#userBtn .who').innerHTML = `<b id="meName">${esc(me.fullName)}</b><span id="meDept">${esc(me.departmentName || (me.isRootAdmin ? 'Quản trị gốc' : ''))}</span>`;
   $('#orgName').textContent = org || '';
   $('#orgName').classList.toggle('hidden', !org);
-  document.title = `Kepper Hub${org ? ' · ' + org : ''}`;
+  document.title = `Kepler Hub${org ? ' · ' + org : ''}`;
 }

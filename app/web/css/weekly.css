@@ -21,7 +21,7 @@
 .wk-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 16px 4px}
 .wk-brand{display:flex;flex-direction:column;line-height:1.15;margin-right:auto}
 .wk-brand b{font-weight:700;letter-spacing:.14em;color:var(--brand);font-size:.95rem}
-.wk-brand span{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);font-weight:700}
+.wk-brand span{font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-ink,#8A6A24);font-weight:700}
 .wk-week{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--muted)}
 .wk-week select{width:auto}
 .wk-tabs{display:flex;gap:2px;overflow-x:auto;padding:0 10px}
@@ -50,14 +50,14 @@
 .c-gold{background:var(--gold-soft);color:#7a5f22}
 .wk .btn.ghost{border:1px dashed var(--border-strong);background:var(--surface);color:var(--brand)}
 .wk .btn.x{min-height:28px;padding:3px 10px;font-size:.8rem;font-weight:500;color:var(--muted);background:var(--surface);border:1px solid var(--border)}
-.wk-secret{font-size:.72rem;letter-spacing:.08em;font-weight:700;color:var(--bad);border:1px solid currentColor;border-radius:4px;padding:1px 6px}
+.wk-secret{font-size:.8rem;letter-spacing:.08em;font-weight:700;color:var(--bad);border:1px solid currentColor;border-radius:4px;padding:1px 6px}
 
 /* ---------- Dòng hạng mục ---------- */
 .wk-list{display:grid;gap:10px}
 .wk-row{border:1px solid var(--border);border-radius:8px;padding:12px;display:grid;gap:10px;background:var(--surface)}
 .wk-row.linked{border-left:3px solid var(--brand-200)}
 .wk-row.done{opacity:.8}
-.wk-row-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.76rem;color:var(--muted);font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.wk-row-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.8rem;color:var(--muted);font-weight:700;letter-spacing:.04em;text-transform:uppercase}
 .wk-row-head .code{font-family:inherit;text-transform:none;letter-spacing:0;color:var(--brand);background:var(--brand-050);border-radius:5px;padding:1px 6px}
 .wk-row-head .x{margin-left:auto;display:flex;gap:6px;text-transform:none;letter-spacing:0}
 .wk-row-head .crit{color:var(--danger)}
@@ -68,7 +68,7 @@
 .r-meta.m2{grid-template-columns:1fr 1fr}
 .wk-pct{display:flex;gap:4px;align-items:center}
 .wk-pct input{width:5.5em !important;flex:none}
-.wk-pct button{border:1px solid var(--border);background:var(--surface);border-radius:6px;font-size:.78rem;padding:4px 7px;cursor:pointer;color:var(--text-2)}
+.wk-pct button{border:1px solid var(--border);background:var(--surface);border-radius:6px;font-size:.8rem;padding:4px 7px;cursor:pointer;color:var(--text-2)}
 .wk-pct button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
 .wk-issue{border-left:3px solid var(--wk-warn);background:var(--wk-warn-bg);border-radius:0 7px 7px 0;padding:10px 12px;display:grid;gap:10px}
 .wk-issue>p{margin:0;font-size:.82rem;color:var(--wk-warn);font-weight:700}
@@ -85,7 +85,7 @@
 .wk-table{overflow-x:auto;border:1px solid var(--border);border-radius:8px}
 .wk-table table{border-collapse:collapse;width:100%;font-size:.88rem}
 .wk-table th,.wk-table td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
-.wk-table th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--surface-3);font-weight:700}
+.wk-table th{font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--surface-3);font-weight:700}
 .wk-table tr:last-child td{border-bottom:0}
 .wk-table select{min-width:120px}
 .wk-help{display:grid;gap:14px}
@@ -108,7 +108,8 @@ details.wk-dept>div{padding:0 12px 12px;display:flex;flex-direction:column;gap:1
 .wk-proj .kp{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .wk-proj .kp a{background:var(--surface-3);border-radius:8px;padding:8px 10px;text-decoration:none;color:inherit}
 .wk-proj .kp a b{display:block;font-size:1.2rem}
-.wk-proj .kp a span{font-size:.78rem;color:var(--muted)}
+.wk-proj .kp a span{font-size:.8rem;color:var(--muted)}
 .wk-proj .kp a.warn b{color:var(--wk-warn)} .wk-proj .kp a.bad b{color:var(--bad)} .wk-proj .kp a.good b{color:var(--good)}
 @media (max-width:560px){.wk-proj .kp{grid-template-columns:1fr 1fr}}
 @media (prefers-reduced-motion:no-preference){.wk-tabs a,.wk .btn{transition:background .15s,color .15s,border-color .15s}}
+.wk-accent{color:var(--gold-ink,#8A6A24)}

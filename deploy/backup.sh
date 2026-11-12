@@ -1,5 +1,5 @@
 #!/bin/sh
-# Sao lưu Kepper Hub: CSDL (pg_dump định dạng custom) + tệp đính kèm, giữ BACKUP_KEEP_DAYS ngày.
+# Sao lưu Kepler Hub: CSDL (pg_dump định dạng custom) + tệp đính kèm, giữ BACKUP_KEEP_DAYS ngày.
 # Chạy một lần:  BACKUP_ONCE=1 sh backup.sh
 # Chạy định kỳ:  mỗi ngày từ BACKUP_HOUR (giờ theo TZ của container); CHẠY BÙ khi máy bật lại sau giờ đó
 #                (máy chạy là PC: thường tắt lúc 02:00 → trước đây không bao giờ sao lưu).

@@ -62,7 +62,7 @@ export async function renderProfile(root, setCrumbs) {
         ${org.peers.length ? `<details class="org-peers"><summary class="muted sm">Cùng cấp trong bộ phận</summary><div class="org-people">${org.peers.map(chip).join('')}</div></details>` : ''}</li>
       ${org.below.map(l => `<li class="org-level org-below"><div class="org-label">${esc(l.label)} <span class="muted xs">${l.people.length} người</span></div><div class="org-people">${l.people.map(chip).join('')}</div></li>`).join('')}
     </ol>
-    ${!org.above.length && !org.below.length ? '<p class="muted sm">Chưa có thông tin cấp trên / cấp dưới — quản trị cần gán bộ phận, vai trò (trưởng / phó / nhân viên) và Phó GĐ phụ trách bộ phận.</p>' : ''}
+    ${!org.above.length && !org.below.length ? '<p class="muted sm">Chưa có sơ đồ cấp trên, cấp dưới. Nhờ quản trị gán bộ phận, vai trò và Phó GĐ phụ trách.</p>' : ''}
   </section>`;
 
   root.innerHTML = `<div class="page-head"><h1>Thông tin cá nhân</h1></div>
@@ -88,8 +88,8 @@ export async function renderProfile(root, setCrumbs) {
           ${row('Tạo tài khoản', esc(fmtDate(p.createdAt)))}
           ${row('Đăng nhập gần nhất', p.lastLoginAt ? esc(fmtDateTime(p.lastLoginAt)) : '')}
         </dl>
-        <p class="muted xs">Thông tin sai hoặc thiếu (họ tên, chức danh, bộ phận, email, điện thoại): báo quản trị hệ thống sửa.
-          Ảnh đại diện do bạn tự đặt, ai đăng nhập Kepper cũng thấy; xoá được bất cứ lúc nào.</p>
+        <p class="muted xs">Thông tin sai hoặc thiếu? Báo quản trị để sửa.
+          Mọi người trong Kepler Hub đều thấy ảnh này. Xoá lúc nào cũng được.</p>
         ${mods.includes('hrm') ? `<a class="pf-link" href="#/hrm">${icon('users')}<span><b>Hồ sơ nhân sự, nghỉ phép, chấm công</b><span class="muted xs">Mở phân hệ Nhân sự</span></span></a>` : ''}
         <a class="pf-link" href="#/claude">${icon('send')}<span><b>Kết nối Claude</b><span class="muted xs">Máy đã kết nối, thu hồi</span></span></a>
       </section>

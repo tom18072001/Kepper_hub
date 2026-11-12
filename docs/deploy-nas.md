@@ -1,4 +1,4 @@
-# Chạy Kepper Hub trên NAS công ty
+# Chạy Kepler Hub trên NAS công ty
 
 Dành cho quản trị hệ thống. Thay máy cá nhân (Docker Desktop, `http://localhost:4100`) bằng NAS công ty chạy liên tục,
 nhân viên mở bằng laptop qua `https://kepper.<tên-miền-công-ty>`.

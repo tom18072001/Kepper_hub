@@ -1,4 +1,4 @@
-# Kepper Hub — kế hoạch nghiệp vụ
+# Kepler Hub — kế hoạch nghiệp vụ
 
 ## Bài toán
 Công ty theo dõi dự án bất động sản (vd. SPV NƠXH) bằng **Master Timeline (MTL)**: các hạng mục theo **tháng T** tính từ T0. Mỗi hạng mục có:

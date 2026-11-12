@@ -254,7 +254,7 @@ export function mtlPanelBlock(d, project, editable) {
 }
 export function rebaselineDialog(d, project, done) {
   const modal = openModal(`<h2>Điều chỉnh kế hoạch gốc — ${esc(d.code)}</h2><form>
-    <p class="muted sm">Kế hoạch gốc là căn cứ tính chậm / trễ và KPI tiến độ. Mỗi lần điều chỉnh phải ghi lý do và được lưu vào nhật ký.</p>
+    <p class="muted sm">Kế hoạch gốc dùng để tính chậm, trễ và KPI. Sửa phải ghi lý do, hệ thống lưu lại.</p>
     ${d.startT != null ? `<div class="grid2"><label class="field">Bắt đầu (tháng T)<input type="number" name="startT" min="0" step="1" value="${d.startT}" required></label><label class="field">Kết thúc (tháng T)<input type="number" name="endT" min="0" step="1" value="${d.endT}" required></label></div>`
       : `<div class="grid2"><label class="field">Bắt đầu<input type="date" name="baselineStart" required></label><label class="field">Kết thúc<input type="date" name="baselineEnd" required></label></div>`}
     <label class="field">Lý do điều chỉnh<textarea name="reason" rows="2" required maxlength="500" data-testid="rebaseline-reason"></textarea></label>
@@ -339,7 +339,7 @@ async function settingsDialog(project, done) {
       <label class="field">Nhắc sắp đến hạn trước (ngày)<input type="number" name="dueSoonDays" min="0" max="60" value="${c.dueSoonDays}"></label>
       <label class="field">Nhắc khi chưa cập nhật tiến độ sau (ngày)<input type="number" name="staleDays" min="1" max="60" value="${c.staleDays}"></label>
     </div>
-    <p class="muted xs">Cảnh báo chạy 07:30 hằng ngày: gửi người chủ trì, lãnh đạo bộ phận chủ trì, PMO (trưởng / chủ dự án); hạng mục đường găng hoặc mốc bị chậm / trễ thì gửi thêm Ban lãnh đạo.</p>
+    <p class="muted xs">Mỗi sáng 07:30 hệ thống nhắc người chủ trì, lãnh đạo ban và PMO. Việc găng hoặc mốc bị chậm thì báo thêm Ban lãnh đạo.</p>
     <p class="error" id="msErr"></p>
     <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Huỷ</button><button class="btn btn-primary" data-testid="mtl-settings-save">Lưu</button></div></form>`);
   const form = modal.querySelector('form');

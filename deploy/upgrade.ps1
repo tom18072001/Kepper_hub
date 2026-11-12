@@ -1,4 +1,4 @@
-﻿# Nâng cấp Kepper Hub trên máy chạy Windows (Docker Desktop): sao lưu → giữ image cũ để quay lại → lấy mã → build → khởi động → kiểm tra.
+﻿# Nâng cấp Kepler Hub trên máy chạy Windows (Docker Desktop): sao lưu → giữ image cũ để quay lại → lấy mã → build → khởi động → kiểm tra.
 # Dùng (PowerShell, trong thư mục kepper):   powershell -ExecutionPolicy Bypass -File deploy\upgrade.ps1 [-Branch main]
 # Nên chạy ngoài giờ nộp báo cáo (không chạy chiều thứ Sáu / sáng thứ Hai).
 param([string]$Branch = "")
@@ -53,4 +53,4 @@ if (-not $ok) {
   Write-Host "     docker compose up -d --no-build app"
   exit 1
 }
-Write-Host "OK — Kepper Hub đã nâng cấp. Image cũ giữ ở $rollback (xoá khi ổn định: docker image rm $rollback)." -ForegroundColor Green
+Write-Host "OK — Kepler Hub đã nâng cấp. Image cũ giữ ở $rollback (xoá khi ổn định: docker image rm $rollback)." -ForegroundColor Green

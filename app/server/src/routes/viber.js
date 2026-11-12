@@ -6,7 +6,7 @@ const V = require('../services/viber');
 module.exports = function mountViber(app, { prisma, auth, audit }) {
   app.get('/api/me/viber', auth, async (req, res) => {
     const link = await prisma.viberLink.findUnique({ where: { userId: req.user.id } });
-    res.json({ enabled: V.enabled(), botName: process.env.VIBER_BOT_NAME || 'Kepper Hub', linked: !!link?.viberId, linkedAt: link?.linkedAt || null, consentAt: link?.consentAt || null,
+    res.json({ enabled: V.enabled(), botName: process.env.VIBER_BOT_NAME || 'Kepler Hub', linked: !!link?.viberId, linkedAt: link?.linkedAt || null, consentAt: link?.consentAt || null,
       pendingCode: link?.code && link.codeExpiresAt > new Date() ? link.code : null, codeExpiresAt: link?.codeExpiresAt || null });
   });
   // Lấy mã liên kết (hết hạn sau 15 phút). Bắt buộc tick đồng ý (gửi thông báo qua Viber — máy chủ ở nước ngoài).
@@ -39,8 +39,8 @@ module.exports = function mountViber(app, { prisma, auth, audit }) {
       if (link) {
         await prisma.$transaction([prisma.viberLink.updateMany({ where: { viberId, NOT: { id: link.id } }, data: { viberId: null, linkedAt: null } }),
           prisma.viberLink.update({ where: { id: link.id }, data: { viberId, linkedAt: new Date(), code: null, codeExpiresAt: null } })]);
-        await V.sendText(viberId, 'Đã liên kết tài khoản Kepper Hub. Bạn sẽ nhận nhắc việc tiến độ tại đây. Huỷ trong "Tài khoản của tôi".').catch(() => {});
-      } else await V.sendText(viberId, 'Gửi mã 6 số lấy trong Kepper Hub (Tài khoản của tôi → Viber) để liên kết.').catch(() => {});
+        await V.sendText(viberId, 'Đã liên kết tài khoản Kepler Hub. Bạn sẽ nhận nhắc việc tiến độ tại đây. Huỷ trong "Tài khoản của tôi".').catch(() => {});
+      } else await V.sendText(viberId, 'Gửi mã 6 số lấy trong Kepler Hub (Tài khoản của tôi → Viber) để liên kết.').catch(() => {});
     }
     res.json({ ok: true });
   });

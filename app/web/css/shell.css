@@ -25,14 +25,14 @@
 .ab-logo{height:34px;width:auto;flex:none;display:block}
 .ab-name{display:flex;flex-direction:column;line-height:1.15;min-width:0;padding-left:11px;border-left:1px solid var(--border)}
 .ab-name b{font-size:1rem;font-weight:700;letter-spacing:-.005em;white-space:nowrap;color:var(--navy)}
-.ab-name span{font-size:.74rem;font-weight:600;color:var(--gold-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.ab-name span{font-size:.8rem;font-weight:600;color:var(--gold-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
 .ab-pop{position:relative}
 .ab-apps{display:flex;align-items:center;gap:8px;height:38px;padding:0 14px 0 11px;border-radius:10px;border:1px solid var(--border-strong);
   background:#fff;color:var(--navy);font-weight:600;font-size:.88rem;cursor:pointer;white-space:nowrap}
 .ab-apps svg.i{color:var(--gold)}
 .ab-apps:hover,.ab-apps[aria-expanded="true"]{background:var(--brand-050);border-color:var(--brand-200)}
 .ab-search{flex:1;max-width:540px;margin:0 auto;display:flex;align-items:center;gap:10px;height:40px;padding:0 10px 0 13px;border-radius:10px;
-  border:1px solid transparent;background:#eef2f6;color:#5d7284;cursor:pointer;font-size:.9rem;min-width:0}
+  border:1px solid transparent;background:#eef2f6;color:#566270;cursor:pointer;font-size:.9rem;min-width:0}
 .ab-search:hover{background:#e6ecf2;color:var(--navy)}
 .ab-search .lbl{flex:1;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ab-right{display:flex;align-items:center;gap:4px;margin-left:auto}
@@ -42,7 +42,7 @@
 .ab-user .avatar{width:36px;height:36px;font-size:.8rem;box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--gold)}
 .ab-user .who{display:flex;flex-direction:column;align-items:flex-start;line-height:1.2;min-width:0}
 .ab-user .who b{font-size:.87rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
-.ab-user .who span{font-size:.74rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
+.ab-user .who span{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
 .ab-user svg.i{color:var(--faint)}
 
 /* Bảng "Ứng dụng" */
@@ -57,7 +57,7 @@
 .la-app:hover,.la-app:focus-visible{background:var(--surface-2);text-decoration:none;outline:none;box-shadow:inset 0 0 0 1px var(--border)}
 .la-app .tile{grid-row:1/3}
 .la-t{font-weight:600;font-size:.88rem;line-height:1.25;color:var(--navy)}
-.la-d{font-size:.75rem;color:var(--muted);line-height:1.3}
+.la-d{font-size:.8rem;color:var(--muted);line-height:1.3}
 
 /* Ô icon màu theo phân hệ */
 .tile{--g:#09334C;width:24px;height:24px;border-radius:7px;display:inline-grid;place-items:center;flex:none;background:var(--g);color:#fff}
@@ -108,8 +108,8 @@
 #sidebar .sb-items .badge{margin-left:auto}
 /* Dự án: theo phòng, mã dự án */
 .sb-projects{display:flex;flex-direction:column;gap:1px}
-#sidebar .sb-dept{padding:8px 10px 2px;font-size:.76rem;font-weight:600;color:var(--navy-mute)}
-#sidebar .sb-projects .key{flex:none;font-size:.7rem;font-weight:700;background:rgba(255,255,255,.1);border-radius:5px;padding:1px 6px;color:#e6eef4;letter-spacing:.02em;min-width:30px;text-align:center}
+#sidebar .sb-dept{padding:8px 10px 2px;font-size:.8rem;font-weight:600;color:var(--navy-mute)}
+#sidebar .sb-projects .key{flex:none;font-size:.8rem;font-weight:700;background:rgba(255,255,255,.1);border-radius:5px;padding:1px 6px;color:#e6eef4;letter-spacing:.02em;min-width:30px;text-align:center}
 #sidebar .sb-projects a.active .key{background:var(--gold);color:var(--navy)}
 #sidebar .sb-none{padding:6px 10px;color:var(--navy-mute)}
 

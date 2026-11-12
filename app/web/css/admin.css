@@ -22,7 +22,7 @@ table.diff-table{box-shadow:none;border-radius:var(--radius-sm)}
 .diff-table th,.diff-table td{padding:7px 10px;font-size:.86rem;vertical-align:top}
 .diff-table td:first-child{width:1%;white-space:nowrap}
 .diff-table s{color:var(--muted)}
-.audit-json{font-size:.78rem;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text-2)}
+.audit-json{font-size:.8rem;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text-2)}
 .perm-grid td.perm-changed{background:var(--brand-050)}
 .perm-grid td.perm-changed select{border-color:var(--brand)}
 .admin-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--radius)}

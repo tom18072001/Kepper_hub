@@ -66,7 +66,7 @@
 .fx-hint{margin:4px 0 0 26px;max-width:30ch}
 
 .fx-menu{display:grid;gap:1px;min-width:260px;max-width:min(340px,calc(100vw - 32px));padding:6px}
-.fx-menu-h{font-size:.75rem;font-weight:700;color:var(--muted);padding:8px 10px 4px}
+.fx-menu-h{font-size:.8rem;font-weight:700;color:var(--muted);padding:8px 10px 4px}
 .fx-menu-sep{height:1px;background:var(--border);margin:6px 4px}
 .fx-menu-empty{margin:0;padding:8px 10px;font-size:.85rem;color:var(--muted);max-width:32ch}
 .fx-menu [role^=menuitem]{display:flex;align-items:center;gap:8px;width:100%;min-height:36px;padding:7px 10px;border:none;border-radius:7px;background:none;
@@ -74,7 +74,7 @@
 .fx-menu [role^=menuitem]:hover,.fx-menu [role^=menuitem]:focus-visible{background:var(--brand-050);color:var(--brand-700)}
 .fx-menu [aria-checked="true"]{background:var(--brand-050);color:var(--brand-700);font-weight:700}
 .fx-mi-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fx-mi-view{flex:none;font-size:.75rem;font-weight:500;color:var(--muted)}
+.fx-mi-view{flex:none;font-size:.8rem;font-weight:500;color:var(--muted)}
 
 /* Trống khi lọc ra 0 */
 .fx-empty{max-width:640px;margin:8px auto;padding:24px}

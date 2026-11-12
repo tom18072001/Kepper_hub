@@ -248,7 +248,7 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
     ].sort(MP.byStep);
 
     const wb = new ExcelJS.Workbook();
-    wb.creator = `Kepper Hub - ${req.user.username}`; wb.created = new Date();
+    wb.creator = `Kepler Hub - ${req.user.username}`; wb.created = new Date();
     const head = { font: { bold: true, color: { argb: 'FFFFFFFF' } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E8C' } }, alignment: { vertical: 'middle', wrapText: true } };
     const ws = wb.addWorksheet('MTL bộ phận', { views: [{ state: 'frozen', ySplit: 2 }] });
     ws.columns = [{ width: 9 }, { width: 58 }, { width: 26 }, { width: 13 }, { width: 13 }, { width: 11 }, { width: 8 }, { width: 11 }, { width: 40 }];

@@ -1,8 +1,8 @@
-# Đánh giá bảo vệ dữ liệu — Kepper Hub
+# Đánh giá bảo vệ dữ liệu — Kepler Hub
 
-Kepper Hub kế thừa mã nguồn và các biện pháp đã đánh giá của WorkHub. Các mục §1–§16 nằm trong `docs/data-protection-assessment.md` của repo tom18072001/ND57, nhánh `workhub-kanban`. Tài liệu này đánh giá lại cho nghiệp vụ mới của Kepper.
+Kepler Hub kế thừa mã nguồn và các biện pháp đã đánh giá của WorkHub. Các mục §1–§16 nằm trong `docs/data-protection-assessment.md` của repo tom18072001/ND57, nhánh `workhub-kanban`. Tài liệu này đánh giá lại cho nghiệp vụ mới của Kepper.
 
-## Đánh giá bảo vệ dữ liệu — Kepper Hub GĐ1 (MTL, cảnh báo tiến độ, KPI, Viber) — 20/10/2026
+## Đánh giá bảo vệ dữ liệu — Kepler Hub GĐ1 (MTL, cảnh báo tiến độ, KPI, Viber) — 20/10/2026
 
 **Giả định** (chưa được xác nhận, nên áp mức nhạy cảm cao hơn):
 - Triển khai on-prem: một máy chủ / PC của công ty chạy Docker, chỉ truy cập trong mạng nội bộ hoặc qua VPN.
@@ -48,7 +48,7 @@ Khi có nhiều tiêu chí thì áp mức cao nhất, nên các tập kế hoạ
 
 | Mã | Trạng thái | Khuyến nghị cụ thể | Ưu tiên |
 |---|---|---|---|
-| GOV-01 | Một phần | Ban hành quy chế dùng Kepper Hub: ai cập nhật MTL, chu kỳ cập nhật (tuần), ai phê duyệt điều chỉnh kế hoạch gốc. Điều chỉnh kế hoạch gốc phải có lý do và được ghi nhật ký (đã thiết kế) | Bắt buộc |
+| GOV-01 | Một phần | Ban hành quy chế dùng Kepler Hub: ai cập nhật MTL, chu kỳ cập nhật (tuần), ai phê duyệt điều chỉnh kế hoạch gốc. Điều chỉnh kế hoạch gốc phải có lý do và được ghi nhật ký (đã thiết kế) | Bắt buộc |
 | GOV-02 | Chưa có | Chỉ định: chủ sở hữu dữ liệu dự án (GĐĐH), người cập nhật MTL (PMO), người chịu trách nhiệm bảo vệ DLCN, người quản trị hệ thống. Lập bảng RACI theo bộ phận | Bắt buộc |
 | GOV-03 | Một phần | Danh mục dữ liệu ghi ở tài liệu này và trong `schema.prisma` (chú thích). Chưa cần công cụ catalog | Nên có |
 | GOV-04 | Một phần | Gắn nhãn "Bảo mật" cho dự án MTL trên giao diện; không cho đặt dự án ở chế độ "Toàn tổ chức" khi chưa có phê duyệt | Nên có |
@@ -102,7 +102,7 @@ Soát lại với Công báo trước khi trích dẫn trong hồ sơ chính th�
 - Cần xác nhận "GR" trong cột đầu mối là bộ phận nào. Tạm hiểu là Đối ngoại / quan hệ chính quyền.
 - Cơ quan bên ngoài (UBND TP, các Sở, Cục, VP ĐKĐĐ) chỉ lưu dạng chữ "đơn vị phê duyệt / phối hợp", không có tài khoản.
 
-## Đánh giá bảo vệ dữ liệu — Kepper Hub GĐ2a (sprint theo tháng T, Cập nhật nhanh, MTL bộ phận điền sẵn) — 20/10/2026
+## Đánh giá bảo vệ dữ liệu — Kepler Hub GĐ2a (sprint theo tháng T, Cập nhật nhanh, MTL bộ phận điền sẵn) — 20/10/2026
 
 **Giả định:** như GĐ1 (on-prem, < 500 nhân viên, không có dữ liệu khách hàng, không có bí mật nhà nước).
 **Kết luận cổng: ĐẠT CÓ ĐIỀU KIỆN** — điều kiện chỉ còn các mục Bắt buộc đã nêu ở GĐ1 (GOV-02, PRI-04, RES-01, RES-03) và ban hành quy chế ai nhập MTL bộ phận (GOV-01).
@@ -173,7 +173,7 @@ Không phát sinh nghĩa vụ mới ngoài GĐ1. Cập nhật nội dung hồ s�
 - Lãnh đạo bộ phận phối hợp có thể thêm dòng con vào bước do bộ phận khác chủ trì (cột "Thuộc bước"), làm tiến độ bước tổng tính theo dòng con đó. Mẫu chỉ gợi ý dòng con cho bước bộ phận chủ trì và hướng dẫn ghi rõ phải thống nhất với bên chủ trì; PMO rà khi duyệt.
 - Mục tiêu % theo sprint dùng kế hoạch gốc tuyến tính — với hạng mục không đều (chờ cơ quan ngoài) có thể đặt mục tiêu chưa sát; cân nhắc trọng số / mốc trung gian ở GĐ sau.
 
-## Đánh giá bảo vệ dữ liệu — Kepper Hub GĐ2b (Báo cáo tuần bộ phận theo mẫu BM-TH-01, tự điền từ MTL) — 23/10/2026
+## Đánh giá bảo vệ dữ liệu — Kepler Hub GĐ2b (Báo cáo tuần bộ phận theo mẫu BM-TH-01, tự điền từ MTL) — 23/10/2026
 
 **Giả định:** như GĐ1 (on-prem, < 500 nhân viên, không có dữ liệu khách hàng, không có bí mật nhà nước). Mẫu BM-TH-01 do chủ dự án cung cấp; tên bộ phận thật trong mẫu KHÔNG đưa vào repo, seed dùng bộ phận giả có sẵn.
 **Kết luận cổng: ĐẠT CÓ ĐIỀU KIỆN**. Có hai nhóm điều kiện:

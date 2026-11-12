@@ -1,5 +1,5 @@
 #!/bin/sh
-# Nâng cấp Kepper Hub trên NAS / máy chủ Linux (bản Linux của deploy/upgrade.ps1):
+# Nâng cấp Kepler Hub trên NAS / máy chủ Linux (bản Linux của deploy/upgrade.ps1):
 # sao lưu → giữ image cũ để quay lại → lấy mã → build → khởi động → kiểm tra.
 #   sudo sh deploy/upgrade.sh [nhánh]
 # Nên chạy ngoài giờ nộp báo cáo (không chạy chiều thứ Sáu / sáng thứ Hai).

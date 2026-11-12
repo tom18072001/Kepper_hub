@@ -1,5 +1,5 @@
 #!/bin/sh
-# Chuẩn bị chạy Kepper Hub trên NAS công ty / máy chủ Linux — chạy MỘT lần, trong thư mục mã nguồn, bằng sudo:
+# Chuẩn bị chạy Kepler Hub trên NAS công ty / máy chủ Linux — chạy MỘT lần, trong thư mục mã nguồn, bằng sudo:
 #   sudo sh deploy/nas-setup.sh /volume1/kepper-data https://kepper.<tên-miền-công-ty>
 # Việc làm: kiểm tra Docker + kiến trúc → tạo thư mục dữ liệu (đúng chủ, đúng quyền) → tạo .env với khoá ngẫu nhiên.
 # KHÔNG khởi động ứng dụng, KHÔNG sửa .env đã có. Hướng dẫn đầy đủ: docs/deploy-nas.md

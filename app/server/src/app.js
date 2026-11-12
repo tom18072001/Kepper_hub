@@ -39,7 +39,7 @@ function createApp({ prisma, config }) {
     origin(origin, callback) {
       if (!origin || config.allowedOrigins.includes(origin)) return callback(null, true);
       // Hay gặp khi chuyển máy chạy (NAS) mà người dùng mở bằng địa chỉ khác APP_ORIGIN (IP thay vì tên miền, http thay vì https).
-      return callback(new HttpError(403, `Địa chỉ ${String(origin).slice(0, 80)} chưa được phép — mở Kepper bằng ${config.allowedOrigins[0] || 'địa chỉ quản trị cung cấp'} hoặc nhờ quản trị thêm vào APP_ORIGIN`, 'CORS_FORBIDDEN'));
+      return callback(new HttpError(403, `Địa chỉ ${String(origin).slice(0, 80)} chưa được phép — mở Kepler Hub bằng ${config.allowedOrigins[0] || 'địa chỉ quản trị cung cấp'} hoặc nhờ quản trị thêm vào APP_ORIGIN`, 'CORS_FORBIDDEN'));
     },
   }));
   // Giới hạn tần suất chung cho API (không áp lên /api/auth để giữ nguyên tiêu chí đăng nhập).

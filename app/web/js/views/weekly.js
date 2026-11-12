@@ -100,7 +100,7 @@ async function drawReport(body) {
   const editable = r.canEdit;
   body.innerHTML = `
     <div><h1>Báo cáo công việc tuần ${fmtD(S.from)} – ${fmtDY(S.to)}</h1>
-      <p class="wk-lead">Nộp trước <b>17:30 ${wday(S.deadlineDay)} ${fmtD(S.deadlineDay)}</b>. Báo cáo đã <b>điền sẵn từ MTL</b>, kế hoạch tuần trước và Action Log giao ban — chỉ sửa chỗ khác thực tế. Hạng mục <b>Chậm</b>, <b>Vướng</b> hoặc <b>Quá hạn</b> phải có nguyên nhân, giải pháp và đề nghị hỗ trợ. Khi gửi, % tiến độ được ghi luôn vào MTL.</p></div>
+      <p class="wk-lead">Nộp trước <b>17:30 ${wday(S.deadlineDay)} ${fmtD(S.deadlineDay)}</b>. Đã <b>điền sẵn</b> từ MTL, kế hoạch tuần trước và Action Log, bạn chỉ sửa chỗ chưa đúng. Việc <b>Chậm</b>, <b>Vướng</b>, <b>Quá hạn</b> cần ghi nguyên nhân, cách xử lý và hỗ trợ cần có. Gửi xong, % tự cập nhật vào MTL.</p></div>
     <section class="wk-card"><h2>Thông tin</h2>
       <div class="wk-grid">
         <label class="wk-f">Bộ phận<span class="wk-ro" data-testid="wk-dept-name">${esc(r.department.name)}</span></label>
@@ -332,7 +332,7 @@ async function drawNotices(body) {
   const people = deptId => store.users.filter(u => u.departmentId === Number(deptId) && u.role !== 'admin' && u.id !== store.me.id);
   body.innerHTML = `
     <div><h1>Báo nộp muộn hoặc vắng mặt</h1>
-      <p class="wk-lead">Nộp muộn: báo trước 17:30 ${S.deadlineDay ? `${wday(S.deadlineDay)} ${fmtD(S.deadlineDay)}` : 'thứ Sáu'}, nộp chậm nhất 12:00 hôm sau. Vắng giao ban: báo trước 17:30 thứ Sáu (đột xuất trước 08:00 ngày giao ban) và cử cấp phó hoặc người được ủy quyền dự thay. Vắng có báo trước vẫn phải nộp báo cáo đúng hạn.</p></div>
+      <p class="wk-lead"><b>Nộp muộn:</b> báo trước 17:30 ${S.deadlineDay ? `${wday(S.deadlineDay)} ${fmtD(S.deadlineDay)}` : 'thứ Sáu'}, nộp chậm nhất 12:00 hôm sau. <b>Vắng giao ban:</b> báo trước 17:30 thứ Sáu (đột xuất: trước 08:00 ngày họp), cử người dự thay. Vắng vẫn nộp báo cáo đúng hạn.</p></div>
     ${mine.length ? `<section class="wk-card" id="wkNoticeForm">
       <div class="wk-grid">
         <label class="wk-f">Loại thông báo<select id="nType" data-testid="wk-n-type">${opts([['LATE', 'Nộp báo cáo muộn'], ['ABSENT', 'Vắng mặt giao ban']], 'LATE')}</select></label>
@@ -384,10 +384,10 @@ async function drawSummary(body) {
   const actions = structuredClone(md.actions || []);
   st.actions = actions;
   body.innerHTML = `
-    <div><h1>Tổng hợp giao ban <span style="color:var(--gold)">08:30 ${wday(S.meetingDay)} ${fmtDY(S.meetingDay)}</span> <span class="wk-secret">BẢO MẬT</span></h1>
-      <p class="wk-lead">Báo cáo tuần ${fmtD(S.from)} – ${fmtDY(S.to)}. Thư ký rà trạng thái nộp, gom yêu cầu hỗ trợ và gửi bản tổng hợp cho TGĐ và các trưởng bộ phận trước 08:00. Trưởng bộ phận đọc trước, chuẩn bị trả lời yêu cầu gửi tới bộ phận mình.</p></div>
+    <div><h1>Tổng hợp giao ban <span class="wk-accent">08:30 ${wday(S.meetingDay)} ${fmtDY(S.meetingDay)}</span> <span class="wk-secret">BẢO MẬT</span></h1>
+      <p class="wk-lead">Tuần ${fmtD(S.from)} – ${fmtDY(S.to)}. Thư ký gửi bản tổng hợp trước 08:00. Trưởng ban đọc trước và chuẩn bị trả lời yêu cầu gửi tới ban mình.</p></div>
     <div class="wk-kpis" data-testid="wk-kpis">${[[`${k.submitted}/${k.total}`, 'Bộ phận đã nộp'], [k.overdue, 'Hạng mục quá hạn'], [k.stuck, 'Chậm / vướng'], [k.helps, 'Yêu cầu hỗ trợ']].map(([v, l]) => `<div class="wk-kpi"><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join('')}</div>
-    <section class="wk-card"><h2>Tình trạng nộp ${M ? '<small>điểm danh và "không đạt" ghi ngay khi chọn</small>' : ''}</h2>
+    <section class="wk-card"><h2>Tình trạng nộp ${M ? '<small>chọn là lưu ngay</small>' : ''}</h2>
       <div class="wk-table"><table><thead><tr><th>Bộ phận</th><th>Trạng thái</th><th>Giờ nộp</th><th>Hạng mục</th><th>Chậm/Vướng</th><th>Quá hạn</th><th>Vắng</th>${M ? '<th>Điểm danh</th><th>Không đạt</th>' : ''}</tr></thead><tbody data-testid="wk-status-table">
       ${s.rows.map(r => `<tr data-testid="wk-srow-${r.id}"><td><b>${esc(r.name)}</b>${r.submittedBy ? `<br><span class="wk-note">${esc(r.submittedBy)}</span>` : ''}</td>
         <td><span class="wk-chip ${toneOf(r.status.tone)}">${esc(r.status.label)}</span>${r.draft ? '<br><span class="wk-note">đang có bản nháp</span>' : ''}${ctx.me.canOnBehalf && !r.submittedAt ? `<br><a class="wk-note" href="${hrefOf('', { d: r.id })}" data-testid="wk-onbehalf-${r.id}">Nhập thay</a>` : ''}</td>
@@ -399,10 +399,10 @@ async function drawSummary(body) {
     ${s.actionReview.length ? `<section class="wk-card"><h2>Rà Action Log tuần trước <small>08:30 – 08:35</small></h2>
       <div class="wk-table"><table><thead><tr><th>Việc</th><th>Bộ phận</th><th>Phụ trách</th><th>Hạn</th><th>Kết quả</th></tr></thead><tbody data-testid="wk-action-review">
       ${s.actionReview.map(a => `<tr><td>${esc(a.task)}</td><td>${esc(a.department)}</td><td>${esc(a.owner || '')}</td><td>${fmtD(a.due)}</td><td>${a.status ? `<span class="wk-chip ${a.status === DONE ? 'c-good' : a.overdue || ['Chậm', 'Vướng'].includes(a.status) ? 'c-bad' : 'c-idle'}">${esc(a.status)}${a.pct !== '' && a.pct != null ? ` · ${a.pct}%` : ''}</span>` : `<span class="wk-chip ${a.overdue ? 'c-bad' : 'c-idle'}">chưa báo cáo</span>`}</td></tr>`).join('')}</tbody></table></div></section>` : ''}
-    <section class="wk-card"><h2>Yêu cầu hỗ trợ, phối hợp <small>xử lý lúc 09:15 – 09:25 · TGĐ kết luận từng yêu cầu</small></h2>
+    <section class="wk-card"><h2>Yêu cầu hỗ trợ, phối hợp <small>09:15 – 09:25 · TGĐ kết luận từng việc</small></h2>
       <div class="wk-help" data-testid="wk-helps">${s.helps.length ? s.helps.map(g => `<div><h3>Gửi ${esc(g.to)} · ${g.list.length}</h3><div class="wk-help">${g.list.map(h => helpHtml(h, M)).join('')}</div></div>`).join('')
         : '<div class="wk-empty">Chưa có yêu cầu hỗ trợ nào trong các báo cáo đã nộp.</div>'}</div></section>
-    <section class="wk-card" id="wkActions"><h2>Kết luận giao ban & Action Log <small>${s.publishedAt ? `đã phát hành ${fmtTime(s.publishedAt)}` : 'phát hành trước 14:00 ngày giao ban'} · việc tự vào Phần I báo cáo tuần sau</small></h2>
+    <section class="wk-card" id="wkActions"><h2>Kết luận giao ban & Action Log <small>${s.publishedAt ? `đã phát hành ${fmtTime(s.publishedAt)}` : 'phát hành trước 14:00 ngày họp'} · việc tự chuyển sang báo cáo tuần sau</small></h2>
       <div id="wkActList"></div>
       ${M ? `<div class="wk-actions"><button class="btn ghost" type="button" id="actAdd" data-testid="wk-act-add">+ Thêm việc</button>
         <button class="btn" type="button" id="actSave" data-testid="wk-act-save">Lưu Action Log</button>
@@ -569,8 +569,8 @@ async function drawCompliance(body, params) {
   const d = await api(`/api/weekly/compliance?month=${month}`);
   const months = Array.from({ length: 6 }, (_, k) => { const x = new Date(Date.UTC(Number(ctx.week.slice(0, 4)), Number(ctx.week.slice(5, 7)) - 1 - k, 1)); return x.toISOString().slice(0, 7); });
   body.innerHTML = `
-    <div><h1>Chấm điểm tuân thủ giao ban <span style="color:var(--gold)">tháng ${month.slice(5)}/${month.slice(0, 4)}</span></h1>
-      <p class="wk-lead">Mỗi trưởng bộ phận bắt đầu tháng với 100 điểm, trừ theo Phụ lục 1 (mức đề xuất — TGĐ chốt khi ban hành). Điểm cuối tháng × trọng số tiêu chí (đề xuất 5%) đưa vào KPI. Lập ngày làm việc thứ 3 của tháng sau, trình TGĐ duyệt.</p></div>
+    <div><h1>Chấm điểm tuân thủ giao ban <span class="wk-accent">tháng ${month.slice(5)}/${month.slice(0, 4)}</span></h1>
+      <p class="wk-lead">Mỗi trưởng ban có 100 điểm đầu tháng, trừ theo Phụ lục 1 (TGĐ chốt mức trừ). Điểm cuối tháng × trọng số (đề xuất 5%) tính vào KPI. Lập vào ngày làm việc thứ 3 tháng sau, trình TGĐ duyệt.</p></div>
     <section class="wk-card"><div class="wk-actions"><label class="wk-week">Tháng<select id="cMonth">${opts(months.map(m => [m, `${m.slice(5)}/${m.slice(0, 4)}`]), month)}</select></label>
       <span class="wk-note">${d.weeks.length ? `Tính ${d.weeks.length} tuần: ${d.weeks.map(fmtD).join(', ')}` : 'Chưa có tuần nào trong tháng được tính'}${d.startWeek ? ` · bắt đầu chấm từ ${fmtDY(d.startWeek)}` : ''}</span>
       <span class="wk-chip ${d.state.status === 'APPROVED' ? 'c-good' : d.state.status === 'SUBMITTED' ? 'c-warn' : 'c-idle'}" data-testid="wk-score-state">${d.state.status === 'APPROVED' ? `Đã duyệt — ${esc(d.state.approvedBy)} ${fmtTime(d.state.approvedAt)} · đã khoá` : d.state.status === 'SUBMITTED' ? `Đã trình TGĐ — ${esc(d.state.submittedBy)} ${fmtTime(d.state.submittedAt)}` : 'Bản nháp (tính theo số liệu hiện tại)'}</span>
@@ -595,7 +595,7 @@ async function drawProgress(body) {
   st.schedule = st.week === ctx.week ? ctx.schedule : null;
   const pct = v => (v == null ? '—' : `${Number(v).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`);
   const tone = s => (s == null ? '' : s >= 0.95 ? 'good' : s >= 0.8 ? 'warn' : 'bad');
-  body.innerHTML = `<div><h1>Tiến độ dự án</h1><p class="wk-lead">Theo Master Timeline. Thanh xanh = thực tế, vạch vàng = kế hoạch hôm nay. Bấm vào số để mở danh sách hạng mục tương ứng.</p></div>
+  body.innerHTML = `<div><h1>Tiến độ dự án</h1><p class="wk-lead">Thanh xanh: đã làm · vạch vàng: kế hoạch hôm nay. Bấm vào số để xem danh sách.</p></div>
     <div class="wk-proj">${d.projects.map(p => { const s = p.summary, link = `#/projects/${p.id}`; return `<section class="wk-card" data-testid="wk-proj-${esc(p.key)}">
       <div class="wk-actions" style="justify-content:space-between"><h2><a href="${link}">${esc(p.name)}</a> <small>${esc(p.key)}${p.currentT == null ? '' : ` · tháng T${p.currentT}/${p.totalT}`}</small></h2><a class="btn btn-sm" href="${link}">Mở dự án</a></div>
       <div class="bar" title="Thực tế ${pct(s.actualPct)} · kế hoạch ${pct(s.plannedPct)}"><i style="width:${Math.max(0, Math.min(100, s.actualPct || 0))}%"></i><b style="left:${Math.max(0, Math.min(100, s.plannedPct || 0))}%"></b></div>

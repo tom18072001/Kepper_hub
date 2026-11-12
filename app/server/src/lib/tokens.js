@@ -46,14 +46,14 @@ function normPath(p) {
 function tokenDenied(method, rawPath, scopes) {
   const m = String(method).toUpperCase();
   const path = normPath(rawPath);
-  if (m === 'GET' || m === 'HEAD') return READ_DENY.some(re => re.test(path)) ? 'Thao tác này không làm qua Claude (xuất tệp / quản trị) — làm trên giao diện Kepper' : null;
+  if (m === 'GET' || m === 'HEAD') return READ_DENY.some(re => re.test(path)) ? 'Thao tác này không làm qua Claude (xuất tệp / quản trị) — làm trên giao diện Kepler Hub' : null;
   if (!scopes.includes('write')) return 'Token chỉ đọc — tạo token có quyền ghi để Claude cập nhật';
   return WRITE_ALLOW.some(([mm, re]) => mm === m && re.test(path)) ? null
-    : 'Thao tác này cần người dùng tự làm trên giao diện Kepper (nộp, phê duyệt, xoá, phát hành, quản trị)';
+    : 'Thao tác này cần người dùng tự làm trên giao diện Kepler Hub (nộp, phê duyệt, xoá, phát hành, quản trị)';
 }
 
 // Lớp thứ hai trong từng route xuất / tải tệp: lời gọi qua token (req.via) bị từ chối dù danh sách chặn có sót.
 function assertNotVia(req) {
-  if (req.via) { const e = new Error('Xuất / tải tệp không làm qua Claude — làm trên giao diện Kepper'); e.status = 403; e.code = 'NOT_VIA_AI'; throw e; }
+  if (req.via) { const e = new Error('Xuất / tải tệp không làm qua Claude — làm trên giao diện Kepler Hub'); e.status = 403; e.code = 'NOT_VIA_AI'; throw e; }
 }
 module.exports = { assertNotVia, PREFIX, MAX_DAYS, SCOPES, sha256, newToken, isToken, tokenDenied, normPath, WRITE_ALLOW, READ_DENY };

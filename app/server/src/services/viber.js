@@ -25,7 +25,7 @@ async function call(method, body, fetchImpl = globalThis.fetch) {
   return j;
 }
 async function sendText(viberId, textValue) {
-  return call('send_message', { receiver: viberId, type: 'text', sender: { name: (process.env.VIBER_BOT_NAME || 'Kepper Hub').slice(0, 28) }, text: String(textValue).slice(0, 7000) });
+  return call('send_message', { receiver: viberId, type: 'text', sender: { name: (process.env.VIBER_BOT_NAME || 'Kepler Hub').slice(0, 28) }, text: String(textValue).slice(0, 7000) });
 }
 // Gửi cho những người đã liên kết + đồng ý. Không bật → không làm gì.
 async function sendToUsers(prisma, userIds, textValue) {

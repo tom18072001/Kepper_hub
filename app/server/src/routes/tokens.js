@@ -17,7 +17,7 @@ module.exports = function mountTokens(app, { prisma, auth, audit, requirePermiss
     res.json(rows.map(out));
   });
   app.post('/api/me/tokens', auth, async (req, res) => {
-    if (req.via) fail(403, 'Token chỉ tạo trên giao diện Kepper', 'NOT_VIA_AI');
+    if (req.via) fail(403, 'Token chỉ tạo trên giao diện Kepler Hub', 'NOT_VIA_AI');
     if (isItAdmin(req.user)) fail(403, 'Tài khoản quản trị hệ thống không dùng Claude để truy cập dữ liệu nghiệp vụ', 'FORBIDDEN');
     const name = text(req.body?.name, 'Tên', { required: true, max: 60 });
     const scopes = (Array.isArray(req.body?.scopes) ? req.body.scopes : ['read']).filter(x => T.SCOPES.includes(x));
@@ -77,13 +77,13 @@ module.exports = function mountTokens(app, { prisma, auth, audit, requirePermiss
     res.json({ status: 'approved', token: p.token, user: p.user });
   });
   app.get('/api/claude/connect/:code', auth, async (req, res) => {
-    if (req.via) fail(403, 'Chỉ xác nhận trên giao diện Kepper', 'NOT_VIA_AI');
+    if (req.via) fail(403, 'Chỉ xác nhận trên giao diện Kepler Hub', 'NOT_VIA_AI');
     const p = pendingOf(req.params.code);
     res.setHeader('Cache-Control', 'no-store');
     res.json({ code: String(req.params.code).toUpperCase(), device: p.device, status: p.status, createdAt: new Date(p.createdAt), sameMachine: sameMachine(p.ip, req.ip) });
   });
   app.post('/api/claude/connect/:code/:decision', auth, async (req, res) => {
-    if (req.via) fail(403, 'Chỉ xác nhận trên giao diện Kepper', 'NOT_VIA_AI');
+    if (req.via) fail(403, 'Chỉ xác nhận trên giao diện Kepler Hub', 'NOT_VIA_AI');
     if (!['approve', 'deny'].includes(req.params.decision)) fail(404, 'Không tìm thấy API', 'NOT_FOUND');
     const code = String(req.params.code).toUpperCase(), p = pendingOf(code);
     if (p.status !== 'pending') fail(409, 'Yêu cầu này đã được xử lý', 'DONE');

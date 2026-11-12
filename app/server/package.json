@@ -2,7 +2,7 @@
   "name": "kepper-hub-server",
   "version": "0.2.0",
   "private": true,
-  "description": "Kepper Hub - theo dõi tiến độ dự án theo Master Timeline (backend)",
+  "description": "Kepler Hub - theo dõi tiến độ dự án theo Master Timeline (backend)",
   "main": "src/server.js",
   "engines": {
     "node": ">=20"

@@ -90,7 +90,7 @@ function profileDl(p, m) {
 // Hiện CCCD / lương: nhập lại mật khẩu (Claude / trình duyệt do AI điều khiển không được nhập mật khẩu); mỗi lượt ghi nhật ký.
 function askPassword(title) {
   return new Promise(resolve => {
-    const modal = openModal(`<h2>${esc(title)}</h2><p class="muted sm">Nhập lại mật khẩu Kepper để xem. Lượt xem được ghi nhật ký.</p><form>
+    const modal = openModal(`<h2>${esc(title)}</h2><p class="muted sm">Nhập lại mật khẩu Kepler Hub để xem. Lượt xem được ghi nhật ký.</p><form>
       <label class="field">Mật khẩu<input type="password" name="pw" autocomplete="current-password" required data-testid="hrm-pw"></label><p class="error" id="pwErr"></p>
       <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Huỷ</button><button class="btn btn-primary" data-testid="hrm-pw-ok">Xem</button></div></form>`);
     modal.querySelector('[data-close]').onclick = () => { closeModal(); resolve(null); };
@@ -336,7 +336,7 @@ async function renderSettings(root, m) {
     <label class="field span2">Ngày lễ / nghỉ bù (mỗi dòng một ngày YYYY-MM-DD)<textarea name="holidays" rows="4">${esc(c.holidays.join('\n'))}</textarea></label>
     <label class="field span2">Chỉ cho chấm công trong mạng văn phòng (mỗi dòng một dải, vd. 192.168.1.0/24; để trống = không giới hạn)
       <textarea name="officeNetworks" rows="2">${esc((c.officeNetworks || []).join('\n'))}</textarea>
-      <span class="muted xs">IP Kepper đang thấy từ máy bạn: <code>${esc(m.yourIp || '')}</code>. Nếu là 172.x / 192.168.65.x (Docker Desktop) thì Kepper KHÔNG thấy IP thật — đừng bật giới hạn này.</span></label>
+      <span class="muted xs">IP Kepler Hub đang thấy từ máy bạn: <code>${esc(m.yourIp || '')}</code>. Nếu là 172.x / 192.168.65.x (Docker Desktop) thì Kepler Hub KHÔNG thấy IP thật — đừng bật giới hạn này.</span></label>
     ${m.me.canRoles ? `<label class="field span2">Người phụ trách nhân sự (Ban giám đốc chỉ định — xem / sửa hồ sơ, hợp đồng, số định danh)
       <select name="hrUserIds" multiple size="6" data-testid="hrm-hr-users">${people.map(u => `<option value="${u.id}"${(c.hrUserIds || []).includes(u.id) ? ' selected' : ''}>${esc(u.fullName)} · ${esc(deptName(u.departmentId))}</option>`).join('')}</select></label>` : ''}
     <p class="error span2" id="cfgErr"></p><div class="modal-actions span2"><button class="btn btn-primary">Lưu thiết lập</button></div></form>`;

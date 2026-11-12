@@ -78,7 +78,7 @@ async function runProjectAlerts(prisma, project, day = new Date()) {
       const link = `#/projects/${project.id}?item=${r.id}`;
       notified += await notify(prisma, to, { type: 'MTL_ALERT', title: `[${KIND_LABEL[kind]}] ${code} · ${String(r.title).slice(0, 80)}${r.critical ? ' (đường găng)' : ''}`, body: detail, link });
       // Viber: tối thiểu hoá — chỉ mã hạng mục, loại cảnh báo, liên kết nội bộ (không tên việc, không số liệu).
-      await viber.sendToUsers(prisma, to, `Kepper Hub — ${KIND_LABEL[kind]}: ${code}. Mở: ${viber.appLink(link)}`).catch(() => {});
+      await viber.sendToUsers(prisma, to, `Kepler Hub — ${KIND_LABEL[kind]}: ${code}. Mở: ${viber.appLink(link)}`).catch(() => {});
     }
   }
   // Ảnh chụp tiến độ hôm nay: toàn dự án + từng bộ phận (đường cong S thực tế), tiến độ theo cây đầu việc như Dashboard.
