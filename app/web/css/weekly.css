@@ -113,3 +113,5 @@ details.wk-dept>div{padding:0 12px 12px;display:flex;flex-direction:column;gap:1
 @media (max-width:560px){.wk-proj .kp{grid-template-columns:1fr 1fr}}
 @media (prefers-reduced-motion:no-preference){.wk-tabs a,.wk .btn{transition:background .15s,color .15s,border-color .15s}}
 .wk-accent{color:var(--gold-ink,#8A6A24)}
+/* Trang có bảng (tổng hợp giao ban, chấm điểm, tiến độ): nới rộng để cột không bị chật; trang soạn báo cáo giữ 920px dễ đọc */
+.wk:has(.wk-table){max-width:1120px}

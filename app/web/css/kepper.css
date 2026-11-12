@@ -38,7 +38,7 @@
 .pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.warn{background:var(--warn-soft);color:var(--warn)} .pill.danger{background:var(--danger-soft);color:var(--danger)}
 .pill.info{background:var(--brand-050);color:var(--brand-700)}
 .ok-t{color:var(--ok)} .warn-t{color:var(--warn)} .danger-t{color:var(--danger)}
-.crit{color:var(--danger);font-size:.7rem;vertical-align:middle}
+.crit{color:var(--danger);display:inline-flex;vertical-align:middle}
 .ms{color:var(--brand-700)}
 /* Kế hoạch & Gantt */
 .mtl-pf{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
@@ -234,3 +234,8 @@
 .hm-grid{grid-template-columns:repeat(auto-fill,minmax(min(420px,100%),1fr))}
 .hm-card{min-width:0}
 @media (max-width:440px){.hm-kpis{grid-template-columns:repeat(3,1fr)}}
+/* Ký hiệu mốc / đường găng / xong vẽ bằng SVG (thay ◆ ● ✓) — cùng cỡ chữ đi kèm */
+.gl{display:inline-block;width:.8em;height:.8em;vertical-align:-.05em;flex:none}
+.gl-crit{width:.55em;height:.55em;vertical-align:.08em}
+.gl-ck{width:.95em;height:.95em;vertical-align:-.12em;margin-right:.25em}
+.btn .gl-ck{margin-right:0}

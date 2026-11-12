@@ -32,7 +32,7 @@ function progressBar(i, { t, goal = 'month' }) {
 function quickControls(i) {
   const a = Math.round(i.actual || 0);
   return `<div class="qk" data-qk="${i.id}" data-code="${esc(i.code)}">
-    <button type="button" class="btn btn-sm qk-xong" data-qv="100" data-testid="qk-${esc(i.code)}-100" title="Đánh dấu việc này đã xong">✓ Xong</button>
+    <button type="button" class="btn btn-sm qk-xong" data-qv="100" data-testid="qk-${esc(i.code)}-100" title="Đánh dấu việc này đã xong"><svg class="gl gl-ck" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>Xong</button>
     <span class="qk-seg" role="group" aria-label="Đang làm dở: cập nhật % ${esc(i.code)}">${STEPS.map(v => `<button type="button" class="qk-b${a === v ? ' on' : ''}" data-qv="${v}" data-testid="qk-${esc(i.code)}-${v}">${v}%</button>`).join('')}</span>
     <label class="qk-n-wrap" title="Nhập % khác rồi bấm Enter"><input type="number" class="qk-n" min="0" max="100" step="5" value="${a}" aria-label="Tiến độ % khác ${esc(i.code)}" data-testid="qk-${esc(i.code)}-n">%</label>
     <button type="button" class="link-btn qk-note-btn" data-qnote aria-expanded="false">Ghi chú</button>
@@ -46,12 +46,12 @@ export function sprintCard(i, { t, goal = 'month', href, canEdit = false, showDe
   const tone = i.done ? 'ok' : TONE[i.status] || '';
   // Việc đã xong: một dòng gọn, để mắt dồn vào việc còn lại.
   if (i.done && compactDone) return `<article class="sc sc-ok sc-isdone sc-compact" data-id="${i.id}" data-testid="sc-${esc(i.code)}">
-    <span class="ok-t">✓</span><a class="code" href="${href(i)}">${esc(i.code)}</a>${i.planCode ? `<span class="muted xs">Bước ${esc(i.planCode)}</span>` : ''}
+    <span class="ok-t"><svg class="gl gl-ck" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span><a class="code" href="${href(i)}">${esc(i.code)}</a>${i.planCode ? `<span class="muted xs">Bước ${esc(i.planCode)}</span>` : ''}
     <a class="sc-title" href="${href(i)}">${esc(i.title)}</a><span class="grow"></span><span class="muted xs">${showDept && i.leadDepartmentName ? esc(i.leadDepartmentName) + ' · ' : ''}${dueText(i)}</span></article>`;
   const who = i.assignees?.length ? i.assignees.map(u => personLink(u)).join(', ') : '<span class="muted">chưa giao người</span>';
   return `<article class="sc ${tone ? 'sc-' + tone : ''}${i.done ? ' sc-isdone' : ''}" data-id="${i.id}" data-testid="sc-${esc(i.code)}">
     <div class="sc-top"><a class="code" href="${href(i)}">${esc(i.code)}</a>${i.planCode ? `<span class="muted xs">Bước ${esc(i.planCode)}</span>` : ''}
-      ${i.critical ? '<span class="crit" title="Đường găng">●</span>' : ''}${i.milestone ? '<span class="ms" title="Mốc">◆</span>' : ''}
+      ${i.critical ? '<span class="crit" title="Đường găng"><svg class="gl gl-crit" viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="currentColor"/></svg></span>' : ''}${i.milestone ? '<span class="ms" title="Mốc"><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg></span>' : ''}
       <span class="grow"></span>${i.done ? '<span class="pill ok">Đã xong</span>' : `<span class="pill ${tone}" data-testid="sc-status">${esc(i.statusLabel || '')}</span>`}</div>
     <a class="sc-title" href="${href(i)}">${esc(i.title)}</a>
     ${i.parentCode && i.parentTitle ? `<div class="muted xs sc-parent">thuộc bước ${esc(i.parentCode)} · ${esc(i.parentTitle.slice(0, 70))}</div>` : ''}
