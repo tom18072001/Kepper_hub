@@ -82,10 +82,12 @@ function createApp({ prisma, config }) {
   // Công khai (trang đăng nhập cần), chỉ 4 tệp ảnh cố định, không liệt kê thư mục.
   const BRAND_FILES = ['logo.png', 'logo-light.png', 'mark.png', 'mark-light.png'];
   const fsSync = require('node:fs');
+  const pngSize = file => { try { const b = fsSync.readFileSync(file); return b.readUInt32BE(16) + 'x' + b.readUInt32BE(20); } catch { return null; } };
   const brandHas = f => !!config.brandingDir && fsSync.existsSync(path.join(config.brandingDir, f));
   app.get('/api/brand', (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
-    res.json({ name: config.orgName || '', files: BRAND_FILES.filter(brandHas) });
+    const m = brandHas('mark.png') && pngSize(path.join(config.brandingDir, 'mark.png'));
+    res.json({ name: config.orgName || '', files: BRAND_FILES.filter(brandHas), appIcon: !!m && m.split('x')[0] === m.split('x')[1] && Number(m.split('x')[0]) >= 144 });
   });
   app.get('/branding/:file', (req, res) => {
     if (!BRAND_FILES.includes(req.params.file) || !brandHas(req.params.file)) return res.status(404).end();
@@ -128,7 +130,6 @@ function createApp({ prisma, config }) {
   });
   // Cài Kepler Hub như một ứng dụng (PWA, Edge / Chrome): tên và biểu tượng. Có logo công ty (BRANDING_DIR/mark.png) thì dùng logo,
   // không thì dùng biểu tượng chung trong mã nguồn. Công khai như trang đăng nhập — không chứa dữ liệu người dùng.
-  const pngSize = file => { try { const b = fsSync.readFileSync(file); return b.readUInt32BE(16) + 'x' + b.readUInt32BE(20); } catch { return null; } };
   app.get('/manifest.webmanifest', (req, res) => {
     const icons = [
       { src: 'assets/app-icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
@@ -137,7 +138,8 @@ function createApp({ prisma, config }) {
       { src: 'assets/app-icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ];
     const mark = brandHas('mark.png') && pngSize(path.join(config.brandingDir, 'mark.png'));
-    if (mark && Number(mark.split('x')[0]) >= 144) icons.unshift({ src: 'branding/mark.png', sizes: mark, type: 'image/png', purpose: 'any' });
+    const [mw, mh] = mark ? mark.split('x').map(Number) : [0, 0];
+    if (mw >= 144 && mw === mh) icons.unshift({ src: 'branding/mark.png', sizes: mark, type: 'image/png', purpose: 'any' });
     res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache');
     res.send(JSON.stringify({

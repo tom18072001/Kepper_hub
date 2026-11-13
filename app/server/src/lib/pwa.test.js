@@ -30,6 +30,14 @@ test('manifest: tên Kepler Hub, chế độ standalone, đủ biểu tượng 1
   } finally { s.close(); }
 });
 
+test('logo không vuông không dùng làm biểu tượng ứng dụng', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-'));
+  const b = Buffer.alloc(33); b.write('\x89PNG\r\n\x1a\n', 0, 'latin1'); b.writeUInt32BE(160, 16); b.writeUInt32BE(76, 20);
+  fs.writeFileSync(path.join(dir, 'mark.png'), b);
+  const s = await serve({ BRANDING_DIR: dir });
+  try { const m = await (await fetch(s.base + '/manifest.webmanifest')).json(); assert.notEqual(m.icons[0].src, 'branding/mark.png'); } finally { s.close(); }
+});
+
 test('manifest dùng logo công ty (BRANDING_DIR/mark.png) khi có, kèm kích thước thật', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brand-'));
   fs.copyFileSync(path.join(__dirname, '../../../web/assets/app-icon-512.png'), path.join(dir, 'mark.png'));

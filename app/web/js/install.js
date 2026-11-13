@@ -16,5 +16,5 @@ sync();
 fetch('api/brand').then(r => (r.ok ? r.json() : null)).then(b => {
   if (!b) return;
   if (b.name) $('#org').textContent = `Theo dõi tiến độ dự án · ${b.name}`;
-  if (b.files?.includes('mark.png')) $('#appIcon').src = 'branding/mark.png';
+  if (b.appIcon) $('#appIcon').src = 'branding/mark.png';
 }).catch(() => {});
