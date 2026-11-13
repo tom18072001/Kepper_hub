@@ -56,7 +56,7 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
       viewerIds: (s.director || s.clerk) && d.security === 'BAO_MAT_CAO' ? d.viewerIds : undefined,
       cancelled: d.cancelledAt ? { at: d.cancelledAt, reason: d.cancelReason } : null,
       createdBy: { id: d.createdById, fullName: users[d.createdById] || null },
-      can: { edit: !s.ai && !d.cancelledAt && (s.director || s.clerk), status: Object.keys(V.STATUS[d.book]).filter(k => k !== d.status && !s.ai && V.canStatus(d, s, k)) },
+      can: { edit: !s.ai && !d.cancelledAt && (s.director || s.clerk), status: (ks => ks.filter((k, i) => i > ks.indexOf(d.status) && !s.ai && V.canStatus(d, s, k)))(Object.keys(V.STATUS[d.book])) }, // chỉ các bước kế tiếp
     };
   }
 
@@ -190,6 +190,8 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
     const d = await load(req.params.id, s);
     const to = oneOf(String(req.body?.to || ''), Object.keys(V.STATUS[d.book]), 'Trạng thái');
     if (s.ai || !V.canStatus(d, s, to)) fail(403, 'Bạn không đổi được trạng thái này', 'FORBIDDEN');
+    const order = Object.keys(V.STATUS[d.book]);
+    if (order.indexOf(to) <= order.indexOf(d.status)) fail(422, 'Trạng thái chỉ đi tiếp, không quay lại', 'INVALID_STATUS');
     const note = text(req.body?.note, 'Ghi chú', { max: 500 }) || null;
     const u = await prisma.$transaction(async tx => {
       const r = await tx.docRecord.update({ where: { id: d.id }, data: { status: to } });

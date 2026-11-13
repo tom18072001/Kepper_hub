@@ -109,7 +109,7 @@ async function renderDoc(root, id, setCrumbs, m) {
   const STEP_LABEL = { PROCESSING: 'Bắt đầu xử lý', DONE: 'Báo xong', FILED: 'Lập hồ sơ', SUBMITTED: 'Đã trình', ASSIGNED: 'Đã giao', SENT: 'Đã gửi', CONFIRMED: 'Bên nhận đã xác nhận', REPLIED: 'Đã có phản hồi', EFFECTIVE: 'Có hiệu lực', EXPIRED: 'Hết hiệu lực', RECEIVED: 'Về "Đã tiếp nhận"', NUMBERED: 'Về "Đã cấp số"', ISSUED: 'Về "Đã ban hành"' };
   const ACT = { CREATE: 'Vào sổ', STATUS: 'Đổi trạng thái', ASSIGN: 'Giao xử lý', UPDATE: 'Sửa thông tin', CANCEL: 'Hủy số' };
   const st = m.status[d.book.code];
-  root.innerHTML = `<div class="page-head"><h1 class="code">${esc(d.number)}</h1>${statusPill(d)}
+  root.innerHTML = `<div class="page-head"><h1>${esc(d.number)}</h1>${statusPill(d)}
       ${d.can.edit ? '<button class="btn btn-ghost" id="vtEdit" data-testid="vt-edit">Sửa / giao xử lý</button><button class="btn btn-ghost danger" id="vtCancel" data-testid="vt-cancel">Hủy số</button>' : ''}</div>
     <section class="card pg-section"><h2 style="margin-top:0">${esc(d.title)}</h2>
       ${d.cancelled ? `<p class="danger-text">Đã hủy ${fmtDateTime(d.cancelled.at)} — ${esc(d.cancelled.reason)}. Số này giữ nguyên trong sổ, không cấp lại.</p>` : ''}
