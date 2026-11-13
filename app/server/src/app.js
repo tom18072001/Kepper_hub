@@ -126,6 +126,32 @@ function createApp({ prisma, config }) {
       res.send(mcpbCache.buf);
     } catch (error) { next(error); }
   });
+  // Cài Kepler Hub như một ứng dụng (PWA, Edge / Chrome): tên và biểu tượng. Có logo công ty (BRANDING_DIR/mark.png) thì dùng logo,
+  // không thì dùng biểu tượng chung trong mã nguồn. Công khai như trang đăng nhập — không chứa dữ liệu người dùng.
+  const pngSize = file => { try { const b = fsSync.readFileSync(file); return b.readUInt32BE(16) + 'x' + b.readUInt32BE(20); } catch { return null; } };
+  app.get('/manifest.webmanifest', (req, res) => {
+    const icons = [
+      { src: 'assets/app-icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: 'assets/app-icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: 'assets/app-icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+      { src: 'assets/app-icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+    ];
+    const mark = brandHas('mark.png') && pngSize(path.join(config.brandingDir, 'mark.png'));
+    if (mark && Number(mark.split('x')[0]) >= 144) icons.unshift({ src: 'branding/mark.png', sizes: mark, type: 'image/png', purpose: 'any' });
+    res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.send(JSON.stringify({
+      id: '/', name: 'Kepler Hub', short_name: 'Kepler Hub',
+      description: config.orgName ? `Theo dõi tiến độ dự án · ${config.orgName}` : 'Theo dõi tiến độ dự án theo Master Timeline',
+      lang: 'vi', start_url: './#/home', scope: './', display: 'standalone', display_override: ['window-controls-overlay', 'standalone'],
+      background_color: '#FFFFFF', theme_color: '#09334C', icons,
+      shortcuts: [
+        { name: 'Cập nhật nhanh', url: './#/quick' },
+        { name: 'Báo cáo tuần', url: './#/tuan' },
+        { name: 'Việc của tôi', url: './#/mywork' },
+      ],
+    }));
+  });
   // HTML/JS/CSS luôn kiểm tra lại (ETag) để bản cập nhật hiện ngay; font giữ cache 7 ngày.
   app.use(express.static(config.webDir, { index: 'index.html', setHeaders(res, file) {
     res.setHeader('Cache-Control', /\.woff2$/.test(file) ? 'public, max-age=604800' : 'no-cache');

@@ -282,3 +282,5 @@ img.avatar-img{object-fit:cover;background:var(--surface-3);display:inline-block
 .org-peers>summary{cursor:pointer;margin-bottom:6px}
 @media (max-width:1000px){.pf-grid{grid-template-columns:1fr}}
 @media (max-width:560px){.pf-row{grid-template-columns:1fr;gap:2px}.pf-head{flex-direction:column;align-items:flex-start}}
+.login-install{display:block;margin-top:14px;text-align:center;font-size:.85rem;color:var(--muted)}
+.login-install:hover{color:var(--brand,#09334C)}

@@ -1,4 +1,5 @@
 // Khởi động ứng dụng: đăng nhập, khung giao diện, điều hướng theo hash.
+import './pwa.js';
 import { api, setToken, getToken, onAuthEvent, lastLocalWrite } from './api.js';
 import { store, can, loadBasics, reloadProjects, isItAdmin, workScope } from './store.js';
 import { $, $$, esc, toast, closeModal, requestCloseModal, avatar, errorMessage, ago, setPrefUser, clearDrafts, uiPref } from './util.js';

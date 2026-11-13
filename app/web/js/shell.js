@@ -1,8 +1,9 @@
 // Khung giao diện kiểu bộ phần mềm văn phòng (1Office, Base…): thanh đầu trang có "Ứng dụng", tìm nhanh, thông báo, menu tài khoản;
 // sidebar chia nhóm theo phân hệ (Tiến độ · Công việc · Nghiệp vụ · Dự án · Quản trị), thu gọn thành dải icon, nhớ theo người dùng.
 // Một nguồn khai báo (NAV) cho cả sidebar và bảng "Ứng dụng".
+import { canInstall, promptInstall, onInstallChange } from './pwa.js';
 import { store, can, isItAdmin, workScope } from './store.js';
-import { $, $$, esc, uiPref } from './util.js';
+import { $, $$, esc, uiPref, toast } from './util.js';
 import { icon } from './icons.js';
 
 const mods = () => store.settings?.modules || [];
@@ -81,6 +82,7 @@ function renderUserMenu() {
     <a class="menu-item" role="menuitem" href="#/me" data-testid="nav-me">${icon('users')}Thông tin cá nhân</a>
     ${it ? '' : `<a class="menu-item" role="menuitem" href="#/claude" data-testid="nav-claude">${icon('send')}Kết nối Claude</a>`}
     ${it ? '' : `<a class="menu-item" role="menuitem" href="#/trash" data-testid="nav-trash">${icon('trash')}Thùng rác</a>`}
+    <button type="button" class="menu-item${canInstall() ? '' : ' hidden'}" role="menuitem" id="installApp" data-testid="install-app">${icon('download')}Cài Kepler Hub lên máy</button>
     <button type="button" class="menu-item" role="menuitem" id="userShortcuts">${icon('settings')}Phím tắt</button>
     <div class="um-sep"></div>
     <button type="button" class="menu-item danger" role="menuitem" id="logoutBtn" data-testid="logout">${icon('logout')}Đăng xuất</button>`;
@@ -147,6 +149,7 @@ export function initShell({ onLogout, onShortcuts }) {
   $('#userPanel').addEventListener('click', e => {
     if (e.target.closest('#logoutBtn')) onLogout?.();
     if (e.target.closest('#userShortcuts')) onShortcuts?.();
+    if (e.target.closest('#installApp')) promptInstall().then(r => { if (r === 'accepted') toast('Đã cài Kepler Hub — mở từ biểu tượng trên máy'); });
   });
   document.addEventListener('click', e => { if (!e.target.closest('.ab-pop')) closePops(); });
   document.addEventListener('keydown', e => {
@@ -178,3 +181,6 @@ export function renderMe() {
   $('#orgName').classList.toggle('hidden', !org);
   document.title = `Kepler Hub${org ? ' · ' + org : ''}`;
 }
+
+// Hiện / ẩn "Cài Kepler Hub lên máy" khi trình duyệt cho phép cài (hoặc vừa cài xong).
+onInstallChange(() => $('#installApp')?.classList.toggle('hidden', !canInstall()));
