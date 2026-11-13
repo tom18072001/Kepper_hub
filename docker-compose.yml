@@ -131,6 +131,26 @@ services:
     entrypoint: ["sh", "/deploy/restore.sh"]
     restart: "no"
 
+  # ---- HTTPS nội bộ (profile "https") — máy chủ riêng / máy ảo, không có reverse proxy sẵn ----
+  # Caddy giữ chứng chỉ do CA nội bộ của chính Caddy cấp (tls internal), chuyển vào app.
+  # Laptop cần tin chứng chỉ gốc: tải http://<HUB_HOST>/kepler-hub-ca.crt hoặc đẩy bằng Group Policy (docs/deploy-vm.md).
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      HUB_HOST: ${HUB_HOST:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${CADDY_DATA_PATH:-caddydata}:/data
+    ports:
+      - "${HTTPS_BIND:-0.0.0.0}:${HTTPS_PORT:-443}:443"
+      - "${HTTPS_BIND:-0.0.0.0}:${HTTP_PORT:-80}:80"
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
+
   # ---- Tuỳ chọn (profile "full") ----
   minio:
     profiles: ["full"]
@@ -169,6 +189,7 @@ services:
 
 volumes:
   pgdata:
+  caddydata:
   uploads:
   miniodata:
 

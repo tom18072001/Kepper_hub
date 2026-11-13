@@ -1,0 +1,27 @@
+# Kepler Hub — HTTPS nội bộ (docker compose --profile https). Tên máy: biến HUB_HOST (vd. kepler-hub.kepler.com).
+{
+	admin off
+}
+
+# Cổng 80: chỉ phát chứng chỉ gốc (để máy ngoài domain cài tin cậy) và chuyển mọi thứ khác sang HTTPS.
+http://{$HUB_HOST} {
+	handle /kepler-hub-ca.crt {
+		root * /data/caddy/pki/authorities/local
+		rewrite * /root.crt
+		header Content-Type application/x-x509-ca-cert
+		header Content-Disposition "attachment; filename=kepler-hub-ca.crt"
+		file_server
+	}
+	handle {
+		redir https://{host}{uri} permanent
+	}
+}
+
+{$HUB_HOST} {
+	tls internal
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy app:4000 {
+		flush_interval -1
+	}
+}
