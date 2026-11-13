@@ -1,0 +1,14 @@
+{
+  "_ghi_chu": "MẪU, tên GIẢ. Tệp thật đặt trên máy chạy, không đưa vào git.",
+  "departments": [
+    { "code": "BGD-MAU", "name": "Ban Giám đốc (mẫu)" },
+    { "code": "TH-MAU", "name": "Phòng Tổng hợp (mẫu)", "supervisorUsername": "pgd.mau" },
+    { "code": "TK-MAU", "name": "Phòng Thiết kế (mẫu)", "parentCode": null }
+  ],
+  "users": [
+    { "username": "tgd.mau", "fullName": "Nguyễn Văn Mẫu", "displayTitle": "Tổng Giám đốc", "role": "director", "departmentCode": "BGD-MAU" },
+    { "username": "pgd.mau", "fullName": "Trần Thị Thử", "displayTitle": "Phó TGĐ", "role": "director", "departmentCode": "BGD-MAU" },
+    { "username": "tp.th.mau", "fullName": "Lê Văn Giả", "displayTitle": "Trưởng phòng", "role": "manager", "departmentCode": "TH-MAU" },
+    { "username": "cv.tk.mau", "fullName": "Phạm Thị Ví Dụ", "displayTitle": "Chuyên viên", "role": "member", "departmentCode": "TK-MAU" }
+  ]
+}
