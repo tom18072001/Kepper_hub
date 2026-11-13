@@ -5,7 +5,12 @@
 //   { "departments": [{ "code": "TH", "name": "Phòng Tổng hợp", "parentCode": null, "supervisorUsername": null }],
 //     "users": [{ "username": "nguyen.van.a", "fullName": "...", "displayTitle": "Trưởng phòng", "email": "...", "phone": "...",
 //                 "role": "manager", "departmentCode": "TH" }] }
+//     "settings": {   // tuỳ chọn — tham số lấy từ quy chế của công ty, tham chiếu người bằng tài khoản, bộ phận bằng mã
+//       "vanthu": { "entities": [{ "code": "HLD", "name": "..." }], "clerks": ["user"], "legal": ["user"] },
+//       "hrm": { "hr": ["user"], "workStart": "08:00", "workEnd": "17:00", "lunchStart": "12:00", "lunchEnd": "13:00", "workDays": [1,2,3,4,5], "holidays": ["2026-11-24"], "annualDays": 12 },
+//       "weekly": { "secretaryDepartmentCode": "TH" } } }
 // Chạy lại được nhiều lần: phòng ban trùng mã thì cập nhật tên / cấp trên; tài khoản đã có thì GIỮ NGUYÊN (không đổi mật khẩu, quyền).
+// settings: ghi đè đúng các khoá có trong tệp, giữ nguyên khoá khác đã đặt trên giao diện.
 // Tài khoản mới: mật khẩu mặc định của hệ thống + bắt đổi ở lần đăng nhập đầu, quyền theo vai trò — giống tạo trong trang Quản trị.
 const fs = require('node:fs');
 const bcrypt = require('bcryptjs');
@@ -60,6 +65,24 @@ async function main() {
       const sup = await tx.user.findUnique({ where: { username: String(d.supervisorUsername).toLowerCase() } });
       if (!sup || sup.role !== 'director') { report.errors.push(`PGĐ phụ trách ${d.supervisorUsername} không phải tài khoản Ban giám đốc`); continue; }
       await tx.department.update({ where: { code: String(d.code).toUpperCase() }, data: { supervisorId: sup.id } });
+    }
+    const st = input.settings || {};
+    const uids = async (names, label) => {
+      const out = [];
+      for (const n of names || []) { const u = await tx.user.findUnique({ where: { username: String(n).toLowerCase() } }); if (u) out.push(u.id); else report.errors.push(`${label}: không có tài khoản ${n}`); }
+      return out;
+    };
+    const merge = async (key, patch) => {
+      const row = await tx.appSetting.findUnique({ where: { key } });
+      const value = { ...(row?.value && typeof row.value === 'object' ? row.value : {}), ...patch };
+      await tx.appSetting.upsert({ where: { key }, update: { value, updatedById: root?.id ?? null }, create: { key, value, updatedById: root?.id ?? null } });
+      report.settings = [...(report.settings || []), key];
+    };
+    if (st.vanthu) await merge('vanthu.config', { ...(st.vanthu.entities && { entities: st.vanthu.entities }), ...(st.vanthu.clerks && { clerkUserIds: await uids(st.vanthu.clerks, 'Văn thư') }), ...(st.vanthu.legal && { legalUserIds: await uids(st.vanthu.legal, 'Pháp chế') }) });
+    if (st.hrm) { const { hr, ...rest } = st.hrm; await merge('hrm.config', { ...rest, ...(hr && { hrUserIds: await uids(hr, 'Nhân sự') }) }); }
+    if (st.weekly?.secretaryDepartmentCode) {
+      const d = await tx.department.findUnique({ where: { code: String(st.weekly.secretaryDepartmentCode).toUpperCase() } });
+      if (d) await merge('weekly.config', { secretaryDepartmentId: d.id }); else report.errors.push(`Không có bộ phận thư ký ${st.weekly.secretaryDepartmentCode}`);
     }
     if (dry) throw Object.assign(new Error('dry-run'), { dry: true });
   }).catch(e => { if (!e.dry) throw e; });
