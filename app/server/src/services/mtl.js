@@ -132,7 +132,8 @@ const ALIASES = [
   { codes: ['GR'], keys: ['gr', 'doi ngoai', 'gpmb', 'giai phong mat bang'] }, { codes: ['PMO'], keys: ['pmo', 'ql du an', 'quan ly du an'] },
 ];
 const EXTERNAL = /^(ubnd|so |so$|cuc |bo |vp dkdd|vpdkdd|ub |dvtv|tu van|chu dat|uy ban|hoi dong|ngan hang)/;
-function splitOwner(text, departments) {
+// extra: { 'kinh doanh': 'BGD' } — cách gọi riêng của công ty (thiết lập mtl.ownerAliases), ưu tiên trước bảng ALIASES mặc định.
+function splitOwner(text, departments, extra = {}) {
   const byCode = new Map(departments.map(d => [String(d.code || '').toUpperCase(), d]));
   const byName = new Map(departments.map(d => [norm(d.name), d]));
   const tokens = String(text || '').split(/[/,;+&]| và |–|—/i).map(t => t.trim()).filter(Boolean);
@@ -140,6 +141,7 @@ function splitOwner(text, departments) {
   for (const t of tokens) {
     const n = norm(t);
     let dept = byCode.get(t.toUpperCase()) || byName.get(n) || byName.get(norm('Phòng ' + t)) || byName.get(norm('Ban ' + t));
+    if (!dept && extra[n]) dept = byCode.get(String(extra[n]).toUpperCase());
     if (!dept) for (const a of ALIASES) if (a.keys.includes(n)) { const c = a.codes.find(x => byCode.get(x)); if (c) { dept = byCode.get(c); break; } }
     if (dept) { if (!internal.includes(dept.id)) internal.push(dept.id); }
     else if (EXTERNAL.test(n + ' ') || /^(ubnd|sở|cục|bộ|vp)/i.test(t)) external.push(t);
@@ -309,7 +311,7 @@ function sprintLane(item, sprint, next = null, { current = false } = {}) {
 const sprintTarget = (item, sprint) => ({ from: plannedPct(item, new Date(sprint.start.getTime() - 1)), to: plannedPct(item, sprint.end) });
 
 module.exports = {
-  DEFAULT_ALERTS, alertConfigOf, STATUS, vnDay, vnMidnight, monthStart, tToDates, initialBaseline, currentT, timeValue, parseMtlRows, splitOwner,
+  DEFAULT_ALERTS, alertConfigOf, STATUS, vnDay, vnMidnight, monthStart, tToDates, initialBaseline, currentT, timeValue, parseMtlRows, splitOwner, norm,
   plannedPct, durationDays, weightOf, rollup, statusOf, spiOf, leavesOf, treeProgress, kpiOf, plannedCurve, isDone, isCancelled,
   sprintOf, sprintState, sprintLane, sprintTarget,
 };
