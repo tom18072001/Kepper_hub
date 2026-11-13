@@ -992,3 +992,59 @@ model HrAttendance {
   @@unique([userId, day])
   @@index([departmentId, day])
 }
+
+// ---- Văn thư (QyĐ-GA-01): sổ văn bản đến / đi / nội bộ, cấp số liên tục theo dãy, hạn xử lý theo độ khẩn ----
+model DocRecord {
+  id             Int        @id @default(autoincrement())
+  book           String // DEN | DI | NOIBO
+  series         String // D10 (đến) | D9 (đi) | D5 | D6 | D7-<mã bộ phận> (nội bộ)
+  entity         String // mã pháp nhân: HLD, DXA…
+  year           Int
+  seq            Int
+  number         String // số và ký hiệu đầy đủ, vd. 0123/2026/Đ-HLD — mã định danh duy nhất
+  docType        String? // tên loại viết tắt: CV, TB, QĐ, TTr…
+  title          String // trích yếu
+  counterpart    String? // nơi gửi (đến) / nơi nhận (đi)
+  externalNumber String? // số, ký hiệu của bên gửi (văn bản đến)
+  docDate        String? // ngày văn bản (YYYY-MM-DD)
+  registeredAt   DateTime   @default(now())
+  security       String     @default("NOI_BO") // CONG_KHAI | NOI_BO | HAN_CHE | BAO_MAT_CAO
+  urgency        String     @default("THUONG") // THUONG | KHAN | THUONG_KHAN | HOA_TOC
+  dueDate        String? // hạn xử lý (văn bản đến) / hạn chờ phản hồi (văn bản đi)
+  status         String
+  handlerId      Int?
+  departmentId   Int?
+  signerName     String?
+  channel        String? // kênh gửi / nhận: bưu điện, trực tiếp, email…
+  trackingCode   String?
+  toLegal        Boolean    @default(false) // văn bản có thời hạn pháp lý → chuyển Pháp chế đồng thời
+  viewerIds      Int[] // Bảo mật cao: danh sách đích danh được xem
+  note           String?
+  cancelledAt    DateTime?
+  cancelReason   String?
+  cancelledById  Int?
+  createdById    Int
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  events         DocEvent[]
+
+  @@unique([series, entity, year, seq])
+  @@unique([number])
+  @@index([book, year])
+  @@index([handlerId])
+  @@index([dueDate])
+}
+
+model DocEvent {
+  id        Int       @id @default(autoincrement())
+  docId     Int
+  doc       DocRecord @relation(fields: [docId], references: [id], onDelete: Cascade)
+  userId    Int?
+  action    String // CREATE | STATUS | ASSIGN | UPDATE | CANCEL
+  fromValue String?
+  toValue   String?
+  note      String?
+  createdAt DateTime  @default(now())
+
+  @@index([docId])
+}

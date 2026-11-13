@@ -239,3 +239,13 @@
 .gl-crit{width:.55em;height:.55em;vertical-align:.08em}
 .gl-ck{width:.95em;height:.95em;vertical-align:-.12em;margin-right:.25em}
 .btn .gl-ck{margin-right:0}
+/* Văn thư */
+.vt-tabs{margin:4px 0 12px}
+.vt-tabs a{flex:none;white-space:nowrap;border-radius:6px;padding:6px 12px;font-size:.85rem;font-weight:600;color:var(--text-2);text-decoration:none;display:inline-flex;align-items:center;min-height:32px}
+.vt-tabs a:hover{color:var(--brand)}
+.vt-tabs a.on{background:var(--surface);color:var(--brand);box-shadow:var(--shadow-sm)}
+.vt-kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr));gap:10px 24px}
+.vt-kv .kv{display:flex;flex-direction:column;gap:2px;min-width:0}
+.vt-kv .kv .muted{font-size:.8rem}
+.vt-log{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.danger-text{color:var(--danger)}

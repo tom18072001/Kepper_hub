@@ -65,6 +65,7 @@ async function start() {
     ];
     // Module tuỳ chọn (playground): nhắc việc theo dõi đối tác; nhắc hợp đồng lao động sắp hết hạn; xoá IP chấm công quá 90 ngày.
     if (config.modules.includes('crm')) daily.push({ name: 'crm_followups', at: '08:10', until: '18:00', run: p => require('./routes/crm').runCrmFollowups(p) });
+    if (config.modules.includes('vanthu')) daily.push({ name: 'vanthu_reminders', at: '08:20', until: '18:00', run: p => require('./routes/vanthu').runVanthuReminders(p) });
     if (config.modules.includes('hrm')) daily.push(
       { name: 'hrm_reminders', at: '08:15', until: '18:00', run: p => require('./routes/hrm').runHrmReminders(p) },
       { name: 'retention_hrm_ip', at: '03:10', run: p => require('./routes/hrm').purgeAttendanceIps(p) });

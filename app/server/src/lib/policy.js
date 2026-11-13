@@ -28,6 +28,8 @@ const DATASETS = {
   'hrm.contract': { label: 'Hạn chế', pii: 'cơ bản + tài chính cá nhân (lương)', note: 'Hợp đồng lao động; lương mã hoá theo trường, không gửi AI' },
   'hrm.leave': { label: 'Bảo mật', pii: 'cơ bản (có thể nhạy cảm nếu ghi bệnh)', note: 'Đơn nghỉ phép; lý do ≤ 200 ký tự, không ghi chi tiết bệnh' },
   'hrm.attendance': { label: 'Bảo mật', pii: 'cơ bản (thời gian, IP)', note: 'Giờ vào / ra, đi muộn / về sớm, giải trình' },
+  // ---- Văn thư (QyĐ-GA-01) — quyền theo mức bảo mật của từng văn bản: services/vanthu.js canView ----
+  'vanthu.doc': { label: 'Theo mức ghi trên văn bản (Công khai / Nội bộ / Hạn chế / Bảo mật cao)', pii: 'có thể (nơi gửi, người ký, nội dung trích yếu)', note: 'Sổ văn bản đến / đi / nội bộ: số, trích yếu, người xử lý, hạn, trạng thái — không lưu tệp văn bản' },
   'hrm.config': { label: 'Nội bộ', pii: 'không', note: 'Giờ làm, ngày làm, ngày lễ, mạng văn phòng, người phụ trách nhân sự' },
 };
 const ACTIONS = ['view', 'edit', 'export', 'ai', 'external'];

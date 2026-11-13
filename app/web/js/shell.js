@@ -21,6 +21,7 @@ const NAV = [
     { href: '#/dashboard', label: 'Thống kê', icon: 'chart', testid: 'nav-dashboard', id: 'navDashboard', show: () => can('reports.dashboard'), desc: 'Thống kê, KPI' },
   ] },
   { id: 'biz', name: 'Nghiệp vụ', color: '#B8641C', icon: 'building', items: [
+    { href: '#/vanthu', label: 'Văn thư', icon: 'file', testid: 'nav-vanthu', id: 'navVanthu', match: '#/vanthu', show: () => mods().includes('vanthu'), desc: 'Sổ văn bản đến, đi, nội bộ' },
     { href: '#/crm', label: 'Đối tác', icon: 'building', testid: 'nav-crm', id: 'navCrm', match: '#/crm', show: () => mods().includes('crm'), desc: 'Nhà thầu, cơ quan, ngân hàng' },
     { href: '#/hrm', label: 'Nhân sự', icon: 'users', testid: 'nav-hrm', id: 'navHrm', match: '#/hrm', show: () => mods().includes('hrm'), desc: 'Hồ sơ, nghỉ phép, chấm công' },
   ] },

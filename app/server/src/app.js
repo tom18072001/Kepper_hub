@@ -100,7 +100,7 @@ function createApp({ prisma, config }) {
     require('./routes/cycles'), require('./routes/recurring'), require('./routes/views'), require('./routes/reports'), require('./routes/work'), require('./routes/search'),
     require('./routes/mtl'), require('./routes/sprint'), require('./routes/weekly'), require('./routes/viber'), require('./routes/realtime'), require('./routes/tokens'),
     require('./routes/profile'),
-    require('./routes/crm'), require('./routes/hrm'), // chỉ gắn khi bật trong MODULES
+    require('./routes/crm'), require('./routes/hrm'), require('./routes/vanthu'), // chỉ gắn khi bật trong MODULES
   ]) mount(app, ctx);
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'Không tìm thấy API', code: 'NOT_FOUND' }));
@@ -196,8 +196,8 @@ function loadConfig(env = process.env) {
     webDir: env.WEB_DIR ? path.resolve(env.WEB_DIR) : path.join(__dirname, '..', '..', 'web'),
     uploadTmpDir: env.UPLOAD_TMP_DIR || require('node:os').tmpdir(),
     enableCron: env.ENABLE_CRON !== 'false',
-    // Module tuỳ chọn (playground): MODULES=crm,hrm. Mặc định tắt — bản chạy thật không có CRM / HRM cho tới khi Ban GĐ quyết.
-    modules: String(env.MODULES || '').split(',').map(s => s.trim().toLowerCase()).filter(m => ['crm', 'hrm'].includes(m)),
+    // Module tuỳ chọn: MODULES=crm,hrm,vanthu (vanthu: sổ văn bản theo QyĐ-GA-01). Mặc định tắt — bản chạy thật không có CRM / HRM cho tới khi Ban GĐ quyết.
+    modules: String(env.MODULES || '').split(',').map(s => s.trim().toLowerCase()).filter(m => ['crm', 'hrm', 'vanthu'].includes(m)),
     // Tên công ty hiện trên thanh đầu trang (đặt trong .env của máy chạy — không ghi tên thật vào mã nguồn).
     orgName: String(env.ORG_NAME || '').trim().slice(0, 60),
     brandingDir: env.BRANDING_DIR ? path.resolve(env.BRANDING_DIR) : '',
