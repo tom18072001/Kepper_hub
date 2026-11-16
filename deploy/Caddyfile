@@ -2,6 +2,8 @@
 # HUB_HOST: một hoặc nhiều tên máy, cách nhau dấu phẩy + cách, vd. "kepler-hub.kepler.com, hub.keplerholdings.vn".
 {
 	admin off
+	# Cổng 80 do khối :80 bên dưới tự xử lý (trang cài chứng chỉ + chuyển HTTPS).
+	auto_https disable_redirects
 }
 
 # Cổng 80 (mọi tên máy): trang hướng dẫn + tệp chứng chỉ gốc để máy cài tin cậy; còn lại chuyển sang HTTPS.

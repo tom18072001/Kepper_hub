@@ -106,7 +106,16 @@ function createApp({ prisma, config }) {
   app.use('/api', (req, res) => res.status(404).json({ error: 'Không tìm thấy API', code: 'NOT_FOUND' }));
   // Tiện ích Claude: điền sẵn địa chỉ của chính máy chủ này (APP_ORIGIN — vd. địa chỉ NAS) vào ô "Địa chỉ Kepper",
   // người dùng không phải sửa localhost. Không chứa token hay thông tin người dùng.
-  let mcpbCache = null;
+  let mcpbCache = null, caCache = { at: 0, pem: '' };
+  // Chứng chỉ gốc lấy từ Caddy trong cùng mạng compose (http://caddy/kepler-hub-ca.crt); không có Caddy → rỗng. Nhớ 1 giờ.
+  async function hubCa() {
+    if (!config.hubCaUrl) return '';
+    if (Date.now() - caCache.at < 3_600_000) return caCache.pem;
+    const text = await fetch(config.hubCaUrl, { signal: AbortSignal.timeout(2000) }).then(r => (r.ok ? r.text() : '')).catch(() => '');
+    const pem = /^-----BEGIN CERTIFICATE-----/.test(text.trim()) && text.length < 20_000 ? text : '';
+    caCache = { at: pem ? Date.now() : Date.now() - 3_540_000, pem }; // lỗi / chưa có Caddy: thử lại sau 1 phút
+    return caCache.pem;
+  }
   app.get('/downloads/kepper-claude.mcpb', async (req, res, next) => {
     try {
       const file = path.join(config.webDir, 'downloads', 'kepper-claude.mcpb');
@@ -116,8 +125,7 @@ function createApp({ prisma, config }) {
       const here = `${req.protocol}://${req.get('host')}`;
       const origin = config.allowedOrigins.includes(here) ? here : (config.allowedOrigins[0] || '');
       // HTTPS nội bộ (Caddy tls internal): Node trong Claude Desktop không đọc kho chứng chỉ Windows → đóng chứng chỉ gốc vào gói.
-      const ca = await require('node:fs/promises').readFile(config.hubCaFile, 'utf8').catch(() => '');
-      const caPem = /-----BEGIN CERTIFICATE-----/.test(ca) ? ca : '';
+      const caPem = await hubCa();
       const key = `${stat.mtimeMs}:${origin}:${caPem.length}:${caPem.slice(-80)}`;
       if (mcpbCache?.key !== key) {
         const JSZip = require('jszip');
@@ -198,7 +206,7 @@ function loadConfig(env = process.env) {
     port: Number(env.PORT || 4000),
     jwtSecret: env.JWT_SECRET,
     production: env.NODE_ENV === 'production',
-    hubCaFile: env.HUB_CA_FILE || '/data/caddy-ro/caddy/pki/authorities/local/root.crt',
+    hubCaUrl: env.HUB_CA_URL ?? 'http://caddy/kepler-hub-ca.crt',
     allowedOrigins: String(env.APP_ORIGIN || 'http://localhost:4000').split(',').map(s => s.trim()).filter(Boolean),
     trustProxy: trust === 'false' ? false : trust === 'true' ? true : /^\d+$/.test(trust) ? Number(trust) : trust,
     apiRateLimit: Number(env.API_RATE_LIMIT || 600),

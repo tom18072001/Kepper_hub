@@ -31,5 +31,5 @@ Nâng cấp: chép mã mới vào máy ảo, chạy lại `sh deploy/vm-deploy.s
   - Máy ngoài domain / điện thoại: mở `http://<tên máy>/cai-chung-chi` (trang hướng dẫn, tải `kepler-hub-ca.crt`).
 - Nhiều tên máy: `HUB_HOST="kepler-hub.kepler.com, hub.keplerholdings.vn"` (cách nhau dấu phẩy) và thêm cùng các tên vào `APP_ORIGIN`
   (`https://...`). `hub.keplerholdings.vn` là bản ghi A công khai tại nhà quản lý DNS trỏ về IP nội bộ — cho máy dùng DNS ngoài (8.8.8.8).
-- Tiện ích Claude (`/downloads/kepper-claude.mcpb`): máy chủ tự đóng chứng chỉ gốc vào gói và đặt `NODE_EXTRA_CA_CERTS`
+- Tiện ích Claude (`/downloads/kepper-claude.mcpb`): máy chủ lấy chứng chỉ gốc từ Caddy (`http://caddy/kepler-hub-ca.crt`, biến `HUB_CA_URL`), đóng vào gói và đặt `NODE_EXTRA_CA_CERTS`
   (Node trong Claude Desktop không đọc kho chứng chỉ của Windows), điền sẵn đúng địa chỉ người dùng đang mở.

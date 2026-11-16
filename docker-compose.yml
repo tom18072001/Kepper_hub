@@ -67,8 +67,6 @@ services:
       - ${UPLOADS_PATH:-uploads}:/data/uploads   # NAS: vd. /volume1/kepper/uploads
       - ${LOG_PATH:-./logs}:/data/logs
       - ${BRANDING_PATH:-./branding}:/data/branding:ro
-      # Chứng chỉ gốc của Caddy (tls internal): đóng vào tiện ích Claude để Node tin HTTPS nội bộ. Chỉ đọc.
-      - ${CADDY_DATA_PATH:-caddydata}:/data/caddy-ro:ro
     ports:
       # Mặc định chỉ máy này vào được. Có reverse proxy HTTPS trên cùng máy (DSM / QNAP): giữ 127.0.0.1.
       # Không có proxy, cho laptop trong mạng vào thẳng: APP_BIND=0.0.0.0 (HTTP không mã hoá — chỉ để thử).
