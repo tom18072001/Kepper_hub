@@ -15,7 +15,7 @@
 	}
 	handle /cai-chung-chi* {
 		root * /srv/ca-help
-		rewrite * /index.html
+		rewrite * /
 		file_server
 	}
 	handle {
