@@ -112,13 +112,22 @@ function createApp({ prisma, config }) {
       const file = path.join(config.webDir, 'downloads', 'kepper-claude.mcpb');
       const stat = await require('node:fs/promises').stat(file).catch(() => null);
       if (!stat) return next();
-      const origin = config.allowedOrigins[0] || '';
-      const key = `${stat.mtimeMs}:${origin}`;
+      // Địa chỉ điền sẵn: đúng địa chỉ người dùng đang mở (nếu nằm trong APP_ORIGIN), không thì địa chỉ đầu tiên.
+      const here = `${req.protocol}://${req.get('host')}`;
+      const origin = config.allowedOrigins.includes(here) ? here : (config.allowedOrigins[0] || '');
+      // HTTPS nội bộ (Caddy tls internal): Node trong Claude Desktop không đọc kho chứng chỉ Windows → đóng chứng chỉ gốc vào gói.
+      const ca = await require('node:fs/promises').readFile(config.hubCaFile, 'utf8').catch(() => '');
+      const caPem = /-----BEGIN CERTIFICATE-----/.test(ca) ? ca : '';
+      const key = `${stat.mtimeMs}:${origin}:${caPem.length}:${caPem.slice(-80)}`;
       if (mcpbCache?.key !== key) {
         const JSZip = require('jszip');
         const zip = await JSZip.loadAsync(await require('node:fs/promises').readFile(file));
         const manifest = JSON.parse(await zip.file('manifest.json').async('string'));
         if (manifest.user_config?.kepper_url && /^https?:\/\//.test(origin)) manifest.user_config.kepper_url.default = origin;
+        if (caPem && manifest.server?.mcp_config) {
+          zip.file('kepler-hub-ca.pem', caPem);
+          manifest.server.mcp_config.env = { ...(manifest.server.mcp_config.env || {}), NODE_EXTRA_CA_CERTS: '${__dirname}/kepler-hub-ca.pem' };
+        }
         zip.file('manifest.json', JSON.stringify(manifest, null, 2));
         mcpbCache = { key, buf: await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }) };
       }
@@ -189,6 +198,7 @@ function loadConfig(env = process.env) {
     port: Number(env.PORT || 4000),
     jwtSecret: env.JWT_SECRET,
     production: env.NODE_ENV === 'production',
+    hubCaFile: env.HUB_CA_FILE || '/data/caddy-ro/caddy/pki/authorities/local/root.crt',
     allowedOrigins: String(env.APP_ORIGIN || 'http://localhost:4000').split(',').map(s => s.trim()).filter(Boolean),
     trustProxy: trust === 'false' ? false : trust === 'true' ? true : /^\d+$/.test(trust) ? Number(trust) : trust,
     apiRateLimit: Number(env.API_RATE_LIMIT || 600),
