@@ -324,8 +324,7 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
     if (!rows.length) fail(422, 'Nhập ít nhất một việc nhánh', 'REQUIRED');
     if (rows.length > 100) fail(422, 'Tối đa 100 việc nhánh mỗi lần');
     const created = await prisma.$transaction(async tx => {
-      const parent = await itemWithProject(tx, id);
-      if (parent.parentId) fail(422, 'Chỉ thêm việc nhánh cho việc gốc');
+      const parent = await itemWithProject(tx, id); // việc nhánh được chia tiếp ở mọi cấp (trần cấp: services/tree.js)
       const g = await MG.mtlCreateGuard(tx, req.user, project, rights, { parentId: id }); // MTL: quản lý dự án / lãnh đạo bộ phận chủ trì
       const leaders = await leadersOf(tx, parent);
       if (!(rights.canManage || parent.assignedById === req.user.id || leaders.includes(req.user.id) || parent.assignees.some(a => a.userId === req.user.id)))

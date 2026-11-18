@@ -1,6 +1,8 @@
 // Quyền ở cấp dự án = quyền hệ thống (permissions.js) giao với thành viên dự án và phạm vi phòng ban.
 const { permissionScope, hasPermission, isItAdmin } = require('../lib/permissions');
 const { fail } = require('../lib/http');
+const tree = require('./tree');
+const { MAX_DEPTH } = tree;
 
 function projectRights(user, project, member) {
   const viewScope = permissionScope(user, 'work.view', 'VIEW');
@@ -45,18 +47,22 @@ const ITEM_ACCESS_SELECT = { id: true, projectId: true, parentId: true, assigned
   assignees: { select: { userId: true } }, supporters: { select: { userId: true } }, supportDepartments: { select: { departmentId: true } } };
 // Sổ giao việc của đơn vị (visibility ASSIGNED): chỉ Ban Giám đốc (xem toàn tổ chức), thành viên sổ, người giao,
 // người chủ trì / phối hợp và lãnh đạo phòng chủ trì / phòng phối hợp thấy việc (quyền xem theo từng việc).
-function canSeeItem(user, project, member, item, parent = null) {
+// `ancestors`: việc cha, hoặc danh sách tổ tiên [cha, ông, …] — ai thấy một việc tổ tiên thì thấy cả cây con của nó.
+function canSeeItem(user, project, member, item, ancestors = null) {
   if (project.visibility !== 'ASSIGNED') return true;
   if (permissionScope(user, 'work.view', 'VIEW') === 'SYSTEM' || member) return true;
   const ok = it => !!it && (it.assignedById === user.id || it.assignees.some(a => a.userId === user.id) || it.supporters.some(a => a.userId === user.id)
     || (isDeptLeader(user) && (it.leadDepartmentId === user.departmentId || it.supportDepartments.some(d => d.departmentId === user.departmentId))));
-  return ok(item) || ok(parent);
+  return ok(item) || (Array.isArray(ancestors) ? ancestors : [ancestors]).some(ok);
 }
 function itemVisibleWhere(user) {
   if (permissionScope(user, 'work.view', 'VIEW') === 'SYSTEM') return {};
   const mine = [{ assignedById: user.id }, { assignees: { some: { userId: user.id } } }, { supporters: { some: { userId: user.id } } }];
   if (isDeptLeader(user)) mine.push({ leadDepartmentId: user.departmentId }, { supportDepartments: { some: { departmentId: user.departmentId } } });
-  return { OR: [{ project: { visibility: { not: 'ASSIGNED' } } }, { project: { members: { some: { userId: user.id } } } }, ...mine, { parent: { OR: mine } }] };
+  // Thấy một việc tổ tiên (tới MAX_DEPTH cấp) → thấy việc con cháu.
+  let up = { OR: mine };
+  for (let i = 1; i < MAX_DEPTH; i++) up = { OR: [...mine, { parent: up }] };
+  return { OR: [{ project: { visibility: { not: 'ASSIGNED' } } }, { project: { members: { some: { userId: user.id } } } }, ...mine, { parent: up }] };
 }
 // Sổ giao việc của đơn vị: thao tác cấp sổ (giao việc gốc, nhập hàng loạt, tiếp nhận yêu cầu, chuyển ghi chú,
 // chuyển chu kỳ, xem quy tắc lặp) chỉ dành cho Ban Giám đốc / người quản lý sổ / thành viên sổ.
@@ -85,7 +91,7 @@ async function delegatedView(prisma, user, item, parent) {
 async function loadItem(prisma, user, itemId, need = 'view') {
   const item = await prisma.workItem.findUnique({ where: { id: itemId }, select: ITEM_ACCESS_SELECT });
   if (!item) fail(404, 'Không tìm thấy công việc', 'NOT_FOUND');
-  const parentOf = () => (item.parentId ? prisma.workItem.findUnique({ where: { id: item.parentId }, select: ITEM_ACCESS_SELECT }) : null);
+  const parentOf = () => tree.ancestors(prisma, item.parentId, ITEM_ACCESS_SELECT); // [cha, ông, …]
   let ctx;
   try { ctx = await loadProject(prisma, user, item.projectId, need); }
   catch (error) {
@@ -98,7 +104,7 @@ async function loadItem(prisma, user, itemId, need = 'view') {
     const parent = await parentOf();
     // Người được uỷ quyền (trong thời hạn) thay lãnh đạo phòng chủ trì cũng thấy việc của phòng đó.
     const delegated = async () => {
-      const dept = item.leadDepartmentId ?? parent?.leadDepartmentId;
+      const dept = tree.effectiveDept(item, parent);
       return dept != null && (await require('./approval').deptLeaderIds(prisma, dept)).includes(user.id);
     };
     // Thành viên sổ (vd. Văn phòng nhập thay) xem được cả sổ nhưng chỉ sửa việc mình giao hoặc mình liên quan.

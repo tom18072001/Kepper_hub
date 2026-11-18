@@ -74,7 +74,8 @@ async function drawPhases(body, project, params, modes) {
     const i = g.top;
     if (!i.children) return `<div class="sp-step leaf">${card(i)}</div>`;
     const tone = i.done ? 'ok' : TONE[i.status] || '';
-    const doneKids = g.kids.filter(c => c.done).length;
+    // Việc con nhiều cấp: % của bước chia theo việc con trực tiếp (cấp 1); cấp sâu hơn thụt lề dưới việc cha của nó.
+    const direct = g.kids.filter(c => c.depth === 1), doneKids = direct.filter(c => c.done).length;
     return `<div class="sp-step" data-testid="sp-step-${esc(i.planCode || i.code)}">
       <div class="sc sc-parent ${tone ? 'sc-' + tone : ''}">
         <div class="sc-top"><a class="code" href="${href(i)}">${esc(i.code)}</a><span class="muted xs">Bước ${esc(i.planCode || '')}</span>${i.critical ? '<span class="crit" title="Đường găng"><svg class="gl gl-crit" viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="currentColor"/></svg></span>' : ''}${i.milestone ? '<span class="ms" title="Mốc"><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg></span>' : ''}<span class="grow"></span><span class="pill ${tone}">${esc(i.done ? 'Đã xong' : i.statusLabel || '')}</span></div>
@@ -82,9 +83,9 @@ async function drawPhases(body, project, params, modes) {
         <div class="sc-meta muted xs"><span>${esc(i.leadDepartmentName)}</span><span>T${num(i.startT, 0)}–T${num(i.endT, 0)} · ${fmtDate(i.baselineStart)} – ${fmtDate(i.baselineEnd)}</span></div>
         <div class="sc-prog"><div class="sc-track"><i class="sc-fill ${tone || 'ok'}" style="width:${Math.min(100, i.actual || 0)}%"></i><b class="sc-goal" style="left:${Math.min(100, i.planned || 0)}%"></b></div>
           <span class="sc-nums"><b>${pct(i.actual)}</b><span class="muted"> / KH ${pct(i.planned)}</span></span></div>
-        <div class="muted xs" data-testid="sp-kids-${esc(i.planCode || i.code)}"><b>${doneKids}/${g.kids.length}</b> việc con đã xong — mỗi việc con ${num(100 / Math.max(1, g.kids.length), 1)}% của bước (tự tính, không cần khai %)</div>
+        <div class="muted xs" data-testid="sp-kids-${esc(i.planCode || i.code)}"><b>${doneKids}/${direct.length}</b> việc con đã xong — mỗi việc con ${num(100 / Math.max(1, direct.length), 1)}% của bước (tự tính, không cần khai %)</div>
       </div>
-      <div class="sp-kids">${g.kids.filter(c => !dept || String(c.leadDepartmentId) === String(dept) || String(i.leadDepartmentId) === String(dept)).map(c => card(c)).join('')}</div>
+      <div class="sp-kids">${g.kids.filter(c => !dept || String(c.leadDepartmentId) === String(dept) || String(i.leadDepartmentId) === String(dept)).map(c => c.depth > 1 ? `<div class="sp-sub" style="margin-left:${(c.depth - 1) * 16}px">${card(c)}</div>` : card(c)).join('')}</div>
     </div>`;
   };
   const tone = isDone(sp.status) ? 'ok' : TONE[sp.status] || '';

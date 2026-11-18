@@ -4,6 +4,7 @@ const { sanitizeHtml, htmlToText } = require('../lib/rich-text');
 const { activity, notify, notifyRequesterIfDone } = require('./events');
 const approval = require('./approval');
 const MTL = require('./mtl');
+const tree = require('./tree');
 
 const PRIORITIES = ['URGENT', 'HIGH', 'MEDIUM', 'LOW', 'NONE'];
 const BOARD_INCLUDE = {
@@ -188,6 +189,7 @@ async function createWorkItem(tx, { project, user, rights, input, reporterId = u
   const parentId = optionalInt(input.parentId, 'Việc cha');
   const parent = parentId ? await tx.workItem.findFirst({ where: { id: parentId, projectId: project.id }, select: { id: true, leadDepartmentId: true, taskType: true } }) : null;
   if (parentId && !parent) fail(422, 'Việc cha không thuộc dự án');
+  if (parent) await tree.assertCanNest(tx, parentId); // việc con nhiều cấp, trần MAX_DEPTH
   // Giao về phòng: đơn vị chủ trì (việc nhánh kế thừa của việc cha). Sổ giao việc của đơn vị mà giao thẳng cán bộ
   // thì đơn vị chủ trì = phòng của người chủ trì, để lãnh đạo phòng vẫn thấy và duyệt trước khi trình.
   let leadDepartmentId = input.leadDepartmentId !== undefined ? await departmentIdOf(tx, input.leadDepartmentId, 'Đơn vị chủ trì') : (parent?.leadDepartmentId ?? null);

@@ -8,6 +8,7 @@ const { activity, notify } = require('../services/events');
 const approval = require('../services/approval');
 const bus = require('../services/bus');
 const W = require('../services/workitems');
+const tree = require('../services/tree');
 const { describe: describeRule } = require('../services/recurring');
 const { stageOf } = require('../services/stage');
 const { setProgress } = require('../services/mtl-progress');
@@ -53,8 +54,7 @@ async function dispatchRole(tx, user, rights, project, item) {
   if (!item.dispatchStatus && project.visibility !== 'ASSIGNED') return 'FULL';
   if (rights.canManage || item.assignedById === user.id || item.reporterId === user.id) return 'FULL';
   if (item.assignees.some(a => a.userId === user.id)) return 'WORKER';
-  let dept = item.leadDepartmentId;
-  if (dept == null && item.parentId) dept = (await tx.workItem.findUnique({ where: { id: item.parentId }, select: { leadDepartmentId: true } }))?.leadDepartmentId ?? null;
+  const dept = item.leadDepartmentId ?? (item.parentId ? tree.effectiveDept(item, await tree.ancestors(tx, item.parentId, { leadDepartmentId: true })) : null);
   return (await approval.deptLeaderIds(tx, dept)).includes(user.id) ? 'WORKER' : 'SUPPORT';
 }
 function assertDispatchChange(role, { toState, keys = [] }) {
@@ -134,11 +134,17 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
     for (const sd of item.supportDepartments) if ((await approval.deptLeaderIds(prisma, sd.departmentId)).includes(req.user.id)) { supportLead = true; break; }
     const approverNames = Object.fromEntries((await prisma.user.findMany({ where: { isActive: true, permissions: { some: { permissionKey: 'work.approve' } } }, select: { id: true, fullName: true } })).map(u => [u.id, u.fullName]));
     const depts = Object.fromEntries((await prisma.department.findMany({ where: { id: { in: [item.leadDepartmentId, ...item.supportDepartments.map(d => d.departmentId)].filter(Boolean) } }, select: { id: true, name: true } })).map(d => [d.id, d.name]));
-    // Sổ giao việc của đơn vị: người chỉ thấy việc nhánh thì không thấy tiêu đề việc cha.
-    if (item.parent && project.visibility === 'ASSIGNED') {
-      const pa = await prisma.workItem.findUnique({ where: { id: item.parent.id }, select: ITEM_ACCESS_SELECT });
-      if (!canSeeItem(req.user, project, member, pa)) item.parent = { id: item.parent.id, number: item.parent.number, title: null };
-    }
+    // Đường dẫn cha (việc con nhiều cấp): [gốc, …, cha]. Sổ giao việc của đơn vị: việc tổ tiên người dùng không thấy thì ẩn tiêu đề.
+    const chain = item.parentId ? await tree.ancestors(prisma, item.parentId, { ...ITEM_ACCESS_SELECT, number: true, title: true }) : [];
+    const ancestors = chain.map((a, i) => ({ id: a.id, number: a.number,
+      title: project.visibility !== 'ASSIGNED' || canSeeItem(req.user, project, member, a, chain.slice(i + 1)) ? a.title : null })).reverse();
+    if (item.parent) item.parent = ancestors.at(-1) ?? item.parent;
+    // Tiến độ thực tế theo cả cây con cháu (không chỉ con trực tiếp).
+    const descIds = await tree.descendantIds(prisma, [item.id], { archivedAt: null });
+    const desc = descIds.length ? await prisma.workItem.findMany({ where: { id: { in: descIds } }, select: { id: true, parentId: true, progress: true, weight: true, state: { select: { category: true } } } }) : [];
+    const rolled = MTL.rollup([{ ...item, parentId: null }, ...desc]);
+    const kidCount = new Map();
+    for (const d of desc) kidCount.set(d.parentId, (kidCount.get(d.parentId) || 0) + 1);
     const base = boardItem(project, { ...item, checklist: item.checklist, approvals: pending ? [pending] : [], extensions: item.extensions.filter(x => x.status === 'PENDING') });
     res.json({
       ...base, descriptionHtml: item.descriptionHtml, state: item.state, parent: item.parent, children: item.children, cycle: item.cycle,
@@ -175,13 +181,14 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       stage: stageOf({ ...item, pendingApproval: pending }, allSteps),
       // Kepper: tình trạng so với kế hoạch gốc (hạng mục có con: % thực tế = bình quân gia quyền của con).
       mtl: project.kind === 'MTL' ? (() => {
-        const kids = item.children.map(c => ({ ...c, parentId: item.id }));
-        const act = MTL.rollup([{ ...item, parentId: null }, ...kids]).get(item.id);
+        const act = rolled.get(item.id);
         const st = MTL.statusOf(item, act, new Date(), MTL.alertConfigOf(project));
         return { actual: act, planned: st.planned ?? MTL.plannedPct(item), status: st.code, statusLabel: MTL.STATUS[st.code], variance: st.variance ?? null, lateDays: st.lateDays ?? null };
       })() : null,
       submitRounds: item.approvals.length,
-      children: item.children.map(c => ({ ...c, assignees: c.assignees.map(a => a.user), stage: stageOf({ ...c, pendingApproval: c.approvals[0] }, allSteps) })),
+      children: item.children.map(c => ({ ...c, assignees: c.assignees.map(a => a.user), stage: stageOf({ ...c, pendingApproval: c.approvals[0] }, allSteps),
+        childCount: kidCount.get(c.id) || 0, actual: rolled.get(c.id) ?? c.progress })),
+      ancestors, depth: chain.length, maxDepth: tree.MAX_DEPTH, descendantCount: descIds.length,
       // Người duyệt thực tế từng bước của RIÊNG việc này (việc giao về phòng: lãnh đạo phòng chủ trì, PGĐ phụ trách…).
       stepApprovers: await (async () => { const ctx = await approval.approvalContext(prisma); return Object.fromEntries(steps.map(st => [st.level, approval.approverIdsSync(ctx, project, st, item).map(id => approverNames[id]).filter(Boolean)])); })(),
     });
@@ -256,7 +263,15 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
           if (project.visibility !== 'ASSIGNED' && project.kind !== 'MTL' && data.leadDepartmentId != null && data.leadDepartmentId !== project.departmentId)
             fail(422, 'Giao về phòng khác chỉ dùng trong sổ giao việc của đơn vị', 'DISPATCH_NOT_ALLOWED');
           // Việc nhánh đi theo đơn vị chủ trì mới (quyền xem, cấp duyệt "Trưởng phòng").
-          if (data.leadDepartmentId !== item.leadDepartmentId) await tx.workItem.updateMany({ where: { parentId: id, leadDepartmentId: item.leadDepartmentId }, data: { leadDepartmentId: data.leadDepartmentId } });
+          // Việc con cháu đang theo đơn vị cũ thì đi theo đơn vị mới (mọi cấp); việc đã giao riêng cho đơn vị khác giữ nguyên.
+          if (data.leadDepartmentId !== item.leadDepartmentId) {
+            for (let frontier = [id], seen = new Set([id]), d = 0; frontier.length && d < 50; d++) {
+              const kids = (await tx.workItem.findMany({ where: { parentId: { in: frontier }, leadDepartmentId: item.leadDepartmentId }, select: { id: true } })).map(k => k.id).filter(k => !seen.has(k));
+              kids.forEach(k => seen.add(k));
+              if (kids.length) await tx.workItem.updateMany({ where: { id: { in: kids } }, data: { leadDepartmentId: data.leadDepartmentId } });
+              frontier = kids;
+            }
+          }
           if (project.visibility === 'ASSIGNED' && data.leadDepartmentId !== item.leadDepartmentId && data.leadDepartmentId != null && !item.parentId) {
             Object.assign(data, { dispatchStatus: 'PENDING', dispatchedAt: new Date(), acceptedAt: null, acceptedById: null });
             await notify(tx, await approval.deptLeaderIds(tx, data.leadDepartmentId), { type: 'DISPATCH', title: `Phòng được giao chủ trì ${project.key}-${item.number} — cần tiếp nhận, phân công`, body: item.title, link: W.link(project, item) }, req.user.id);
@@ -285,7 +300,8 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       if (body.parentId !== undefined) {
         data.parentId = optionalInt(body.parentId, 'Việc cha');
         if (data.parentId === id) fail(422, 'Việc cha không hợp lệ');
-        if (data.parentId && !(await tx.workItem.findFirst({ where: { id: data.parentId, projectId: project.id } }))) fail(422, 'Việc cha không thuộc dự án');
+        if (data.parentId && !(await tx.workItem.findFirst({ where: { id: data.parentId, projectId: project.id, archivedAt: null } }))) fail(422, 'Việc cha không thuộc dự án');
+        if (data.parentId && data.parentId !== item.parentId) await tree.assertCanNest(tx, data.parentId, id); // chặn vòng cha–con, trần cấp
       }
       // Người giao chỉ do người giao hiện tại hoặc người quản lý đổi (tránh tự đặt mình làm người giao để lùi hạn, tự duyệt gia hạn…).
       if (body.assignedById !== undefined && Number(body.assignedById || 0) !== Number(item.assignedById || 0) && item.assignedById && item.assignedById !== req.user.id && !rights.canManage)
@@ -463,7 +479,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       const names = mentions(bodyText);
       const mentioned = names.length ? await tx.user.findMany({ where: { username: { in: names }, isActive: true }, include: { permissions: true, memberships: { where: { projectId: project.id } } } }) : [];
       const access = project.visibility === 'ASSIGNED' ? await tx.workItem.findUnique({ where: { id }, select: ITEM_ACCESS_SELECT }) : null;
-      const parentAccess = access?.parentId ? await tx.workItem.findUnique({ where: { id: access.parentId }, select: ITEM_ACCESS_SELECT }) : null;
+      const parentAccess = access?.parentId ? await tree.ancestors(tx, access.parentId, ITEM_ACCESS_SELECT) : null;
       const allowed = mentioned.filter(u => projectRights(u, project, u.memberships[0]).canView && (!access || canSeeItem(u, project, u.memberships[0], access, parentAccess))).map(u => u.id);
       const code = `${project.key}-${item.number}`;
       await notify(tx, allowed, { type: 'MENTION', title: `${req.user.fullName} nhắc bạn trong ${code}`, body: bodyText.slice(0, 200), link: W.link(project, item) }, req.user.id);

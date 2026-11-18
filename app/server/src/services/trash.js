@@ -1,19 +1,20 @@
 // Thùng rác: việc / dự án bị xoá được giữ 7 ngày để khôi phục, sau đó hệ thống xoá hẳn (kể cả tệp đính kèm).
 const storage = require('../lib/storage');
+const { descendantIds } = require('./tree');
 
 const TRASH_DAYS = 7;
 const DAY = 86_400_000;
 const purgeAt = deletedAt => new Date(new Date(deletedAt).getTime() + TRASH_DAYS * DAY);
 
-// Chuyển việc (và các việc con) vào thùng rác. Trả về số việc bị xoá.
+// Chuyển việc (và mọi việc con cháu) vào thùng rác. Trả về mã các việc bị xoá.
 async function trashItem(tx, itemId, user, at = new Date()) {
-  const ids = [itemId, ...(await tx.workItem.findMany({ where: { parentId: itemId, archivedAt: null }, select: { id: true } })).map(c => c.id)];
+  const ids = [itemId, ...(await descendantIds(tx, [itemId], { archivedAt: null }))];
   await tx.workItem.updateMany({ where: { id: { in: ids } }, data: { archivedAt: at, deletedById: user.id } });
   return ids;
 }
-// Khôi phục việc và các việc con bị xoá cùng lúc.
+// Khôi phục việc và các việc con cháu bị xoá cùng lúc.
 async function restoreItem(tx, item) {
-  const ids = [item.id, ...(await tx.workItem.findMany({ where: { parentId: item.id, archivedAt: item.archivedAt }, select: { id: true } })).map(c => c.id)];
+  const ids = [item.id, ...(await descendantIds(tx, [item.id], { archivedAt: item.archivedAt }))];
   await tx.workItem.updateMany({ where: { id: { in: ids } }, data: { archivedAt: null, deletedById: null } });
   return ids;
 }
