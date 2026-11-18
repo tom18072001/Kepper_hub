@@ -1,0 +1,12 @@
+{
+  "name": "kepler-nas-mcp",
+  "version": "0.1.0",
+  "description": "Kepler NAS cho Claude Desktop — đọc kho file nội bộ chỉ đọc, theo quyền tài khoản Windows của người dùng",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "test": "node --test test/server.test.mjs",
+    "pack": "powershell -NoProfile -ExecutionPolicy Bypass -File pack.ps1"
+  }
+}

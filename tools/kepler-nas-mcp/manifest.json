@@ -1,0 +1,36 @@
+{
+  "manifest_version": "0.3",
+  "name": "kepler-nas",
+  "display_name": "Kepler NAS",
+  "version": "0.1.0",
+  "description": "Cho Claude đọc kho file nội bộ Kepler (NAS) — chỉ đọc, đúng quyền thư mục của tài khoản Windows của bạn.",
+  "long_description": "Chạy trên máy bạn, đọc thư mục chia sẻ trong mạng công ty (cần ở văn phòng hoặc bật VPN). Claude chỉ thấy những thư mục tài khoản Windows của bạn được IT cấp quyền; không sửa, không xoá, không tải tệp lên đâu cả. Đọc chữ trong TXT/CSV, DOCX, XLSX, PPTX và PDF có lớp chữ. Dùng được trong mọi Project của Claude Desktop, kể cả \"Hỏi Keplerholdings\".",
+  "author": { "name": "IT Kepler Holdings" },
+  "server": {
+    "type": "node",
+    "entry_point": "server.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server.js"],
+      "env": { "NAS_ROOTS": "${user_config.nas_roots}" }
+    }
+  },
+  "user_config": {
+    "nas_roots": {
+      "type": "string",
+      "title": "Thư mục kho file",
+      "description": "Thư mục chia sẻ được phép đọc, nhiều thư mục cách nhau dấu ;",
+      "required": true,
+      "default": "\\\\192.168.130.2\\DATA"
+    }
+  },
+  "tools": [
+    { "name": "nas_roots", "description": "Thư mục kho file được phép đọc" },
+    { "name": "nas_list", "description": "Liệt kê thư mục" },
+    { "name": "nas_search", "description": "Tìm tệp theo tên" },
+    { "name": "nas_read", "description": "Đọc nội dung tệp (chỉ đọc)" }
+  ],
+  "keywords": ["kepler", "nas", "kho file", "tài liệu"],
+  "license": "UNLICENSED",
+  "compatibility": { "platforms": ["win32"], "runtimes": { "node": ">=18.0.0" } }
+}
