@@ -14,8 +14,10 @@ test('1. Đăng nhập: sai mật khẩu bị từ chối, tài khoản mới ph
 
   await login(page, 'nv.kinhdoanh1');
   await expect(page.locator('#meName')).toHaveText('Phạm Văn An');
-  // Trang chủ là "Báo cáo tuần"; Việc của tôi: KD-1 và KD-4 được giao cho nhân viên này
-  await expect(page).toHaveURL(/#\/tuan/);
+  // Trang chủ "việc cần xử lý hôm nay": việc quá hạn KD-4 hiện ngay; Việc của tôi: KD-1 và KD-4 được giao cho nhân viên này
+  await expect(page).toHaveURL(/#\/today/);
+  await expect(page.getByTestId('today-todo')).toContainText('KD-4');
+  await expect(page.getByTestId('today-meeting')).toBeVisible();
   await page.getByTestId('nav-my').click();
   await expect(page.getByTestId('my-KD-1')).toBeVisible();
   await expect(page.getByTestId('my-KD-4')).toBeVisible();

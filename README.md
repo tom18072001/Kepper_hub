@@ -1,8 +1,8 @@
-# Kepper Hub — theo dõi tiến độ dự án theo Master Timeline
+# Kepler Hub — theo dõi tiến độ dự án theo Master Timeline
 
 Kế hoạch nghiệp vụ: [`docs/PLAN-kepper.md`](docs/PLAN-kepper.md). Đánh giá bảo vệ dữ liệu: [`docs/data-protection-assessment.md`](docs/data-protection-assessment.md).
 
-Kepper Hub được khởi tạo từ WorkHub (repo `tom18072001/ND57`, nhánh `workhub-kanban`). Phần lõi giữ nguyên:
+Kepler Hub được khởi tạo từ WorkHub (repo `tom18072001/ND57`, nhánh `workhub-kanban`). Phần lõi giữ nguyên:
 - dự án, Kanban, danh sách, lịch, việc con;
 - duyệt nhiều cấp, bình luận @nhắc tên, tệp đính kèm hai chiều;
 - thông báo, phân quyền theo bộ phận, nhật ký, sao lưu.
@@ -33,7 +33,9 @@ Kepper Hub được khởi tạo từ WorkHub (repo `tom18072001/ND57`, nhánh `
 | Báo cáo tuần (GĐ2b) | **Trang chủ = "Báo cáo tuần"** theo Quy chế QC-TH-01 / Quy trình QT-TH-01 / Biểu mẫu BM-TH-01: một trang, thanh chọn tuần (thứ Sáu) + hạn nộp, các tab **Nộp báo cáo · Báo muộn / vắng · Tổng hợp · Chấm điểm · Tiến độ dự án**. Báo cáo **tự điền sẵn**: Phần I = hạng mục MTL của bộ phận đến hạn / quá hạn / xong trong tuần + kế hoạch tuần trước + Action Log giao ban ("TGĐ giao"); Phần II = việc MTL chạy nhiều tuần + việc chưa xong tuần trước ("việc sẽ làm tuần tới" lấy mục checklist kế tiếp); Phần III = hạng mục MTL bắt đầu tuần tới. Tình trạng, % tự tính; người lập chỉ sửa chỗ khác thực tế. Chậm / Vướng / Quá hạn bắt buộc nguyên nhân, giải pháp, đề nghị hỗ trợ (máy chủ kiểm tra). Tự lưu nháp; **gửi một lần → % ghi luôn vào MTL** (hạng mục người gửi có quyền sửa, không dùng checklist). Giờ nộp tính lần gửi đầu; muộn có / không báo; 12:00 thứ Bảy |
 | Giao ban (GĐ2b) | **Tổng hợp** (TGĐ, thư ký, PMO, trưởng / phó bộ phận): tình trạng nộp theo thứ tự trình bày, KPI, rà Action Log tuần trước, yêu cầu hỗ trợ gom theo nơi nhận, chi tiết từng bộ phận, **Sao chép bản tổng hợp** (nhãn BẢO MẬT, không có họ tên). Thư ký / TGĐ / PMO: điểm danh, đánh dấu báo cáo không đạt, **kết luận của TGĐ** cho từng yêu cầu, **Action Log** → phát hành (thông báo trưởng bộ phận; việc tự vào Phần I báo cáo tuần sau), nhập thay cho bộ phận gửi email (giờ nộp = giờ nhận email), thiết lập bộ phận phải nộp / thứ tự / hạn nộp và ngày họp khi nghỉ lễ. **Chấm điểm tuân thủ tháng** theo Phụ lục 1 (100 điểm, mức trừ đề xuất, ghi đè bằng `AppSetting weekly.config.points`). Nhắc 15:00 ngày hạn nộp cho bộ phận chưa nộp; 07:35 ngày giao ban gửi tóm tắt tổng hợp |
 | Phân quyền dữ liệu (GĐ2b) | Vai trò giao ban suy ra từ tài khoản và hai lựa chọn của Ban GĐ (bộ phận thư ký, PMO). Mọi quyền trên báo cáo tuần, tổng hợp, thông báo vắng, giao ban, chấm điểm, % / kế hoạch MTL, KPI cá nhân, AI và gửi ra ngoài nằm ở **một file `lib/policy.js`**, có test từng ô. AI tắt mặc định; khi bật chỉ được dùng bản tổng hợp tóm tắt |
-| Claude trong công việc (GĐ3) | **AI native, đúng quyền người dùng.**<br>• Mỗi người cài tiện ích Kepper cho Claude Desktop (`kepper-claude.mcpb`, tải ở "Công cụ khác → Kết nối Claude") và tự tạo token cá nhân.<br>• Claude xem / cập nhật đúng những gì tài khoản đó được phép (qua cùng API + `lib/policy.js`): xem việc, cập nhật % / checklist, bình luận, giao việc, nhắc việc, soạn nháp báo cáo tuần, tổng hợp theo quyền.<br>• Nộp, phê duyệt, phát hành, xoá, xuất tệp vẫn làm trên giao diện.<br>• Token chỉ trong LAN, hạn ≤ 90 ngày, thu hồi được; nhật ký đánh dấu `[claude:token#id]`. |
+| Claude trong công việc (GĐ3) | **AI native, đúng quyền người dùng.**<br>• Mỗi người cài tiện ích Kepper cho Claude Desktop (`kepper-claude.mcpb`, tải ở trang "Kết nối Claude" — địa chỉ Kepper điền sẵn). Lần hỏi đầu, Kepper mở trang **Cho phép** trên trình duyệt của chính máy đó; không phải tạo / dán token (vẫn còn cách tạo token tay cho máy không mở được trình duyệt).<br>• Claude xem / cập nhật đúng những gì tài khoản đó được phép (qua cùng API + `lib/policy.js`): xem việc, cập nhật % / checklist, bình luận, giao việc, nhắc việc, soạn nháp báo cáo tuần, tổng hợp theo quyền.<br>• Nộp, phê duyệt, phát hành, xoá, xuất tệp vẫn làm trên giao diện.<br>• Token chỉ trong LAN, hạn 30 ngày (tạo tay ≤ 90 ngày), tối đa 5 máy / người, thu hồi được; nhật ký đánh dấu `[claude:token#id]`. |
+| Thông tin cá nhân | Menu tài khoản → **Thông tin cá nhân**: xem thông tin tài khoản (sửa họ tên, chức danh, bộ phận vẫn do quản trị), đổi / xoá ảnh đại diện (tuỳ chọn, thu nhỏ ở trình duyệt), đổi mật khẩu, **vị trí trong cây tổ chức** — Ban GĐ, Phó GĐ phụ trách, lãnh đạo bộ phận phía trên; người cùng cấp; người phía dưới (suy ra từ vai trò, bộ phận, bộ phận cha, Phó GĐ phụ trách) |
+| CRM đối tác, HRM (playground, mặc định tắt) | Bật bằng `MODULES=crm,hrm`; dùng thử trên bản riêng: `deploy/playground.ps1` (cổng 4200, dữ liệu GIẢ).<br>• **Đối tác**: nhà thầu, tư vấn, cơ quan, ngân hàng, nhà cung cấp; người liên hệ, nhật ký làm việc, việc cần theo dõi (nhắc 08:10), hợp đồng / gói thầu — chi tiết chỉ bộ phận phụ trách.<br>• **Nhân sự**: hồ sơ, hợp đồng lao động, nghỉ phép (lãnh đạo bộ phận duyệt), chấm công + giải trình, nhập máy chấm công (CSV). Số CCCD, lương mã hoá (`HR_ENC_KEY`); Claude chỉ thấy 4 số cuối CCCD, không thấy lương.<br>• Xem `docs/data-protection-assessment.md` — chưa bật trên bản chạy thật. |
 | Viber (đề xuất) | Có sẵn nhưng **mặc định tắt**. Người dùng tự liên kết bằng mã 6 số và phải đồng ý; tin nhắn chỉ có mã hạng mục, loại cảnh báo, liên kết. Chỉ bật (`VIBER_ENABLED=1`, `VIBER_AUTH_TOKEN`, `APP_ORIGIN` công khai HTTPS cho webhook `/api/viber/webhook`) sau khi có hồ sơ đánh giá tác động chuyển DLCN ra nước ngoài |
 
 ## Chạy trên máy (Docker)
@@ -54,6 +56,10 @@ Dữ liệu mẫu **giả** (`SEED_DEMO=true`) gồm:
 - mật khẩu ban đầu `12345678`, phải đổi khi đăng nhập lần đầu.
 
 **MTL thật của công ty chỉ nhập trên máy chạy** ("Khác → Nhập MTL từ Excel"), không đưa vào git.
+
+**Bản thử CRM / HRM** (không đụng bản đang chạy): `powershell -ExecutionPolicy Bypass -File deploy\playground.ps1` → thư mục `kepper-play` bên cạnh, Docker project `kepper-play`, http://localhost:4200, CSDL riêng, khoá ngẫu nhiên, dữ liệu mẫu GIẢ (thêm `nv.hcns` = người phụ trách nhân sự). Xoá hẳn: `docker compose -p kepper-play down -v`.
+
+**Chạy thử một dự án theo vai trò trên bản thử** (TGĐ giao việc → PMO nhập MTL → lãnh đạo bộ phận chi tiết hoá → nhân viên làm, xin nghỉ → báo cáo tuần → giao ban): `docker exec -e BASE=http://127.0.0.1:4000 -e OUT=/tmp/journal.json kepper-play-app-1 node scripts/simulate-project.mjs`. Kịch bản đặt mật khẩu chung `Play@2026` cho các tài khoản mẫu, tạo dự án **BM — Khu nhà ở Bình Minh (giả)**; chỉ chạy khi máy có dữ liệu mẫu (tự từ chối trên bản chạy thật).
 
 Vận hành trên máy chạy:
 
@@ -80,11 +86,11 @@ Vận hành trên máy chạy:
 - **Máy chạy thật**: app từ chối `JWT_SECRET` mẫu và `SEED_DEMO=true`.
   - Muốn dùng thử trên máy chạy thì đặt `ALLOW_DEMO_SEED=yes`.
 
-Trước khi dùng thật cho nhiều người:
-- chạy trên máy chủ / VM luôn bật (không phải PC cá nhân), đồng bộ giờ NTP;
-- đặt reverse proxy TLS (HTTPS) phía trước cổng 4100 và `TRUST_PROXY=1`;
+Trước khi dùng thật cho nhiều người (phản biện đầy đủ, có đo tải 50 người: `docs/production-readiness.md`):
+- chạy trên máy luôn bật — **NAS công ty**: `sudo sh deploy/nas-setup.sh <thư-mục-dữ-liệu> https://kepper.<tên-miền>`, hướng dẫn `docs/deploy-nas.md`; nâng cấp `sudo sh deploy/upgrade.sh`; đồng bộ giờ NTP;
+- đặt reverse proxy TLS (HTTPS) phía trước cổng 4100, `TRUST_PROXY=1`, `APP_ORIGIN` = đúng địa chỉ người dùng gõ;
 - khoá các tài khoản mẫu;
-- bật mã hoá + bản sao lưu ngoài máy.
+- bật mã hoá + bản sao lưu ngoài máy (ngoài NAS).
 
 ## Chạy không cần Docker (phát triển)
 

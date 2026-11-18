@@ -82,10 +82,17 @@ const AUDIT_ACTIONS = {
   WEEKLY_REPORT_SUBMIT: 'Nộp báo cáo tuần', WEEKLY_NOTICE: 'Báo nộp muộn / vắng giao ban', WEEKLY_NOTICE_DELETE: 'Xoá thông báo muộn / vắng',
   WEEKLY_SUMMARY_COPY: 'Sao chép bản tổng hợp giao ban', WEEKLY_MEETING: 'Cập nhật giao ban (điểm danh, kết luận, Action Log)', WEEKLY_MEETING_PUBLISH: 'Phát hành kết luận giao ban',
   WEEKLY_CONFIG: 'Thiết lập báo cáo tuần', WEEKLY_COMPLIANCE_SUBMIT: 'Trình bảng điểm tuân thủ giao ban', WEEKLY_COMPLIANCE_APPROVE: 'Duyệt bảng điểm tuân thủ giao ban', TOKEN_CREATE: 'Tạo token Claude', TOKEN_REVOKE: 'Thu hồi token Claude',
+  CRM_PARTNER_CREATE: 'Thêm đối tác', CRM_PARTNER_UPDATE: 'Sửa đối tác', CRM_CONTACT_CREATE: 'Thêm người liên hệ đối tác', CRM_CONTACT_UPDATE: 'Sửa người liên hệ đối tác', CRM_CONTACT_DELETE: 'Xoá người liên hệ đối tác',
+  CRM_INTERACTION_CREATE: 'Ghi nhật ký làm việc với đối tác', CRM_FOLLOWUP_DONE: 'Xong việc theo dõi đối tác', CRM_ENGAGEMENT_CREATE: 'Thêm hợp đồng / gói thầu', CRM_ENGAGEMENT_UPDATE: 'Sửa hợp đồng / gói thầu',
+  HRM_CONFIG: 'Thiết lập nhân sự', HR_PROFILE_UPDATE: 'Sửa hồ sơ nhân sự', HR_IDENTITY_VIEW: 'Xem số định danh', HR_IDENTITY_UPDATE: 'Sửa số định danh', HR_CONTRACT_CREATE: 'Thêm hợp đồng lao động', HR_CONTRACT_UPDATE: 'Sửa hợp đồng lao động',
+  HR_LEAVE_CREATE: 'Tạo đơn nghỉ', HR_LEAVE_APPROVE: 'Duyệt đơn nghỉ', HR_LEAVE_REJECT: 'Từ chối đơn nghỉ', HR_LEAVE_CANCEL: 'Huỷ đơn nghỉ',
+  HR_ATT_APPROVE: 'Duyệt giải trình chấm công', HR_ATT_REJECT: 'Từ chối giải trình chấm công', HR_ATT_IMPORT: 'Nhập dữ liệu máy chấm công',
 };
 const AUDIT_ENTITIES = {
   User: 'Tài khoản', Auth: 'Đăng nhập', Department: 'Phòng ban', UserPermission: 'Phân quyền', Label: 'Nhãn', AppSetting: 'Danh mục',
-  TaskTemplate: 'Mẫu nhóm việc', Delegation: 'Uỷ quyền', WeeklyConfig: 'Thiết lập giao ban', ApiToken: 'Token Claude', WorkItem: 'Công việc', Project: 'Dự án / sổ', Attachment: 'Tệp đính kèm',
+  TaskTemplate: 'Mẫu nhóm việc', Delegation: 'Uỷ quyền', WeeklyConfig: 'Thiết lập giao ban', ApiToken: 'Token Claude',
+  CrmPartner: 'Đối tác', CrmContact: 'Người liên hệ đối tác', CrmInteraction: 'Nhật ký đối tác', CrmEngagement: 'Hợp đồng / gói thầu', HrmConfig: 'Thiết lập nhân sự',
+  HrProfile: 'Hồ sơ nhân sự', HrContract: 'Hợp đồng lao động', HrLeave: 'Đơn nghỉ', HrAttendance: 'Chấm công', WorkItem: 'Công việc', Project: 'Dự án / sổ', Attachment: 'Tệp đính kèm',
   ApprovalRequest: 'Yêu cầu duyệt', Cycle: 'Chu kỳ', RecurringRule: 'Việc lặp lại', IntakeRequest: 'Yêu cầu tiếp nhận', SavedView: 'Bộ lọc đã lưu',
   Plan: 'Kế hoạch năm', Summary: 'Tổng hợp giao việc', Kpi: 'KPI', WeeklyReport: 'Báo cáo tuần', WeeklyNotice: 'Thông báo muộn / vắng', WeeklyMeeting: 'Giao ban tuần', Ops: 'Trang Điều hành',
 };
@@ -274,8 +281,9 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
 
   // ---------- Danh bạ (tối thiểu hoá trường trả về) ----------
   app.get('/api/users/directory', auth, async (req, res) => {
-    res.json(await prisma.user.findMany({ where: { isActive: true }, orderBy: { fullName: 'asc' },
-      select: { id: true, username: true, fullName: true, displayTitle: true, role: true, departmentId: true } }));
+    const rows = await prisma.user.findMany({ where: { isActive: true }, orderBy: { fullName: 'asc' },
+      select: { id: true, username: true, fullName: true, displayTitle: true, role: true, departmentId: true, avatarFile: true } });
+    res.json(rows.map(({ avatarFile, ...u }) => ({ ...u, avatarUrl: avatarFile ? '/' + avatarFile : null })));
   });
 
   // ---------- Tài khoản ----------
@@ -376,11 +384,14 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
     const target = await prisma.user.findUnique({ where: { id: intParam(req.params.id) } });
     if (!target) fail(404, 'Không tìm thấy tài khoản', 'NOT_FOUND');
     if (!canResetPassword(req.user, target)) fail(403, 'Không thể reset mật khẩu tài khoản này', 'FORBIDDEN');
-    const sensitive = target.role === 'director';
+    // Người phụ trách nhân sự (HRM) xem được CCCD, lương của mọi người → reset mật khẩu của họ cũng là thao tác nhạy cảm, báo Ban GĐ.
+    const hrCfg = (await prisma.appSetting.findUnique({ where: { key: 'hrm.config' } }))?.value;
+    const isHr = Array.isArray(hrCfg?.hrUserIds) && hrCfg.hrUserIds.map(Number).includes(target.id);
+    const sensitive = target.role === 'director' || isHr;
     await prisma.$transaction(async tx => {
       await tx.user.update({ where: { id: target.id }, data: { passwordHash: await bcrypt.hash(DEFAULT_PASSWORD, 10), mustChangePw: true, sessionVersion: { increment: 1 } } });
       await audit(req, 'PASSWORD_RESET', 'User', target.id, null, sensitive ? { sensitive: true } : null, tx);
-      if (sensitive) await notifyDirectors(tx, req.user, `Quản trị hệ thống vừa reset mật khẩu tài khoản ${target.username} (Ban giám đốc)`, 'Tài khoản phải đổi mật khẩu ở lần đăng nhập tới');
+      if (sensitive) await notifyDirectors(tx, req.user, `Quản trị hệ thống vừa reset mật khẩu tài khoản ${target.username} (${target.role === 'director' ? 'Ban giám đốc' : 'người phụ trách nhân sự'})`, 'Tài khoản phải đổi mật khẩu ở lần đăng nhập tới');
     });
     res.json({ ok: true });
   });

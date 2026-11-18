@@ -21,7 +21,8 @@ const POINT_LABEL = {
 };
 
 // ---------- Ngày / tuần (chuỗi YYYY-MM-DD theo giờ VN) ----------
-const isDay = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s + 'T00:00:00Z'));
+// Ngày có thật (2026-02-30 → false: Date.parse tự chuyển sang 02/03).
+const isDay = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s + 'T00:00:00Z')) && new Date(s + 'T00:00:00Z').toISOString().slice(0, 10) === s;
 const addDays = (s, n) => new Date(Date.parse(s + 'T00:00:00Z') + n * DAY).toISOString().slice(0, 10);
 const dayOf = d => (d ? new Date(new Date(d).getTime() + H7).toISOString().slice(0, 10) : '');
 const at = (day, hh, mm) => new Date(Date.parse(`${day}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00+07:00`));
@@ -128,6 +129,17 @@ function buildPrefill({ week: f, deptId, items = [], memberIds = new Set(), prev
     if (e <= S.to) add(results, mtlRow(i));
     else if (s <= S.to) add(ongoing, mtlRow(i, { next: i.checklistNext || '' }));
     else if (s <= S.nextTo) { if (!seen.has(i.id)) { seen.add(i.id); plans.push({ key: `m${i.id}`, itemId: i.id, ref: i.code, step: i.planCode || '', task: i.title, basis: MTL_SOURCE, ownerIds: (i.assignees || []).map(a => a.id), due: e, output: '' }); } }
+  }
+  // Nguyên nhân / giải pháp của tuần trước (bản đã nộp) cho cùng hạng mục còn chậm: điền sẵn để bộ phận xem lại, sửa nếu đã khác —
+  // không phải gõ lại mỗi tuần. Đề nghị hỗ trợ không chép (mỗi tuần Ban GĐ kết luận riêng).
+  if (prev) {
+    const last = new Map();
+    for (const r of [...(prev.results || []), ...(prev.ongoing || [])]) if (r && (r.cause || r.solution)) last.set(r.itemId ? `i${r.itemId}` : `k${r.key}`, r);
+    for (const r of [...results, ...ongoing]) {
+      const p = last.get(r.itemId ? `i${r.itemId}` : `k${r.key}`);
+      if (!p || r.status === DONE || r.cause || r.solution) continue;
+      r.cause = String(p.cause || ''); r.solution = String(p.solution || ''); r.carried = true;
+    }
   }
   const rank = r => [r.status === DONE ? 2 : needsIssue(r, f) ? 0 : 1, r.due || '9999'];
   const order = (a, b) => { const x = rank(a), y = rank(b); return x[0] - y[0] || (x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0); };
@@ -360,7 +372,7 @@ function fridaysOf(ym, now = new Date(), startWeek = null) {
 
 module.exports = {
   SOURCES, MTL_SOURCE, STATUSES, DONE, HELP_BGD, HELP_SELF, REASONS, NOTICE_TYPES, ATTENDANCE, DECISIONS, POINTS, POINT_LABEL,
-  isDay, addDays, dayOf, at, weekday, currentFriday, isFriday, fmtD, fmtTime, scheduleOf,
+  isDay, addDays, dayOf, at, weekday, currentFriday, isFriday, fmtD, fmtDY, fmtTime, scheduleOf,
   isOverdue, needsIssue, issueLabel, statusFromMtl, deptCandidates, buildPrefill, sanitize, validate, finalize, writeBacks,
   submissionStatus, absenceNoticed, SUBMITTED, buildSummary, briefSummary, summaryText, compliance, fridaysOf, stableStringify,
 };

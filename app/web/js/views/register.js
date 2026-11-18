@@ -34,18 +34,28 @@ export function drawRegister(body, current, { filtered, openItemHash, reload }) 
   const ids = new Set(scoped.map(i => i.id));
   const order = (a, b) => (a.planCode && b.planCode ? a.planCode.localeCompare(b.planCode, 'vi', { numeric: true }) : a.number - b.number);
   const roots = scoped.filter(i => !i.parentId || !ids.has(i.parentId)).sort(order);
-  const statusOk = i => !status || i.dl.code === status || (byParent.get(i.id) || []).some(c => c.dl.code === status);
+  // Việc con nhiều cấp: duyệt cả cây (có chặn vòng).
+  const subtreeOk = (i, seen = new Set()) => !seen.has(i.id) && (seen.add(i.id), i.dl.code === status || (byParent.get(i.id) || []).some(c => subtreeOk(c, seen)));
+  const statusOk = i => !status || subtreeOk(i);
+  const progMemo = new Map();
+  const groupProgress = i => {
+    if (progMemo.has(i.id)) return progMemo.get(i.id);
+    progMemo.set(i.id, i.progress || 0);
+    const kids = byParent.get(i.id) || [];
+    const v = kids.length ? Math.round(kids.reduce((n, c) => n + groupProgress(c), 0) / kids.length) : i.progress || 0;
+    progMemo.set(i.id, v); return v;
+  };
   const canEdit = project.rights.canEdit;
   const pr = p => (p === 'NONE' ? '' : `<span class="prio prio-${p}">${esc(PRIORITY[p].label)}</span>`);
-  const row = (i, stt, child) => {
+  const row = (i, stt, depth) => {
     const kids = byParent.get(i.id) || [];
-    const group = !child && kids.length;
-    // Nhóm việc: tiến độ = trung bình các việc nhánh (chỉ hiển thị, sửa ở từng việc nhánh).
-    const progress = group ? Math.round(kids.reduce((n, c) => n + (c.progress || 0), 0) / kids.length) : i.progress;
+    const child = depth > 0, group = kids.length > 0;
+    // Nhóm việc (ở mọi cấp): tiến độ = trung bình các việc nhánh, tính dồn qua mọi cấp (chỉ hiển thị, sửa ở việc lá).
+    const progress = group ? groupProgress(i) : i.progress;
     const assigner = i.assignedById ? userById(i.assignedById)?.fullName || '' : '';
     return `<tr class="reg-row${child ? ' child' : ''}${group ? ' group' : ''}" data-id="${i.id}" data-testid="reg-${esc(i.code)}">
       <td class="num">${stt}</td><td class="code">${esc(i.code)}${i.refCode ? `<div class="muted xs">${esc(i.refCode)}</div>` : ''}</td>
-      <td class="reg-title">${group ? `<button class="icon-btn reg-toggle" data-toggle="${i.id}" aria-label="${ui.collapsed.has(i.id) ? 'Mở' : 'Thu'} việc nhánh">${icon(ui.collapsed.has(i.id) ? 'right' : 'down')}</button>` : ''}${child ? '<span class="reg-arrow">↳</span>' : ''}${!child ? `<span class="type-tag type-${i.taskType}" title="${i.taskType === 'PLAN' ? 'Kế hoạch năm' : 'Đột xuất (theo chỉ đạo)'}">${i.taskType === 'PLAN' ? 'KH' : 'ĐX'}</span>` : ''}<span>${i.planCode && !child ? `<b>${esc(i.planCode)}</b> ` : ''}${esc(i.title)}</span>${i.dispatchStatus === 'PENDING' ? ' <span class="pill warn">Chờ phòng tiếp nhận</span>' : ''}${group ? ` <span class="muted xs">(${kids.length} việc nhánh)</span>` : ''}</td>
+      <td class="reg-title">${group ? `<button class="icon-btn reg-toggle" data-toggle="${i.id}" aria-label="${ui.collapsed.has(i.id) ? 'Mở' : 'Thu'} việc nhánh">${icon(ui.collapsed.has(i.id) ? 'right' : 'down')}</button>` : ''}${child ? `<span class="reg-arrow" style="margin-left:${(depth - 1) * 14}px">↳</span>` : ''}${!child ? `<span class="type-tag type-${i.taskType}" title="${i.taskType === 'PLAN' ? 'Kế hoạch năm' : 'Đột xuất (theo chỉ đạo)'}">${i.taskType === 'PLAN' ? 'KH' : 'ĐX'}</span>` : ''}<span>${i.planCode && !child ? `<b>${esc(i.planCode)}</b> ` : ''}${esc(i.title)}</span>${i.dispatchStatus === 'PENDING' ? ' <span class="pill warn">Chờ phòng tiếp nhận</span>' : ''}${group ? ` <span class="muted xs">(${kids.length} việc nhánh)</span>` : ''}</td>
       <td class="nowrap">${fmtDate(i.dueDate)}</td>
       <td class="nowrap">${deadlineChip(i.dl)}</td><td class="nowrap">${i.dispatchStatus || i.stage?.code === 'RETURNED' || i.stage?.code?.startsWith('WAIT') ? stagePill(i.stage) : ''}</td><td class="num ${i.dl.daysLeft < 0 ? 'due overdue' : ''}">${i.dl.daysLeft ?? ''}</td>
       <td class="reg-people">${names(i.assignees)}${i.leadDepartmentId && !child ? `<div class="muted xs">${esc(deptName(i.leadDepartmentId))}</div>` : ''}</td>
@@ -63,12 +73,19 @@ export function drawRegister(body, current, { filtered, openItemHash, reload }) 
   };
   let stt = 0, lastSection = null;
   const rows = [];
+  // Việc nhánh hiện khi: không lọc, chính nó / cây con của nó khớp, hoặc một việc tổ tiên khớp trạng thái đang lọc.
+  const emit = (i, depth, ancestorOk, seen) => {
+    if (seen.has(i.id)) return; seen.add(i.id);
+    rows.push(row(i, ++stt, depth));
+    if (ui.collapsed.has(i.id)) return;
+    const ok = ancestorOk || (status && i.dl.code === status);
+    for (const c of (byParent.get(i.id) || []).sort(order)) if (!status || ok || statusOk(c)) emit(c, depth + 1, ok, seen);
+  };
+  const seen = new Set();
   for (const r of roots) {
-    const kids = (byParent.get(r.id) || []).sort(order);
     if (!statusOk(r)) continue;
     if (r.planSection && r.planSection !== lastSection) { lastSection = r.planSection; rows.push(`<tr class="reg-section"><td colspan="${cols}">${esc(r.planSection)}</td></tr>`); }
-    rows.push(row(r, ++stt, false));
-    if (!ui.collapsed.has(r.id)) for (const c of kids) if (!status || c.dl.code === status || r.dl.code === status) rows.push(row(c, ++stt, true));
+    emit(r, 0, false, seen);
   }
   body.innerHTML = `<div class="reg-wrap"><table class="table reg" data-testid="register">
       <thead><tr><th>STT</th><th>Mã CV</th><th>Nội dung công việc</th><th>Hạn hoàn thành</th><th>Trạng thái</th><th>Khâu</th><th>Còn lại (ngày)</th><th>Người chủ trì</th><th>Tiến độ</th><th>Ngày HT thực tế</th><th>Ưu tiên</th><th>Người phối hợp</th><th>Người giao</th><th>Ngày giao</th><th>Nguồn giao việc</th><th>Văn bản căn cứ</th><th>Sản phẩm đầu ra</th>

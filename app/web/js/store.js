@@ -1,5 +1,6 @@
 // Trạng thái dùng chung của ứng dụng (người dùng hiện tại, danh mục).
 import { api } from './api.js';
+import { setAvatarDirectory } from './util.js';
 
 export const store = { me: null, projects: [], departments: [], labels: [], users: [], settings: { dueSoonDays: 3, sources: [] }, templates: [] };
 
@@ -12,6 +13,7 @@ export async function loadBasics() {
     api('/api/projects'), api('/api/departments'), api('/api/labels'), api('/api/users/directory'), api('/api/settings'), api('/api/templates'),
   ]);
   Object.assign(store, { projects, departments, labels, users, settings, templates });
+  setAvatarDirectory(users);
 }
 export async function reloadProjects() { store.projects = await api('/api/projects'); return store.projects; }
 // Nhãn dùng được trong một dự án: nhãn chung + nhãn riêng của dự án đó.

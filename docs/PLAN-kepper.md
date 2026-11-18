@@ -1,4 +1,4 @@
-# Kepper Hub — kế hoạch nghiệp vụ
+# Kepler Hub — kế hoạch nghiệp vụ
 
 ## Bài toán
 Công ty theo dõi dự án bất động sản (vd. SPV NƠXH) bằng **Master Timeline (MTL)**: các hạng mục theo **tháng T** tính từ T0. Mỗi hạng mục có:
@@ -191,3 +191,33 @@ Còn mở:
 - quy chế sử dụng AI;
 - cảnh báo đọc dồn bất thường theo token;
 - connector từ xa (claude.ai web / điện thoại) khi đã có máy chủ + TLS.
+
+## Playground CRM đối tác + HRM (nhánh `kepper/playground-crm-hrm`)
+
+Chủ dự án (24/10/2026): mở playground riêng xây thêm CRM (đối tác, nhà thầu, cơ quan) và HRM (hồ sơ, hợp đồng, nghỉ phép, chấm công). Công ty ~40 người, cấp độ 2.
+
+| Hạng mục | Cách làm |
+|---|---|
+| Tách biệt | Module tuỳ chọn `MODULES=crm,hrm`, mặc định tắt (bản 4100 không đổi). Bản thử `deploy/playground.ps1`: thư mục, Docker project, image (`kepper-app:play`), CSDL, cổng 4200 riêng; dữ liệu GIẢ |
+| CRM | `CrmPartner` (một bộ phận phụ trách + người phụ trách), `CrmContact`, `CrmInteraction` (nhật ký không sửa; việc theo dõi có hạn + người theo dõi → nhắc 08:10), `CrmEngagement` (hợp đồng / gói thầu / MOU / hồ sơ cấp phép, gắn dự án) |
+| HRM | `HrProfile` (CCCD mã hoá), `HrContract` (lương mã hoá), `HrLeave` (tính ngày làm việc, phép năm BLLĐ Đ113–114, chặn trùng, lãnh đạo duyệt), `HrAttendance` (chấm vào / ra giờ máy chủ, giải trình → duyệt, nhập CSV máy chấm công), thiết lập (giờ làm, ngày làm, ngày lễ, mạng văn phòng, người phụ trách nhân sự do Ban GĐ chỉ định) |
+| Quyền | `lib/policy.js` thêm `crm.*`, `hrm.*`; test ma trận `policy-playground.test.js`; IT không có quyền nào |
+| Claude | 10 công cụ MCP mới (0.4.0): đối tác, chi tiết, việc theo dõi, ghi nhật ký, xong việc theo dõi; hồ sơ + phép của tôi, đơn nghỉ, tạo đơn nghỉ của mình, bảng công, tổng hợp công. Không chấm công / duyệt / sửa hồ sơ qua Claude; CCCD 4 số cuối; không lương; nghỉ ốm của người khác gộp |
+| Kiểm thử | unit (ma trận, ngày nghỉ, phép năm, đi muộn, CIDR, bảng công, mã hoá), e2e `08-playground-crm-hrm`, tích hợp MCP |
+
+Trước khi bật trên bản chạy thật: thông báo xử lý DLCN cho người lao động, chỉ định người phụ trách nhân sự + người chịu trách nhiệm bảo vệ DLCN, thời hạn lưu hồ sơ người nghỉ việc, khoá `HR_ENC_KEY` ngoài máy, hồ sơ đánh giá tác động (DPA mục Playground).
+
+## Giao diện theo nhận diện công ty, kiểu bộ phần mềm văn phòng (nhánh `kepper/ui-shell`, 23/10/2026)
+
+Phản hồi của chủ dự án: chưa ưng UI/UX; tham khảo 1Office, Base.vn; theo theme logo công ty.
+
+| Hạng mục | Cách làm |
+|---|---|
+| Khung | Thanh đầu trang trắng (logo, nút **Ứng dụng** dạng lưới phân hệ, tìm nhanh Ctrl K, thông báo, menu tài khoản); sidebar navy chia nhóm Tiến độ · Công việc · Nghiệp vụ · Dự án · Quản trị, gập từng nhóm, thu gọn thành dải icon (`js/shell.js`, `css/shell.css`). Thay cho menu 3 mục + "Công cụ khác" của GĐ2b |
+| Trang chủ | `#/today` (thay `#/tuan`): việc cần xử lý xếp theo hạn (phiếu trình, gia hạn, kiến nghị, việc của tôi quá hạn / trong 7 ngày), dự án xếp theo mức lo, thẻ Giao ban (giờ họp, tình trạng báo cáo của bộ phận / số bộ phận đã nộp), thông báo mới. Chỉ dùng API sẵn có |
+| Danh mục | Bỏ khỏi sidebar và menu tài khoản (người dùng nghiệp vụ); chỉ còn ở nhóm Quản trị (IT) |
+| Theme | Navy `#09334C`, vàng đồng `#B28A33` theo logo; mục đang mở có chấm vàng; trang đăng nhập có quỹ đạo elip |
+| Nhận diện | Tên, logo công ty chỉ trên máy chạy: `ORG_NAME`, thư mục `BRANDING_PATH` (logo.png, logo-light.png, mark.png, mark-light.png). `GET /api/brand` (công khai: tên + tệp có sẵn), `GET /branding/<tệp>` (4 tên cố định). `branding/` trong `.gitignore` |
+| Thông tin cá nhân | `#/me` (menu tài khoản): thông tin tài khoản (chỉ xem), đổi / xoá ảnh đại diện (`PUT/DELETE /api/me/avatar`, ảnh ở `/avatars/<uuid>`), đổi mật khẩu, cây tổ chức (`GET /api/me/profile`, `routes/profile.js` `orgOf`) |
+| Kết nối Claude | Bỏ bước tạo / dán token: tiện ích 0.5.0 xin mã → trình duyệt mở `#/claude?connect=<mã>` → **Cho phép** (cùng máy) → token 30 ngày lưu trong thư mục người dùng (`routes/tokens.js` `/api/claude/connect/*`). Token tay vẫn còn trong mục "Cách thủ công". Gói `.mcpb` tải về tự điền địa chỉ theo `APP_ORIGIN` |
+| Chạy trên NAS | `APP_BIND`, `PGDATA_PATH`, `UPLOADS_PATH`; `deploy/nas-setup.sh`, `deploy/upgrade.sh`; `docs/deploy-nas.md`; phản biện production + đo tải 50 người: `docs/production-readiness.md` |

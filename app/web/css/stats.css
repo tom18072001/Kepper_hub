@@ -45,8 +45,8 @@
 .mk-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px}
 .mk-t{display:flex;flex-direction:column;gap:2px;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-2);min-width:0}
 .mk-t b{font-size:1.35rem;line-height:1.15;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
-.mk-t span{font-size:.78rem;color:var(--muted);font-weight:500}
-.mk-t small{font-size:.72rem;color:var(--faint)}
+.mk-t span{font-size:.8rem;color:var(--muted);font-weight:500}
+.mk-t small{font-size:.8rem;color:var(--faint)}
 .mk-t.ok b{color:var(--ok)}.mk-t.warn b{color:var(--warn)}.mk-t.bad b{color:var(--danger)}
 .mk-score{background:var(--brand-050);border-color:var(--brand-100)}
 .mk-score b{color:var(--brand)}
@@ -64,7 +64,7 @@
 .palette-list a{min-height:42px}
 .palette-list a:not(.sel):hover{background:transparent;color:var(--text)}
 .palette-list a.sel{background:var(--brand-050);color:var(--brand)}
-.pal-group{padding:12px 12px 4px;font-size:.78rem;font-weight:600;color:var(--muted)}
+.pal-group{padding:12px 12px 4px;font-size:.8rem;font-weight:600;color:var(--muted)}
 .palette-list>[role=group]:first-child>.pal-group{padding-top:4px}
 .pal-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pal-hint{flex:none;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

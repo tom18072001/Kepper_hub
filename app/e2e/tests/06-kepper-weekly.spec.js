@@ -12,7 +12,9 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   const nv = await (await browser.newContext()).newPage();
   await login(nv, 'nv.phaply');
 
-  // 1) Trang chủ = "Báo cáo tuần" của bộ phận mình, đã điền sẵn hạng mục MTL; nhân viên không thấy Tổng hợp / Chấm điểm.
+  // 1) Trang chủ có thẻ Giao ban → "Báo cáo tuần" của bộ phận mình, đã điền sẵn hạng mục MTL; nhân viên không thấy Tổng hợp / Chấm điểm.
+  await expect(nv).toHaveURL(/#\/today/);
+  await nv.getByTestId('today-weekly').click();
   await expect(nv).toHaveURL(/#\/tuan/);
   await expect(nv.getByTestId('weekly')).toBeVisible();
   await expect(nv.getByTestId('wk-dept-name')).toHaveText('Ban Pháp lý');
@@ -109,6 +111,7 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   // 7) Báo nộp muộn (Ban Tài chính); báo vắng phải cử người dự thay.
   const tc = await (await browser.newContext()).newPage();
   await login(tc, 'tb.taichinh');
+  await tc.getByTestId('nav-tuan').click();
   await expect(tc.getByTestId('wk-dept-name')).toHaveText('Ban Tài chính'); // bộ phận theo tài khoản, không phải chọn
   await expect(tc.getByTestId('wk-preparer')).toContainText('trưởng bộ phận');
   await tc.getByTestId('wk-tab-bao').click();

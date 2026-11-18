@@ -1,4 +1,5 @@
 // Khởi động ứng dụng: đăng nhập, khung giao diện, điều hướng theo hash.
+import './pwa.js';
 import { api, setToken, getToken, onAuthEvent, lastLocalWrite } from './api.js';
 import { store, can, loadBasics, reloadProjects, isItAdmin, workScope } from './store.js';
 import { $, $$, esc, toast, closeModal, requestCloseModal, avatar, errorMessage, ago, setPrefUser, clearDrafts, uiPref } from './util.js';
@@ -11,17 +12,23 @@ import { renderProjectSettings, openCreateProject } from './views/settings.js';
 import { openItem, closeItem, isItemOpen } from './views/item-panel.js';
 import { openPalette, closePalette } from './views/palette.js';
 import { renderHome } from './views/home.js';
+import { renderToday } from './views/today.js';
+import { renderProfile } from './views/profile.js';
 import { renderQuick } from './views/quick.js';
 import { renderWeekly } from './views/weekly.js';
 import { renderTrash } from './views/trash.js';
 import { renderClaude } from './views/claude.js';
+import { renderCrm } from './views/crm.js';
+import { renderVanthu } from './views/vanthu.js';
+import { renderHrm } from './views/hrm.js';
 import { renderCatalog } from './views/catalog.js';
 import { renderWork } from './views/work.js';
 import { current as projectState, reloadProject } from './views/project.js';
 import { reloadOpenItem, openItemId } from './views/item-panel.js';
 import { startRealtime, stopRealtime, onRealtime } from './realtime.js';
 import { hydrateIcons } from './icons.js';
-import { initShortcuts } from './shortcuts.js';
+import { initShortcuts, help as showShortcuts, labelNavShortcuts } from './shortcuts.js';
+import { initShell, renderNav, renderMe, highlightNav, loadBrand } from './shell.js';
 
 hydrateIcons();
 initShortcuts();
@@ -79,7 +86,6 @@ $('#passwordForm').addEventListener('submit', async e => {
   } catch (error) { $('#pwError').textContent = errorMessage(error); }
 });
 $('#pwLogout').addEventListener('click', () => logout());
-$('#logoutBtn').addEventListener('click', () => logout());
 
 async function enter() {
   store.me = await api('/api/me');
@@ -88,8 +94,8 @@ async function enter() {
   await loadBasics();
   show('appShell');
   renderShell();
-  // Trang chủ: "Tuần này" (báo cáo tuần theo BM-TH-01 + tổng hợp giao ban) cho mọi người dùng nghiệp vụ; admin IT: quản trị.
-  const home = isItAdmin() ? '#/admin/users' : '#/tuan';
+  // Trang chủ: "hôm nay cần làm gì" (việc cần xử lý, dự án theo mức lo, giao ban tuần này) cho người dùng nghiệp vụ; admin IT: quản trị.
+  const home = isItAdmin() ? '#/admin/users' : '#/today';
   if (!location.hash || location.hash === '#/' || (isItAdmin() && !/^#\/(admin|catalog)/.test(location.hash))) location.hash = home; else route();
   refreshCounters();
   startRealtime();
@@ -98,27 +104,17 @@ async function enter() {
 
 function renderShell() {
   const me = store.me;
-  $('#meAvatar').outerHTML = avatar(me).replace('class="avatar"', 'class="avatar" id="meAvatar"');
-  $('#meName').textContent = me.fullName;
-  $('#meDept').textContent = me.departmentName || (me.isRootAdmin ? 'Quản trị gốc' : '');
-  $('#navDashboard').classList.toggle('hidden', !can('reports.dashboard'));
-  // Tổng thể công việc (mọi dự án, theo người / phòng): BGĐ và lãnh đạo phòng; cán bộ xem việc mình ở "Việc của tôi".
-  $('#navWork').classList.toggle('hidden', !['SYSTEM', 'UNIT'].includes(workScope()));
+  $('#meAvatar').outerHTML = avatar(me).replace(/^<(\w+) class="avatar/, '<$1 id="meAvatar" class="avatar');
+  renderMe();
+  $('.ab-brand').setAttribute('href', isItAdmin() ? '#/admin/users' : '#/today');
   // Admin IT: chỉ thấy phần quản trị, không thấy công việc / dự án / báo cáo.
-  $('#workNav').classList.toggle('hidden', isItAdmin());
-  $('#projectSection').classList.toggle('hidden', isItAdmin());
   $('#paletteBtn').classList.toggle('hidden', isItAdmin());
-  let anyAdmin = false;
-  for (const a of $$('#adminNav [data-perm]')) { const ok = can(a.dataset.perm); a.classList.toggle('hidden', !ok); anyAdmin ||= ok; }
-  $('#adminNav').classList.toggle('hidden', !anyAdmin);
-  $('#newProjectBtn').classList.toggle('hidden', !can('projects.manage', 'operate'));
-  // Nhóm "Công cụ khác" nhớ trạng thái mở / đóng theo người dùng (mặc định thu gọn cho gọn mắt).
-  const more = $('#navMore');
-  more.open = !!uiPref('nav:more');
-  more.ontoggle = () => uiPref('nav:more', more.open || null);
+  renderNav({ onNewProject: () => openCreateProject(async project => { await reloadProjects(); renderProjectNav(); location.hash = `#/projects/${project.id}`; }) });
   renderProjectNav();
+  labelNavShortcuts();
 }
 export function renderProjectNav() {
+  if (!$('#projectNav')) return;
   const byDept = new Map();
   for (const p of store.projects) {
     const name = p.department?.name || '—';
@@ -126,20 +122,9 @@ export function renderProjectNav() {
     byDept.get(name).push(p);
   }
   $('#projectNav').innerHTML = [...byDept.entries()].map(([dept, list]) => `<div class="sb-dept">${esc(dept)}</div>` +
-    list.map(p => `<a href="#/projects/${p.id}" data-project="${p.id}" data-testid="nav-project-${esc(p.key)}"><span class="key">${esc(p.key)}</span><span>${esc(p.name)}</span></a>`).join('')).join('')
-    || '<div class="muted xs" style="padding:6px 10px">Chưa có dự án nào bạn được xem.</div>';
+    list.map(p => `<a href="#/projects/${p.id}" data-project="${p.id}" data-testid="nav-project-${esc(p.key)}" title="${esc(p.key + ' — ' + p.name)}"><span class="key">${esc(p.key)}</span><span class="t">${esc(p.name)}</span></a>`).join('')).join('')
+    || '<div class="muted xs sb-none">Chưa có dự án nào bạn được xem.</div>';
   highlightNav();
-}
-function highlightNav() {
-  const hash = location.hash;
-  $$('.sb-nav a, .sb-projects a').forEach(a => {
-    const href = a.getAttribute('href');
-    a.classList.toggle('active', hash === href || hash.split('?')[0] === href || (href.startsWith('#/projects/') && hash.startsWith(href + '/')) || (href.startsWith('#/projects/') && hash.startsWith(href + '?'))
-      || (href === '#/tuan' && hash.startsWith('#/tuan')));
-  });
-  // Đang mở một trang trong "Công cụ khác" thì mở nhóm đó ra.
-  const more = $('#navMore');
-  if (more && $('a.active', more)) more.open = true;
 }
 
 let countersBusy = false;
@@ -151,11 +136,9 @@ export async function refreshCounters() {
     const dot = $('#notifDot');
     dot.textContent = notif.unread > 9 ? '9+' : String(notif.unread);
     dot.classList.toggle('hidden', !notif.unread);
-    const badge = $('#approvalBadge');
-    badge.textContent = counts.total; badge.classList.toggle('hidden', !counts.total);
-    badge.title = `${counts.queue} chờ duyệt · ${counts.extensions} đề nghị gia hạn`;
-    // "Công cụ khác" đang thu gọn: hiện số việc chờ duyệt ngay trên tiêu đề nhóm.
-    const more = $('#moreBadge'); more.textContent = counts.total; more.classList.toggle('hidden', !counts.total); more.title = badge.title;
+    const title = `${counts.queue} chờ duyệt, ${counts.extensions} đề nghị gia hạn`;
+    // Số chờ duyệt: ở mục "Chờ tôi duyệt" và trên tiêu đề nhóm "Công việc" (hiện khi nhóm đang gập / sidebar thu gọn).
+    for (const b of [$('#approvalBadge'), $('#moreBadge')]) if (b) { b.textContent = counts.total; b.classList.toggle('hidden', !counts.total); b.title = title; }
     store.counts = counts;
     store.notifications = notif;
   } catch { /* bỏ qua lỗi đếm */ } finally { countersBusy = false; }
@@ -180,10 +163,8 @@ $('#notifPanel').addEventListener('click', async e => {
 });
 document.addEventListener('click', e => { if (!e.target.closest('.notif')) $('#notifPanel').classList.add('hidden'); });
 
-// Menu di động, tạo dự án, palette
-$('#menuBtn').addEventListener('click', () => $('#sidebar').classList.toggle('open'));
-$('#sidebar').addEventListener('click', e => { if (e.target.closest('a')) $('#sidebar').classList.remove('open'); });
-$('#newProjectBtn').addEventListener('click', () => openCreateProject(async project => { await reloadProjects(); renderProjectNav(); location.hash = `#/projects/${project.id}`; }));
+// Thanh đầu trang, sidebar (thu gọn / mở trượt), bảng Ứng dụng, menu tài khoản; palette
+initShell({ onLogout: () => logout(), onShortcuts: () => showShortcuts() });
 $('#paletteBtn').addEventListener('click', openPalette);
 $('#modalRoot').addEventListener('mousedown', e => { if (e.target.id === 'modalRoot') requestCloseModal(); });
 $('#paletteRoot').addEventListener('mousedown', e => { if (e.target.id === 'paletteRoot') closePalette(); });
@@ -215,7 +196,7 @@ document.addEventListener('keydown', e => {
 let renderToken = 0, lastViewKey = '';
 // Vẽ lại trang nền (hộp việc, điều hành, chờ duyệt…) sau thao tác trong panel, không đụng tới panel đang mở.
 // Chỉ các trang danh sách; bỏ qua khi người dùng đang gõ hoặc đã nhập dở trong trang (ghi chú, form uỷ quyền, danh mục…).
-const LIST_PAGES = ['', 'my', 'ops', 'approvals', 'dept', 'schedule'];
+const LIST_PAGES = ['', 'my', 'ops', 'approvals', 'dept', 'schedule', 'today'];
 let bgBusy = false;
 export async function refreshBackground() {
   if (!store.me || bgBusy) return;
@@ -252,7 +233,7 @@ export async function route({ background = false } = {}) {
   const setCrumbs = html => { $('#crumbs').innerHTML = html; };
   const syncPanel = () => { if (background) return; if (params.get('item')) openItem(Number(params.get('item'))); else closeItem(); };
   try {
-    if (isItAdmin() && !['admin', 'catalog'].includes(parts[0])) { location.hash = '#/admin/users'; return; }
+    if (isItAdmin() && !['admin', 'catalog', 'me'].includes(parts[0])) { location.hash = '#/admin/users'; return; }
     if (parts[0] === 'projects' && parts[1]) {
       const id = Number(parts[1]);
       if (parts[2] === 'settings') await renderProjectSettings(view, id, setCrumbs);
@@ -263,13 +244,18 @@ export async function route({ background = false } = {}) {
       }
       if (params.get('item')) openItem(Number(params.get('item'))); else closeItem();
     } else if (parts[0] === 'approvals') { await renderApprovals(view, params, setCrumbs); syncPanel(); }
-    else if (['requests', 'schedule', 'ops', 'dept', 'summary', 'kpi'].includes(parts[0])) { location.replace('#/home'); return; } // nghiệp vụ NQ57 đã bỏ (Kepper)
+    else if (['requests', 'schedule', 'ops', 'dept', 'summary', 'kpi'].includes(parts[0])) { location.replace('#/home'); return; } // nghiệp vụ NQ57 đã bỏ (Kepler Hub)
     else if (parts[0] === 'tuan') { closeItem(); await renderWeekly(view, parts[1] || '', params, setCrumbs); }
     else if (parts[0] === 'home') { await renderHome(view, params, setCrumbs); syncPanel(); }
+    else if (parts[0] === 'today') { closeItem(); await renderToday(view, params, setCrumbs, () => token === renderToken); }
     else if (parts[0] === 'sprint') { await renderQuick(view, params, setCrumbs); syncPanel(); }
     else if (parts[0] === 'dashboard') { closeItem(); await renderDashboard(view, params, setCrumbs); }
     else if (parts[0] === 'trash') { closeItem(); await renderTrash(view, setCrumbs); }
-    else if (parts[0] === 'claude') { closeItem(); await renderClaude(view, setCrumbs); }
+    else if (parts[0] === 'claude') { closeItem(); await renderClaude(view, setCrumbs, params); }
+    else if (parts[0] === 'me') { closeItem(); await renderProfile(view, setCrumbs); }
+    else if (parts[0] === 'vanthu') { closeItem(); await renderVanthu(view, parts[1] || null, params, setCrumbs); }
+    else if (parts[0] === 'crm') { closeItem(); await renderCrm(view, parts[1] || null, params, setCrumbs); }
+    else if (parts[0] === 'hrm') { closeItem(); await renderHrm(view, parts, params, setCrumbs); }
     else if (parts[0] === 'catalog') { closeItem(); await renderCatalog(view, setCrumbs); }
     else if (parts[0] === 'work') { await renderWork(view, params, setCrumbs); syncPanel(); }
     else if (parts[0] === 'admin') { closeItem(); await renderAdmin(view, parts[1] || 'users', params, setCrumbs); }
@@ -303,6 +289,7 @@ window.addEventListener('workhub:hashreplaced', () => {
 });
 
 (async function init() {
+  await loadBrand();
   if (!getToken()) { show('loginPage'); return; }
   try { await enter(); } catch { logout(); }
 })();

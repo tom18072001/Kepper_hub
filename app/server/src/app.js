@@ -38,7 +38,8 @@ function createApp({ prisma, config }) {
   app.use('/api', cors({
     origin(origin, callback) {
       if (!origin || config.allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(new HttpError(403, 'Origin không được phép', 'CORS_FORBIDDEN'));
+      // Hay gặp khi chuyển máy chạy (NAS) mà người dùng mở bằng địa chỉ khác APP_ORIGIN (IP thay vì tên miền, http thay vì https).
+      return callback(new HttpError(403, `Địa chỉ ${String(origin).slice(0, 80)} chưa được phép — mở Kepler Hub bằng ${config.allowedOrigins[0] || 'địa chỉ quản trị cung cấp'} hoặc nhờ quản trị thêm vào APP_ORIGIN`, 'CORS_FORBIDDEN'));
     },
   }));
   // Giới hạn tần suất chung cho API (không áp lên /api/auth để giữ nguyên tiêu chí đăng nhập).
@@ -77,14 +78,99 @@ function createApp({ prisma, config }) {
     await prisma.$queryRaw`SELECT 1`;
     res.json({ ok: true });
   });
+  // Nhận diện công ty (tên, logo) — đặt trên máy chạy (ORG_NAME, thư mục BRANDING_DIR), không nằm trong mã nguồn.
+  // Công khai (trang đăng nhập cần), chỉ 4 tệp ảnh cố định, không liệt kê thư mục.
+  const BRAND_FILES = ['logo.png', 'logo-light.png', 'mark.png', 'mark-light.png'];
+  const fsSync = require('node:fs');
+  const pngSize = file => { try { const b = fsSync.readFileSync(file); return b.readUInt32BE(16) + 'x' + b.readUInt32BE(20); } catch { return null; } };
+  const brandHas = f => !!config.brandingDir && fsSync.existsSync(path.join(config.brandingDir, f));
+  app.get('/api/brand', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    const m = brandHas('mark.png') && pngSize(path.join(config.brandingDir, 'mark.png'));
+    res.json({ name: config.orgName || '', files: BRAND_FILES.filter(brandHas), appIcon: !!m && m.split('x')[0] === m.split('x')[1] && Number(m.split('x')[0]) >= 144 });
+  });
+  app.get('/branding/:file', (req, res) => {
+    if (!BRAND_FILES.includes(req.params.file) || !brandHas(req.params.file)) return res.status(404).end();
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.sendFile(req.params.file, { root: config.brandingDir, dotfiles: 'deny' });
+  });
   for (const mount of [
     require('./routes/auth'), require('./routes/admin'), require('./routes/labels'), require('./routes/projects'), require('./routes/items'), require('./routes/trash'),
     require('./routes/attachments'), require('./routes/approvals'), require('./routes/me'), require('./routes/notes'), require('./routes/dashboard'), require('./routes/kpi'), require('./routes/register'), require('./routes/dispatch'), require('./routes/excel'),
     require('./routes/cycles'), require('./routes/recurring'), require('./routes/views'), require('./routes/reports'), require('./routes/work'), require('./routes/search'),
     require('./routes/mtl'), require('./routes/sprint'), require('./routes/weekly'), require('./routes/viber'), require('./routes/realtime'), require('./routes/tokens'),
+    require('./routes/profile'),
+    require('./routes/crm'), require('./routes/hrm'), require('./routes/vanthu'), // chỉ gắn khi bật trong MODULES
   ]) mount(app, ctx);
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'Không tìm thấy API', code: 'NOT_FOUND' }));
+  // Tiện ích Claude: điền sẵn địa chỉ của chính máy chủ này (APP_ORIGIN — vd. địa chỉ NAS) vào ô "Địa chỉ Kepper",
+  // người dùng không phải sửa localhost. Không chứa token hay thông tin người dùng.
+  let mcpbCache = null, caCache = { at: 0, pem: '' };
+  // Chứng chỉ gốc lấy từ Caddy trong cùng mạng compose (http://caddy/kepler-hub-ca.crt); không có Caddy → rỗng. Nhớ 1 giờ.
+  async function hubCa() {
+    if (!config.hubCaUrl) return '';
+    if (Date.now() - caCache.at < 3_600_000) return caCache.pem;
+    const text = await fetch(config.hubCaUrl, { signal: AbortSignal.timeout(2000) }).then(r => (r.ok ? r.text() : '')).catch(() => '');
+    const pem = /^-----BEGIN CERTIFICATE-----/.test(text.trim()) && text.length < 20_000 ? text : '';
+    caCache = { at: pem ? Date.now() : Date.now() - 3_540_000, pem }; // lỗi / chưa có Caddy: thử lại sau 1 phút
+    return caCache.pem;
+  }
+  app.get('/downloads/kepper-claude.mcpb', async (req, res, next) => {
+    try {
+      const file = path.join(config.webDir, 'downloads', 'kepper-claude.mcpb');
+      const stat = await require('node:fs/promises').stat(file).catch(() => null);
+      if (!stat) return next();
+      // Địa chỉ điền sẵn: đúng địa chỉ người dùng đang mở (nếu nằm trong APP_ORIGIN), không thì địa chỉ đầu tiên.
+      const here = `${req.protocol}://${req.get('host')}`;
+      const origin = config.allowedOrigins.includes(here) ? here : (config.allowedOrigins[0] || '');
+      // HTTPS nội bộ (Caddy tls internal): Node trong Claude Desktop không đọc kho chứng chỉ Windows → đóng chứng chỉ gốc vào gói.
+      const caPem = await hubCa();
+      const key = `${stat.mtimeMs}:${origin}:${caPem.length}:${caPem.slice(-80)}`;
+      if (mcpbCache?.key !== key) {
+        const JSZip = require('jszip');
+        const zip = await JSZip.loadAsync(await require('node:fs/promises').readFile(file));
+        const manifest = JSON.parse(await zip.file('manifest.json').async('string'));
+        if (manifest.user_config?.kepper_url && /^https?:\/\//.test(origin)) manifest.user_config.kepper_url.default = origin;
+        if (caPem && manifest.server?.mcp_config) {
+          zip.file('kepler-hub-ca.pem', caPem);
+          manifest.server.mcp_config.env = { ...(manifest.server.mcp_config.env || {}), NODE_EXTRA_CA_CERTS: '${__dirname}/kepler-hub-ca.pem' };
+        }
+        zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+        mcpbCache = { key, buf: await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }) };
+      }
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', 'attachment; filename="kepper-claude.mcpb"');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.send(mcpbCache.buf);
+    } catch (error) { next(error); }
+  });
+  // Cài Kepler Hub như một ứng dụng (PWA, Edge / Chrome): tên và biểu tượng. Có logo công ty (BRANDING_DIR/mark.png) thì dùng logo,
+  // không thì dùng biểu tượng chung trong mã nguồn. Công khai như trang đăng nhập — không chứa dữ liệu người dùng.
+  app.get('/manifest.webmanifest', (req, res) => {
+    const icons = [
+      { src: 'assets/app-icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: 'assets/app-icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: 'assets/app-icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+      { src: 'assets/app-icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+    ];
+    const mark = brandHas('mark.png') && pngSize(path.join(config.brandingDir, 'mark.png'));
+    const [mw, mh] = mark ? mark.split('x').map(Number) : [0, 0];
+    if (mw >= 144 && mw === mh) icons.unshift({ src: 'branding/mark.png', sizes: mark, type: 'image/png', purpose: 'any' });
+    res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.send(JSON.stringify({
+      id: '/', name: 'Kepler Hub', short_name: 'Kepler Hub',
+      description: config.orgName ? `Theo dõi tiến độ dự án · ${config.orgName}` : 'Theo dõi tiến độ dự án theo Master Timeline',
+      lang: 'vi', start_url: './#/home', scope: './', display: 'standalone', display_override: ['window-controls-overlay', 'standalone'],
+      background_color: '#FFFFFF', theme_color: '#09334C', icons,
+      shortcuts: [
+        { name: 'Cập nhật nhanh', url: './#/quick' },
+        { name: 'Báo cáo tuần', url: './#/tuan' },
+        { name: 'Việc của tôi', url: './#/mywork' },
+      ],
+    }));
+  });
   // HTML/JS/CSS luôn kiểm tra lại (ETag) để bản cập nhật hiện ngay; font giữ cache 7 ngày.
   app.use(express.static(config.webDir, { index: 'index.html', setHeaders(res, file) {
     res.setHeader('Cache-Control', /\.woff2$/.test(file) ? 'public, max-age=604800' : 'no-cache');
@@ -120,6 +206,7 @@ function loadConfig(env = process.env) {
     port: Number(env.PORT || 4000),
     jwtSecret: env.JWT_SECRET,
     production: env.NODE_ENV === 'production',
+    hubCaUrl: env.HUB_CA_URL ?? 'http://caddy/kepler-hub-ca.crt',
     allowedOrigins: String(env.APP_ORIGIN || 'http://localhost:4000').split(',').map(s => s.trim()).filter(Boolean),
     trustProxy: trust === 'false' ? false : trust === 'true' ? true : /^\d+$/.test(trust) ? Number(trust) : trust,
     apiRateLimit: Number(env.API_RATE_LIMIT || 600),
@@ -127,6 +214,11 @@ function loadConfig(env = process.env) {
     webDir: env.WEB_DIR ? path.resolve(env.WEB_DIR) : path.join(__dirname, '..', '..', 'web'),
     uploadTmpDir: env.UPLOAD_TMP_DIR || require('node:os').tmpdir(),
     enableCron: env.ENABLE_CRON !== 'false',
+    // Module tuỳ chọn: MODULES=crm,hrm,vanthu (vanthu: sổ văn bản theo QyĐ-GA-01). Mặc định tắt — bản chạy thật không có CRM / HRM cho tới khi Ban GĐ quyết.
+    modules: String(env.MODULES || '').split(',').map(s => s.trim().toLowerCase()).filter(m => ['crm', 'hrm', 'vanthu'].includes(m)),
+    // Tên công ty hiện trên thanh đầu trang (đặt trong .env của máy chạy — không ghi tên thật vào mã nguồn).
+    orgName: String(env.ORG_NAME || '').trim().slice(0, 60),
+    brandingDir: env.BRANDING_DIR ? path.resolve(env.BRANDING_DIR) : '',
   };
 }
 

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cài Kepler Hub</title>
+  <meta name="theme-color" content="#09334C">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/app-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/fonts/be-vietnam-pro.css">
+  <style>
+    :root{--navy:#09334C;--gold-ink:#8A6A24;--muted:#566270;--line:#E3E8EE}
+    *{box-sizing:border-box}
+    body{margin:0;font:15px/1.55 "Be Vietnam Pro","Segoe UI",system-ui,sans-serif;color:#1d2733;background:#F3F5F8}
+    main{max-width:560px;margin:48px auto;padding:0 20px}
+    .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:28px}
+    .hd{display:flex;gap:14px;align-items:center;margin-bottom:18px}
+    .hd img{width:56px;height:56px;border-radius:12px}
+    h1{font-size:22px;margin:0;color:var(--navy)}
+    .sub{color:var(--muted);margin:2px 0 0}
+    .btn{display:inline-flex;gap:8px;align-items:center;justify-content:center;min-height:44px;padding:0 20px;border-radius:10px;border:0;background:var(--navy);color:#fff;font-weight:600;font-size:15px;font-family:inherit;cursor:pointer;text-decoration:none}
+    .btn:focus-visible{outline:3px solid #B28A33;outline-offset:2px}
+    .btn.ghost{background:#fff;color:var(--navy);border:1px solid var(--line)}
+    .row{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 6px}
+    ol{padding-left:20px;margin:8px 0 0}
+    li{margin:6px 0}
+    h2{font-size:16px;margin:26px 0 4px;color:var(--navy)}
+    .ok{color:#1f7a4d;font-weight:600}
+    .note{color:var(--muted);font-size:13.5px}
+    kbd{font:12.5px ui-monospace,Consolas,monospace;background:#F3F5F8;border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+    .hidden{display:none!important}
+  </style>
+  <script type="module" src="js/install.js"></script>
+</head>
+<body>
+<main>
+  <div class="card">
+    <div class="hd"><img src="assets/app-icon-192.png" alt="" id="appIcon"><div><h1>Cài Kepler Hub</h1><p class="sub" id="org">Theo dõi tiến độ dự án theo Master Timeline</p></div></div>
+
+    <p id="stDone" class="ok hidden">Kepler Hub đã được cài trên máy này. Mở từ biểu tượng trên màn hình hoặc menu Start.</p>
+    <div class="row">
+      <button type="button" class="btn hidden" id="installBtn">Cài lên máy</button>
+      <a class="btn ghost" href="./">Mở trên trình duyệt</a>
+    </div>
+    <p class="note" id="stManual">Không thấy nút <b>Cài lên máy</b>? Làm theo hướng dẫn bên dưới.</p>
+
+    <h2>Microsoft Edge</h2>
+    <ol><li>Bấm <kbd>⋯</kbd> ở góc phải → <b>Ứng dụng</b> → <b>Cài đặt trang web này dưới dạng ứng dụng</b>.</li><li>Đặt tên <b>Kepler Hub</b> → <b>Cài đặt</b>. Chọn ghim vào thanh tác vụ nếu muốn.</li></ol>
+    <h2>Google Chrome</h2>
+    <ol><li>Bấm biểu tượng cài (màn hình có mũi tên) ở cuối thanh địa chỉ, hoặc <kbd>⋮</kbd> → <b>Truyền, lưu và chia sẻ</b> → <b>Cài đặt trang dưới dạng ứng dụng</b>.</li><li>Bấm <b>Cài đặt</b>.</li></ol>
+    <h2>Điện thoại</h2>
+    <ol><li>Android (Chrome): <kbd>⋮</kbd> → <b>Thêm vào màn hình chính</b> → <b>Cài đặt</b>.</li><li>iPhone (Safari): nút <b>Chia sẻ</b> → <b>Thêm vào MH chính</b>.</li></ol>
+    <p class="note">Chỉ mở được trong mạng công ty hoặc qua VPN. Đăng nhập bằng tài khoản quản trị cấp cho bạn.</p>
+
+    <h2>Dùng cùng Claude Desktop (không bắt buộc)</h2>
+    <p class="note">Tải tiện ích, mở tệp để cài vào Claude Desktop, rồi tạo mã kết nối ở trang <b>Kết nối Claude</b> trong Kepler Hub.</p>
+    <div class="row"><a class="btn ghost" href="downloads/kepper-claude.mcpb" download>Tải tiện ích Claude</a></div>
+  </div>
+</main>
+</body>
+</html>

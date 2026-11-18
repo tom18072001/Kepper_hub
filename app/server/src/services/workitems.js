@@ -3,6 +3,8 @@ const { fail, intParam, optionalInt, optionalDate, text, oneOf } = require('../l
 const { sanitizeHtml, htmlToText } = require('../lib/rich-text');
 const { activity, notify, notifyRequesterIfDone } = require('./events');
 const approval = require('./approval');
+const MTL = require('./mtl');
+const tree = require('./tree');
 
 const PRIORITIES = ['URGENT', 'HIGH', 'MEDIUM', 'LOW', 'NONE'];
 const BOARD_INCLUDE = {
@@ -187,6 +189,7 @@ async function createWorkItem(tx, { project, user, rights, input, reporterId = u
   const parentId = optionalInt(input.parentId, 'Việc cha');
   const parent = parentId ? await tx.workItem.findFirst({ where: { id: parentId, projectId: project.id }, select: { id: true, leadDepartmentId: true, taskType: true } }) : null;
   if (parentId && !parent) fail(422, 'Việc cha không thuộc dự án');
+  if (parent) await tree.assertCanNest(tx, parentId); // việc con nhiều cấp, trần MAX_DEPTH
   // Giao về phòng: đơn vị chủ trì (việc nhánh kế thừa của việc cha). Sổ giao việc của đơn vị mà giao thẳng cán bộ
   // thì đơn vị chủ trì = phòng của người chủ trì, để lãnh đạo phòng vẫn thấy và duyệt trước khi trình.
   let leadDepartmentId = input.leadDepartmentId !== undefined ? await departmentIdOf(tx, input.leadDepartmentId, 'Đơn vị chủ trì') : (parent?.leadDepartmentId ?? null);
@@ -205,13 +208,16 @@ async function createWorkItem(tx, { project, user, rights, input, reporterId = u
   const supporterIds = await activeUsers(tx, idList(input.supporterIds, 'Người phối hợp') || [], { strict: strictAssignees });
   const { data, steps } = await transition(tx, { project, rights, item: { id: null, state: null, parentId, approvalLevels, priority: oneOf(input.priority, PRIORITIES, 'Ưu tiên') || 'NONE', labelIds }, toState, overrideWip: silent ? 'bulk' : input.overrideWip });
   const { nextNumber } = await tx.project.update({ where: { id: project.id }, data: { nextNumber: { increment: 1 } }, select: { nextNumber: true } });
+  const startDate = optionalDate(input.startDate, 'Ngày bắt đầu') ?? null, dueDate = optionalDate(input.dueDate, 'Hạn') ?? null;
+  // MTL: việc con / việc đột xuất lập trên ứng dụng nhận kế hoạch gốc ngay khi có hạn (để vào báo cáo tuần, KPI, cảnh báo).
+  const baseline = project.kind === 'MTL' ? MTL.initialBaseline(startDate, dueDate) : null;
   const item = await tx.workItem.create({ data: {
     ...data, projectId: project.id, number: nextNumber - 1, title, descriptionHtml, descriptionText: htmlToText(descriptionHtml),
     priority: oneOf(input.priority, PRIORITIES, 'Ưu tiên') || 'NONE', reporterId, parentId, cycleId: cycleId ?? null,
     recurringRuleId: input.recurringRuleId ?? null, approvalLevels,
     ...reg, assignedById: reg.assignedById ?? user.id ?? null, assignedAt: reg.assignedAt ?? new Date(),
     ...(data.progress != null ? { progress: data.progress } : {}),
-    startDate: optionalDate(input.startDate, 'Ngày bắt đầu') ?? null, dueDate: optionalDate(input.dueDate, 'Hạn') ?? null,
+    startDate, dueDate, ...(baseline || {}),
     estimate: input.estimate == null || input.estimate === '' ? null : Number(input.estimate) || null,
     position: await endPosition(tx, toState.id),
     taskType, leadDepartmentId, originalDueDate: optionalDate(input.dueDate, 'Hạn') ?? null,

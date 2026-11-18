@@ -1,5 +1,5 @@
 #!/bin/sh
-# Khôi phục Kepper Hub từ một thư mục sao lưu (tạo bởi backup.sh).
+# Khôi phục Kepler Hub từ một thư mục sao lưu (tạo bởi backup.sh).
 #   sh restore.sh /backups/20261016-020000
 # Bản đã mã hoá (*.age): mount khoá bí mật age vào container và đặt AGE_IDENTITY=/key/kepper-backup.key
 #

@@ -1,8 +1,9 @@
-# Kepper Hub — chạy trên máy cá nhân / máy chủ nội bộ.
+# Kepler Hub — chạy trên máy cá nhân / máy chủ nội bộ.
 #   cp .env.example .env   (sửa mật khẩu, JWT_SECRET)
 #   docker compose up -d --build                      # Postgres + app, tệp lưu trên volume
 #   docker compose --profile full up -d --build       # thêm MinIO + bộ xem trước Word (LibreOffice)
-# Mở http://localhost:4100 (APP_PORT) — mọi cổng chỉ bind 127.0.0.1. Cho người khác dùng: đặt sau reverse proxy có TLS (xem README).
+# Mở http://localhost:4100 (APP_PORT) — mặc định chỉ bind 127.0.0.1. Cho người khác dùng: đặt sau reverse proxy có TLS (xem README).
+# Chạy trên NAS công ty: xem docs/deploy-nas.md (APP_BIND, PGDATA_PATH, UPLOADS_PATH… trong .env).
 name: kepper
 
 services:
@@ -15,7 +16,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Đặt POSTGRES_PASSWORD trong .env}
       POSTGRES_DB: workhub
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ${PGDATA_PATH:-pgdata}:/var/lib/postgresql/data   # NAS: thư mục trên ổ NAS, vd. /volume1/kepper/pgdata
     ports:
       - "127.0.0.1:${POSTGRES_HOST_PORT:-5435}:5432"
     healthcheck:
@@ -43,6 +44,12 @@ services:
       ROOT_ADMIN_USERNAME: ${ROOT_ADMIN_USERNAME:-admin}
       ROOT_ADMIN_PASSWORD: ${ROOT_ADMIN_PASSWORD:?Đặt ROOT_ADMIN_PASSWORD trong .env}
       SEED_DEMO: ${SEED_DEMO:-false}
+      ALLOW_DEMO_SEED: ${ALLOW_DEMO_SEED:-}   # chỉ máy dùng thử (playground): yes
+      # Module tuỳ chọn: crm,hrm (mặc định tắt). Bật hrm cần HR_ENC_KEY (khoá mã hoá CCCD, lương — giữ cùng chỗ với khoá sao lưu).
+      MODULES: ${MODULES:-}
+      ORG_NAME: ${ORG_NAME:-}   # tên công ty hiện trên thanh đầu trang (chỉ ghi trong .env)
+      BRANDING_DIR: /data/branding   # logo công ty: logo.png, logo-light.png, mark.png, mark-light.png (thư mục BRANDING_PATH trên máy)
+      HR_ENC_KEY: ${HR_ENC_KEY:-}
       STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
@@ -55,12 +62,15 @@ services:
       # Kepper: Viber bot (mặc định tắt — xem docs/data-protection-assessment.md)
       VIBER_ENABLED: ${VIBER_ENABLED:-0}
       VIBER_AUTH_TOKEN: ${VIBER_AUTH_TOKEN:-}
-      VIBER_BOT_NAME: ${VIBER_BOT_NAME:-Kepper Hub}
+      VIBER_BOT_NAME: ${VIBER_BOT_NAME:-Kepler Hub}
     volumes:
-      - uploads:/data/uploads
+      - ${UPLOADS_PATH:-uploads}:/data/uploads   # NAS: vd. /volume1/kepper/uploads
       - ${LOG_PATH:-./logs}:/data/logs
+      - ${BRANDING_PATH:-./branding}:/data/branding:ro
     ports:
-      - "127.0.0.1:${APP_PORT:-4100}:4000"
+      # Mặc định chỉ máy này vào được. Có reverse proxy HTTPS trên cùng máy (DSM / QNAP): giữ 127.0.0.1.
+      # Không có proxy, cho laptop trong mạng vào thẳng: APP_BIND=0.0.0.0 (HTTP không mã hoá — chỉ để thử).
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-4100}:4000"
     restart: unless-stopped
     stop_grace_period: 20s   # dừng êm: chờ request / job đang chạy (server.js)
     logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
@@ -94,7 +104,7 @@ services:
       - ./deploy:/deploy:ro
       - ${BACKUP_PATH:-./backups}:/backups
       - ${BACKUP_COPY_PATH:-./backups-copy}:/backups-copy
-      - uploads:/data/uploads:ro
+      - ${UPLOADS_PATH:-uploads}:/data/uploads:ro
     entrypoint: ["sh", "/deploy/backup.sh"]
     restart: unless-stopped
 
@@ -117,9 +127,30 @@ services:
     volumes:
       - ./deploy:/deploy:ro
       - ${BACKUP_PATH:-./backups}:/backups:ro
-      - uploads:/data/uploads
+      - ${UPLOADS_PATH:-uploads}:/data/uploads
     entrypoint: ["sh", "/deploy/restore.sh"]
     restart: "no"
+
+  # ---- HTTPS nội bộ (profile "https") — máy chủ riêng / máy ảo, không có reverse proxy sẵn ----
+  # Caddy giữ chứng chỉ do CA nội bộ của chính Caddy cấp (tls internal), chuyển vào app.
+  # Laptop cần tin chứng chỉ gốc: tải http://<HUB_HOST>/kepler-hub-ca.crt hoặc đẩy bằng Group Policy (docs/deploy-vm.md).
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      HUB_HOST: ${HUB_HOST:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/ca-help.html:/srv/ca-help/index.html:ro
+      - ${CADDY_DATA_PATH:-caddydata}:/data
+    ports:
+      - "${HTTPS_BIND:-0.0.0.0}:${HTTPS_PORT:-443}:443"
+      - "${HTTPS_BIND:-0.0.0.0}:${HTTP_PORT:-80}:80"
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
 
   # ---- Tuỳ chọn (profile "full") ----
   minio:
@@ -159,6 +190,7 @@ services:
 
 volumes:
   pgdata:
+  caddydata:
   uploads:
   miniodata:
 

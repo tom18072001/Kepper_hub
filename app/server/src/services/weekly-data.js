@@ -138,7 +138,7 @@ async function runReportReminder(prisma, now = new Date()) {
     const prev = await prisma.weeklyReport.findUnique({ where: { departmentId_week: { departmentId: d.id, week: WK.addDays(week, -7) } } });
     const to = [...await approval.deptLeaderIds(prisma, d.id), prev?.preparerId, rep?.preparerId].filter(Boolean);
     departments++;
-    sent += await notify(prisma, to, { type: 'WEEKLY_REMINDER', title: `Báo cáo tuần ${d.name}: hạn nộp 17:30 hôm nay`, body: rep ? 'Bản nháp đã có — kiểm tra rồi bấm "Gửi báo cáo".' : 'Báo cáo đã điền sẵn từ MTL — chỉ cần sửa chỗ khác thực tế rồi gửi.', link: '#/tuan' });
+    sent += await notify(prisma, to, { type: 'WEEKLY_REMINDER', title: `Báo cáo tuần ${d.name}: hạn nộp 17:30 hôm nay`, body: rep ? 'Bản nháp đã có — kiểm tra rồi bấm "Gửi báo cáo".' : 'Báo cáo đã điền sẵn — bạn chỉ sửa chỗ chưa đúng rồi gửi.', link: '#/tuan' });
   }
   return { departments, sent };
 }

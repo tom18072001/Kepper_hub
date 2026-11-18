@@ -228,11 +228,12 @@ const canSplit = d => d.rights.canManage || d.can?.isAssigner || d.can?.isLeadLe
 function childrenSection(d, editable, open) {
   const link = c => `${location.hash.split('?')[0]}?${new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(location.hash.split('?')[1] || '')), item: c.id })}`;
   const rows = d.children.map(c => `<tr><td><a href="${link(c)}" class="code" data-testid="child-${esc(d.project.key)}-${c.number}">${esc(d.project.key)}-${c.number}</a></td>
-      <td>${esc(c.title)}</td><td class="muted sm">${(c.assignees || []).map(a => esc(a.fullName)).join(', ') || '—'}</td>
+      <td>${esc(c.title)}${c.childCount ? ` <a href="${link(c)}" class="muted xs" data-testid="child-kids-${c.number}" title="Mở để xem các việc con của việc này">▸ ${c.childCount} việc con</a>` : ''}</td><td class="muted sm">${(c.assignees || []).map(a => esc(a.fullName)).join(', ') || '—'}</td>
       <td class="nowrap">${c.dueDate ? fmtDate(c.dueDate) : '—'}${c.internalDueDate ? `<div class="muted xs">nộp phòng ${fmtDate(c.internalDueDate)}</div>` : ''}</td>
-      <td>${stagePill(c.stage)}</td><td class="num">${c.stage?.code === 'DONE' ? 100 : c.progress}%</td></tr>`).join('');
+      <td>${stagePill(c.stage)}</td><td class="num">${c.stage?.code === 'DONE' ? 100 : Math.round((c.childCount ? c.actual : c.progress) ?? 0)}%</td></tr>`).join('');
   const done = d.children.filter(c => c.stage?.code === 'DONE').length;
-  const add = editable && !d.parent && canSplit(d) ? `<div class="row wrap add-row"><input id="newChild" class="grow" placeholder="Thêm một việc nhánh, Enter để tạo" data-testid="child-input" maxlength="300" aria-label="Thêm việc nhánh">
+  // Việc con nhiều cấp: việc ở cấp nào cũng chia tiếp được, tới trần cấp của máy chủ.
+  const add = editable && (d.depth ?? 0) < (d.maxDepth ?? 10) && canSplit(d) ? `<div class="row wrap add-row"><input id="newChild" class="grow" placeholder="Thêm một việc nhánh, Enter để tạo" data-testid="child-input" maxlength="300" aria-label="Thêm việc nhánh">
       <button class="btn btn-ghost btn-sm" data-act="bulk-children" data-testid="bulk-children-open">${icon('list')}Chia nhiều việc…</button>
       ${(store.templates || []).length ? `<button class="btn btn-ghost btn-sm" data-act="template-children" data-testid="template-open">${icon('checklist')}Từ mẫu…</button>` : ''}</div>` : '';
   if (!rows) return add ? compact('Việc nhánh', add, { testid: 'children-section' }) : '';
@@ -331,7 +332,7 @@ function render() {
   const moreFilled = [d.coordinatorText, d.source, d.assignedAt, d.startDate, d.estimate, d.cycleId, d.recurring].filter(v => v != null && v !== '').length;
   const showLabels = project.visibility !== 'ASSIGNED' || d.labels.length;
   p.innerHTML = `
-    <div class="ip-head" tabindex="-1"><span class="code" data-testid="item-code">${esc(d.code)}</span><span class="muted sm grow">${esc(d.project.name)}${d.parent ? ` · thuộc <a href="#/projects/${d.project.id}?item=${d.parent.id}">${esc(d.project.key)}-${d.parent.number}</a>` : ''}</span>
+    <div class="ip-head" tabindex="-1"><span class="code" data-testid="item-code">${esc(d.code)}</span><span class="muted sm grow">${esc(d.project.name)}${(d.ancestors?.length ? d.ancestors : d.parent ? [d.parent] : []).length ? ` · thuộc <span data-testid="item-breadcrumb">${(d.ancestors?.length ? d.ancestors : [d.parent]).map(a => `<a href="#/projects/${d.project.id}?item=${a.id}"${a.title ? ` title="${esc(a.title)}"` : ''}>${esc(d.project.key)}-${a.number}</a>`).join(' › ')}</span>` : ''}</span>
       <details class="ip-menu"><summary class="icon-btn" aria-label="Thao tác khác" title="Thao tác khác">⋯</summary><div class="ip-menu-list" role="menu">
         ${r.canDelete && !d.archivedAt ? `<button class="menu-item danger" role="menuitem" data-act="archive" data-testid="archive-item">${icon('trash')}Xoá (vào thùng rác)</button>` : ''}
         ${fe && project.rights.canManage && !d.recurring ? `<button class="menu-item" role="menuitem" data-act="repeat">${icon('history')}Lặp lại việc này…</button>` : ''}
@@ -356,6 +357,7 @@ function render() {
           : editable ? compact('Checklist', checklistBody) : ''}
         ${childrenSection(d, editable, plan.children)}
         ${d.attachments.length || (d.documents || []).length || editable ? sec('files', { title: 'Tài liệu', count: d.attachments.length + (d.documents || []).length || '', summary: `bên giao ${giveFiles.length + giveDocs.length} · bên thực hiện ${backFiles.length + backDocs.length}`, open: plan.files, testid: 'files-section', body: filesBody }) : ''}
+        ${(store.settings?.modules || []).includes('crm') ? `<div id="ipCrm" data-testid="item-crm">${crmCache.id === d.id ? crmCache.html : ''}</div>` : ''}
         ${sec('comments', { title: 'Bình luận', count: d.comments.length || '', open: plan.comments || !!d.comments.length, body: commentsBody })}
         ${sec('history', { title: 'Lịch sử', count: d.activities.length, summary: lastAct ? `gần nhất: ${esc(lastAct.actorName)} ${ago(lastAct.createdAt)}` : '', open: plan.history, body: historyBody })}
       </div>
@@ -399,6 +401,22 @@ function render() {
   restoreDrafts(p);
   const t = $('#ipTitle', p); if (t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
   bind(editable);
+  if (!same && $('#ipCrm', p)) fillCrm(d.id);
+}
+
+// Playground CRM: nhật ký làm việc với đối tác gắn việc này (ghi ở trang Đối tác, chọn "Việc liên quan").
+let crmCache = { id: null, html: '' };
+async function fillCrm(id) {
+  try {
+    const r = await api(`/api/crm/items/${id}/interactions`);
+    if (openId !== id) return;
+    const html = !r.rows.length && !r.hidden ? '' : sec('crm', { title: 'Làm việc với đối tác', count: r.rows.length || '', open: true, body: `
+      ${r.rows.map(i => `<div class="crm-row" data-testid="item-crm-row"><div class="muted xs">${fmtDate(i.date)} · ${esc(i.type.label)} · <a href="#/crm/${i.partner.id}">${esc(i.partner.name)}</a> · ${esc(i.createdBy.fullName || '')}</div>
+        <div>${esc(i.summary)}</div>${i.nextStep ? `<div class="muted xs">Tiếp theo: ${esc(i.nextStep)}${i.nextDue ? ` — hạn ${fmtDate(i.nextDue)}` : ''}${i.nextOwner ? ` (${esc(i.nextOwner.fullName || '')})` : ''}${i.followUpDone ? ' · đã xong' : ''}</div>` : ''}</div>`).join('')}
+      ${r.hidden ? `<p class="muted xs">${r.hidden} nhật ký khác chỉ bộ phận phụ trách đối tác xem được.</p>` : ''}` });
+    crmCache = { id, html };
+    const box = $('#ipCrm', panel()); if (box) box.innerHTML = html;
+  } catch { /* chưa bật CRM / không có quyền: không hiện */ }
 }
 
 // Sau khi duyệt từ "Chờ tôi xử lý": mời mở phiếu tiếp theo.
@@ -444,7 +462,7 @@ function bind(editable) {
       const d = data;
       try {
         await api(`/api/items/${d.id}`, { method: 'DELETE' }); closeItem(true); reloadProject(); refreshBackground();
-        toast(`Đã chuyển ${d.code}${d.children.length ? ` cùng ${d.children.length} việc con` : ''} vào thùng rác`, 'ok', { action: { label: 'Hoàn tác', run: async () => { await api(`/api/items/${d.id}/restore`, { method: 'POST' }); reloadProject(); refreshBackground(); toast(`Đã khôi phục ${d.code}`, 'ok'); } } });
+        toast(`Đã chuyển ${d.code}${(d.descendantCount ?? d.children.length) ? ` cùng ${d.descendantCount ?? d.children.length} việc con` : ''} vào thùng rác`, 'ok', { action: { label: 'Hoàn tác', run: async () => { await api(`/api/items/${d.id}/restore`, { method: 'POST' }); reloadProject(); refreshBackground(); toast(`Đã khôi phục ${d.code}`, 'ok'); } } });
       } catch (err) { toast(errorMessage(err), 'err'); }
       return;
     }

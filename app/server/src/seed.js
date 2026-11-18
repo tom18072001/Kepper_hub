@@ -46,7 +46,8 @@ async function seed(prisma = new PrismaClient(), env = process.env) {
   }
   // Danh mục mặc định (mẫu nhóm việc "Nhiệm vụ chuẩn – Cuộc thi/Hội thi").
   await require('./services/register').ensureDefaults(prisma);
-  if (String(env.SEED_DEMO) !== 'true' || await prisma.project.count()) return out;
+  if (String(env.SEED_DEMO) !== 'true') return out;
+  if (await prisma.project.count()) return seedModules(prisma, env, out);
   // Máy chạy thật: dữ liệu mẫu tạo tài khoản Ban GĐ mẫu với mật khẩu công khai trong README → phải xác nhận rõ.
   if (env.NODE_ENV === 'production' && env.ALLOW_DEMO_SEED !== 'yes')
     throw new Error('SEED_DEMO=true trên máy chạy sẽ tạo tài khoản mẫu (vd. giamdoc — Ban GĐ) với mật khẩu công khai. Đặt SEED_DEMO=false, hoặc ALLOW_DEMO_SEED=yes nếu đây là máy dùng thử.');
@@ -111,7 +112,13 @@ async function seed(prisma = new PrismaClient(), env = process.env) {
     ] });
   await seedKepper(prisma, { root, users, dept });
   out.demo = true;
-  return out;
+  return seedModules(prisma, env, out);
+}
+// Playground CRM / HRM: dữ liệu mẫu giả, chỉ trên máy dùng thử (ALLOW_DEMO_SEED=yes khi NODE_ENV=production).
+async function seedModules(prisma, env, out) {
+  if (!String(env.MODULES || '').trim()) return out;
+  if (env.NODE_ENV === 'production' && env.ALLOW_DEMO_SEED !== 'yes') return out;
+  return { ...out, modules: await require('./seed-playground').seedPlayground(prisma, env) };
 }
 
 // Dự án mẫu theo Master Timeline (nội dung GIẢ, cùng cấu trúc MTL): T0 cách đây 10 tháng để có đủ trạng thái

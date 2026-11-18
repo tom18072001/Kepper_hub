@@ -1,4 +1,4 @@
-# Hướng dẫn cho agent — Kepper Hub
+# Hướng dẫn cho agent — Kepler Hub
 
 - Phạm vi: hệ thống theo dõi tiến độ dự án bất động sản của Kepper (Master Timeline — MTL tổng và MTL bộ phận),
   cảnh báo nhanh / chậm tiến độ, KPI tiến độ, dashboard, dự án dùng chung và cowork giữa các bộ phận.

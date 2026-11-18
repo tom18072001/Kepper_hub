@@ -130,7 +130,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
   const withProject = need => async (req, res, next) => { req.projectCtx = await loadProject(prisma, req.user, intParam(req.params.id), need); next(); };
 
   // ---------- Danh mục ----------
-  app.get('/api/settings', auth, async (req, res) => res.json({ ...(await R.getSettings(prisma)), canEdit: canEditCatalog(req.user), canCreateTemplate: canCreateTemplate(req.user) }));
+  app.get('/api/settings', auth, async (req, res) => res.json({ ...(await R.getSettings(prisma)), canEdit: canEditCatalog(req.user), canCreateTemplate: canCreateTemplate(req.user), modules: config?.modules || [], orgName: config?.orgName || '' }));
   app.put('/api/settings', auth, async (req, res) => {
     if (!canEditCatalog(req.user)) fail(403, 'Chỉ Ban giám đốc hoặc quản trị được sửa danh mục', 'FORBIDDEN');
     const old = await R.getSettings(prisma);
@@ -216,7 +216,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
     const body = req.body || {};
     const tpl = await prisma.taskTemplate.findUnique({ where: { id: intParam(body.templateId, 'Mẫu') } }) || fail(404, 'Không tìm thấy mẫu', 'NOT_FOUND');
     const parent = await prisma.workItem.findUnique({ where: { id }, include: { assignees: true } });
-    if (parent.parentId) fail(422, 'Chỉ áp mẫu cho nhóm việc (việc không phải việc nhánh)', 'NOT_GROUP');
+    // Áp mẫu được cho việc ở mọi cấp (việc con nhiều cấp); trần cấp kiểm tra khi tạo (services/tree.js).
     // Giống "chia nhiều việc nhánh": người quản lý, người giao, lãnh đạo phòng chủ trì, người chủ trì.
     const allowed = rights.canManage || parent.assignedById === req.user.id || parent.assignees.some(a => a.userId === req.user.id)
       || (await deptLeaderIds(prisma, parent.leadDepartmentId ?? project.departmentId)).includes(req.user.id);
@@ -446,9 +446,12 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
     const steps = await prisma.approvalStep.findMany({ where: { projectId: project.id }, orderBy: { level: 'asc' } });
     const names = Object.fromEntries((await prisma.user.findMany({ where: { id: { in: [...new Set(items.map(i => i.assignedById).filter(Boolean))] } }, select: { id: true, fullName: true } })).map(u => [u.id, u.fullName]));
     const deptNames = Object.fromEntries((await prisma.department.findMany({ select: { id: true, name: true } })).map(d => [d.id, d.name]));
-    const ordered = [];
-    for (const p of items.filter(i => !i.parentId)) { ordered.push(p); for (const c of items.filter(i => i.parentId === p.id)) ordered.push(c); }
-    for (const c of items.filter(i => i.parentId && !ordered.includes(i))) ordered.push(c);
+    // Thứ tự theo cây (việc con nhiều cấp): duyệt sâu, mỗi cấp thêm một dấu "↳" trước tên việc.
+    const ids = new Set(items.map(i => i.id)), kidsOf = new Map(), depthOf = new Map(), ordered = [];
+    for (const i of items) if (i.parentId && ids.has(i.parentId)) { if (!kidsOf.has(i.parentId)) kidsOf.set(i.parentId, []); kidsOf.get(i.parentId).push(i); }
+    const walk = (i, d) => { if (depthOf.has(i.id)) return; depthOf.set(i.id, d); ordered.push(i); for (const c of kidsOf.get(i.id) || []) walk(c, d + 1); };
+    for (const p of items.filter(i => !i.parentId)) walk(p, 0);
+    for (const c of items) walk(c, 1); // việc nhánh mà người xuất không thấy việc cha (hoặc dữ liệu vòng): cuối bảng, 1 cấp
     const now = new Date();
     const wb = new ExcelJS.Workbook();
     wb.creator = `WorkHub - ${req.user.username}`;
@@ -463,13 +466,13 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
     head.height = 36;
     ordered.forEach((i, k) => {
       const s = R.deadlineStatus(i, now, settings.dueSoonDays);
-      const row = ws.addRow([k + 1, `${project.key}-${i.number}`, (i.parentId ? '↳ ' : '') + i.title, i.source || '', names[i.assignedById] || '', i.assignees.map(a => a.user.fullName).join(', '),
+      const row = ws.addRow([k + 1, `${project.key}-${i.number}`, (depthOf.get(i.id) ? '↳'.repeat(depthOf.get(i.id)) + ' ' : '') + i.title, i.source || '', names[i.assignedById] || '', i.assignees.map(a => a.user.fullName).join(', '),
         [...i.supporters.map(a => a.user.fullName), i.coordinatorText].filter(Boolean).join('; '), excelDay(i.assignedAt), excelDay(i.dueDate), PRIORITY_LABEL[i.priority], i.progress,
         i.state.category === 'COMPLETED' ? excelDay(i.completedAt) : null, s.label, s.daysLeft ?? '', i.deliverable, i.outputs, i.resultNote, i.review, i.note,
         TASK_TYPE_LABEL[i.taskType] || '', deptNames[i.leadDepartmentId] || '', RATING_LABEL[i.rating] || '', R.formatDocumentRefs(i.documents), stageOf(i, steps).label]);
       row.alignment = { wrapText: true, vertical: 'top' };
       for (const c of DATE_COLUMNS) row.getCell(c).numFmt = DATE_FMT;
-      if (!i.parentId && items.some(c => c.parentId === i.id)) row.getCell(3).font = { bold: true };
+      if (kidsOf.has(i.id)) row.getCell(3).font = { bold: true };
       if (STATUS_FILL[s.code]) { row.getCell(13).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_FILL[s.code] } }; row.getCell(14).fill = row.getCell(13).fill; }
     });
     ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: REGISTER_COLUMNS.length } };
@@ -525,8 +528,9 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
         const get = k => (C[k] ? cellText(row.getCell(C[k])) : '');
         let title = String(get('title') || '').trim();
         if (!title) return;
-        const isChild = /^↳/.test(title);
-        title = title.replace(/^↳\s*/, '').trim();
+        // Cấp việc = số dấu "↳" đầu tên (việc con nhiều cấp; "↳ " = con của dòng việc gốc gần nhất như trước).
+        const level = (title.match(/^(?:↳\s*)+/)?.[0].match(/↳/g) || []).length, isChild = level > 0;
+        title = title.replace(/^(?:↳\s*)+/, '').trim();
         if (title.length > 300) title = title.slice(0, 297) + '…';
         const lead = match(get('lead')), support = match(get('support')), assigner = match(get('assigner'));
         for (const u of [...lead.unmatched, ...assigner.unmatched]) warnings.add(`Chưa có tài khoản cho "${u}"`);
@@ -542,7 +546,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
         const basis = parseDocumentRefsSafe(get('basis'));
         for (const e of basis.errors) docErrors.push(`Dòng ${n}: ${e}`);
         rows.push({
-          n, isChild, refCode: String(get('code') || '') || null, title, source: String(get('source') || '') || null,
+          n, isChild, level, refCode: String(get('code') || '') || null, title, source: String(get('source') || '') || null,
           taskType: /^ke hoach/.test(norm(get('taskType'))) ? 'PLAN' : /^dot xuat/.test(norm(get('taskType'))) ? 'ADHOC' : undefined,
           assignedById: assigner.ids[0] || null, leadIds: lead.ids, supporterIds: support.ids.filter(id => !lead.ids.includes(id)),
           coordinatorText: support.unmatched.join('; '), assignedAt: parseDay(get('assignedAt'), 'Ngày giao', n), dueDate: parseDay(get('due'), 'Hạn hoàn thành', n),
@@ -574,16 +578,18 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
       const st = c => states.find(s => s.category === c);
       const dispatchCounts = new Map();
       const created = await prisma.$transaction(async tx => {
-        let parentId = null, count = 0;
+        const parents = []; // parents[k] = việc gần nhất ở cấp k
+        let count = 0;
         for (const r of rows) {
           const state = r.progress > 0 && st('STARTED') ? st('STARTED') : st('UNSTARTED');
           const item = await W.createWorkItem(tx, { project, user: req.user, rights, silent: true, source: 'REGISTER', strictAssignees: false, input: {
             title: r.title, assigneeIds: r.leadIds, supporterIds: r.supporterIds, assignedById: r.assignedById, assignedAt: r.assignedAt, source: r.source, dueDate: r.dueDate,
             priority: r.priority, progress: r.progress, deliverable: r.deliverable, outputs: r.outputs, resultNote: r.resultNote, coordinatorText: r.coordinatorText, note: r.note,
-            refCode: r.refCode, stateId: state.id, parentId: r.isChild ? parentId : null, overrideWip: true, ...(r.taskType ? { taskType: r.taskType } : {}),
+            refCode: r.refCode, stateId: state.id, parentId: r.level ? parents.slice(0, r.level).filter(Boolean).at(-1) ?? null : null, overrideWip: true, ...(r.taskType ? { taskType: r.taskType } : {}),
             ...(r.leadDepartmentId ? { leadDepartmentId: r.leadDepartmentId } : {}),
           } });
-          if (!r.isChild) parentId = item.id;
+          const lv = item.parentId ? Math.min(r.level, parents.length) : 0; // cấp thực tế (dòng nhảy cấp → gắn vào cấp gần nhất có việc)
+          parents.length = lv; parents[lv] = item.id;
           if (item.dispatchStatus && !r.completedAt) bumpDispatch(dispatchCounts, item.leadDepartmentId, item.dispatchStatus === 'PENDING');
           // Việc đã có ngày hoàn thành thực tế trong sổ: ghi nhận hoàn thành (dữ liệu lịch sử, không qua duyệt).
           if (r.completedAt) await tx.workItem.update({ where: { id: item.id }, data: { stateId: st('COMPLETED').id, completedAt: r.completedAt, progress: 100, startedAt: r.assignedAt || r.completedAt } });

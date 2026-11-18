@@ -54,7 +54,7 @@ async function drawPhases(body, project, params, modes) {
     return `<a class="rd-row${s.index === k ? ' sel' : ''}" href="${hrefWith({ s: s.index })}" data-testid="sp-road-${s.index}">
       <span class="rd-name"><b>${s.index + 1}. ${esc(s.name)}</b><span class="muted xs">${esc(s.stepsLabel || '')}${has ? ` · T${s.startT}–T${s.endT}` : ''}</span></span>
       <span class="rd-track">${has ? `<i class="rd-bar ${tone}" style="left:${l}%;width:${w}%"><i class="rd-fill" style="width:${Math.min(100, s.actualPct || 0)}%"></i>${s.plannedPct != null && !isDone(s.status) ? `<b class="rd-goal" style="left:${Math.min(100, s.plannedPct)}%"></b>` : ''}</i>` : ''}
-        ${s.milestones.map(m => `<span class="rd-ms${m.done ? ' done' : ''}" style="left:${x(dayT(m.baselineEnd))}%" title="${esc(`◆ ${m.planCode ? 'Bước ' + m.planCode + ' · ' : ''}${m.title}`)}">◆</span>`).join('')}
+        ${s.milestones.map(m => `<span class="rd-ms${m.done ? ' done' : ''}" style="left:${x(dayT(m.baselineEnd))}%" title="${esc(`◆ ${m.planCode ? 'Bước ' + m.planCode + ' · ' : ''}${m.title}`)}"><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg></span>`).join('')}
         ${now >= 0 && now <= T + 1 ? `<span class="rd-today" style="left:${x(now)}%"></span>` : ''}</span>
       <span class="rd-num"><b>${pct(s.actualPct)}</b><span class="muted xs">KH ${pct(s.plannedPct)}</span><span class="pill ${tone}">${esc(s.statusLabel || '')}</span></span></a>`;
   }).join('');
@@ -74,31 +74,32 @@ async function drawPhases(body, project, params, modes) {
     const i = g.top;
     if (!i.children) return `<div class="sp-step leaf">${card(i)}</div>`;
     const tone = i.done ? 'ok' : TONE[i.status] || '';
-    const doneKids = g.kids.filter(c => c.done).length;
+    // Việc con nhiều cấp: % của bước chia theo việc con trực tiếp (cấp 1); cấp sâu hơn thụt lề dưới việc cha của nó.
+    const direct = g.kids.filter(c => c.depth === 1), doneKids = direct.filter(c => c.done).length;
     return `<div class="sp-step" data-testid="sp-step-${esc(i.planCode || i.code)}">
       <div class="sc sc-parent ${tone ? 'sc-' + tone : ''}">
-        <div class="sc-top"><a class="code" href="${href(i)}">${esc(i.code)}</a><span class="muted xs">Bước ${esc(i.planCode || '')}</span>${i.critical ? '<span class="crit" title="Đường găng">●</span>' : ''}${i.milestone ? '<span class="ms" title="Mốc">◆</span>' : ''}<span class="grow"></span><span class="pill ${tone}">${esc(i.done ? 'Đã xong' : i.statusLabel || '')}</span></div>
+        <div class="sc-top"><a class="code" href="${href(i)}">${esc(i.code)}</a><span class="muted xs">Bước ${esc(i.planCode || '')}</span>${i.critical ? '<span class="crit" title="Đường găng"><svg class="gl gl-crit" viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="currentColor"/></svg></span>' : ''}${i.milestone ? '<span class="ms" title="Mốc"><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg></span>' : ''}<span class="grow"></span><span class="pill ${tone}">${esc(i.done ? 'Đã xong' : i.statusLabel || '')}</span></div>
         <a class="sc-title" href="${href(i)}">${esc(i.title)}</a>
         <div class="sc-meta muted xs"><span>${esc(i.leadDepartmentName)}</span><span>T${num(i.startT, 0)}–T${num(i.endT, 0)} · ${fmtDate(i.baselineStart)} – ${fmtDate(i.baselineEnd)}</span></div>
         <div class="sc-prog"><div class="sc-track"><i class="sc-fill ${tone || 'ok'}" style="width:${Math.min(100, i.actual || 0)}%"></i><b class="sc-goal" style="left:${Math.min(100, i.planned || 0)}%"></b></div>
           <span class="sc-nums"><b>${pct(i.actual)}</b><span class="muted"> / KH ${pct(i.planned)}</span></span></div>
-        <div class="muted xs" data-testid="sp-kids-${esc(i.planCode || i.code)}"><b>${doneKids}/${g.kids.length}</b> việc con đã xong — mỗi việc con ${num(100 / Math.max(1, g.kids.length), 1)}% của bước (tự tính, không cần khai %)</div>
+        <div class="muted xs" data-testid="sp-kids-${esc(i.planCode || i.code)}"><b>${doneKids}/${direct.length}</b> việc con đã xong — mỗi việc con ${num(100 / Math.max(1, direct.length), 1)}% của bước (tự tính, không cần khai %)</div>
       </div>
-      <div class="sp-kids">${g.kids.filter(c => !dept || String(c.leadDepartmentId) === String(dept) || String(i.leadDepartmentId) === String(dept)).map(c => card(c)).join('')}</div>
+      <div class="sp-kids">${g.kids.filter(c => !dept || String(c.leadDepartmentId) === String(dept) || String(i.leadDepartmentId) === String(dept)).map(c => c.depth > 1 ? `<div class="sp-sub" style="margin-left:${(c.depth - 1) * 16}px">${card(c)}</div>` : card(c)).join('')}</div>
     </div>`;
   };
   const tone = isDone(sp.status) ? 'ok' : TONE[sp.status] || '';
   const when = isDone(sp.status) ? 'Đã hoàn thành' : sp.status === 'OVERDUE' ? `Trễ ${sp.lateDays} ngày so với kế hoạch` : sp.status === 'NOT_DUE' ? `Bắt đầu sau ${sp.startsIn} ngày` : sp.daysLeft != null ? `Còn ${sp.daysLeft} ngày` : '';
-  const ms = sp.milestones.map(m => `<a href="${itemHref(m.id)}" class="sp-ms-i">◆ ${esc(m.planCode ? `Bước ${m.planCode} · ` : '')}${esc(m.title)} <span class="pill ${m.done ? 'ok' : ['OVERDUE', 'BEHIND', 'LATE_START'].includes(m.status) ? 'danger' : ''}">${m.done ? 'Đã xong' : esc(m.statusLabel || '')}</span></a>`).join('');
+  const ms = sp.milestones.map(m => `<a href="${itemHref(m.id)}" class="sp-ms-i"><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> ${esc(m.planCode ? `Bước ${m.planCode} · ` : '')}${esc(m.title)} <span class="pill ${m.done ? 'ok' : ['OVERDUE', 'BEHIND', 'LATE_START'].includes(m.status) ? 'danger' : ''}">${m.done ? 'Đã xong' : esc(m.statusLabel || '')}</span></a>`).join('');
   const deptRows = d.byDepartment.map(r => `<tr class="${dept && String(r.id) === String(dept) ? 'sel' : ''}"><td><b>${esc(r.name)}</b></td><td class="num">${r.items}</td><td class="num">${r.done}</td>
     <td class="num">${pct(r.plannedPct)}</td><td class="num"><b>${pct(r.actualPct)}</b></td><td class="num"><span class="pill ${spiTone(r.spi)}">${num(r.spi)}</span></td>
     <td class="num${r.behind ? ' warn-t' : ''}">${r.behind}</td><td class="num${r.overdue ? ' danger-t' : ''}">${r.overdue}</td></tr>`).join('');
   const shown = groups.filter(passG);
   body.innerHTML = `<div class="mtl sp" data-testid="sprint-view">
     ${modes}
-    ${!d.configured ? `<div class="card sp-note" data-testid="sp-suggested">${icon('bell')}<span>Đây là <b>sprint gợi ý</b> (cắt theo mốc ◆ trên đường găng). ${project.rights.canManage ? 'Bấm <b>Thiết lập sprint</b> để đặt tên và gộp bước, ví dụ <code>Chuyển nhượng DA | 1-9</code>.' : 'PMO sẽ đặt tên và gộp bước cho đúng các giai đoạn của dự án.'}</span></div>` : ''}
+    ${!d.configured ? `<div class="card sp-note" data-testid="sp-suggested">${icon('bell')}<span>Đây là <b>sprint gợi ý</b> (cắt theo mốc <svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> trên đường găng). ${project.rights.canManage ? 'Bấm <b>Thiết lập sprint</b> để đặt tên và gộp bước, ví dụ <code>Chuyển nhượng DA | 1-9</code>.' : 'PMO sẽ đặt tên và gộp bước cho đúng các giai đoạn của dự án.'}</span></div>` : ''}
     ${d.unassigned.length && d.configured ? `<div class="card sp-note warn">Bước chưa thuộc sprint nào: ${d.unassigned.map(esc).join(', ')}</div>` : ''}
-    <section class="card sp-road" data-testid="sp-road"><div class="mtl-h"><h3>Lộ trình ${d.sprints.length} sprint</h3><span class="muted xs">thanh = thời gian kế hoạch · phần tô = % thực tế (theo đầu việc) · vạch = % kế hoạch hôm nay · ◆ mốc · đỏ dọc = hôm nay</span></div>
+    <section class="card sp-road" data-testid="sp-road"><div class="mtl-h"><h3>Lộ trình ${d.sprints.length} sprint</h3><span class="muted xs">Thanh: thời gian kế hoạch · phần tô: đã làm · vạch: kế hoạch hôm nay · <svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> mốc · vạch đỏ: hôm nay</span></div>
       <div class="rd"><div class="rd-row rd-head"><span class="rd-name"></span><span class="rd-track rd-axis">${axis}</span><span class="rd-num"></span></div>${road}</div></section>
     <section class="card sp-head">
       <div class="sp-nav">
@@ -121,7 +122,7 @@ async function drawPhases(body, project, params, modes) {
       <button type="button" class="chip${!dept ? ' on' : ''}" data-dept="" aria-pressed="${!dept}">Tất cả ban<b>${d.rows.length}</b></button>
       ${[...deptCounts].sort((a, b) => a[1].name.localeCompare(b[1].name, 'vi')).map(([id, v]) => `<button type="button" class="chip${String(id) === String(dept) ? ' on' : ''}" data-dept="${id}" aria-pressed="${String(id) === String(dept)}" data-testid="sp-dept-${id}">${esc(v.name)}<b>${v.n}</b></button>`).join('')}
     </div>
-    <section class="sp-steps" data-testid="sp-steps-list"><div class="sp-lh"><h3>Các bước của sprint</h3><span class="pill">${shown.length}</span><span class="muted xs">bấm <b>✓ Xong</b> khi xong một việc · đang làm dở thì chọn %</span></div>
+    <section class="sp-steps" data-testid="sp-steps-list"><div class="sp-lh"><h3>Các bước của sprint</h3><span class="pill">${shown.length}</span><span class="muted xs">bấm <b><svg class="gl gl-ck" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>Xong</b> khi xong một việc · đang làm dở thì chọn %</span></div>
       ${shown.map(stepCard).join('') || '<p class="muted sm">Không có bước nào của ban này trong sprint.</p>'}</section>
     <section class="card"><div class="mtl-h"><h3>Sprint ${k + 1} theo ban</h3><span class="muted xs">tiến độ theo đầu việc của ban chủ trì</span></div>
       <div class="tbl-scroll"><table class="table" data-testid="sp-summary"><thead><tr><th>Ban</th><th class="num">Đầu việc</th><th class="num">Đã xong</th><th class="num">% KH</th><th class="num">% TT</th><th class="num">SPI</th><th class="num">Chậm</th><th class="num">Trễ</th></tr></thead>
@@ -141,7 +142,7 @@ function bindSetup(body, project, d) {
       <p class="muted sm">Mỗi dòng một sprint, theo thứ tự: <b>Tên sprint | các bước | mục tiêu (không bắt buộc)</b>. Các bước ghi khoảng hoặc danh sách: <code>1-9</code>, <code>10-12</code>, <code>II.1-II.8</code>, <code>13, 14, 16</code>. Cũng có thể ghi <code>Chuyển nhượng DA (B1–9)</code>.
         Việc con của MTL bộ phận tự thuộc sprint của bước tổng. Để trống rồi lưu = dùng sprint gợi ý theo mốc.</p>
       <textarea name="text" rows="10" class="sp-text" spellcheck="false" data-testid="sp-setup-text" placeholder="Chuyển nhượng DA | 1-9 | SPV kế thừa CĐT, có QSDĐ&#10;Đề xuất NƠXH → CTĐT | 10-12 | Có QĐ chấp thuận CTĐT + giao CĐT&#10;Phân kỳ 2 | II.1-II.8">${esc(d.configured ? d.text : '')}</textarea>
-      ${!d.configured && d.text ? `<p class="muted xs">Gợi ý hiện tại (theo mốc ◆ đường găng) — <button type="button" class="link-btn" data-fill>chép vào ô để sửa</button></p>` : ''}
+      ${!d.configured && d.text ? `<p class="muted xs">Gợi ý hiện tại (theo mốc <svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> đường găng) — <button type="button" class="link-btn" data-fill>chép vào ô để sửa</button></p>` : ''}
       <p class="error" id="spErr"></p>
       <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Huỷ</button><button class="btn btn-primary" data-testid="sp-setup-save">Lưu</button></div></form>`, { wide: true });
     const form = modal.querySelector('form');
@@ -189,12 +190,12 @@ async function drawMonth(body, project, params, modes) {
     const past = cur != null && c.t < cur, isCur = c.t === cur;
     const tone = !c.due ? '' : past ? (c.open ? 'danger' : c.doneInTime === c.due ? 'ok' : 'warn') : isCur ? (c.open ? 'cur' : 'ok') : '';
     const tip = `T${c.t}${c.due ? ` · ${c.due} hạng mục phải xong${past || isCur ? `, đã xong đúng hạn ${c.doneInTime}${c.open ? `, chưa xong ${c.open}` : ''}` : ''}` : ' · không có hạng mục phải xong'}${c.milestone ? ' · có mốc ◆' : ''}`;
-    return `<a href="${monthHref(c.t)}" class="sp-cell ${tone}${c.t === t ? ' sel' : ''}${isCur ? ' now' : ''}" title="${esc(tip)}" aria-label="${esc(tip)}" data-testid="sp-cell-${c.t}"><span>${c.t}</span>${c.milestone ? '<i>◆</i>' : ''}</a>`;
+    return `<a href="${monthHref(c.t)}" class="sp-cell ${tone}${c.t === t ? ' sel' : ''}${isCur ? ' now' : ''}" title="${esc(tip)}" aria-label="${esc(tip)}" data-testid="sp-cell-${c.t}"><span>${c.t}</span>${c.milestone ? '<i><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg></i>' : ''}</a>`;
   };
   const deptRows = d.byDepartment.map(r => `<tr class="${dept && String(r.id) === String(dept) ? 'sel' : ''}"><td><b>${esc(r.name)}</b></td><td class="num">${r.due}</td><td class="num ok-t">${r.done}</td>
     <td class="num${r.open && s.state === 'PAST' ? ' danger-t' : ''}">${r.open}</td><td class="num${r.carried ? ' danger-t' : ''}">${r.carried || 0}</td><td class="num">${r.running}</td>
     <td class="num${r.behind ? ' warn-t' : ''}">${r.behind ?? '—'}</td><td class="num"><span class="pill ${spiTone(r.spi)}">${num(r.spi)}</span></td></tr>`).join('');
-  const ms = d.milestones.length ? `<div class="sp-ms" data-testid="sp-milestones"><b>◆ Mốc trong tháng:</b> ${d.milestones.map(m => `<a href="${itemHref(m.id)}">${esc(m.planCode ? `Bước ${m.planCode} · ` : '')}${esc(m.title)}</a> <span class="pill ${m.done ? 'ok' : ['OVERDUE', 'BEHIND', 'LATE_START'].includes(m.status) ? 'danger' : ''}">${m.done ? 'Đã xong' : esc(m.statusLabel)}</span>`).join(' · ')}</div>` : '';
+  const ms = d.milestones.length ? `<div class="sp-ms" data-testid="sp-milestones"><b><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> Mốc trong tháng:</b> ${d.milestones.map(m => `<a href="${itemHref(m.id)}">${esc(m.planCode ? `Bước ${m.planCode} · ` : '')}${esc(m.title)}</a> <span class="pill ${m.done ? 'ok' : ['OVERDUE', 'BEHIND', 'LATE_START'].includes(m.status) ? 'danger' : ''}">${m.done ? 'Đã xong' : esc(m.statusLabel)}</span>`).join(' · ')}</div>` : '';
   const doneDue = s.due ? Math.round(s.done / s.due * 100) : null;
   const STATE = { CURRENT: 'Tháng hiện tại', PAST: 'Tháng đã qua', FUTURE: 'Tháng sắp tới' };
   body.innerHTML = `<div class="mtl sp" data-testid="month-view">
@@ -213,7 +214,7 @@ async function drawMonth(body, project, params, modes) {
         <div class="${spiTone(s.spi)}"><span class="muted xs">SPI ${s.state === 'PAST' ? 'cuối tháng' : 'hôm nay'}</span><b>${num(s.spi)}</b><small class="muted">${s.state === 'FUTURE' ? 'chưa tới tháng' : 'thực tế / kế hoạch'}</small></div>
       </div>
       <div class="sp-strip" role="navigation" aria-label="Chọn tháng" data-testid="sp-strip">${d.sprints.map(cell).join('')}</div>
-      <div class="mtl-legend"><span><i class="lg-ok"></i>Xong đúng hạn</span><span><i class="lg-warn"></i>Có hạng mục xong trễ</span><span><i class="lg-danger"></i>Còn hạng mục chưa xong</span><span><i class="lg-cur"></i>Tháng hiện tại</span><span>◆ Có mốc</span></div>
+      <div class="mtl-legend"><span><i class="lg-ok"></i>Xong đúng hạn</span><span><i class="lg-warn"></i>Có hạng mục xong trễ</span><span><i class="lg-danger"></i>Còn hạng mục chưa xong</span><span><i class="lg-cur"></i>Tháng hiện tại</span><span><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> Có mốc</span></div>
     </section>
     <div class="chips sp-depts" role="group" aria-label="Lọc theo ban" data-testid="sp-depts">
       <button type="button" class="chip${!dept ? ' on' : ''}" data-dept="" aria-pressed="${!dept}">Tất cả ban<b>${all.length}</b></button>
@@ -222,7 +223,7 @@ async function drawMonth(body, project, params, modes) {
     ${ms}
     <div class="sp-lanes">
       <section class="sp-lane" data-testid="sp-lane-due"><div class="sp-lh"><h3>Phải xong trong tháng</h3><span class="pill">${lanes.due.length}</span></div><p class="muted xs">Kế hoạch gốc kết thúc trong T${t}${s.state === 'CURRENT' ? ', và việc trễ từ tháng trước' : ''}</p>${cards(lanes.due, 'Không có hạng mục phải xong.')}</section>
-      <section class="sp-lane" data-testid="sp-lane-running"><div class="sp-lh"><h3>Đang chạy</h3><span class="pill">${lanes.running.length}</span></div><p class="muted xs">Kết thúc sau T${t} · vạch trên thanh = mục tiêu % cuối tháng</p>${cards(lanes.running, 'Không có hạng mục đang chạy.')}</section>
+      <section class="sp-lane" data-testid="sp-lane-running"><div class="sp-lh"><h3>Đang chạy</h3><span class="pill">${lanes.running.length}</span></div><p class="muted xs">Còn chạy sau T${t} · vạch = mục tiêu cuối tháng</p>${cards(lanes.running, 'Không có hạng mục đang chạy.')}</section>
       <section class="sp-lane sp-lane-next" data-testid="sp-lane-next"><div class="sp-lh"><h3>Chuẩn bị cho T${t + 1}</h3><span class="pill">${lanes.next.length}</span></div><p class="muted xs">Bắt đầu ở tháng sau — chuẩn bị hồ sơ, nguồn lực</p>${cards(lanes.next, 'Tháng sau chưa có hạng mục bắt đầu.')}</section>
     </div>
     <section class="card"><div class="mtl-h"><h3>Tổng kết tháng T${t} theo ban</h3><span class="muted xs">${s.state === 'PAST' ? '"Đã xong" = xong trước khi hết tháng · SPI theo ảnh chụp tiến độ ngày cuối tháng' : s.state === 'CURRENT' ? 'tính đến hôm nay' : 'tháng chưa bắt đầu'}</span></div>
