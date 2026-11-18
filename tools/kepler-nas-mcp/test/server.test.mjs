@@ -33,6 +33,7 @@ fs.writeFileSync(path.join(ROOT, 'Dự án', 'Tiến độ.xlsx'), zip({ 'xl/wor
 const content = zlib.deflateSync(Buffer.from('BT /F1 12 Tf 72 712 Td (Bien ban nghiem thu) Tj T* [(Hang muc ) -20 (mong coc)] TJ ET'));
 fs.writeFileSync(path.join(ROOT, 'Dự án', 'Biên bản.pdf'), Buffer.concat([Buffer.from(`%PDF-1.4\n4 0 obj << /Length ${content.length} /Filter /FlateDecode >>\nstream\n`, 'latin1'), content, Buffer.from('\nendstream\nendobj\n%%EOF\n', 'latin1')]));
 fs.writeFileSync(path.join(ROOT, 'ghi chu.txt'), 'Ghi chú nội bộ');
+fs.writeFileSync(path.join(ROOT, 'scan.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
 fs.writeFileSync(path.join(OUTSIDE, 'bi-mat.txt'), 'không được đọc');
 
 function server() {
@@ -62,6 +63,8 @@ test('liệt kê, tìm không dấu, đọc DOCX / XLSX / PDF / TXT', async () =
   const p = (await s.tool('nas_read', { path: 'Dự án/Biên bản.pdf' })).text;
   assert.match(p, /Bien ban nghiem thu/); assert.match(p, /Hang muc mong coc/);
   assert.match((await s.tool('nas_read', { path: 'ghi chu.txt' })).text, /Ghi chú nội bộ/);
+  const img = await s.call('tools/call', { name: 'nas_read', arguments: { path: 'scan.png' } });
+  assert.equal(img.result.content[1].type, 'image'); assert.equal(img.result.content[1].mimeType, 'image/png');
   s.stop();
 });
 

@@ -88,6 +88,8 @@ function pdf(buf) {
   const text = parts.join('\n').replace(/[^\S\n]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
   return text.length > 20 ? text : '';
 }
+const IMAGE_EXT = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp' };
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const TEXT_EXT = new Set(['.txt', '.md', '.csv', '.tsv', '.json', '.xml', '.html', '.htm', '.log', '.ini', '.yml', '.yaml']);
 function extract(abs, buf) {
   const ext = path.extname(abs).toLowerCase();
@@ -106,7 +108,7 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { path: { type: 'string', description: 'Đường dẫn trong kho, vd. "#10.DuAn\\NOXH-DuongXa" hoặc đường dẫn UNC đầy đủ. Trống = thư mục gốc.' } } } },
   { name: 'nas_search', description: 'Tìm tệp / thư mục theo tên (không dấu, không phân biệt hoa thường) trong kho file, có giới hạn thời gian.',
     inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'Các từ có trong tên tệp, vd. "hop dong tu van"' }, path: { type: 'string', description: 'Thư mục bắt đầu tìm (trống = gốc)' }, limit: { type: 'number', description: 'Tối đa kết quả (≤ 100)' } }, required: ['query'] } },
-  { name: 'nas_read', description: 'Đọc nội dung chữ của một tệp trong kho: TXT/CSV/MD, DOCX, XLSX, PPTX, PDF có lớp chữ. Chỉ đọc, không sửa.',
+  { name: 'nas_read', description: 'Đọc nội dung một tệp trong kho: chữ của TXT/CSV/MD, DOCX, XLSX, PPTX, PDF có lớp chữ; ảnh JPG/PNG (≤ 5 MB) trả về dạng ảnh để đọc. Chỉ đọc, không sửa.',
     inputSchema: { type: 'object', properties: { path: { type: 'string', description: 'Đường dẫn tệp trong kho' }, max_chars: { type: 'number', description: `Số ký tự tối đa trả về (mặc định ${DEFAULT_CHARS})` }, offset: { type: 'number', description: 'Bỏ qua bấy nhiêu ký tự đầu (đọc tiếp phần sau)' } }, required: ['path'] } },
 ];
 const fold = s => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
@@ -151,6 +153,12 @@ const handlers = {
     const st = fs.statSync(abs);
     if (st.isDirectory()) throw new Error('Đây là thư mục — dùng nas_list');
     if (st.size > MAX_READ_BYTES) throw new Error(`Tệp ${fmtSize(st.size)} quá lớn để đọc (tối đa ${fmtSize(MAX_READ_BYTES)})`);
+    // Ảnh (bản scan chụp, sơ đồ): gửi ảnh để Claude tự đọc chữ trong ảnh.
+    const img = IMAGE_EXT[path.extname(abs).toLowerCase()];
+    if (img) {
+      if (st.size > MAX_IMAGE_BYTES) throw new Error(`Ảnh ${fmtSize(st.size)} quá lớn (tối đa ${fmtSize(MAX_IMAGE_BYTES)}) — mở ảnh và đính kèm vào cuộc trò chuyện`);
+      return [{ type: 'text', text: `${abs}\n(ảnh ${fmtSize(st.size)}, sửa ${day(st.mtime)})` }, { type: 'image', data: fs.readFileSync(abs).toString('base64'), mimeType: img }];
+    }
     const text = extract(abs, fs.readFileSync(abs));
     if (text == null) return `${abs}\n(${fmtSize(st.size)}) Định dạng ${path.extname(abs) || 'không đuôi'} chưa đọc được chữ. Mở tệp và đính kèm vào cuộc trò chuyện nếu cần.`;
     const from = Math.max(0, Number(offset) || 0), n = Math.min(200000, Math.max(1000, Number(max_chars) || DEFAULT_CHARS));
@@ -173,7 +181,7 @@ readline.createInterface({ input: process.stdin }).on('line', async line => {
     if (method === 'tools/call') {
       const h = handlers[params?.name];
       if (!h) return send({ id, error: { code: -32601, message: `Không có công cụ ${params?.name}` } });
-      try { return send({ id, result: { content: [{ type: 'text', text: await h(params.arguments || {}) }] } }); }
+      try { const out = await h(params.arguments || {}); return send({ id, result: { content: Array.isArray(out) ? out : [{ type: 'text', text: out }] } }); }
       catch (e) { return send({ id, result: { isError: true, content: [{ type: 'text', text: why(e) }] } }); }
     }
     send({ id, error: { code: -32601, message: `Không hỗ trợ ${method}` } });
