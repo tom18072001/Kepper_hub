@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { objectKey, isStorageNotFound } = require('./attachment-utils');
+const nas = require('./nas');
 
 const DRIVER = (process.env.STORAGE_DRIVER || 'local').toLowerCase();
 const sha256 = buf => crypto.createHash('sha256').update(buf).digest('hex');
@@ -111,14 +112,26 @@ function minioDriver() {
 }
 
 const driver = DRIVER === 'minio' ? minioDriver() : localDriver();
-console.log('StorageService: driver =', driver.kind);
+console.log('StorageService: driver =', driver.kind, nas.enabled() ? `+ kho file dự án (${nas.root()})` : '');
 
+// Khoá "nas:<đường dẫn>" = tệp nằm trong kho file dự án (bản gốc); còn lại theo driver cũ.
 module.exports = {
   driver: driver.kind,
   save: (...a) => driver.save(...a),
-  stat: (...a) => driver.stat(...a),
-  getStream: (...a) => driver.getStream(...a),
-  remove: (...a) => driver.remove(...a),
+  // Lưu vào kho file dự án theo quy ước tên; null khi dự án chưa có thư mục trong kho (gọi save() như cũ).
+  saveToProject(meta, buffer) {
+    const plan = nas.planPath(meta);
+    if (!plan) return null;
+    return { objectKey: nas.save(plan.rel, buffer), size: buffer.length, checksum: sha256(buffer), version: plan.version };
+  },
+  stat: async key => (nas.isNasKey(key) ? (fs.existsSync(nas.absOf(key)) ? { size: fs.statSync(nas.absOf(key)).size } : null) : driver.stat(key)),
+  getStream: async key => (nas.isNasKey(key) ? fs.createReadStream(nas.absOf(key)) : driver.getStream(key)),
+  // Xoá trên Hub: tệp trong kho file được chuyển vào _LuuTru, không xoá hẳn.
+  remove: async key => (nas.isNasKey(key) ? nas.archive(key) : driver.remove(key)),
+  // Vị trí hiển thị cho người dùng: tệp trong kho file → đường dẫn trong kho (mở được qua ổ mạng trong văn phòng / VPN).
+  locationOf: key => (nas.isNasKey(key) ? { storedIn: 'NAS', nasPath: String(key).slice(nas.PREFIX.length), version: Number(/_v(\d+)_\d{8}(\.[^./]*)?$/.exec(key)?.[1]) || null } : { storedIn: 'HUB' }),
+  // Huỷ tệp vừa ghi khi lưu bản ghi thất bại.
+  discard: async key => (nas.isNasKey(key) ? nas.discard(key) : driver.remove(key)),
   minioStat,
   localPath,
 };

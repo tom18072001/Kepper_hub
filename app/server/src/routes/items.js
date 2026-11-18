@@ -9,6 +9,7 @@ const approval = require('../services/approval');
 const bus = require('../services/bus');
 const W = require('../services/workitems');
 const tree = require('../services/tree');
+const storage = require('../lib/storage');
 const { describe: describeRule } = require('../services/recurring');
 const { stageOf } = require('../services/stage');
 const { setProgress } = require('../services/mtl-progress');
@@ -151,7 +152,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       intake: item.intakeRequest ? { id: item.intakeRequest.id, requesterName: names[item.intakeRequest.requesterId], createdAt: item.intakeRequest.createdAt } : null,
       project: { id: project.id, key: project.key, name: project.name }, rights, reporterName: names[item.reporterId] || null, assignedByName: names[item.assignedById] || null, reviewedByName: names[item.reviewedById] || null, plan: item.plan,
       checklist: item.checklist, comments: item.comments.map(c => ({ ...c, authorName: names[c.authorId] })),
-      attachments: item.attachments.map(a => ({ id: a.id, fileName: a.fileName, mimeType: a.mimeType, sizeBytes: a.sizeBytes, createdAt: a.createdAt, uploadedById: a.uploadedById, uploadedByName: names[a.uploadedById] })),
+      attachments: item.attachments.map(a => ({ id: a.id, fileName: a.fileName, mimeType: a.mimeType, sizeBytes: a.sizeBytes, createdAt: a.createdAt, uploadedById: a.uploadedById, uploadedByName: names[a.uploadedById], ...storage.locationOf(a.objectKey) })),
       activities: item.activities.map(a => ({ ...a, actorName: names[a.actorId] || 'Hệ thống' })),
       recurring: rule ? { ...rule, schedule: describeRule(rule) } : null,
       approvalSteps: steps, allApprovalSteps: allSteps, approvalLevels: item.approvalLevels, approvalSource: effective.source, defaultApprovalLevels: project.defaultApprovalLevels, canApprove,

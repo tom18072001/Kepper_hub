@@ -51,6 +51,9 @@ services:
       BRANDING_DIR: /data/branding   # logo công ty: logo.png, logo-light.png, mark.png, mark-light.png (thư mục BRANDING_PATH trên máy)
       HR_ENC_KEY: ${HR_ENC_KEY:-}
       STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      # Kho file dự án (bản gốc tệp đính kèm, lib/nas.js): NAS_PATH = thư mục đã mount trên máy chạy (vd. /mnt/kho-duan),
+      # NAS_ROOT=/data/nas để bật. Trống = tắt, giữ cách lưu cũ.
+      NAS_ROOT: ${NAS_ROOT:-}
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
       MINIO_USE_SSL: "false"
@@ -67,6 +70,7 @@ services:
       - ${UPLOADS_PATH:-uploads}:/data/uploads   # NAS: vd. /volume1/kepper/uploads
       - ${LOG_PATH:-./logs}:/data/logs
       - ${BRANDING_PATH:-./branding}:/data/branding:ro
+      - ${NAS_PATH:-./nas-off}:/data/nas
     ports:
       # Mặc định chỉ máy này vào được. Có reverse proxy HTTPS trên cùng máy (DSM / QNAP): giữ 127.0.0.1.
       # Không có proxy, cho laptop trong mạng vào thẳng: APP_BIND=0.0.0.0 (HTTP không mã hoá — chỉ để thử).
