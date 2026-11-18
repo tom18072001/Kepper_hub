@@ -1,9 +1,10 @@
 // Kho file dự án (NAS / máy chủ file, mount vào container tại NAS_ROOT) là BẢN GỐC của tệp đính kèm.
 // Hub chỉ giữ đường dẫn + metadata. Quy ước (tài liệu "Đề xuất phương án liên thông Kepler Hub – NAS"):
-//   <NAS_ROOT>/<KEY>-<TênNgắn>/<KEY>-<số hạng mục>_<ten-hang-muc>/<MãViệc>_<BộPhận>_<MôTả>_v<NN>_<YYYYMMDD>.<đuôi>
+//   <NAS_ROOT>/<KEY>-<TênNgắn>/<NN.Mảng>/<KEY>-<số hạng mục>_<TênHạngMục>/<MãViệc>_<BộPhận>_<MôTả>_v<NN>_<YYYYMMDD>.<đuôi>
+//   (thư mục mảng chọn theo phòng chủ trì hạng mục, bảng ghép NAS_DEPT_FOLDERS; không có thì bỏ cấp này)
 // - Chỉ dự án ĐÃ có thư mục trong NAS_ROOT (tên = KEY hoặc bắt đầu bằng "KEY-") mới lưu vào kho; còn lại giữ cách lưu cũ.
 // - Không bao giờ ghi đè: mỗi lần tải lên là một phiên bản _vNN mới.
-// - Xoá trên Hub không xoá trên kho: tệp được chuyển vào <thư mục dự án>/_LuuTru/.
+// - Xoá trên Hub không xoá trên kho: tệp được chuyển vào <thư mục dự án>/<NN.LuuTru có sẵn | _LuuTru>/.
 const fs = require('fs');
 const path = require('path');
 
@@ -36,13 +37,28 @@ function projectFolder(key) {
   return dirs(ROOT).find(n => n.toUpperCase() === k || n.toUpperCase().startsWith(k + '-')) || null;
 }
 
+// Thư mục mảng trong thư mục dự án theo phòng chủ trì hạng mục: NAS_DEPT_FOLDERS="PC=01.PhapLy,TCKT=02.TaiChinh,…".
+// Khớp đúng tên, hoặc phần sau "NN." (vd. "PhapLy" khớp "01.PhapLy"). Không khớp → đặt thẳng trong thư mục dự án.
+const DEPT_FOLDERS = Object.fromEntries(String(process.env.NAS_DEPT_FOLDERS || '').split(',').map(s => s.split('=').map(x => x.trim())).filter(([k, v]) => k && v).map(([k, v]) => [k.toUpperCase(), v]));
+const bare = n => String(n).replace(/^\d+\./, '').toLowerCase();
+function areaFolder(proj, deptCode) {
+  const want = DEPT_FOLDERS[String(deptCode || '').toUpperCase()];
+  if (!want) return null;
+  return dirs(inside(proj)).find(n => n === want || bare(n) === bare(want)) || null;
+}
+// Thư mục lưu trữ của dự án: có sẵn "NN.LuuTru" thì dùng, không thì tạo "_LuuTru".
+const archiveFolder = proj => dirs(inside(proj)).find(n => /^(\d+\.|_)LuuTru$/i.test(n)) || '_LuuTru';
+
 // Đường dẫn tương đối cho tệp mới. root: việc gốc của cây (hạng mục MTL); item: việc nhận đính kèm.
-function planPath({ projectKey, root, item, deptCode, fileName, date = new Date() }) {
+// rootDeptCode: phòng chủ trì hạng mục (chọn thư mục mảng); deptCode: phòng chủ trì việc (ghi vào tên tệp).
+function planPath({ projectKey, root, item, deptCode, rootDeptCode, fileName, date = new Date() }) {
   const proj = projectFolder(projectKey);
   if (!proj) return null;
+  const area = areaFolder(proj, rootDeptCode ?? deptCode);
+  const parent = area ? path.join(proj, area) : proj;
   const rootCode = `${projectKey}-${root.number}`;
-  const existing = dirs(inside(proj)).find(n => n === rootCode || n.startsWith(rootCode + '_'));
-  const folder = existing || `${rootCode}_${slug(root.title)}`;
+  const existing = dirs(inside(parent)).find(n => n === rootCode || n.startsWith(rootCode + '_'));
+  const folder = path.join(area || '', existing || `${rootCode}_${slug(root.title)}`);
   const ext = path.extname(fileName).toLowerCase().replace(/[^.a-z0-9]/g, '');
   const stem = `${projectKey}-${item.number}_${slug(deptCode || 'CHUNG', 12)}_${slug(path.basename(fileName, path.extname(fileName)))}`;
   let taken = [];
@@ -58,12 +74,12 @@ function save(rel, buffer) {
   fs.writeFileSync(abs, buffer, { flag: 'wx' }); // không ghi đè
   return PREFIX + rel;
 }
-// Xoá trên Hub → chuyển vào _LuuTru của dự án (bản gốc không mất).
+// Xoá trên Hub → chuyển vào thư mục lưu trữ của dự án (bản gốc không mất).
 function archive(key) {
   const abs = absOf(key);
   if (!fs.existsSync(abs)) return;
   const proj = path.relative(ROOT, abs).split(path.sep)[0];
-  const dest = path.join(ROOT, proj, '_LuuTru', `${Date.now()}_${path.basename(abs)}`);
+  const dest = path.join(ROOT, proj, archiveFolder(proj), `${Date.now()}_${path.basename(abs)}`);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.renameSync(abs, dest);
 }

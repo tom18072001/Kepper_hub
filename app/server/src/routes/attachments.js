@@ -31,12 +31,15 @@ module.exports = function mountAttachments(app, { prisma, auth, audit, config })
       const item = await prisma.workItem.findUnique({ where: { id: itemId }, select: { id: true, number: true, title: true, parentId: true, leadDepartmentId: true } });
       const chain = item.parentId ? await tree.ancestors(prisma, item.parentId, { number: true, title: true, leadDepartmentId: true }) : [];
       const deptId = tree.effectiveDept(item, chain) ?? req.user.departmentId ?? null;
-      const deptCode = deptId ? (await prisma.department.findUnique({ where: { id: deptId }, select: { code: true } }))?.code : null;
+      const codeOf = async id => (id ? (await prisma.department.findUnique({ where: { id }, select: { code: true } }))?.code ?? null : null);
+      const root = chain.at(-1) || item;
+      const deptCode = await codeOf(deptId);
+      const rootDeptCode = (await codeOf(root.leadDepartmentId)) ?? deptCode; // thư mục mảng theo phòng chủ trì hạng mục
       for (const file of files) {
         const fileName = downloadName(file.originalname);
         const mimeType = await verifyUpload(fileName, file.path);
         const buffer = await fs.readFile(file.path);
-        const stored = storage.saveToProject({ projectKey: project.key, root: chain.at(-1) || item, item, deptCode, fileName }, buffer)
+        const stored = storage.saveToProject({ projectKey: project.key, root, item, deptCode, rootDeptCode, fileName }, buffer)
           || await storage.save(fileName, buffer, `${project.key}/${itemId}`);
         saved.push({ fileName, mimeType, stored });
       }
