@@ -312,7 +312,7 @@ function render() {
   // Tệp xếp theo người tải lên: người chủ trì / phối hợp → "Bên thực hiện"; còn lại (người giao, lãnh đạo) → "Bên giao".
   const doers = new Set([...d.assignees.map(a => a.id), ...(d.supporters || []).map(a => a.id)]);
   const attRow = a => `<div class="att">${FILE}<span class="name" title="${esc(a.fileName)}">${esc(a.fileName)}</span><span class="muted xs">${(a.sizeBytes / 1024).toFixed(0)} KB · ${esc(a.uploadedByName || '')} · <span title="${fmtDateTime(a.createdAt)}">${ago(a.createdAt)}</span>${a.storedIn === 'NAS' ? ` · <span class="pill ok" title="Bản gốc trong kho file dự án: ${esc(a.nasPath)}" data-testid="att-nas">Kho file${a.version ? ` · v${String(a.version).padStart(2, '0')}` : ''}</span>` : ''}</span>
-            ${/\.(pdf|png|jpe?g|gif|webp|docx?)$/i.test(a.fileName) ? `<button class="btn btn-ghost btn-sm" data-preview="${a.id}">Xem</button>` : ''}<button class="btn btn-ghost btn-sm" data-download="${a.id}" data-testid="download-${esc(a.fileName)}">Tải</button>${editable ? `<button class="icon-btn" data-del-att="${a.id}" aria-label="Xoá tệp" title="Xoá tệp">${X}</button>` : ''}</div>`;
+            ${/\.(pdf|png|jpe?g|gif|webp|docx?)$/i.test(a.fileName) ? `<button class="btn btn-ghost btn-sm" data-preview="${a.id}">Xem</button>` : ''}<button class="btn btn-ghost btn-sm" data-download="${a.id}" data-testid="download-${esc(a.fileName)}">Tải</button>${editable ? `<button class="icon-btn" data-del-att="${a.id}"${a.storedIn === 'NAS' ? ' data-nas="1"' : ''} aria-label="Xoá tệp" title="Xoá tệp">${X}</button>` : ''}</div>`;
   const docRow = x => `<div class="att tw-doc" data-testid="tw-doc"><span class="pill">${x.kind === 'BASIS' ? 'Căn cứ' : x.kind === 'ISSUED' ? 'Đã phát hành' : 'Sản phẩm'}</span><b>${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.number)}</a>` : esc(x.number)}</b><span class="name" title="${esc(x.summary)}">${esc(x.summary)}</span></div>`;
   const giveFiles = d.attachments.filter(a => !doers.has(a.uploadedById)), backFiles = d.attachments.filter(a => doers.has(a.uploadedById));
   const giveDocs = (d.documents || []).filter(x => x.kind === 'BASIS'), backDocs = (d.documents || []).filter(x => x.kind !== 'BASIS');
@@ -488,7 +488,9 @@ function bind(editable) {
     const dl = e.target.closest('[data-download]'); if (dl) return download(`/api/attachments/${dl.dataset.download}/download`).catch(err => toast(errorMessage(err), 'err'));
     const pv = e.target.closest('[data-preview]'); if (pv) return openPreview(`/api/attachments/${pv.dataset.preview}/preview`).catch(err => toast(errorMessage(err), 'err'));
     const da = e.target.closest('[data-del-att]');
-    if (da && await confirmDialog('Xoá tệp đính kèm này? Tệp bị xoá hẳn, không khôi phục được.', { danger: true, okText: 'Xoá tệp' })) { await api(`/api/attachments/${da.dataset.delAtt}`, { method: 'DELETE' }).catch(err => toast(errorMessage(err), 'err')); return refresh(); }
+    // Tệp trong kho file dự án (bản gốc): xoá trên Hub chỉ chuyển tệp vào thư mục lưu trữ của dự án trên kho.
+    const delMsg = da?.dataset.nas ? 'Gỡ tệp này khỏi việc? Bản gốc trong kho file được chuyển vào thư mục lưu trữ của dự án (vd. 99.LuuTru), IT lấy lại được khi cần.' : 'Xoá tệp đính kèm này? Tệp bị xoá hẳn, không khôi phục được.';
+    if (da && await confirmDialog(delMsg, { danger: true, okText: 'Xoá tệp' })) { await api(`/api/attachments/${da.dataset.delAtt}`, { method: 'DELETE' }).catch(err => toast(errorMessage(err), 'err')); return refresh(); }
     const dc = e.target.closest('[data-del-check]');
     if (dc) {
       const c = data.checklist.find(x => String(x.id) === dc.dataset.delCheck), itemId = data.id;
