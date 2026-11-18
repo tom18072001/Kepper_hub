@@ -8,6 +8,7 @@ const { verifyUpload, previewable, typeOf } = require('../lib/files');
 const { convertWord, streamToBuffer } = require('../lib/document-preview');
 const { fail, intParam } = require('../lib/http');
 const { loadItem } = require('../services/access');
+const tree = require('../services/tree');
 const { activity } = require('../services/events');
 const bus = require('../services/bus');
 
@@ -26,11 +27,17 @@ module.exports = function mountAttachments(app, { prisma, auth, audit, config })
     try {
       if (!files.length) fail(400, 'Chưa chọn tệp', 'REQUIRED');
       const { project, itemId } = req.itemCtx;
+      // Kho file dự án (bản gốc): việc gốc của cây = thư mục hạng mục; mã bộ phận = phòng chủ trì (theo cây), không có thì phòng người gửi.
+      const item = await prisma.workItem.findUnique({ where: { id: itemId }, select: { id: true, number: true, title: true, parentId: true, leadDepartmentId: true } });
+      const chain = item.parentId ? await tree.ancestors(prisma, item.parentId, { number: true, title: true, leadDepartmentId: true }) : [];
+      const deptId = tree.effectiveDept(item, chain) ?? req.user.departmentId ?? null;
+      const deptCode = deptId ? (await prisma.department.findUnique({ where: { id: deptId }, select: { code: true } }))?.code : null;
       for (const file of files) {
         const fileName = downloadName(file.originalname);
         const mimeType = await verifyUpload(fileName, file.path);
         const buffer = await fs.readFile(file.path);
-        const stored = await storage.save(fileName, buffer, `${project.key}/${itemId}`);
+        const stored = storage.saveToProject({ projectKey: project.key, root: chain.at(-1) || item, item, deptCode, fileName }, buffer)
+          || await storage.save(fileName, buffer, `${project.key}/${itemId}`);
         saved.push({ fileName, mimeType, stored });
       }
       const rows = await prisma.$transaction(async tx => {
@@ -44,9 +51,9 @@ module.exports = function mountAttachments(app, { prisma, auth, audit, config })
         return out;
       });
       bus.item(project.id, itemId, req.user.id);
-      res.status(201).json(rows.map(a => ({ id: a.id, fileName: a.fileName, mimeType: a.mimeType, sizeBytes: a.sizeBytes, createdAt: a.createdAt })));
+      res.status(201).json(rows.map(a => ({ id: a.id, fileName: a.fileName, mimeType: a.mimeType, sizeBytes: a.sizeBytes, createdAt: a.createdAt, ...storage.locationOf(a.objectKey) })));
     } catch (error) {
-      await Promise.allSettled(saved.map(s => storage.remove(s.stored.objectKey)));
+      await Promise.allSettled(saved.map(s => storage.discard(s.stored.objectKey)));
       throw error;
     } finally {
       await Promise.allSettled(files.map(f => fs.rm(f.path, { force: true })));
