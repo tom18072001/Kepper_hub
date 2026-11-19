@@ -390,7 +390,7 @@ const savedView = () => current.views.find(v => v.id === current.saved) || null;
 // Bộ lọc đang khác bộ lọc đã lưu (so với những gì máy chủ đã lưu).
 function savedDirty(v) {
   const vf = v.filters || {};
-  return KEYS.some(k => (current.filters[k] || '') !== String(vf[k] ?? '')) || current.lanes !== (vf.lanes || 'none');
+  return KEYS.some(k => (current.filters[k] || '') !== String(vf[k] ?? '')) || current.lanes !== (laneOk(vf.lanes) ? vf.lanes : defaultLanes());
 }
 function savedBtnHtml() {
   const v = savedView();

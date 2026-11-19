@@ -150,7 +150,7 @@ test('B3 + B4 + B5 + N2. Dự án MTL: tab mặc định, Lịch trong "Khác", 
   // Bấm ô ngày trên Lịch → form tạo việc, hạn điền sẵn ngày đó.
   const day = vnDate(3);
   await pmo.getByTestId(`calendar-add-${day}`).click({ force: true });
-  await expect(pmo.getByTestId('create-due')).toHaveValue(day);
+  await expect(pmo.locator('#modal input[name="dueDate"]')).toHaveValue(day);
   await pmo.keyboard.press('Escape');
   await expect(pmo.locator('#modalRoot')).toBeHidden();
 
