@@ -44,7 +44,7 @@ module.exports = function mountApprovals(app, { prisma, auth, audit }) {
       const submit = request.actions.filter(a => a.decision === 'SUBMIT').at(-1);
       out.push({
         id: request.id, status: request.status, currentLevel: request.currentLevel, totalLevels: request.totalLevels, stepName: step?.name || null, createdAt: request.createdAt,
-        lastLevel: request.currentLevel === request.totalLevels, submitNote: submit?.comment || null, requestedByName: n[request.requestedById] || null,
+        lastLevel: request.currentLevel === request.totalLevels, ratingRequired: step?.approverType === 'ASSIGNER', submitNote: submit?.comment || null, requestedByName: n[request.requestedById] || null,
         onBehalfOf: onBehalfOfId ? n[onBehalfOfId] || null : null,
         item: { id: item.id, code: `${project.key}-${item.number}`, title: item.title, priority: item.priority, dueDate: item.dueDate, state: item.state.name, taskType: item.taskType,
           assignees: item.assignees.map(a => a.user), assignedByName: n[item.assignedById] || null, departmentName: d[deptOf(item)] || null },

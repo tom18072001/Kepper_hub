@@ -51,7 +51,7 @@ async function mtlGuard(client, user, project, rights, itemId, { progress = fals
   if (assign) Policy.assertCan(s, 'edit', 'mtl.plan', { item, op: 'assign' });
   if (manualPct && it.allKids) fail(422, 'Tiến độ việc cha tính tự động từ các việc con — cập nhật ở việc con', 'PROGRESS_FROM_CHILDREN');
   if (manualPct && it.allChecks) fail(422, 'Tiến độ việc này tính theo checklist — đánh dấu các mục đã xong', 'PROGRESS_FROM_CHECKLIST');
-  if (toState?.category === 'COMPLETED' && it.openKids) fail(422, `Còn ${it.openKids} việc con chưa xong — việc cha tự hoàn thành khi các việc con xong`, 'PROGRESS_FROM_CHILDREN');
+  if (toState?.category === 'COMPLETED' && it.openKids) fail(422, `Còn ${it.openKids} việc con chưa xong — việc cha chỉ gửi duyệt được khi mọi việc con đã được duyệt hoàn thành`, 'PROGRESS_FROM_CHILDREN');
   if (toState?.category === 'COMPLETED' && it.openChecks) fail(422, `Còn ${it.openChecks} mục checklist chưa xong`, 'PROGRESS_FROM_CHECKLIST');
 }
 

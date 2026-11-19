@@ -48,7 +48,7 @@ test('chỉ số kỳ: đúng hạn, Kế hoạch năm, Đột xuất, xếp lo�
     item(7, 'UNSTARTED', { taskType: 'PLAN', assignedAt: at('2026-01-05T08:00:00+07:00'), dueDate: at('2026-12-15T00:00:00+07:00') }),
     item(8, 'CANCELLED', { taskType: 'PLAN', dueDate: at('2026-10-20T00:00:00+07:00') }),
     // Xong trong kỳ, xếp loại Không hoàn thành nhưng xếp loại ở kỳ trước → không tính vào xếp loại kỳ này.
-    item(9, 'COMPLETED', { completedAt: at('2026-10-01T08:00:00+07:00'), rating: 'FAIL', ratedAt: at('2026-09-30T08:00:00+07:00'),
+    item(9, 'COMPLETED', { completedAt: at('2026-10-01T08:00:00+07:00'), rating: 'POOR', ratedAt: at('2026-09-30T08:00:00+07:00'),
       rejectionDates: [at('2026-09-29T08:00:00+07:00'), at('2026-10-01T07:00:00+07:00')] }),
   ];
   const m = S.metrics(items, { from, to, now });

@@ -1,6 +1,6 @@
 // Văn thư — sổ văn bản đến / đi / nội bộ (QyĐ-GA-01): vào sổ cấp số tự động, hạn xử lý theo độ khẩn, theo dõi trạng thái.
 // Quyền do máy chủ quyết (routes/vanthu.js) — giao diện chỉ ẩn nút theo cờ "can" / "canRegister".
-import { api } from '../api.js';
+import { api, download } from '../api.js';
 import { store, deptName } from '../store.js';
 import { esc, fmtDate, fmtDateTime, toast, openModal, closeModal, confirmDialog, errorMessage } from '../util.js';
 
@@ -107,7 +107,7 @@ async function renderDoc(root, id, setCrumbs, m) {
   setCrumbs(`<a href="#/vanthu?book=${d.book.code}">Văn thư</a> / ${esc(d.number)}`);
   const row = (k, v) => (v ? `<div class="kv"><span class="muted">${k}</span><span>${v}</span></div>` : '');
   const STEP_LABEL = { PROCESSING: 'Bắt đầu xử lý', DONE: 'Báo xong', FILED: 'Lập hồ sơ', SUBMITTED: 'Đã trình', ASSIGNED: 'Đã giao', SENT: 'Đã gửi', CONFIRMED: 'Bên nhận đã xác nhận', REPLIED: 'Đã có phản hồi', EFFECTIVE: 'Có hiệu lực', EXPIRED: 'Hết hiệu lực', RECEIVED: 'Về "Đã tiếp nhận"', NUMBERED: 'Về "Đã cấp số"', ISSUED: 'Về "Đã ban hành"' };
-  const ACT = { CREATE: 'Vào sổ', STATUS: 'Đổi trạng thái', ASSIGN: 'Giao xử lý', UPDATE: 'Sửa thông tin', CANCEL: 'Hủy số' };
+  const ACT = { CREATE: 'Vào sổ', STATUS: 'Đổi trạng thái', ASSIGN: 'Giao xử lý', UPDATE: 'Sửa thông tin', CANCEL: 'Hủy số', FILE: 'Thêm tệp', FILE_DELETED: 'Gỡ tệp' };
   const st = m.status[d.book.code];
   root.innerHTML = `<div class="page-head"><h1>${esc(d.number)}</h1>${statusPill(d)}
       ${d.can.edit ? '<button class="btn btn-ghost" id="vtEdit" data-testid="vt-edit">Sửa / giao xử lý</button><button class="btn btn-ghost danger" id="vtCancel" data-testid="vt-cancel">Hủy số</button>' : ''}</div>
@@ -131,6 +131,13 @@ async function renderDoc(root, id, setCrumbs, m) {
       </div>
       ${d.can.status.length ? `<div class="row wrap" style="margin-top:14px">${d.can.status.map(k => `<button class="btn ${['DONE', 'FILED', 'SENT', 'EFFECTIVE'].includes(k) ? 'btn-primary' : 'btn-ghost'} btn-sm" data-to="${k}" data-testid="vt-to-${k}">${esc(STEP_LABEL[k] || st[k])}</button>`).join('')}</div>` : ''}
     </section>
+    <section class="card pg-section" data-testid="vt-files"><h3 style="margin-top:0">Tệp văn bản</h3>
+      ${d.files.length ? `<ul class="vt-files">${d.files.map(f => `<li><span>${esc(f.fileName)}</span> <span class="muted xs">${(f.sizeBytes / 1024).toFixed(0)} KB · ${esc(f.uploadedBy || '')} · ${fmtDateTime(f.createdAt)}</span>
+        ${f.storedIn === 'NAS' ? ` <span class="pill ok" title="Bản gốc trên NAS: \\\\192.168.130.2\\DATA\\${esc(f.nasPath.replace(/\//g, '\\'))}" data-testid="vt-file-nas">NAS${f.version ? ` · v${String(f.version).padStart(2, '0')}` : ''}</span>` : ''}
+        <button class="btn btn-ghost btn-sm" data-dl="${f.id}">Tải</button>${d.can.deleteFile ? `<button class="btn btn-ghost btn-sm danger" data-rm="${f.id}"${f.storedIn === 'NAS' ? ' data-nas="1"' : ''}>Gỡ</button>` : ''}</li>`).join('')}</ul>`
+        : '<p class="muted sm">Chưa có tệp. Bản scan văn bản lưu vào thư mục văn thư của bộ phận trên NAS.</p>'}
+      ${d.can.upload ? '<label class="btn btn-ghost btn-sm">Tải tệp lên<input type="file" id="vtFiles" multiple hidden data-testid="vt-file-input"></label>' : ''}
+    </section>
     <section class="card pg-section"><h3 style="margin-top:0">Lịch sử</h3><ol class="vt-log">
       ${d.events.map(e => `<li><span class="muted xs">${fmtDateTime(e.createdAt)}</span> <b>${esc(e.user || '')}</b> · ${esc(ACT[e.action] || e.action)}${e.action === 'STATUS' ? `: ${esc(st[e.fromValue] || e.fromValue || '')} → ${esc(st[e.toValue] || e.toValue)}` : ''}${e.note ? ` — ${esc(e.note)}` : ''}</li>`).join('')}</ol></section>`;
   root.querySelectorAll('[data-to]').forEach(b => b.onclick = async () => {
@@ -138,6 +145,20 @@ async function renderDoc(root, id, setCrumbs, m) {
     let note = null;
     if (to === 'DONE') { note = await confirmDialog(`Báo đã xử lý xong ${d.number}?`, { okText: 'Báo xong', input: 'Kết quả xử lý (không bắt buộc)' }); if (note === null) return; }
     try { await api(`/api/vanthu/docs/${d.id}/status`, { method: 'POST', body: { to, note: typeof note === 'string' ? note : null } }); toast('Đã cập nhật', 'ok'); renderDoc(root, id, setCrumbs, m); }
+    catch (error) { toast(errorMessage(error), 'error'); }
+  });
+  root.querySelector('#vtFiles')?.addEventListener('change', async e => {
+    if (!e.target.files.length) return;
+    const form = new FormData();
+    for (const f of e.target.files) form.append('files', f);
+    try { await api(`/api/vanthu/docs/${d.id}/files`, { method: 'POST', form }); toast('Đã tải tệp lên', 'ok'); renderDoc(root, id, setCrumbs, m); }
+    catch (error) { toast(errorMessage(error), 'error'); e.target.value = ''; }
+  });
+  root.querySelectorAll('[data-dl]').forEach(b => b.onclick = () => download(`/api/vanthu/files/${b.dataset.dl}/download`).catch(err => toast(errorMessage(err), 'error')));
+  root.querySelectorAll('[data-rm]').forEach(b => b.onclick = async () => {
+    const msg = b.dataset.nas ? 'Gỡ tệp khỏi văn bản? Bản trên NAS được chuyển vào thư mục _LuuTru của sổ, không xoá hẳn.' : 'Gỡ tệp khỏi văn bản?';
+    if (!(await confirmDialog(msg, { okText: 'Gỡ tệp', danger: true }))) return;
+    try { await api(`/api/vanthu/files/${b.dataset.rm}`, { method: 'DELETE' }); toast('Đã gỡ tệp', 'ok'); renderDoc(root, id, setCrumbs, m); }
     catch (error) { toast(errorMessage(error), 'error'); }
   });
   root.querySelector('#vtCancel')?.addEventListener('click', async () => {

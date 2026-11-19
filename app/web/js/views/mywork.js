@@ -96,7 +96,7 @@ export async function renderMyWork(root, params, setCrumbs) {
   };
   const row = i => `<tr class="clickable" tabindex="0" data-href="${href(i)}" data-testid="my-${esc(i.code)}">
       <td class="code mw-c-code">${esc(i.code)}</td>
-      <td class="mw-c-title"><span class="mw-title">${esc(i.title)}</span><span class="mw-tags">${i.myRole ? `<span class="pill role">${ROLE[i.myRole]}</span>` : ''}${prioChip(i.priority) ? `<span class="mw-prio">${prioChip(i.priority)}</span>` : ''}${i.labels.map(labelChip).join('')}</span></td>
+      <td class="mw-c-title">${i.parentRef ? `<span class="parent-ref" title="Việc con của ${esc(i.parentRef.code)} · ${esc(i.parentRef.title)}">↳ ${esc(i.parentRef.code)} <span class="parent-title">${esc(i.parentRef.title)}</span></span>` : ""}<span class="mw-title">${esc(i.title)}</span>${i.counts?.childrenTotal ? ` <span class="pill kids-chip${i.counts.childrenDone === i.counts.childrenTotal ? " ok" : ""}" title="Việc con đã được duyệt hoàn thành">${i.counts.childrenDone}/${i.counts.childrenTotal} việc con</span>` : ""}<span class="mw-tags">${i.myRole ? `<span class="pill role">${ROLE[i.myRole]}</span>` : ''}${prioChip(i.priority) ? `<span class="mw-prio">${prioChip(i.priority)}</span>` : ''}${i.labels.map(labelChip).join('')}</span></td>
       <td class="mw-c-next">${nextCell(i)}</td>
       ${multiProject ? `<td class="mw-c-proj muted sm">${esc(i.project.name)}</td>` : ''}
       <td class="mw-c-due">${dueCell(i)}</td></tr>`;

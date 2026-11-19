@@ -10,9 +10,11 @@ const CATEGORIES = ['BACKLOG', 'UNSTARTED', 'STARTED', 'REVIEW', 'COMPLETED', 'C
 const WEEK_STATES = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Cuối tuần'].map((name, i) => ({ name, category: 'OTHER', color: ['#2563eb', '#0891b2', '#16a34a', '#d97706', '#9333ea', '#64748b'][i] }));
 // Nhóm cột bắt buộc theo cách dùng dự án: có duyệt thì cần cột Chờ duyệt + Hoàn thành (+ Đang làm để trả lại);
 // sổ giao việc của đơn vị còn cần Chưa bắt đầu (tiếp nhận) — dự án thường thì tự do.
-function requiredCategories(project, stepsCount) {
+// Mọi việc hoàn thành phải qua người giao duyệt: có cột "Hoàn thành" thì cần cột "Chờ duyệt" và "Đang làm" (để trả lại).
+// Bảng chỉ gồm cột tự do (vd. "Lịch tuần") không có khái niệm hoàn thành nên không bắt buộc.
+function requiredCategories(project, stepsCount, states = []) {
   if (project.visibility === 'ASSIGNED') return ['UNSTARTED', 'STARTED', 'REVIEW', 'COMPLETED'];
-  return stepsCount ? ['STARTED', 'REVIEW', 'COMPLETED'] : [];
+  return stepsCount || states.some(s => s.category === 'COMPLETED') ? ['STARTED', 'REVIEW', 'COMPLETED'] : [];
 }
 const DEFAULT_STATES = [
   { name: 'Tồn đọng', category: 'BACKLOG', color: '#94a3b8' },
@@ -157,8 +159,8 @@ module.exports = function mountProjects(app, { prisma, auth, audit }) {
     }));
     const stepsCount = await prisma.approvalStep.count({ where: { projectId: project.id } });
     const LABEL = { UNSTARTED: 'Chưa bắt đầu', STARTED: 'Đang thực hiện', REVIEW: 'Chờ duyệt', COMPLETED: 'Hoàn thành' };
-    for (const required of requiredCategories(project, stepsCount)) if (!states.some(s => s.category === required))
-      fail(422, `${project.visibility === 'ASSIGNED' ? 'Sổ giao việc' : 'Dự án có quy trình duyệt'} cần ít nhất một cột thuộc nhóm "${LABEL[required]}"`, 'MISSING_CATEGORY');
+    for (const required of requiredCategories(project, stepsCount, states)) if (!states.some(s => s.category === required))
+      fail(422, `${project.visibility === 'ASSIGNED' ? 'Sổ giao việc' : 'Dự án có cột Hoàn thành (việc xong phải qua người giao duyệt)'} cần ít nhất một cột thuộc nhóm "${LABEL[required]}"`, 'MISSING_CATEGORY');
     await prisma.$transaction(async tx => {
       const existing = await tx.workflowState.findMany({ where: { projectId: project.id }, include: { _count: { select: { items: true } } } });
       const keep = new Set(states.filter(s => s.id).map(s => s.id));
