@@ -13,6 +13,10 @@ export function canMove(state, fromCategory, toCategory, submit = false) {
   return WORK_FROM.includes(fromCategory) && WORK_TO.includes(toCategory);
 }
 
+// Ai duyệt cấp đầu (chấm mức): việc mốc / đường găng → Ban Giám đốc của việc; việc thường → người giao.
+// pending: phiếu đang chờ (withBoard chốt lúc gửi duyệt) — có phiếu thì theo phiếu, chưa có thì theo cờ mốc / găng của việc.
+export const firstApprover = (item, pending = null) => ((pending ? pending.withBoard : (item?.critical || item?.milestone)) ? 'Ban Giám đốc' : 'người giao');
+
 const NONE = Object.freeze({ view: 'SUMMARY', roles: [], state: null, fields: {} });
 export const capsOf = d => d?.capabilities || NONE;
 

@@ -1,6 +1,6 @@
 // Trang dự án: Bảng Kanban, Sổ giao việc, Danh sách, Lịch, Tiến độ kế hoạch + một hệ lọc dùng chung cho mọi kiểu xem:
 // ô tìm, chip nhanh, "Thêm bộ lọc", chip đang áp, đếm kết quả, lưu trên URL, nhớ bộ lọc cuối theo người, bộ lọc đã lưu.
-import { canMove } from '../task-caps.js';
+import { canMove, firstApprover } from '../task-caps.js';
 import { api, download, ApiError } from '../api.js';
 import { store, can, labelsFor, createProjectLabel, deptName, userById } from '../store.js';
 import { scheduleFields, bindSchedule, readSchedule } from './recurring-form.js';
@@ -897,8 +897,9 @@ export async function moveItem(id, stateId, afterId, beforeId, overrideWip = fal
   try {
     const row = await api(`/api/items/${id}/move`, { method: 'POST', body: { stateId, afterId: afterId ? Number(afterId) : null, beforeId: beforeId ? Number(beforeId) : null, overrideWip } });
     const state = current.project.states.find(s => s.id === stateId), landed = current.project.states.find(s => s.id === row?.stateId);
-    if (landed?.category === 'REVIEW' && state?.category === 'COMPLETED') toast('Đã chuyển vào "Chờ duyệt" — việc thành Hoàn thành khi người giao duyệt và chấm mức', 'ok');
-    else if (landed?.category === 'REVIEW') toast('Đã gửi người giao duyệt', 'ok');
+    const who = firstApprover(row, row?.pendingApproval); // việc mốc / đường găng: Ban Giám đốc duyệt
+    if (landed?.category === 'REVIEW' && state?.category === 'COMPLETED') toast(`Đã chuyển vào "Chờ duyệt" — việc thành Hoàn thành khi ${who} duyệt và chấm mức`, 'ok');
+    else if (landed?.category === 'REVIEW') toast(`Đã gửi ${who} duyệt`, 'ok');
   } catch (error) {
     if (error instanceof ApiError && error.code === 'WIP_LIMIT' && current.project.rights.canManage && !overrideWip) {
       if (await confirmDialog(error.message + '. Bạn là quản lý dự án — vẫn chuyển vượt giới hạn?', { okText: 'Vẫn chuyển' })) return moveItem(id, stateId, afterId, beforeId, true);

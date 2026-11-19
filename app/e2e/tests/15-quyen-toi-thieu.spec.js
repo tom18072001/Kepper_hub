@@ -283,7 +283,10 @@ test('Q8. Việc mốc / đường găng: Ban Giám đốc của việc duyệt 
   const crit = await create({ title: 'Ký hợp đồng thuê phòng họp (giả)', leadDepartmentId: D('KD').id, assigneeIds: [U('nv.kinhdoanh1').id], critical: true });
   expect((await apiAs(pmo, `/api/items/${crit.id}`, { method: 'PATCH', data: { stateId: REVIEW } })).status()).toBe(403); // người giao không gửi duyệt thay
   const lead = await as(browser, 'nv.kinhdoanh1');
-  await json(await apiAs(lead, `/api/items/${crit.id}`, { method: 'PATCH', data: { stateId: REVIEW } }));
+  // Người chủ trì bấm "Gửi duyệt" trên panel: thông báo ghi đúng người duyệt (Ban Giám đốc, không phải người giao).
+  const lp = await openItem(lead, ctx.projectId, crit.id);
+  await lp.getByTestId('submit-approval').click();
+  await expect(lead.locator('.toast', { hasText: 'Đã gửi Ban Giám đốc duyệt' }).first()).toBeVisible();
   const d = await json(await apiAs(pmo, `/api/items/${crit.id}`));
   expect(d.approvalSteps[0]).toMatchObject({ approverType: 'BOARD', name: 'Ban Giám đốc duyệt' });
   expect(d.stepApprovers['1']).toEqual(expect.arrayContaining(['Trần Minh Giám', 'Phó GĐ Kinh doanh (giả)']));

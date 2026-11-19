@@ -12,7 +12,7 @@ import { icon } from '../icons.js';
 import { dispatchParts, progressParts, documentForm, sourceOptions, ratingPick, RATINGS, handleDispatchClick, bindDispatchInputs, summaryBar, actionZone, stagePill, countdownPill, acceptDialog } from './dispatch-panel.js';
 import { sec, compact, bindSectionMemory, resetSectionMemory } from './sections.js';
 import { mtlPanelBlock, rebaselineDialog } from './mtl.js';
-import { canMove, capsOf, ROLE_LABEL } from '../task-caps.js';
+import { canMove, capsOf, ROLE_LABEL, firstApprover } from '../task-caps.js';
 
 let openId = null, data = null, project = null;
 const panel = () => $('#itemPanel');
@@ -154,7 +154,7 @@ function approvalBox() {
       <div class="field-error" id="approvalCommentHelp" role="alert"></div>
       <div class="row" style="margin-top:8px"><button class="btn btn-ok" data-act="approve" data-testid="approve-btn">${data.ratingRequired ? 'Duyệt hoàn thành' : 'Duyệt'}</button><button class="btn btn-danger" data-act="reject" data-testid="reject-btn">${data.ratingRequired ? 'Trả lại' : 'Không duyệt'}</button></div></div>`;
 }
-// Kết quả người giao duyệt: ai, lúc nào, mức nào, nhận xét gì.
+// Kết quả duyệt cấp chấm mức (người giao; việc mốc / găng: Ban Giám đốc): ai, lúc nào, mức nào, nhận xét gì.
 // Đánh giá = mức chấm + nhận xét lúc duyệt (cấp người giao). Người chủ trì thấy sau khi đã chấm; chỉ đọc.
 function ratingResult() {
   if (!data.rating) return '';
@@ -362,7 +362,7 @@ function render() {
   const canPick = c.assign || c.assignOwnDept;
   const states = project.states;
   // Việc cần duyệt: không kéo thẳng sang Hoàn thành (máy chủ cũng chặn) — đi qua "Gửi duyệt" / "Nộp sản phẩm".
-  // Chọn "Hoàn thành" khi chưa được duyệt → máy chủ đưa vào "Chờ duyệt" (người giao duyệt + chấm mức).
+  // Chọn "Hoàn thành" khi chưa được duyệt → máy chủ đưa vào "Chờ duyệt" (người giao — việc mốc / găng: Ban Giám đốc — duyệt + chấm mức).
   const approvedNow = d.approvals[0]?.status === 'APPROVED';
   // Gọn (mặc định): các khối mở / đóng theo vai trò và khâu, ẩn ô thêm mới trống và trường ít dùng ở cột phải.
   // "Mở tất cả các mục": hiện đủ trường, mở mọi khối (nhớ theo người).
@@ -464,7 +464,7 @@ function render() {
         <div class="ip-core">
         <label class="${project.visibility === 'ASSIGNED' ? 'lite-hide' : ''}">Trạng thái${c.state ? `<select id="ipState" data-testid="item-state" title="Trạng thái (S)">${states.map(s => { const done = s.category === 'COMPLETED' && s.id !== d.stateId && !approvedNow, doneLock = done && (d.state.category === 'REVIEW' || d.childProgress?.open > 0);
           const ruleLock = s.id !== d.stateId && !canMove(c.state, d.state.category, s.category, !!c.submit);
-          const locked = s.id !== d.stateId && (doneLock || ruleLock); return `<option value="${s.id}"${s.id === d.stateId ? ' selected' : ''}${locked ? ' disabled' : ''}>${stateLabel(s)}${locked ? (ruleLock ? (['REVIEW', 'COMPLETED'].includes(s.category) ? ' (người chủ trì gửi duyệt)' : ' (người giao / Ban Giám đốc)') : d.state.category === 'REVIEW' ? ' (đang chờ người giao duyệt)' : ' (còn việc con chưa duyệt)') : done ? ' → gửi người giao duyệt' : ''}</option>`; }).join('')}</select>` : `<div class="side-text" data-testid="item-state">${stateLabel(d.state)}</div>`}</label>
+          const locked = s.id !== d.stateId && (doneLock || ruleLock); return `<option value="${s.id}"${s.id === d.stateId ? ' selected' : ''}${locked ? ' disabled' : ''}>${stateLabel(s)}${locked ? (ruleLock ? (['REVIEW', 'COMPLETED'].includes(s.category) ? ' (người chủ trì gửi duyệt)' : ' (người giao / Ban Giám đốc)') : d.state.category === 'REVIEW' ? ` (đang chờ ${firstApprover(d, d.approvals.find(a => a.status === 'PENDING'))} duyệt)` : ' (còn việc con chưa duyệt)') : done ? ` → gửi ${firstApprover(d)} duyệt` : ''}</option>`; }).join('')}</select>` : `<div class="side-text" data-testid="item-state">${stateLabel(d.state)}</div>`}</label>
         <label class="lite-hide">Ưu tiên${fe ? `<select id="ipPriority" data-testid="item-priority" title="Ưu tiên (P)">${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}"${k === d.priority ? ' selected' : ''}>${v.label}</option>`).join('')}</select>` : `<div class="side-text" data-testid="item-priority">${esc(PRIORITY[d.priority]?.label || '—')}</div>`}</label>
         <div class="side-progress ${project.kind === 'MTL' || d.progress ? '' : 'lite-hide'}"><span class="side-h" id="ipProgLabel">Tiến độ</span>
           <div class="row progress-view" role="meter" aria-labelledby="ipProgLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pctNow}"><span class="progress"><i style="width:${pctNow}%"></i></span><b data-testid="item-progress">${pctNow}%</b></div>
@@ -597,7 +597,7 @@ function bind(editable) {
       return;
     }
     if (act === 'restore') { try { await api(`/api/items/${data.id}/restore`, { method: 'POST' }); toast('Đã khôi phục', 'ok'); } catch (err) { toast(errorMessage(err), 'err'); } return refresh(); }
-    if (act === 'submit-approval') { const review = project.states.find(s => s.category === 'REVIEW'); if (await patch({ stateId: review.id })) toast('Đã gửi người giao duyệt', 'ok'); return; }
+    if (act === 'submit-approval') { const review = project.states.find(s => s.category === 'REVIEW'); if (await patch({ stateId: review.id })) toast(`Đã gửi ${firstApprover(data, data.approvals.find(a => a.status === 'PENDING'))} duyệt`, 'ok'); return; }
     if (act === 'approve' || act === 'reject') {
       const pending = data.approvals.find(a => a.status === 'PENDING');
       const comment = $('#approvalComment', p).value.trim();
@@ -647,7 +647,7 @@ function bind(editable) {
   const on = (sel, fn) => { const el = $(sel, p); if (el) el.onchange = fn; };
   on('#ipState', async e => {
     const to = project.states.find(s => s.id === Number(e.target.value));
-    if (await patch({ stateId: to.id }) && to.category === 'COMPLETED' && data.approvals[0]?.status !== 'APPROVED') toast('Đã chuyển vào "Chờ duyệt" — việc thành Hoàn thành khi người giao duyệt và chấm mức', 'ok');
+    if (await patch({ stateId: to.id }) && to.category === 'COMPLETED' && data.approvals[0]?.status !== 'APPROVED') toast(`Đã chuyển vào "Chờ duyệt" — việc thành Hoàn thành khi ${firstApprover(data, data.approvals.find(a => a.status === 'PENDING'))} duyệt và chấm mức`, 'ok');
   });
   on('#ipPriority', e => patch({ priority: e.target.value }));
   on('#ipStart', e => patch({ startDate: fromDateInput(e.target.value) }));
