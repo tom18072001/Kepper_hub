@@ -54,10 +54,13 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
   app.get('/api/weekly/context', auth, async (req, res) => {
     const s = await subjectOf(req);
     const cfg = await weeklyConfig(prisma), rd = await requiredDepartments(prisma, cfg);
-    const now = new Date(), cur = WK.currentFriday(now);
+    const now = new Date(), cur = WK.currentFriday(now), prevWeek = WK.addDays(cur, -7);
+    // Buổi giao ban sáng thứ Hai xét tuần TRƯỚC (tuần hiện tại đã sang tuần mới): giao diện chỉ đường tới tuần đó khi chưa phát hành.
+    const prevMeeting = s.summary ? await meetingOf(prevWeek) : null;
     res.setHeader('Cache-Control', 'private, no-store');
     res.json({
       week: cur, weeks: Array.from({ length: 10 }, (_, k) => WK.addDays(cur, (1 - k) * 7)), schedule: WK.scheduleOf(cur, await meetingOf(cur)),
+      ...(s.summary ? { prev: { week: prevWeek, schedule: WK.scheduleOf(prevWeek, prevMeeting), publishedAt: prevMeeting?.publishedAt || null } } : {}),
       me: { departmentId: req.user.departmentId, role: req.user.role, director: s.director, secretary: s.secretary, pmo: s.pmo, leader: s.leader, mustReport: s.mustReport,
         canManage: s.manage, canSummary: s.summary, canDetail: s.full, canOnBehalf: s.secretary, canConfig: P.can(s, 'edit', 'weekly.config'), canRoles: P.can(s, 'edit', 'weekly.roles'),
         canCompliance: P.can(s, 'view', 'weekly.compliance'), canApprove: s.director },
@@ -386,9 +389,13 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
       if (b.skip !== undefined) data.skip = !!b.skip; // tuần nghỉ Tết / lễ: không giao ban, không chấm điểm
       if (b.deadlineDay !== undefined) { if (b.deadlineDay && (!WK.isDay(b.deadlineDay) || b.deadlineDay > week || b.deadlineDay < WK.addDays(week, -4))) fail(422, 'Hạn nộp phải là một ngày từ thứ Hai đến thứ Sáu của tuần báo cáo', 'INVALID_DATE'); data.deadlineDay = b.deadlineDay || null; }
       if (b.meetingDay !== undefined) { if (b.meetingDay && (!WK.isDay(b.meetingDay) || b.meetingDay <= week || b.meetingDay > WK.addDays(week, 10))) fail(422, 'Ngày giao ban phải sau thứ Sáu của tuần báo cáo', 'INVALID_DATE'); data.meetingDay = b.meetingDay || null; }
+      // Điểm danh và phát hành chỉ từ giờ giao ban (theo ngày họp đã đổi nếu có) — chặn bấm nhầm trước buổi họp.
+      const S = WK.scheduleOf(week, data), started = WK.meetingStarted(S, now);
+      const notYet = what => fail(409, `Chưa tới giờ giao ban (${WK.fmtTime(S.meetingAt)}) — ${what} từ giờ họp`, 'MEETING_NOT_STARTED');
       if (b.attendance !== undefined) {
         const att = {};
         for (const [k, v] of Object.entries(b.attendance || {})) if (depts.has(Number(k)) && WK.ATTENDANCE[v]) att[Number(k)] = v;
+        if (!started && WK.stableStringify(att) !== WK.stableStringify(data.attendance || {})) notYet('điểm danh');
         data.attendance = att;
       }
       if (b.failed !== undefined) { const f = {}; for (const [k, v] of Object.entries(b.failed || {})) if (depts.has(Number(k)) && v) f[Number(k)] = true; data.failed = f; }
@@ -417,6 +424,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
         }).filter(Boolean);
       }
       const publish = b.publish === true && !existing?.publishedAt; // kiểm trong khoá: bấm hai lần không phát hành hai lần
+      if (publish && !started) notYet('phát hành kết luận và Action Log');
       if (publish) {
         const missing = helps.filter(h => !data.conclusions?.[h.key]);
         if (missing.length) fail(422, `Còn ${missing.length} yêu cầu hỗ trợ chưa có kết luận của TGĐ`, 'CONCLUSION_MISSING');

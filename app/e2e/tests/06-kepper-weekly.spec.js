@@ -23,6 +23,7 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   await expect(nv.getByTestId('wk-tab-diem')).toHaveCount(0);
   const ctx0 = await (await apiAs(nv, '/api/weekly/context')).json();
   const week = ctx0.week;
+  const addDays = (s, n) => new Date(Date.parse(s + 'T00:00:00Z') + n * 86_400_000).toISOString().slice(0, 10);
   const rep0 = await (await apiAs(nv, '/api/weekly/report')).json();
   const linked = [...rep0.prefill.results, ...rep0.prefill.ongoing, ...rep0.prefill.plans].filter(r => r.itemId);
   expect(linked.length).toBeGreaterThan(0);
@@ -144,39 +145,54 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   const notif = await (await apiAs(gd, '/api/notifications')).json();
   expect(notif.items.some(n => n.type === 'WEEKLY_NOTICE' && /Ban Tài chính báo nộp báo cáo tuần muộn/.test(n.title))).toBe(true);
 
-  // 9) Tổng hợp: KPI, tình trạng nộp, yêu cầu hỗ trợ gom theo nơi nhận; điểm danh; kết luận TGĐ → Action Log → phát hành.
+  // 9) Tổng hợp: KPI, tình trạng nộp, yêu cầu hỗ trợ gom theo nơi nhận.
   await expect(gd.getByTestId('wk-kpis')).toContainText('1/5');
   await expect(gd.getByTestId(`wk-srow-${D('PL').id}`)).toContainText('Tô Minh Khoa');
   await expect(gd.getByTestId(`wk-srow-${D('TC').id}`)).toContainText('báo muộn');
   await expect(gd.getByTestId('wk-helps')).toContainText('Gửi Ban Giám đốc');
-  await gd.getByTestId(`wk-att-${D('TC').id}`).selectOption('ABSENT');
-  await toast(gd, 'Đã ghi điểm danh');
-  // Phát hành khi còn yêu cầu chưa kết luận → bị chặn (TGĐ kết luận TỪNG yêu cầu).
-  await gd.getByTestId('wk-act-publish').click();
-  await toast(gd, 'chưa có kết luận của TGĐ');
+  // 9a) Trước giờ giao ban (tuần hiện tại luôn họp vào thứ Hai SAU tuần đó): ô Điểm danh và nút Phát hành bị khoá, ghi rõ lý do;
+  // máy chủ cũng chặn (gọi API thẳng). Cột "Không đạt" vẫn chọn-là-lưu, hiện "Đã lưu ✓" rồi mờ đi.
+  await expect(gd.getByTestId(`wk-att-${D('TC').id}`)).toBeDisabled();
+  await expect(gd.getByTestId('wk-att-note')).toContainText('điểm danh mở từ 08:30');
+  await expect(gd.getByTestId('wk-act-publish')).toBeDisabled();
+  await expect(gd.getByTestId('wk-publish-lock')).toContainText('Chưa tới giờ giao ban: nút mở lúc 08:30');
+  // Buổi giao ban gần nhất xét tuần TRƯỚC (chưa phát hành): có lối mở thẳng bản tổng hợp tuần đó.
+  await expect(gd.getByTestId('wk-prev-meeting-link')).toHaveAttribute('href', `#/tuan/tong-hop?w=${addDays(week, -7)}`);
+  const putMeeting = (page, data) => apiAs(page, '/api/weekly/meeting', { method: 'PUT', headers: { 'content-type': 'application/json' }, data });
+  for (const data of [{ week, publish: true }, { week, attendance: { [D('TC').id]: 'ABSENT' } }]) {
+    const early = await putMeeting(gd, data);
+    expect(early.status()).toBe(409);
+    expect((await early.json()).code).toBe('MEETING_NOT_STARTED');
+  }
+  const failedPL = gd.locator(`[data-failed="${D('PL').id}"]`);
+  await failedPL.check();
+  await expect(gd.getByTestId('wk-att-saved')).toHaveText('Đã lưu ✓');
+  await expect(gd.getByTestId('wk-att-saved')).toHaveText('', { timeout: 5000 });
+  await failedPL.uncheck();
+  await expect(gd.getByTestId('wk-att-saved')).toHaveText('Đã lưu ✓');
+  // Kết luận TGĐ và Action Log soạn / lưu trước giờ họp được (chỉ phát hành mới phải đợi).
   const helps = await gd.getByTestId('wk-helpitem').all();
   for (const h of helps.slice(1)) await h.locator('select[data-hk="decision"]').selectOption('APPROVE');
   const help = helps[0];
   await help.locator('select[data-hk="decision"]').selectOption('ASSIGN');
   await help.locator('select[data-hk="departmentId"]').selectOption(String(D('TC').id));
-  await toast(gd, 'Đã lưu kết luận');
+  await expect(help.getByTestId('wk-help-saved')).toHaveText('Đã lưu ✓');
   await help.locator('[data-toact]').click();
   await expect(gd.getByTestId('wk-act-task-0')).not.toHaveValue('');
   await expect(gd.getByTestId('wk-act-dept-0')).toHaveValue(String(D('TC').id));
   await gd.getByTestId('wk-act-owner-0').selectOption({ index: 1 }); // Action Log: Việc · Phụ trách · Hạn (bắt buộc)
-  await gd.getByTestId('wk-act-publish').click();
-  await toast(gd, 'Đã phát hành kết luận và Action Log');
+  await gd.getByTestId('wk-act-save').click();
+  await toast(gd, 'Đã lưu Action Log');
   await expect(gd.getByTestId('wk-act-publish')).toBeDisabled();
-  // Action Log vào Phần I báo cáo tuần sau của bộ phận được giao, nguồn "TGĐ giao".
-  const next = new Date(Date.parse(week + 'T00:00:00Z') + 7 * 86_400_000).toISOString().slice(0, 10);
-  const tcNext = await (await apiAs(tc, `/api/weekly/report?week=${next}`)).json();
-  expect(tcNext.prefill.results.some(r => r.source === 'TGĐ giao' && r.actionRef === `${week}:1`)).toBe(true);
   const sum = await (await apiAs(gd, '/api/weekly/summary')).json();
   expect(Object.values(sum.meeting.conclusions).some(c => c.decision === 'ASSIGN' && c.departmentId === D('TC').id)).toBe(true);
+  expect(sum.meeting.actions.length).toBe(1);
+  expect(sum.publishedAt).toBe(null);
 
-  // 10) Sao chép bản tổng hợp: nhãn Bảo mật, không có họ tên người phụ trách; ghi nhật ký.
+  // 10) Sao chép bản tổng hợp: nút báo "Đã sao chép ✓"; nhãn Bảo mật, không có họ tên người phụ trách; ghi nhật ký.
   await gd.getByTestId('wk-copy').click();
-  await expect(gd.locator('#copyMsg')).toContainText(/Đã sao chép|Bôi đen sẵn/);
+  await expect(gd.locator('#copyMsg')).toContainText(/Đã sao chép ✓|Bôi đen sẵn/);
+  if (/Đã sao chép/.test(await gd.locator('#copyMsg').textContent())) await expect(gd.getByTestId('wk-copy')).toHaveText('Đã sao chép ✓');
   const text = await gd.evaluate(() => navigator.clipboard.readText().catch(() => document.querySelector('#copyFallback').value));
   expect(text.startsWith('BẢO MẬT – chỉ dùng nội bộ')).toBe(true);
   expect(text).toContain('Ban Pháp lý →');
@@ -208,10 +224,64 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   const versions = await (await apiAs(gd, `/api/weekly/report/versions?week=${week}&departmentId=${D('GR').id}`)).json();
   expect(versions.length).toBe(1); expect(versions[0].sha256).toMatch(/^[0-9a-f]{64}$/);
 
+  // 11b) Tuần đã họp xong (hai tuần trước — giờ giao ban chắc chắn đã qua): điểm danh mở; nút phát hành qua bước xác nhận
+  // vẽ ngay trên trang (Huỷ thì không phát hành); còn yêu cầu chưa kết luận thì máy chủ chặn; kết luận đủ → phát hành.
+  const past = addDays(week, -14);
+  const prePast = (await (await apiAs(hc, `/api/weekly/report?week=${past}&departmentId=${D('GR').id}`)).json()).prefill;
+  for (const x of [...prePast.results, ...prePast.ongoing]) Object.assign(x, { ownerIds: x.ownerIds.length ? x.ownerIds : [gr.id], cause: 'Chờ (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF', next: x.next || 'Tiếp tục (giả)' });
+  prePast.results.push({ task: 'Xin chủ trương GPMB (giả)', source: 'Phát sinh', ownerIds: [gr.id], due: addDays(past, 3), status: 'Vướng', pct: 20,
+    cause: 'Chờ ý kiến (giả)', solution: 'Báo cáo Ban GĐ (giả)', helpFrom: 'BGD', helpWhat: 'Ban GĐ làm việc với phường (giả)', helpBy: addDays(past, 7) });
+  if (!prePast.plans.length) prePast.plans.push({ task: 'Họp dân (giả)', basis: 'KH tháng', ownerIds: [gr.id], due: addDays(past, 6) });
+  for (const p of prePast.plans) Object.assign(p, { ownerIds: p.ownerIds?.length ? p.ownerIds : [gr.id], output: 'Biên bản (giả)' });
+  const subPast = await apiAs(hc, '/api/weekly/submit', { method: 'POST', headers: { 'content-type': 'application/json' }, data: { week: past, departmentId: D('GR').id, data: prePast } });
+  expect(subPast.status(), await subPast.text()).toBe(200);
+  await gd.goto(`/#/tuan/tong-hop?w=${past}`);
+  await expect(gd.getByTestId('wk-week')).toHaveValue(past);
+  await expect(gd.getByTestId('wk-publish-lock')).toBeHidden();
+  await expect(gd.getByTestId('wk-att-note')).toHaveText('chọn là lưu ngay');
+  await gd.getByTestId(`wk-att-${D('TC').id}`).selectOption('ABSENT');
+  await expect(gd.getByTestId('wk-att-saved')).toHaveText('Đã lưu ✓');
+  await gd.getByTestId('wk-act-publish').click();
+  await expect(gd.getByTestId('wk-publish-confirm')).toContainText('Phát hành kết luận giao ban và Action Log tuần');
+  await expect(gd.getByTestId('wk-publish-missing')).toContainText(/Còn \d+ yêu cầu hỗ trợ chưa có kết luận/);
+  await gd.getByTestId('wk-publish-no').click();
+  await expect(gd.getByTestId('wk-publish-confirm')).toHaveCount(0);
+  await expect(gd.getByTestId('wk-act-publish')).toBeFocused();
+  await gd.getByTestId('wk-act-publish').click();
+  await gd.getByTestId('wk-publish-yes').click();
+  await toast(gd, 'chưa có kết luận của TGĐ'); // TGĐ kết luận TỪNG yêu cầu trước khi phát hành
+  const pastHelps = await gd.getByTestId('wk-helpitem').all();
+  for (const h of pastHelps.slice(1)) await h.locator('select[data-hk="decision"]').selectOption('APPROVE');
+  await pastHelps[0].locator('select[data-hk="decision"]').selectOption('ASSIGN');
+  await pastHelps[0].locator('select[data-hk="departmentId"]').selectOption(String(D('TC').id));
+  await expect(pastHelps[0].getByTestId('wk-help-saved')).toHaveText('Đã lưu ✓');
+  await pastHelps[0].locator('[data-toact]').click();
+  await gd.getByTestId('wk-act-owner-0').selectOption({ index: 1 });
+  await gd.getByTestId('wk-act-publish').click();
+  await expect(gd.getByTestId('wk-publish-missing')).toHaveCount(0);
+  await gd.getByTestId('wk-publish-yes').click();
+  await toast(gd, 'Đã phát hành kết luận và Action Log');
+  await expect(gd.getByTestId('wk-act-publish')).toHaveText('Đã phát hành');
+  await expect(gd.getByTestId('wk-act-publish')).toBeDisabled();
+  // Action Log vào Phần I báo cáo tuần sau của bộ phận được giao, nguồn "TGĐ giao".
+  const tcNext = await (await apiAs(tc, `/api/weekly/report?week=${addDays(past, 7)}`)).json();
+  expect(tcNext.prefill.results.some(r => r.source === 'TGĐ giao' && r.actionRef === `${past}:1`)).toBe(true);
+
   // 12) Chấm điểm tuân thủ tháng: tháng chưa khép thì chưa trình / duyệt; tháng trước: thư ký trình → TGĐ duyệt → khoá.
   await hc.goto('/#/tuan/diem');
   await expect(hc.getByTestId('wk-score').locator('tr')).toHaveCount(5);
   await expect(hc.getByTestId('wk-score-open')).toBeVisible();
+  // Bộ phận chưa có trưởng bộ phận (dữ liệu mẫu đều có → giả lập một bộ phận thiếu bằng cách sửa phản hồi API): báo rõ, không để ô trống.
+  const isCompliance = url => url.pathname === '/api/weekly/compliance';
+  await hc.route(isCompliance, async route => {
+    const res = await route.fetch(), j = await res.json();
+    j.rows[0].leaders = [];
+    await route.fulfill({ response: res, json: j });
+  });
+  await hc.reload();
+  await expect(hc.getByTestId('wk-no-leader')).toContainText('1 bộ phận chưa có trưởng bộ phận');
+  await expect(hc.getByTestId('wk-score').getByText('Chưa có trưởng bộ phận')).toHaveCount(1);
+  await hc.unroute(isCompliance);
   await expect(hc.getByTestId('wk-score-submit')).toHaveCount(0);
   expect((await apiAs(hc, '/api/weekly/compliance/submit', { method: 'POST', headers: { 'content-type': 'application/json' }, data: { month: week.slice(0, 7) } })).status()).toBe(409);
   // Hai tháng trước: luôn đã khép (tháng liền trước có thể chưa khép vào sáng thứ Hai đầu tháng).
@@ -227,6 +297,16 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   await hc.goto('/#/tuan');
   await expect(hc.getByTestId('wk-tab-tong-hop')).toHaveAttribute('aria-selected', 'true');
   await expect(hc.getByTestId('wk-tab-diem')).toBeVisible();
+  // Thứ tự tab theo tần suất dùng; không còn tab "Tiến độ dự án" (link cũ chuyển sang trang Tiến độ dự án).
+  await expect(hc.locator('.wk-tabs a')).toHaveText(['Tổng hợp', 'Nộp báo cáo', 'Chấm điểm', 'Báo muộn / vắng']);
+  // Ô chọn tuần: tuần hiện tại đầu danh sách, tuần sau ở cuối.
+  const weekOpts = hc.getByTestId('wk-week').locator('option');
+  await expect(weekOpts.first()).toHaveAttribute('value', week);
+  await expect(weekOpts.first()).toContainText('tuần này');
+  await expect(weekOpts.last()).toHaveAttribute('value', addDays(week, 7));
+  await expect(weekOpts.last()).toContainText('tuần sau');
+  await hc.goto('/#/tuan/tien-do');
+  await expect(hc).toHaveURL(/#\/home$/);
   expect((await apiAs(kd, '/api/weekly/compliance')).status()).toBe(403);
   const audit = async action => (await (await apiAs(admin, `/api/admin/audit?action=${action}`)).json()).total;
   expect(await audit('WEEKLY_REPORT_SUBMIT')).toBeGreaterThanOrEqual(2);
