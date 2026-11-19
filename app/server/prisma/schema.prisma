@@ -510,6 +510,7 @@ model ApprovalRequest {
   totalLevels   Int
   fromStateId   Int? // trạng thái trước khi gửi duyệt, để trả lại khi bị từ chối
   withAssigner  Boolean          @default(false) // true: cấp 1 = người giao duyệt + chấm mức hoàn thành; cấp k > 1 = bước k-1 của dự án
+  withBoard     Boolean          @default(false) // true (việc mốc / đường găng lúc gửi duyệt): cấp 1 = Ban Giám đốc của việc duyệt + chấm mức, thay người giao
   requestedById Int
   createdAt     DateTime         @default(now())
   closedAt      DateTime?

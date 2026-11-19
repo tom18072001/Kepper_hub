@@ -270,3 +270,68 @@ test('Q7. Ban Giám đốc toàn quyền (quản trị đánh dấu riêng) sử
   expect((await apiAs(board, `/api/items/${step8.id}`, { method: 'PATCH', data: { priority: 'LOW' } })).status()).toBe(403);
   expect(JSON.stringify(await json(await apiAs(admin, '/api/admin/audit?action=BOARD_ALL_UPDATE')))).toContain('BOARD_ALL_UPDATE');
 });
+
+test('Q8. Việc mốc / đường găng: Ban Giám đốc của việc duyệt và chấm mức thay người giao; Ban Giám đốc là người chủ trì thì Ban Giám đốc khác duyệt', async ({ browser }) => {
+  const U = ctx.U, D = ctx.D;
+  const pmo = await as(browser, 'pmo'); // người giao, không thuộc Ban Giám đốc
+  const states = (await json(await apiAs(pmo, `/api/projects/${ctx.projectId}`))).states;
+  const REVIEW = states.find(s => s.category === 'REVIEW').id;
+  const due = new Date(Date.now() + 15 * 86_400_000).toISOString();
+  const create = async data => json(await apiAs(pmo, `/api/projects/${ctx.projectId}/items`, { method: 'POST', data: { dueDate: due, ...data } }));
+
+  // a) Việc đường găng, Phòng Kinh doanh chủ trì: người duyệt = Ban Giám đốc toàn quyền + PGĐ phụ trách Kinh doanh; người giao (PMO) không duyệt.
+  const crit = await create({ title: 'Ký hợp đồng thuê phòng họp (giả)', leadDepartmentId: D('KD').id, assigneeIds: [U('nv.kinhdoanh1').id], critical: true });
+  expect((await apiAs(pmo, `/api/items/${crit.id}`, { method: 'PATCH', data: { stateId: REVIEW } })).status()).toBe(403); // người giao không gửi duyệt thay
+  const lead = await as(browser, 'nv.kinhdoanh1');
+  await json(await apiAs(lead, `/api/items/${crit.id}`, { method: 'PATCH', data: { stateId: REVIEW } }));
+  const d = await json(await apiAs(pmo, `/api/items/${crit.id}`));
+  expect(d.approvalSteps[0]).toMatchObject({ approverType: 'BOARD', name: 'Ban Giám đốc duyệt' });
+  expect(d.stepApprovers['1']).toEqual(expect.arrayContaining(['Trần Minh Giám', 'Phó GĐ Kinh doanh (giả)']));
+  expect(d.stepApprovers['1']).not.toContain('Đặng Quốc Minh');
+  expect(d.stage.label).toBe('Chờ Ban Giám đốc duyệt');
+  expect(d.canApprove).toBe(false);
+  const pending = d.approvals.find(a => a.status === 'PENDING');
+  expect((await json(await apiAs(pmo, '/api/approvals/queue'))).some(q => q.item.id === crit.id)).toBe(false);
+  expect((await apiAs(pmo, `/api/approvals/${pending.id}/approve`, { method: 'POST', data: { rating: 'GOOD' } })).status()).toBe(403);
+  // "Chờ tôi duyệt" và thông báo "Cần duyệt" tới đúng Ban Giám đốc của việc.
+  const tgd = await as(browser, 'giamdoc');
+  const pgd = await as(browser, PGD);
+  for (const page of [tgd, pgd]) {
+    const q = (await json(await apiAs(page, '/api/approvals/queue'))).find(x => x.item.id === crit.id);
+    expect(q).toMatchObject({ ratingRequired: true, stepName: 'Ban Giám đốc duyệt' });
+    expect((await json(await apiAs(page, '/api/notifications'))).items.some(n => n.type === 'APPROVAL_REQUESTED' && n.link.endsWith(`item=${crit.id}`))).toBe(true);
+  }
+  expect((await json(await apiAs(pmo, '/api/notifications'))).items.some(n => n.type === 'APPROVAL_REQUESTED' && n.link.endsWith(`item=${crit.id}`))).toBe(false);
+  // Ban Giám đốc toàn quyền duyệt + chấm mức trên giao diện.
+  const panel = await openItem(tgd, ctx.projectId, crit.id);
+  await panel.getByTestId('rating-GOOD').check();
+  await panel.getByTestId('approval-comment').fill('Đúng tiến độ găng (giả)');
+  await panel.getByTestId('approve-btn').click();
+  await expect(tgd.locator('.toast', { hasText: 'Đã duyệt' }).first()).toBeVisible();
+  const done = await json(await apiAs(lead, `/api/items/${crit.id}`));
+  expect(done.state.category).toBe('COMPLETED');
+  expect(done.assessment).toMatchObject({ rating: 'GOOD', by: 'Trần Minh Giám', comment: 'Đúng tiến độ găng (giả)' });
+
+  // b) Việc mốc mà Ban Giám đốc toàn quyền chính là người chủ trì → Ban Giám đốc toàn quyền khác duyệt.
+  const admin = await as(browser, 'admin');
+  const board = (await json(await apiAs(admin, '/api/users/directory'))).find(u => u.username === 'bgd.toanquyen');
+  await json(await apiAs(admin, `/api/admin/users/${board.id}/board`, { method: 'PUT', data: { boardAll: true } }));
+  const ms = await create({ title: 'Mốc khai trương phòng họp (giả)', leadDepartmentId: D('PL').id, assigneeIds: [U('giamdoc').id], milestone: true });
+  await json(await apiAs(tgd, `/api/items/${ms.id}`, { method: 'PATCH', data: { stateId: REVIEW } }));
+  const m = await json(await apiAs(pmo, `/api/items/${ms.id}`));
+  expect(m.stepApprovers['1']).toContain('Phó TGĐ toàn quyền (giả)');
+  expect(m.stepApprovers['1']).not.toContain('Trần Minh Giám');
+  const mp = m.approvals.find(a => a.status === 'PENDING');
+  expect((await (await apiAs(tgd, `/api/approvals/${mp.id}/approve`, { method: 'POST', data: { rating: 'GOOD' } })).json()).code).toBe('SELF_APPROVAL');
+  const bgd = await as(browser, 'bgd.toanquyen');
+  await json(await apiAs(bgd, `/api/approvals/${mp.id}/approve`, { method: 'POST', data: { rating: 'PASS', comment: 'Đạt (giả)' } }));
+  expect((await json(await apiAs(pmo, `/api/items/${ms.id}`))).state.category).toBe('COMPLETED');
+
+  // c) Việc thường (không mốc, không găng): người giao duyệt như cũ.
+  const normal = await create({ title: 'In biển tên phòng họp (giả)', leadDepartmentId: D('KD').id, assigneeIds: [U('nv.kinhdoanh1').id] });
+  await json(await apiAs(lead, `/api/items/${normal.id}`, { method: 'PATCH', data: { stateId: REVIEW } }));
+  const n = await json(await apiAs(pmo, `/api/items/${normal.id}`));
+  expect(n.approvalSteps[0].approverType).toBe('ASSIGNER');
+  expect(n.canApprove).toBe(true);
+  expect((await json(await apiAs(tgd, '/api/approvals/queue'))).some(q => q.item.id === normal.id)).toBe(false);
+});

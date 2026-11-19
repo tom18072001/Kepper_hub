@@ -4,9 +4,10 @@
 export const WORK_FROM = ['BACKLOG', 'UNSTARTED', 'STARTED'];
 export const WORK_TO = ['BACKLOG', 'UNSTARTED', 'STARTED', 'REVIEW', 'COMPLETED'];
 
-// state: 'ALL' (người giao / Ban Giám đốc) | 'WORK' (người chủ trì) | null.
-export function canMove(state, fromCategory, toCategory) {
+// state: 'ALL' (người giao / Ban Giám đốc) | 'WORK' (người chủ trì) | null; submit: gửi duyệt (chỉ người chủ trì).
+export function canMove(state, fromCategory, toCategory, submit = false) {
   if (!state) return false;
+  if (fromCategory !== toCategory && ['REVIEW', 'COMPLETED'].includes(toCategory) && !submit) return false;
   if (state === 'ALL') return true;
   if (fromCategory === toCategory) return WORK_FROM.includes(fromCategory);
   return WORK_FROM.includes(fromCategory) && WORK_TO.includes(toCategory);

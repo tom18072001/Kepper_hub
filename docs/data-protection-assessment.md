@@ -892,6 +892,10 @@ người giao và tự viết "Đánh giá của người giao" của việc do 
   báo cáo tiến độ, đánh giá, bình luận; tải / xem trước tệp bị chặn; thẻ trên Bảng bỏ mô tả, số văn bản, số bình luận / tệp.
 - **Đánh giá** = mức chấm + nhận xét lúc duyệt (`ApprovalAction`). Bỏ ô viết tay; duyệt **không còn ghi đè / xoá** `WorkItem.review` — nội dung cũ chỉ đọc.
 - **Gia hạn:** Ban Giám đốc của việc duyệt mọi đề nghị (trước: người giao / lãnh đạo phòng). **Xoá tệp / văn bản:** chỉ người đã gửi.
+- **Gửi duyệt** là bước của người chủ trì (người giao / Ban Giám đốc không gửi duyệt thay; vẫn duyệt, tạm dừng, huỷ, mở lại).
+- **Việc mốc hoặc đường găng:** khi gửi duyệt hoàn thành, cấp 1 của phiếu là **Ban Giám đốc của việc** (Ban Giám đốc toàn quyền + PGĐ phụ trách
+  bộ phận chủ trì) duyệt và chấm mức, thay người giao (chốt trên phiếu lúc gửi — `ApprovalRequest.withBoard`, migration `20261120120000`).
+  Người chủ trì không tự duyệt; Ban Giám đốc đồng thời là người chủ trì thì Ban Giám đốc khác duyệt; chưa có ai thì người giao duyệt như việc thường.
 - **Nhập lại MTL** chỉ thêm bước mới, bước đã có giữ nguyên (bỏ tuỳ chọn đặt lại kế hoạch gốc khi nhập).
 - **Bỏ Checklist:** migration `20261120100000_bo_checklist_thanh_viec_nhanh` chuyển mỗi mục thành việc nhánh (cùng người chủ trì; người giao =
   người chủ trì việc cha; mục đã xong → Hoàn thành ghi thẳng, có lịch sử). Bảng `ChecklistItem` giữ lại (không đọc / ghi) với cột `migratedItemId`
@@ -925,7 +929,7 @@ Kèm 3 khuyến nghị cho chủ dự án (mục 4).
 | GOV-01 | Một phần → tốt hơn | Bảng quyền theo vai thành mã (`task-access.js`) + test ma trận vai × trường (`task-access.test.js`) + e2e theo vai (`15-quyen-toi-thieu.spec.js`); văn bản quy chế do phiên khác soạn | Bắt buộc |
 | GOV-02 | Một phần | "Ban Giám đốc của việc" = danh sách Ban Giám đốc toàn quyền (quản trị chọn, có nhật ký) + thiết lập PGĐ phụ trách có sẵn — cần giữ đúng hai thiết lập này; không suy theo phòng, không theo vai director | Bắt buộc |
 | PRE-01 | Đầy đủ | Kiểm quyền ở máy chủ theo từng trường thực sự đổi; giao diện không còn ô cho sửa mà máy chủ trả 403. Người không liên quan không tải được tệp | Bắt buộc |
-| PRE-02 | Đầy đủ | Tách nhiệm: người chủ trì không sửa kế hoạch, không tự đánh giá, không tự gia hạn; không ai tự nhận làm người giao việc chưa có người giao; quản trị không tự đánh dấu mình là Ban Giám đốc toàn quyền | Bắt buộc |
+| PRE-02 | Đầy đủ | Tách nhiệm: người chủ trì không sửa kế hoạch, không tự đánh giá, không tự gia hạn; người giao không gửi duyệt thay; việc mốc / găng do Ban Giám đốc duyệt (người chủ trì là Ban Giám đốc thì người khác duyệt); không ai tự nhận làm người giao việc chưa có người giao; quản trị không tự đánh dấu mình là Ban Giám đốc toàn quyền | Bắt buộc |
 | DET-01 | Đầy đủ | Mọi thay đổi vẫn ghi hoạt động việc + AuditLog như cũ; migration ghi lịch sử cho việc nhánh và việc cha | Bắt buộc |
 | PRI-01 | Đầy đủ | Tối thiểu hoá: U chỉ nhận 5 trường tóm tắt; thẻ danh sách bỏ mô tả / văn bản / số bình luận | Bắt buộc |
 | PRI-02 | Một phần → tốt hơn | Đánh giá cá nhân không còn hiện cho thành viên dự án không liên quan (khuyến nghị đợt "việc con duyệt" nay đã áp dụng một phần) | Bắt buộc |

@@ -154,7 +154,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       ...BOARD_INCLUDE, state: true,
       progressReports: { orderBy: { id: 'desc' }, take: 100 }, extensions: { orderBy: { id: 'desc' } }, documents: { orderBy: { id: 'asc' } }, parent: { select: { id: true, number: true, title: true } }, cycle: true,
       children: { where: { archivedAt: null }, select: { id: true, number: true, title: true, dueDate: true, baselineStart: true, baselineEnd: true, weight: true, startedAt: true, internalDueDate: true, progress: true, completedAt: true, returnedAt: true, dispatchStatus: true,
-        state: { select: { name: true, category: true } }, assignees: { select: { user: { select: { id: true, fullName: true } } } }, approvals: { where: { status: 'PENDING' }, select: { currentLevel: true, withAssigner: true } },
+        state: { select: { name: true, category: true } }, assignees: { select: { user: { select: { id: true, fullName: true } } } }, approvals: { where: { status: 'PENDING' }, select: { currentLevel: true, withAssigner: true, withBoard: true } },
         children: { where: { archivedAt: null }, select: { state: { select: { category: true } } } } }, orderBy: { id: 'asc' } },
       plan: { select: { id: true, name: true, year: true } },
       comments: { orderBy: { id: 'asc' } },
@@ -172,7 +172,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
     // Đang chờ duyệt: hiện đúng số cấp đã chốt lúc gửi; ngược lại: số cấp hiệu lực hiện tại của việc.
     const effective = await approval.levelsForItem(prisma, project, allSteps, { id: item.id, parentId: item.parentId, approvalLevels: item.approvalLevels, priority: item.priority, labelIds: item.labels.map(l => l.labelId) });
     // Chuỗi duyệt: cấp 1 = người giao (bắt buộc chấm mức hoàn thành), sau đó các cấp dự án. Phiếu cũ giữ chuỗi cũ.
-    const steps = pending ? await approval.chainFor(prisma, project, pending) : rules.chainOf(allSteps.slice(0, effective.levels), true);
+    const steps = pending ? await approval.chainFor(prisma, project, pending) : rules.chainOf(allSteps.slice(0, effective.levels), true, { board: rules.isBoardItem(item) });
     const currentStep = pending ? rules.stepAt(steps, pending.currentLevel) : null;
     const canApprove = pending ? await approval.canAct(prisma, req.user, project, pending, item) : false;
     const lastLevel = pending ? pending.currentLevel === pending.totalLevels : false;
@@ -215,7 +215,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       progressReports: item.progressReports.map(r => ({ ...r, authorName: names[r.authorId], answeredByName: names[r.answeredById] || null, forwardedByName: names[r.forwardedById] || null })),
       extensions: item.extensions.map(x => ({ ...x, requestedByName: names[x.requestedById], decidedByName: names[x.decidedById] || null })),
       documents: item.documents.map(d => ({ ...d, createdByName: names[d.createdById] })),
-      lastLevel, ratingRequired: currentStep?.approverType === 'ASSIGNER', ratings: approval.RATINGS, childProgress: rules.childProgress(item.children),
+      lastLevel, ratingRequired: rules.isGradeStep(currentStep), ratings: approval.RATINGS, childProgress: rules.childProgress(item.children),
       // Cờ cũ của giao diện điều hành — suy ra từ `capabilities` (một nguồn quyền).
       can: {
         accept: item.dispatchStatus === 'PENDING' && (caps.assign || caps.assignOwnDept) && !item.archivedAt,

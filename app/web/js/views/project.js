@@ -891,7 +891,7 @@ function bindBoard(body) {
 function dropAllowed(id, stateId) {
   const it = current.items.find(x => x.id === id), states = current.project.states;
   const from = states.find(s => s.id === it?.stateId)?.category, to = states.find(s => s.id === stateId)?.category;
-  return !!it && canMove(it.my?.state, from, to);
+  return !!it && canMove(it.my?.state, from, to, !!it.my?.submit);
 }
 export async function moveItem(id, stateId, afterId, beforeId, overrideWip = false) {
   try {

@@ -124,8 +124,10 @@ async function patch(body) {
 function levelControl(pending) {
   const all = data.allApprovalSteps || [];
   if (!all.length) return '';
-  const extra = data.approvalSteps.filter(s => s.approverType !== 'ASSIGNER').length;
-  const label = n => n === 0 ? 'Chỉ người giao duyệt' : n >= all.length ? `Người giao → đủ ${all.length} cấp (${all.map(s => s.name).join(' → ')})` : `Người giao → ${n} cấp: ${all.slice(0, n).map(s => s.name).join(' → ')}`;
+  const extra = data.approvalSteps.filter(s => s.approverType !== 'ASSIGNER' && s.approverType !== 'BOARD').length;
+  // Việc mốc / đường găng: cấp 1 là Ban Giám đốc của việc (thay người giao).
+  const first = data.approvalSteps[0]?.approverType === 'BOARD' ? 'Ban Giám đốc' : 'Người giao';
+  const label = n => n === 0 ? `Chỉ ${first.toLowerCase()} duyệt` : n >= all.length ? `${first} → đủ ${all.length} cấp (${all.map(s => s.name).join(' → ')})` : `${first} → ${n} cấp: ${all.slice(0, n).map(s => s.name).join(' → ')}`;
   const source = { MANUAL: 'chọn tay', RULE: 'theo quy tắc tự động', DEFAULT: 'mặc định của dự án', CHILD: 'việc nhánh — lãnh đạo phòng duyệt' }[data.approvalSource] || '';
   if (!capsOf(data).approvalLevels || pending || data.archivedAt) return `<p class="muted sm" data-testid="approval-level-text">Mức duyệt: <b>${esc(label(extra))}</b>${source ? ` · ${source}` : ''}</p>`;
   const opts = [['', data.approvalSource === 'MANUAL' ? 'Tự động (theo quy tắc / mặc định dự án)' : `Tự động — ${extra === 0 ? 'chỉ người giao' : extra >= all.length ? `người giao + đủ ${all.length} cấp` : `người giao + ${extra} cấp`}`], ...Array.from({ length: all.length + 1 }, (_, n) => [String(n), label(n)])];
@@ -461,8 +463,8 @@ function render() {
       <div class="ip-side">
         <div class="ip-core">
         <label class="${project.visibility === 'ASSIGNED' ? 'lite-hide' : ''}">Trạng thái${c.state ? `<select id="ipState" data-testid="item-state" title="Trạng thái (S)">${states.map(s => { const done = s.category === 'COMPLETED' && s.id !== d.stateId && !approvedNow, doneLock = done && (d.state.category === 'REVIEW' || d.childProgress?.open > 0);
-          const ruleLock = s.id !== d.stateId && !canMove(c.state, d.state.category, s.category);
-          const locked = s.id !== d.stateId && (doneLock || ruleLock); return `<option value="${s.id}"${s.id === d.stateId ? ' selected' : ''}${locked ? ' disabled' : ''}>${stateLabel(s)}${locked ? (ruleLock ? ' (người giao / Ban Giám đốc)' : d.state.category === 'REVIEW' ? ' (đang chờ người giao duyệt)' : ' (còn việc con chưa duyệt)') : done ? ' → gửi người giao duyệt' : ''}</option>`; }).join('')}</select>` : `<div class="side-text" data-testid="item-state">${stateLabel(d.state)}</div>`}</label>
+          const ruleLock = s.id !== d.stateId && !canMove(c.state, d.state.category, s.category, !!c.submit);
+          const locked = s.id !== d.stateId && (doneLock || ruleLock); return `<option value="${s.id}"${s.id === d.stateId ? ' selected' : ''}${locked ? ' disabled' : ''}>${stateLabel(s)}${locked ? (ruleLock ? (['REVIEW', 'COMPLETED'].includes(s.category) ? ' (người chủ trì gửi duyệt)' : ' (người giao / Ban Giám đốc)') : d.state.category === 'REVIEW' ? ' (đang chờ người giao duyệt)' : ' (còn việc con chưa duyệt)') : done ? ' → gửi người giao duyệt' : ''}</option>`; }).join('')}</select>` : `<div class="side-text" data-testid="item-state">${stateLabel(d.state)}</div>`}</label>
         <label class="lite-hide">Ưu tiên${fe ? `<select id="ipPriority" data-testid="item-priority" title="Ưu tiên (P)">${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}"${k === d.priority ? ' selected' : ''}>${v.label}</option>`).join('')}</select>` : `<div class="side-text" data-testid="item-priority">${esc(PRIORITY[d.priority]?.label || '—')}</div>`}</label>
         <div class="side-progress ${project.kind === 'MTL' || d.progress ? '' : 'lite-hide'}"><span class="side-h" id="ipProgLabel">Tiến độ</span>
           <div class="row progress-view" role="meter" aria-labelledby="ipProgLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pctNow}"><span class="progress"><i style="width:${pctNow}%"></i></span><b data-testid="item-progress">${pctNow}%</b></div>

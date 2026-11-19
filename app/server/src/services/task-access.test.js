@@ -62,7 +62,7 @@ const MATRIX = {
   extension:      [false, false, false, true,  false, false, false, false, false, false],
   decideExtension:[false, true,  true,  false, false, false, false, false, false, false],
   children:       [true,  true,  true,  true,  false, false, false, false, false, false],
-  submit:         [true,  true,  true,  true,  false, false, false, false, false, false],
+  submit:         [false, false, false, true,  false, false, false, false, false, false], // gửi duyệt: chỉ người chủ trì
   docsGive:       [true,  true,  true,  false, false, false, false, false, false, false],
   docsBack:       [false, false, false, true,  true,  false, false, false, false, false],
   comment:        [true,  true,  true,  true,  true,  true,  true,  true,  false, true],
@@ -121,7 +121,14 @@ test('trạng thái: người chủ trì Chưa bắt đầu → Đang thực hi�
   assert.equal(TA.canMove(l, 'STARTED', 'OTHER'), false); // "Tạm dừng" (MTL) là của người giao / BGĐ
   assert.equal(TA.canMove(l, 'REVIEW', 'STARTED'), false);
   assert.equal(TA.canMove(l, 'COMPLETED', 'STARTED'), false); // mở lại: người giao / BGĐ
-  for (const [f, t] of [['STARTED', 'CANCELLED'], ['COMPLETED', 'STARTED'], ['STARTED', 'OTHER'], ['CANCELLED', 'UNSTARTED']]) assert.equal(TA.canMove(a, f, t), true);
+  for (const [f, t] of [['STARTED', 'CANCELLED'], ['COMPLETED', 'STARTED'], ['STARTED', 'OTHER'], ['CANCELLED', 'UNSTARTED'], ['REVIEW', 'STARTED']]) assert.equal(TA.canMove(a, f, t), true);
+  // Người giao / BGĐ không gửi duyệt thay người chủ trì (vào "Chờ duyệt" hay chọn "Hoàn thành" khi chưa duyệt); duyệt qua phiếu.
+  for (const [f, t] of [['STARTED', 'REVIEW'], ['STARTED', 'COMPLETED'], ['UNSTARTED', 'COMPLETED']]) assert.equal(TA.canMove(a, f, t), false, `${f} → ${t}`);
+  assert.equal(TA.canMove(capsOf(U.tgd), 'STARTED', 'COMPLETED'), false);
+  // Người giao đồng thời là người chủ trì (tự giao cho mình): gửi duyệt được.
+  const self = capsOf(U.assigner, item({ assigneeIds: [3] }));
+  assert.equal(self.submit, true);
+  assert.equal(TA.canMove(self, 'STARTED', 'COMPLETED'), true);
   assert.equal(TA.canMove(capsOf(U.support), 'UNSTARTED', 'STARTED'), false);
   assert.equal(TA.canMove(capsOf(U.deptLead), 'UNSTARTED', 'STARTED'), false);
   // Việc đã xong: người chủ trì không đổi gì nữa.

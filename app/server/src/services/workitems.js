@@ -12,7 +12,7 @@ const BOARD_INCLUDE = {
   assignees: { include: { user: { select: { id: true, fullName: true, username: true } } } },
   supporters: { include: { user: { select: { id: true, fullName: true, username: true } } } },
   labels: { include: { label: true } },
-  approvals: { where: { status: 'PENDING' }, select: { id: true, currentLevel: true, totalLevels: true, withAssigner: true } },
+  approvals: { where: { status: 'PENDING' }, select: { id: true, currentLevel: true, totalLevels: true, withAssigner: true, withBoard: true } },
   // Việc con hiện ở mọi view: nhãn việc cha + tiến độ con x/y.
   parent: { select: { id: true, number: true, title: true } },
   children: { where: { archivedAt: null }, select: { state: { select: { category: true } } } },

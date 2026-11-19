@@ -43,7 +43,7 @@ const MESSAGES = {
   selfAssigner: 'Không tự nhận làm người giao của việc chưa có người giao',
   delete: 'Chỉ người giao hoặc Ban Giám đốc xoá việc',
   recur: 'Chỉ người giao hoặc Ban Giám đốc đặt lặp lại việc',
-  state: 'Bạn không đổi được trạng thái này — người chủ trì: Chưa bắt đầu → Đang thực hiện → Gửi duyệt; người giao / Ban Giám đốc: duyệt hoàn thành, tạm dừng, huỷ, mở lại',
+  state: 'Bạn không đổi được trạng thái này — người chủ trì: Chưa bắt đầu → Đang thực hiện → Gửi duyệt; người giao / Ban Giám đốc: duyệt hoàn thành (qua phiếu duyệt), tạm dừng, huỷ, mở lại',
   progress: 'Tiến độ, khó khăn, kiến nghị, dự báo hoàn thành do người chủ trì cập nhật',
   submit: 'Chỉ người chủ trì gửi duyệt / nộp sản phẩm',
   extension: 'Chỉ người chủ trì đề nghị gia hạn',
@@ -125,7 +125,7 @@ function taskCapabilities(user, item, ctx = {}) {
     recur: plan,
     state: live && boss ? 'ALL' : open && L ? 'WORK' : null,
     progress: open && L,
-    submit: open && (L || boss),
+    submit: open && L, // gửi duyệt là bước của người chủ trì (người giao / BGĐ duyệt, tạm dừng, huỷ, mở lại)
     extension: open && L,
     decideExtension: write && B,
     children: (live && boss) || (open && L),
@@ -144,9 +144,12 @@ function taskCapabilities(user, item, ctx = {}) {
   return caps;
 }
 
-// Đổi trạng thái: người giao / Ban Giám đốc mọi trạng thái; người chủ trì chỉ trong nhóm đang làm và gửi duyệt.
+// Đổi trạng thái: người chủ trì trong nhóm đang làm và GỬI DUYỆT (vào "Chờ duyệt" / chọn "Hoàn thành" khi chưa duyệt);
+// người giao / Ban Giám đốc: duyệt (qua phiếu), tạm dừng, huỷ, mở lại — không gửi duyệt thay người chủ trì.
+const SUBMIT_TO = ['REVIEW', 'COMPLETED'];
 function canMove(caps, fromCategory, toCategory) {
   if (!caps?.state) return false;
+  if (fromCategory !== toCategory && SUBMIT_TO.includes(toCategory) && !caps.submit) return false;
   if (caps.state === 'ALL') return true;
   if (fromCategory === toCategory) return WORK_FROM.includes(fromCategory);
   return WORK_FROM.includes(fromCategory) && WORK_TO.includes(toCategory);
@@ -261,7 +264,7 @@ async function loadTask(db, user, itemId, { need = 'view', org = null } = {}) {
 function listCaps(user, org, { project, rights, member }, row) {
   const task = taskOf(row);
   const caps = taskCapabilities(user, task, itemContext(org, { project, rights, member, item: task }));
-  return { view: caps.view, state: caps.state, progress: caps.progress, children: caps.children, roles: caps.roles };
+  return { view: caps.view, state: caps.state, submit: caps.submit, progress: caps.progress, children: caps.children, roles: caps.roles };
 }
 
 module.exports = {

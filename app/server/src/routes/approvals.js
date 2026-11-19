@@ -64,7 +64,7 @@ module.exports = function mountApprovals(app, { prisma, auth, audit, config = {}
       const submit = request.actions.filter(a => a.decision === 'SUBMIT').at(-1);
       out.push({
         id: request.id, status: request.status, currentLevel: request.currentLevel, totalLevels: request.totalLevels, stepName: step?.name || null, createdAt: request.createdAt,
-        lastLevel: request.currentLevel === request.totalLevels, ratingRequired: step?.approverType === 'ASSIGNER', submitNote: submit?.comment || null, requestedByName: n[request.requestedById] || null,
+        lastLevel: request.currentLevel === request.totalLevels, ratingRequired: rules.isGradeStep(step), submitNote: submit?.comment || null, requestedByName: n[request.requestedById] || null,
         onBehalfOf: onBehalfOfId ? n[onBehalfOfId] || null : null,
         item: { id: item.id, code: `${project.key}-${item.number}`, title: item.title, priority: item.priority, dueDate: item.dueDate, state: item.state.name, taskType: item.taskType,
           assignees: item.assignees.map(a => a.user), assignedByName: n[item.assignedById] || null, departmentName: d[deptOf(item)] || null },
@@ -138,7 +138,7 @@ module.exports = function mountApprovals(app, { prisma, auth, audit, config = {}
     const extra = new Set();
     const out = rows.map(r => {
       const item = r.workItem, project = item.project;
-      const chain = rules.chainOf(ctx.steps.get(project.id) || [], !!r.withAssigner);
+      const chain = rules.chainOf(ctx.steps.get(project.id) || [], !!r.withAssigner, { board: !!r.withBoard });
       const step = r.status === 'PENDING' ? rules.stepAt(chain, r.currentLevel) : null;
       const waitingOn = step ? approval.approverIdsSync(ctx, project, step, approval.withDoers(item, r.requestedById), { delegates: false }) : [];
       waitingOn.forEach(id => extra.add(id));

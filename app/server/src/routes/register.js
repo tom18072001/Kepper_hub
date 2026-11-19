@@ -439,7 +439,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
     const settings = await R.getSettings(prisma);
     const items = await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, AND: [itemVisibleWhere(req.user)] }, orderBy: { number: 'asc' },
       include: { state: true, assignees: { include: { user: true } }, supporters: { include: { user: true } },
-        approvals: { where: { status: 'PENDING' }, select: { currentLevel: true, status: true, withAssigner: true } }, documents: { where: { kind: 'BASIS' }, orderBy: { id: 'asc' } } } });
+        approvals: { where: { status: 'PENDING' }, select: { currentLevel: true, status: true, withAssigner: true, withBoard: true } }, documents: { where: { kind: 'BASIS' }, orderBy: { id: 'asc' } } } });
     const steps = await prisma.approvalStep.findMany({ where: { projectId: project.id }, orderBy: { level: 'asc' } });
     const names = Object.fromEntries((await prisma.user.findMany({ where: { id: { in: [...new Set(items.map(i => i.assignedById).filter(Boolean))] } }, select: { id: true, fullName: true } })).map(u => [u.id, u.fullName]));
     const deptNames = Object.fromEntries((await prisma.department.findMany({ select: { id: true, name: true } })).map(d => [d.id, d.name]));

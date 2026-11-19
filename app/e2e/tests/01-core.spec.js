@@ -128,6 +128,11 @@ test('4. Kanban: tạo việc (form + thêm nhanh), kéo-thả giữa các cột
   await expect(column(page, 'Cần làm').getByTestId('card-SK-2')).toBeVisible();
   await expect(column(page, 'Đang làm')).toHaveClass(/over-wip/);
   // Chọn "Hoàn thành" khi chưa được duyệt → việc vào "Chờ duyệt" (người giao duyệt + chấm mức), không thành Hoàn thành ngay.
+  // Gửi duyệt là bước của người chủ trì: người tạo SK-2 nhận chủ trì trước (người giao tự giao cho mình).
+  const sk2 = await card(page, 'SK-2').getAttribute('data-id');
+  const meId = (await (await apiAs(page, '/api/me')).json()).id;
+  expect((await apiAs(page, `/api/items/${sk2}`, { method: 'PATCH', data: { assigneeIds: [meId] } })).status()).toBe(200);
+  await page.reload();
   await card(page, 'SK-2').click();
   const doneValue = await page.getByTestId('item-state').locator('option', { hasText: 'Hoàn thành' }).getAttribute('value');
   await page.getByTestId('item-state').selectOption(doneValue);
