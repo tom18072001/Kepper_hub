@@ -91,7 +91,7 @@ export async function renderToday(root, params, setCrumbs, isCurrent = () => tru
         <span class="td-meta">Thực tế <b>${num(s.actualPct)}%</b> · kế hoạch ${num(s.plannedPct)}% · SPI ${s.spi == null ? '—' : num(s.spi, 2)}${p.currentSprint ? ` · ${esc(p.currentSprint.name)}` : ''}</span></span>
       <span class="td-due"><span class="pill ${tone(p)}">${label(p)}</span></span></a>`; };
   const projBox = projs.length ? `<section class="card td-card" data-testid="today-projects">
-    <div class="td-h"><h2>Dự án</h2><span class="muted sm">${projs.length} dự án · xếp theo mức lo</span><a class="td-link" href="#/home">Dashboard</a></div>
+    <div class="td-h"><h2>Dự án</h2><span class="muted sm">${projs.length} dự án · xếp theo mức lo</span><a class="td-link" href="#/home" data-testid="today-projects-progress">Xem tiến độ</a></div>
     <div class="td-list">${projs.map(prow).join('')}</div></section>` : '';
 
   // ---------- Giao ban tuần này ----------
@@ -131,7 +131,7 @@ export async function renderToday(root, params, setCrumbs, isCurrent = () => tru
     <div class="td-hello">
       <div><h1>${greet()}, ${esc(me.fullName)}</h1>
         <p class="muted">${WEEKDAY[now.getUTCDay()]}, ${String(now.getUTCDate()).padStart(2, '0')}/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${now.getUTCFullYear()}${me.departmentName ? ' · ' + esc(me.departmentName) : ''}</p></div>
-      <div class="td-actions"><a class="btn btn-ghost" href="#/sprint">${icon('checklist')}Cập nhật nhanh</a><a class="btn btn-ghost" href="#/tuan">${icon('calendar')}Báo cáo tuần</a></div>
+      <div class="td-actions"><a class="btn btn-ghost" href="#/sprint">${icon('checklist')}Cập nhật nhanh</a></div>
     </div>
     <div class="td-grid">
       <div class="td-col">${todoBox}${projBox}</div>

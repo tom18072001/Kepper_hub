@@ -5,6 +5,7 @@ import { api } from '../api.js';
 import { store, can, isItAdmin } from '../store.js';
 import { $, esc, debounce, uiPref } from '../util.js';
 import * as shortcuts from '../shortcuts.js';
+import { PAGE_TITLES } from '../shell.js';
 
 const RECENT_MAX = 5;
 let mode = 'normal', selected = 0, entries = [], found = [], lastQ = '', seq = 0, searching = false, moved = false;
@@ -38,15 +39,17 @@ function pages() {
     { label: 'Danh mục', href: '#/catalog', nav: 'nav-admin-catalog' },
   ];
   return [
-    { label: 'Dashboard dự án', hint: 'Master Timeline: tiến độ, SPI, KPI, cảnh báo', href: '#/home', nav: 'nav-home', words: 'dashboard tong quan du an mtl tien do' },
-    { label: 'Việc của tôi', href: '#/my', nav: 'nav-my' },
+    { label: PAGE_TITLES.home, hint: 'Master Timeline: tiến độ, SPI, KPI, cảnh báo', href: '#/home', nav: 'nav-home', words: 'dashboard tong quan du an mtl tien do' },
+    { label: PAGE_TITLES.my, href: '#/my', nav: 'nav-my' },
     { label: 'Ghi chú của tôi', href: '#/my?mode=notes', keys: hasKey('G N') ? 'G N' : '', words: 'ghi chu ca nhan' },
-    { label: 'Tổng thể công việc', hint: 'Mọi việc theo người / bộ phận', href: '#/work', nav: 'nav-work', words: 'tong the theo nguoi bo phan' },
-    { label: 'Chờ tôi duyệt', hint: 'Duyệt, gia hạn', href: '#/approvals', nav: 'nav-approvals', words: 'duyet gia han' },
-    ...(can('reports.dashboard') ? [{ label: 'Số liệu công việc', href: '#/dashboard', nav: 'nav-dashboard', words: 'so lieu bao cao tuan' }] : []),
-    { label: 'Thùng rác', href: '#/trash', nav: 'nav-trash', words: 'khoi phuc da xoa' },
-    { label: 'Trang chủ', hint: 'Việc cần xử lý hôm nay', href: '#/today', nav: 'nav-today', words: 'trang chu hom nay' },
-    { label: 'Thông tin cá nhân', hint: 'Ảnh đại diện, mật khẩu, cây tổ chức', href: '#/me', nav: 'nav-me', words: 'thong tin ca nhan anh dai dien mat khau to chuc' },
+    { label: PAGE_TITLES.work, hint: 'Mọi việc theo người / bộ phận', href: '#/work', nav: 'nav-work', words: 'tong the cong viec theo nguoi bo phan' },
+    { label: PAGE_TITLES.approvals, hint: 'Duyệt, gia hạn, kiến nghị', href: '#/approvals', nav: 'nav-approvals', words: 'duyet gia han kien nghi cho xu ly' },
+    { label: PAGE_TITLES.sprint, hint: 'Kỳ cập nhật tháng: cập nhật % việc tháng này', href: '#/sprint', nav: 'nav-sprint', words: 'cap nhat nhanh ky thang tien do' },
+    { label: PAGE_TITLES.tuan, hint: 'Giao ban: báo cáo, tổng hợp, chấm điểm', href: '#/tuan', nav: 'nav-tuan', words: 'bao cao tuan giao ban tong hop cham diem' },
+    ...(can('reports.dashboard') ? [{ label: PAGE_TITLES.dashboard, href: '#/dashboard', nav: 'nav-dashboard', words: 'thong ke so lieu cong viec kpi dashboard' }] : []),
+    { label: PAGE_TITLES.trash, href: '#/trash', nav: 'nav-trash', words: 'thung rac khoi phuc da xoa' },
+    { label: PAGE_TITLES.today, hint: 'Việc cần xử lý hôm nay', href: '#/today', nav: 'nav-today', words: 'trang chu hom nay' },
+    { label: PAGE_TITLES.me, hint: 'Ảnh đại diện, mật khẩu, cây tổ chức', href: '#/me', nav: 'nav-me', words: 'thong tin ca nhan anh dai dien mat khau to chuc' },
     ...(can('admin.users') ? [{ label: 'Quản trị tài khoản', href: '#/admin/users', nav: 'nav-admin-users' }] : []),
   ].map(e => ({ ...e, group: 'Trang', key: 'page:' + e.href, keys: e.keys || (e.nav && navKeys(e.nav) ? `G ${navKeys(e.nav)}` : '') }));
 }
