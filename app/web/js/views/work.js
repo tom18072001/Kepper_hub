@@ -105,7 +105,7 @@ export async function renderWork(root, params, setCrumbs) {
   };
   const row = i => `<tr class="clickable" tabindex="0" data-href="${itemHref(i)}" data-testid="work-${esc(i.code)}">
       <td class="code mw-c-code">${esc(i.code)}</td>
-      <td class="mw-c-title"><span class="mw-title">${esc(i.title)}</span><span class="mw-tags">${(i.roles || []).map(r => `<span class="pill role">${ROLE_PILL[r]}</span>`).join('')}<span class="muted xs">${esc(i.project.name)}</span></span></td>
+      <td class="mw-c-title">${i.parentRef ? `<span class="parent-ref" title="Việc con của ${esc(i.parentRef.code)} · ${esc(i.parentRef.title)}">↳ ${esc(i.parentRef.code)} <span class="parent-title">${esc(i.parentRef.title)}</span></span>` : ""}<span class="mw-title">${esc(i.title)}</span>${i.counts?.childrenTotal ? ` <span class="pill kids-chip${i.counts.childrenDone === i.counts.childrenTotal ? " ok" : ""}" title="Việc con đã được duyệt hoàn thành">${i.counts.childrenDone}/${i.counts.childrenTotal} việc con</span>` : ""}<span class="mw-tags">${(i.roles || []).map(r => `<span class="pill role">${ROLE_PILL[r]}</span>`).join('')}<span class="muted xs">${esc(i.project.name)}</span></span></td>
       <td class="wk-c-people">${people(i.assignees) || '<span class="muted sm">Chưa phân công</span>'}${i.supporters.length ? `<span class="mw-sub">phối hợp: ${people(i.supporters)}</span>` : ''}${i.leadDeptId && !isUser && !(d.subject.type === 'dept' && i.leadDeptId === d.subject.id) ? `<span class="mw-sub">${d.subject.type === 'dept' ? 'chủ trì: ' : ''}${deptLink(i.leadDeptId, i.leadDepartmentName)}</span>` : ''}</td>
       <td class="mw-c-next"><span class="mw-sub">${esc(i.stage?.label || i.state?.name || '')}</span></td>
       <td class="mw-c-due">${dueCell(i)}</td></tr>`;

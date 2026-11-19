@@ -6,7 +6,8 @@ import { $, esc, fmtDate, fmtDateTime, ago, toast, errorMessage, openModal, clos
 import { icon } from '../icons.js';
 
 export const TASK_TYPES = { PLAN: 'Kế hoạch năm', ADHOC: 'Đột xuất (theo chỉ đạo)' };
-export const RATINGS = { EXCELLENT: 'Hoàn thành xuất sắc', GOOD: 'Hoàn thành tốt', PASS: 'Hoàn thành', FAIL: 'Không hoàn thành' };
+// Thang 5 mức hoàn thành người giao chấm khi duyệt (khớp server/src/services/task-rules.js).
+export const RATINGS = { EXCELLENT: 'Xuất sắc', GOOD: 'Tốt', PASS: 'Đạt', NEEDS_IMPROVEMENT: 'Cần cải thiện', POOR: 'Kém' };
 const DOC_KINDS = { BASIS: 'Căn cứ giao việc', OUTPUT: 'Sản phẩm tham mưu', ISSUED: 'Văn bản đã phát hành' };
 const deptList = () => store.departments.filter(d => d.isActive !== false);
 const userOpts = (prefer) => {
@@ -154,9 +155,12 @@ export function documentsParts(d, editable) {
   return { count: (d.documents || []).length, summary, body: rows + form, empty: !rows };
 }
 
-// Ô xếp loại ở bước duyệt cuối (người giao / Ban Giám đốc nghiệm thu).
-export function ratingPick() {
-  return `<label class="field" style="margin-top:8px">Xếp loại khi nghiệm thu<select id="approvalRating" data-testid="approval-rating"><option value="">— Không xếp loại —</option>${Object.entries(RATINGS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>`;
+// Chấm mức hoàn thành. required = cấp người giao duyệt (bắt buộc chọn 1 trong 5 mức); không bắt buộc = phiếu duyệt cũ, bước cuối.
+export function ratingPick({ required = false } = {}) {
+  if (!required) return `<label class="field" style="margin-top:8px">Xếp loại khi nghiệm thu<select id="approvalRating" data-testid="approval-rating"><option value="">— Không xếp loại —</option>${Object.entries(RATINGS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>`;
+  return `<fieldset class="rating-pick" data-testid="approval-rating" aria-describedby="approvalRatingHelp"><legend>Mức hoàn thành <span class="req" aria-hidden="true">*</span></legend>
+    <div class="rating-opts">${Object.entries(RATINGS).map(([k, v]) => `<label class="rating-opt rating-${k}"><input type="radio" name="approvalRating" value="${k}" data-testid="rating-${k}"> ${v}</label>`).join('')}</div>
+    <div class="field-error" id="approvalRatingHelp" role="alert"></div></fieldset>`;
 }
 
 // Lùi n ngày làm việc (bỏ T7, CN) — gợi ý hạn nộp phòng để phòng còn thời gian duyệt.
