@@ -66,7 +66,8 @@ test('Q2. Người chủ trì (vai Giám đốc, không thuộc BGĐ): không c�
   // Phần của người chủ trì: báo cáo tiến độ, dự báo hoàn thành, đổi trạng thái đang làm.
   await expect(panel.getByTestId('item-forecast')).toHaveAttribute('type', 'date');
   await expect(panel.getByTestId('item-state')).toBeEnabled();
-  await expect(panel.locator('#ipState option', { hasText: 'Huỷ' })).toBeDisabled();
+  await expect(panel.locator('#ipState option', { hasText: 'Huỷ' })).toHaveAttribute('disabled', '');
+  await expect(panel.locator('#ipState option', { hasText: 'Tạm dừng' })).toHaveAttribute('disabled', '');
   // API: mọi trường kế hoạch → 403; ô đánh giá viết tay đã bỏ → 422.
   const patch = data => apiAs(lead, `/api/items/${ctx.itemId}`, { method: 'PATCH', data });
   expect((await patch({ dueDate: new Date(Date.now() + 40 * 86_400_000).toISOString() })).status()).toBe(403);

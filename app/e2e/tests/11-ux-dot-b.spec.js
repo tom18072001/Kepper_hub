@@ -249,14 +249,23 @@ test('B3 + B4 + B5 + N2. Dự án MTL: tab mặc định, Lịch trong "Khác", 
   expect(created.taskType).toBe('PLAN');
   expect(created.assignees.map(a => a.id)).toEqual([me.id]);
 
-  // N2: nhân viên (không quản lý dự án, không lãnh đạo bộ phận) không thấy "Tạo việc" trong dự án MTL.
+  // N2 (quyền tối thiểu theo vai): thành viên không chủ trì việc nào trong dự án MTL không thấy "Tạo việc";
+  // người chủ trì chỉ thêm việc nhánh dưới việc mình chủ trì.
+  const outsider = await (await browser.newContext()).newPage();
+  await login(outsider, 'nv.kythuat');
+  expect(await (await apiAs(outsider, `/api/projects/${project.id}/create-scope`)).json()).toEqual({ root: false, parents: [], reason: 'MTL_CHILD_ONLY' });
+  await outsider.goto(`/#/projects/${project.id}?view=board`);
+  await expect(outsider.locator('#viewBody')).toBeVisible();
+  await expect(outsider.getByTestId('new-item')).toHaveCount(0);
+  await expect(outsider.locator('[data-testid^="quick-add-"]')).toHaveCount(0);
   const staff = await (await browser.newContext()).newPage();
   await login(staff, 'nv.phaply');
-  expect(await (await apiAs(staff, `/api/projects/${project.id}/create-scope`)).json()).toEqual({ root: false, parents: [], reason: 'MTL_CHILD_ONLY' });
-  await staff.goto(`/#/projects/${project.id}?view=board`);
-  await expect(staff.locator('#viewBody')).toBeVisible();
-  await expect(staff.getByTestId('new-item')).toHaveCount(0);
-  await expect(staff.locator('[data-testid^="quick-add-"]')).toHaveCount(0);
+  const staffMe = await (await apiAs(staff, '/api/me')).json();
+  const ss = await (await apiAs(staff, `/api/projects/${project.id}/create-scope`)).json();
+  expect(ss.root).toBe(false);
+  expect(ss.parents.length).toBeGreaterThan(0);
+  const all = await (await apiAs(pmo, `/api/projects/${project.id}/items`)).json();
+  for (const id of ss.parents) expect(all.find(i => i.id === id).assignees.map(a => a.id)).toContain(staffMe.id);
   // Lãnh đạo bộ phận: thấy "Tạo việc" nhưng chỉ thêm việc con trong hạng mục bộ phận mình; thiếu việc cha → báo ngay trên form.
   const lead = await (await browser.newContext()).newPage();
   await login(lead, 'tb.phaply');

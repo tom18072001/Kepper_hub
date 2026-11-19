@@ -35,6 +35,8 @@ test('vai trên một việc: A, B (TGĐ + PGĐ phụ trách), L, S, D, O, U', (
   assert.deepEqual(capsOf(U.pmo).roles, ['O']);
   assert.deepEqual(capsOf(U.owner).roles, ['O']);
   assert.deepEqual(capsOf(U.other).roles, ['U']);
+  // Người chủ trì vai director là "lãnh đạo" phòng của chính mình: không tính thành vai D trên việc mình chủ trì.
+  assert.deepEqual(capsOf(U.lead, item(), { staffLeaderIds: [4, 9] }).roles, ['L']);
 });
 
 test('vai director KHÔNG tự động là Ban Giám đốc: PMO xem toàn bộ, không sửa kế hoạch việc người khác giao', () => {

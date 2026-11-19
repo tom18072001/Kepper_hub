@@ -1,6 +1,6 @@
 // Kepper GĐ2a — sprint = giai đoạn gồm nhóm bước MTL (dữ liệu GIẢ của dự án mẫu DA, T0 = 10 tháng trước → tháng hiện tại luôn là T10):
 // tab Sprint (lộ trình, thiết lập sprint, tiến độ theo đầu việc con, việc nhánh), Kế hoạch & Gantt gom theo sprint, Theo tháng,
-// "Cập nhật nhanh" một chạm + ghi chú, mẫu MTL bộ phận điền sẵn do lãnh đạo ban tự tải / nhập lại (giữ tiến độ, không đặt lại kế hoạch gốc).
+// "Cập nhật nhanh" một chạm + ghi chú, mẫu MTL bộ phận điền sẵn do lãnh đạo ban tự tải / nhập lại (chỉ thêm bước mới, bước đã có giữ nguyên).
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
@@ -179,19 +179,19 @@ test('19. Sprint theo giai đoạn: lộ trình, thiết lập sprint, tiến đ
   await lead.getByTestId('mtl-import-file').setInputFiles(file);
   await lead.getByTestId('mtl-import-preview').click();
   const sum = lead.getByTestId('mtl-import-summary');
-  await expect(sum).toContainText('cập nhật 4');
+  await expect(sum).toContainText('giữ nguyên 4'); // nhập lại chỉ thêm bước mới
   await expect(sum).toContainText('tạo mới 1');
   await expect(sum).toContainText(`nhận ${before.actual}% của bước II.1`);
   await lead.getByTestId('mtl-import-go').click();
-  await toast(lead, 'Đã nhập MTL: tạo 1, cập nhật 4');
+  await toast(lead, 'Đã nhập MTL: tạo 1 hạng mục, giữ nguyên 4');
   // Chi tiết hoá lần đầu bước đang làm dở: dòng con nhận % của bước tổng → tiến độ bước tổng không tụt; tiến độ 8.x giữ nguyên.
   const after = (await (await apiAs(lead, `/api/projects/${project.id}/mtl`)).json()).items;
   expect(after.find(i => i.planCode === 'II.1')).toMatchObject({ children: 1, actual: before.actual });
   expect(after.find(i => i.id === first.id).actual).toBe(50);
-  // Lãnh đạo ban không đặt lại kế hoạch gốc, không nhập MTL tổng / bộ phận khác.
+  // Không ai đặt lại kế hoạch gốc khi nhập (bỏ tuỳ chọn); lãnh đạo ban không nhập MTL tổng / bộ phận khác.
   const buffer = fs.readFileSync(file);
   const send = form => apiAs(lead, `/api/projects/${project.id}/mtl-import`, { method: 'POST', multipart: { file: { name: 'mtl.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer }, dryRun: '1', ...form } });
-  expect((await send({ kind: 'DEPARTMENT', departmentId: String(PL.id), rebaseline: '1' })).status()).toBe(403);
+  expect((await send({ kind: 'DEPARTMENT', departmentId: String(PL.id), rebaseline: '1' })).status()).toBe(422);
   expect((await send({ kind: 'MASTER' })).status()).toBe(403);
   const TK = (await (await apiAs(lead, '/api/departments')).json()).find(d => d.code === 'TK');
   expect((await send({ kind: 'DEPARTMENT', departmentId: String(TK.id) })).status()).toBe(403);

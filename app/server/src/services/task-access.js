@@ -87,7 +87,8 @@ function rolesOf(user, item, ctx = {}) {
   const L = has(item.assigneeIds, uid);
   const S = !L && has(item.supporterIds, uid);
   const Dl = has(ctx.leadLeaderIds, uid);
-  const D = Dl || has(ctx.staffLeaderIds, uid);
+  // Lãnh đạo phòng của người chủ trì (không tính chính người chủ trì — vai director được xem là lãnh đạo phòng của mình).
+  const D = Dl || (!L && has(ctx.staffLeaderIds, uid));
   const SL = has(ctx.supportLeaderIds, uid);
   const O = !!r.canManage || ctx.memberRole === 'OWNER' || (ctx.project?.leadId != null && Number(ctx.project.leadId) === Number(uid)) || user?.role === 'director';
   return { A, B, L, S, D, Dl, SL, O };
