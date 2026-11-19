@@ -2,7 +2,7 @@
 // → chờ phòng duyệt → chờ BGĐ cho ý kiến → hoàn thành; bị trả lại. Dùng chung cho sổ, hộp việc phòng, file xuất.
 const STAGES = {
   PENDING_ACCEPT: 'Chờ phòng tiếp nhận', TODO: 'Chưa bắt đầu', DOING: 'Đang thực hiện', RETURNED: 'Bị trả lại',
-  WAIT_DEPT: 'Chờ phòng duyệt', WAIT_BGD: 'Chờ BGĐ cho ý kiến', WAIT_APPROVAL: 'Chờ duyệt', DONE: 'Hoàn thành', CANCELLED: 'Huỷ',
+  WAIT_ASSIGNER: 'Chờ người giao duyệt', WAIT_DEPT: 'Chờ phòng duyệt', WAIT_BGD: 'Chờ BGĐ cho ý kiến', WAIT_APPROVAL: 'Chờ duyệt', DONE: 'Hoàn thành', CANCELLED: 'Huỷ',
 };
 // item: { state: { category }, dispatchStatus, returnedAt, pendingApproval|approvals: [{ currentLevel }] }
 // steps: các bước duyệt của dự án [{ level, name, approverType }]
@@ -14,7 +14,10 @@ function stageOf(item, steps = []) {
   if (item.dispatchStatus === 'PENDING') return out('PENDING_ACCEPT');
   const pending = item.pendingApproval || (Array.isArray(item.approvals) ? item.approvals.find(a => !a.status || a.status === 'PENDING') : null);
   if (cat === 'REVIEW' && pending) {
-    const step = steps.find(s => s.level === pending.currentLevel);
+    // Phiếu mới (withAssigner): cấp 1 = người giao, cấp k = bước k-1 của dự án.
+    const step = pending.withAssigner ? (pending.currentLevel === 1 ? { approverType: 'ASSIGNER' } : steps.find(s => s.level === pending.currentLevel - 1))
+      : steps.find(s => s.level === pending.currentLevel);
+    if (step?.approverType === 'ASSIGNER') return out('WAIT_ASSIGNER');
     if (step?.approverType === 'DEPARTMENT_MANAGER') return out('WAIT_DEPT');
     if (step?.approverType === 'DIRECTOR' || step?.approverType === 'SUPERVISOR') return out('WAIT_BGD');
     return out('WAIT_APPROVAL', step ? `Chờ duyệt: ${step.name}` : STAGES.WAIT_APPROVAL);
