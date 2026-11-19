@@ -198,3 +198,18 @@ test('Q5. Duyệt: người chủ trì gửi duyệt, người giao chấm mức
   expect((await apiAs(lead, `/api/items/${ctx.itemId}`, { method: 'PATCH', data: { stateId: started.id } })).status()).toBe(403);
   await json(await apiAs(tgd, `/api/items/${ctx.itemId}`, { method: 'PATCH', data: { stateId: started.id } }));
 });
+
+test('Q6. Bước giao cho bộ phận chưa có người: lãnh đạo bộ phận chủ trì chọn người trong phòng mình, không sửa kế hoạch', async ({ browser }) => {
+  const tgd = await as(browser, 'giamdoc');
+  const step = await json(await apiAs(tgd, `/api/projects/${ctx.projectId}/items`, { method: 'POST', data: { title: 'Lắp màn hình phòng họp (giả)', leadDepartmentId: ctx.D('KD').id } }));
+  const head = await as(browser, 'tp.kinhdoanh');
+  const caps = (await json(await apiAs(head, `/api/items/${step.id}`))).capabilities;
+  expect(caps.assignOwnDept).toBe(true);
+  expect(caps.plan).toBe(false);
+  const patch = data => apiAs(head, `/api/items/${step.id}`, { method: 'PATCH', data });
+  expect((await patch({ assigneeIds: [ctx.U('nv.kythuat').id] })).status()).toBe(403); // người phòng khác
+  expect((await patch({ dueDate: new Date().toISOString() })).status()).toBe(403); // kế hoạch
+  await json(await patch({ assigneeIds: [ctx.U('nv.kinhdoanh1').id] }));
+  // Đã có người chủ trì: phân công lại là của người giao / Ban Giám đốc.
+  expect((await patch({ assigneeIds: [ctx.U('nv.kinhdoanh2').id] })).status()).toBe(403);
+});
