@@ -2,6 +2,7 @@
 // Bật bằng MODULES=vanthu. Cấp số tự động, liên tục theo dãy / pháp nhân / năm; không giữ số, nhảy số, dùng lại số đã hủy (Điều 7.1).
 // Văn bản đến: hạn xử lý theo độ khẩn (Điều 12), theo dõi trạng thái (Điều 11), nhắc người xử lý trước hạn 1 ngày và khi quá hạn.
 // Quyền xem theo mức bảo mật (Điều 5) — services/vanthu.js canView. Claude (token): chỉ đọc, không thấy văn bản Bảo mật cao.
+const { Prisma } = require('@prisma/client');
 const { fail, intParam, optionalInt, text, oneOf } = require('../lib/http');
 const V = require('../services/vanthu');
 const WD = require('../services/weekly-data');
@@ -23,6 +24,13 @@ const ACTIVE_USER = { isActive: true, isRootAdmin: false, role: { not: 'admin' }
 const day = v => (v == null || v === '' ? null : WK.isDay(v) ? v : fail(422, 'Ngày không hợp lệ (YYYY-MM-DD)', 'INVALID_DATE'));
 const hash32 = s => { let h = 0; for (const c of s) h = (h * 31 + c.codePointAt(0)) | 0; return h; };
 const out = (map, v) => (v ? { code: v, label: map[v] || v } : null);
+// Tìm theo số, trích yếu, nơi gửi / nhận, số của bên gửi — không phân biệt hoa thường và dấu, như Tìm nhanh (routes/search.js):
+// unaccent(lower(cột)) LIKE unaccent(lower(từ khoá)) (extension unaccent, migration 20261119200000_search_unaccent). % _ \ trong từ khoá hiểu nghĩa đen.
+const TEXT_COLS = ['number', 'title', 'counterpart', 'externalNumber'];
+function textMatch(q) {
+  const pat = '%' + q.replace(/[\\%_]/g, c => '\\' + c) + '%';
+  return Prisma.sql`(${Prisma.join(TEXT_COLS.map(c => Prisma.sql`unaccent(lower(coalesce(${Prisma.raw(`"${c}"`)}, ''))) LIKE unaccent(lower(${pat}))`), ' OR ')})`;
+}
 
 module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
   if (!(config.modules || []).includes('vanthu')) return;
@@ -95,13 +103,44 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
     if (q.entity) where.entity = String(q.entity).slice(0, 6);
     if (q.status) where.status = String(q.status).slice(0, 20);
     if (q.mine === '1') where.handlerId = req.user.id;
-    if (q.q) { const t = String(q.q).slice(0, 100); where.OR = [{ title: { contains: t, mode: 'insensitive' } }, { number: { contains: t, mode: 'insensitive' } }, { counterpart: { contains: t, mode: 'insensitive' } }, { externalNumber: { contains: t, mode: 'insensitive' } }]; }
+    const t = String(q.q || '').trim().slice(0, 100);
+    if (t) {
+      // Từ khoá không phân biệt dấu: bước 1 lấy id khớp bằng SQL có tham số trong cùng phạm vi sổ / năm / pháp nhân / trạng thái / người xử lý,
+      // bước 2 đọc và lọc quyền bằng Prisma như cũ (visible) — phạm vi xem không đổi.
+      const cond = [textMatch(t)];
+      if (where.book) cond.push(Prisma.sql`"book" = ${where.book}`);
+      if (where.year) cond.push(Prisma.sql`"year" = ${where.year}`);
+      if (where.entity) cond.push(Prisma.sql`"entity" = ${where.entity}`);
+      if (where.status) cond.push(Prisma.sql`"status" = ${where.status}`);
+      if (where.handlerId) cond.push(Prisma.sql`"handlerId" = ${where.handlerId}`);
+      const ids = await prisma.$queryRaw`SELECT "id" FROM "DocRecord" WHERE ${Prisma.join(cond, ' AND ')} ORDER BY "year" DESC, "registeredAt" DESC, "seq" DESC LIMIT 500`;
+      where.id = { in: ids.map(r => Number(r.id)) };
+    }
     const rows = (await prisma.docRecord.findMany({ where, orderBy: [{ year: 'desc' }, { registeredAt: 'desc' }, { seq: 'desc' }], take: 500 })).filter(d => visible(d, s));
     const today = WK.dayOf(new Date());
     const list = q.overdue === '1' ? rows.filter(d => V.isOverdue(d, today)) : rows;
     const users = await WD.userNames(prisma, list.flatMap(d => [d.handlerId, d.createdById]));
     const depts = Object.fromEntries((await prisma.department.findMany({ select: { id: true, name: true } })).map(x => [x.id, x.name]));
     res.json(await Promise.all(list.map(d => docOut(d, s, { users, depts }))));
+  });
+
+  // Chọn văn bản trong sổ để gắn vào "Văn bản liên quan" của việc (panel chi tiết việc): chỉ trả văn bản V.canLink — Công khai / Nội bộ,
+  // chưa hủy, người hỏi xem được trong sổ. Không đổi quyền xem sổ. Tìm theo số, trích yếu, nơi gửi / nhận, số của bên gửi —
+  // không phân biệt hoa thường và dấu (unaccent, như Tìm nhanh). Trả ít trường: đủ để điền sẵn số, ngày, nơi ban hành, trích yếu.
+  app.get('/api/vanthu/pick', auth, async (req, res) => {
+    const s = await subject(req);
+    if (s.it) fail(403, 'Quản trị hệ thống không xem nội dung văn bản', 'FORBIDDEN');
+    const q = String(req.query.q || '').trim().slice(0, 100);
+    const match = q ? Prisma.sql`AND ${textMatch(q)}` : Prisma.empty;
+    const ids = (await prisma.$queryRaw`SELECT "id" FROM "DocRecord" WHERE "cancelledAt" IS NULL AND "security" IN (${Prisma.join(V.LINKABLE_SECURITY)}) ${match}
+      ORDER BY "registeredAt" DESC, "id" DESC LIMIT 20`).map(r => Number(r.id));
+    const rows = ids.length ? (await prisma.docRecord.findMany({ where: { id: { in: ids } }, orderBy: [{ registeredAt: 'desc' }, { id: 'desc' }] })).filter(d => V.canLink(d, s) && visible(d, s)) : [];
+    const depts = Object.fromEntries((await prisma.department.findMany({ where: { id: { in: rows.map(d => d.departmentId).filter(Boolean) } }, select: { id: true, name: true } })).map(x => [x.id, x.name]));
+    const entityName = code => s.cfg.entities.find(e => e.code === code)?.name || null;
+    res.json(rows.map(d => ({
+      id: d.id, number: d.number, title: d.title, book: out(V.BOOKS, d.book), security: out(V.SECURITY, d.security),
+      docDate: d.docDate || WK.dayOf(d.registeredAt), issuer: V.issuerOf(d, { entityName: entityName(d.entity), deptName: depts[d.departmentId] || null }),
+    })));
   });
 
   app.get('/api/vanthu/docs/:id', auth, async (req, res) => {
@@ -357,3 +396,5 @@ module.exports.runVanthuReminders = async function runVanthuReminders(prisma, no
   }
   return { sent, open: open.length };
 };
+
+module.exports.textMatch = textMatch;

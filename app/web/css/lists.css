@@ -364,6 +364,16 @@ details.ph-more-menu>summary::-webkit-details-marker{display:none}
 /* Kết quả & tài liệu */
 .tw-actions{gap:8px 14px;align-items:center;margin-top:8px}
 .doc-form{margin-top:8px}
+/* Văn bản liên quan: chọn từ sổ Văn thư (điền sẵn số, ngày, nơi ban hành, trích yếu, liên kết) */
+.doc-pick{margin:10px 0 4px;padding:10px;border:1px dashed var(--border);border-radius:var(--radius-sm,8px);background:var(--surface-2)}
+.doc-pick>label{display:block;font-size:.82rem;font-weight:600;color:var(--text-2);margin-bottom:4px}
+.doc-pick input[type=search]{width:100%}
+.doc-pick p{margin:6px 0 0}.doc-pick p:empty{display:none}
+.doc-pick-list{display:flex;flex-direction:column;gap:4px;margin-top:6px;max-height:220px;overflow:auto}
+.doc-pick-item{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm,8px);background:var(--surface);color:var(--text);font:inherit;font-size:.85rem;cursor:pointer}
+.doc-pick-item:hover,.doc-pick-item:focus-visible{border-color:var(--brand)}
+.doc-pick-item[aria-pressed="true"]{border-color:var(--brand);box-shadow:inset 3px 0 0 var(--brand)}
+.doc-pick-item .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tw-out .pill{background:var(--surface-2)}
 .legacy-note{border:1px dashed var(--border);border-radius:var(--radius-sm,8px);padding:8px 10px;margin-bottom:10px;background:var(--surface-2)}
 .legacy-note .reg-readonly{margin-top:4px}
