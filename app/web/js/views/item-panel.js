@@ -2,7 +2,7 @@
 import { api, download, openPreview, ApiError } from '../api.js';
 import { store, labelsFor, createProjectLabel, personLink } from '../store.js';
 import { $, $$, esc, avatar, labelChip, fmtDate, fmtDateTime, ago, PRIORITY, toast, multiSelect, bindMulti, dateInput, fromDateInput, confirmDialog, errorMessage, CATEGORY, draft, draftLater, uiPref } from '../util.js';
-import { reloadProject, assignableUsers } from './project.js';
+import { reloadProject, assignableUsers, loadedProject } from './project.js';
 import { refreshCounters, refreshBackground } from '../main.js';
 import { openRepeatDialog } from './recurring-form.js';
 import { openCycleForm } from './project-extra.js';
@@ -81,7 +81,9 @@ async function load({ soft = false } = {}) {
   const item = await api(`/api/items/${id}`);
   if (openId !== id) return;
   if (!project || project.id !== item.project.id) {
-    const [p, cycles] = await Promise.all([api(`/api/projects/${item.project.id}`), api(`/api/projects/${item.project.id}/cycles`)]);
+    // Trang dự án vừa tải đúng dự án này: dùng lại, không gọi lại /api/projects/:id và /cycles.
+    const shared = loadedProject(item.project.id);
+    const [p, cycles] = shared ? [shared.project, shared.cycles] : await Promise.all([api(`/api/projects/${item.project.id}`), api(`/api/projects/${item.project.id}/cycles`)]);
     project = { ...p, cycles };
   }
   if (openId !== id) return;

@@ -7,8 +7,8 @@ import { api } from '../api.js';
 import { $, esc, fmtDate, uiPref, replaceHashParams, openModal, closeModal, toast, errorMessage } from '../util.js';
 import { icon } from '../icons.js';
 import { sprintCard, bindQuick, SPRINT_TONE as TONE } from './sprint-card.js';
-import { invalidateMtl } from './mtl.js';
-import { noteHashWritten } from './project.js';
+import { invalidateMtl, latestDraw } from './mtl.js';
+import { noteHashWritten, forgetProjectData } from './project.js';
 
 const num = (v, d = 2) => (v == null ? '—' : Number(v).toLocaleString('vi-VN', { maximumFractionDigits: d }));
 const pct = v => (v == null ? '—' : `${num(v, 1)}%`);
@@ -34,8 +34,9 @@ export async function drawMtlSprint(body, project, params) {
 
 // ---------- Theo giai đoạn ----------
 async function drawPhases(body, project, params, modes, { scroll = false } = {}) {
-  const asked = params.get('s');
+  const asked = params.get('s'), latest = latestDraw(body);
   const d = await api(`/api/projects/${project.id}/mtl-sprints${asked != null && asked !== '' ? `?s=${encodeURIComponent(asked)}` : ''}`);
+  if (!latest()) return; // đã có lượt vẽ mới hơn (đổi giai đoạn, realtime…)
   if (!d.sprints.length) {
     body.innerHTML = `<div class="mtl sp">${modes}<div class="card empty" data-testid="mtl-empty"><p>${d.project.t0Date ? 'Chưa có Master Timeline.' : 'Chưa đặt tháng T0.'}</p>${project.rights.canManage ? (d.project.t0Date ? '<button class="btn btn-primary" data-mtl="import">Nhập MTL từ Excel</button>' : '<button class="btn btn-primary" data-mtl="settings">Đặt T0</button>') : ''}</div></div>`;
     bindSetup(body, project, d);
@@ -162,7 +163,8 @@ function bindSetup(body, project, d) {
       try {
         const r = await api(`/api/projects/${project.id}/mtl-sprints`, { method: 'PUT', body: { text: form.text.value } });
         closeModal(); toast(r.sprints ? `Đã lưu ${r.sprints} giai đoạn${r.unassigned.length ? ` — còn ${r.unassigned.length} bước chưa xếp` : ''}` : 'Đã bỏ thiết lập — dùng giai đoạn gợi ý', 'ok');
-        invalidateMtl(); replaceHashParams({ s: null }); await drawMtlSprint(body, project, paramsNow());
+        // Giai đoạn đổi: Bảng / Danh sách / form Tạo việc lấy lại giai đoạn của hạng mục ở lần vẽ sau.
+        invalidateMtl(); forgetProjectData(); replaceHashParams({ s: null }); await drawMtlSprint(body, project, paramsNow());
       } catch (error) { $('#spErr', modal).textContent = errorMessage(error); }
     };
   };
@@ -185,8 +187,9 @@ function bindDept(body, project, prefKey) {
 // "11/2026" — tháng lịch (giờ Việt Nam) của kỳ.
 const monthOf = d => { const x = new Date(new Date(d).getTime() + 7 * 3_600_000); return `${String(x.getUTCMonth() + 1).padStart(2, '0')}/${x.getUTCFullYear()}`; };
 async function drawMonth(body, project, params, modes) {
-  const asked = params.get('t');
+  const asked = params.get('t'), latest = latestDraw(body);
   const d = await api(`/api/projects/${project.id}/mtl-month${asked != null && asked !== '' ? `?t=${encodeURIComponent(asked)}` : ''}`);
+  if (!latest()) return;
   if (d.empty || !d.sprint) {
     body.innerHTML = `<div class="mtl sp">${modes}<div class="card empty" data-testid="mtl-empty"><p>Chưa đặt tháng T0.</p>${project.rights.canManage ? '<button class="btn btn-primary" data-mtl="settings">Đặt T0</button>' : ''}</div></div>`;
     bindSetup(body, project, null);

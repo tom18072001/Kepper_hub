@@ -45,11 +45,16 @@ test('26. Menu trái: nhãn menu khớp tiêu đề trang, nhóm mới, không c
   // Mỗi mục menu: tiêu đề tab = "<nhãn> · Kepler Hub"; trang đã thống nhất tên thì h1 cũng là nhãn đó.
   const links = await nav.locator('.sb-items > a[data-testid^="nav-"]').evaluateAll(as => as.map(a => ({ href: a.getAttribute('href'), testid: a.dataset.testid, label: a.querySelector('.t').textContent.trim() })));
   expect(links.length).toBeGreaterThanOrEqual(8);
+  // Yêu cầu API đang chạy (trừ luồng realtime giữ kết nối lâu — vì nó mà 'networkidle' không bao giờ tới khi luồng đang mở).
+  const pending = new Set();
+  const isApi = r => { const u = new URL(r.url()); return u.pathname.startsWith('/api/') && u.pathname !== '/api/stream'; };
+  page.on('request', r => { if (isApi(r)) pending.add(r); });
+  for (const ev of ['requestfinished', 'requestfailed']) page.on(ev, r => pending.delete(r));
   for (const { href, testid, label } of links) {
     await page.getByTestId(testid).click();
     await expect(page, `${href}`).toHaveTitle(`${label} · Kepler Hub`);
     // Chờ trang tải xong trước khi bấm mục sau (work.js chưa bỏ kết quả về muộn khi đã chuyển trang).
-    await page.waitForLoadState('networkidle');
+    await expect.poll(() => pending.size, { message: `${href}: còn yêu cầu API đang chạy` }).toBe(0);
     if (H1_SAME_AS_MENU.has(href)) await expect(page.locator('#view h1').first(), href).toHaveText(label);
   }
   await expect(page.getByTestId('nav-home')).toHaveText('Tiến độ dự án');

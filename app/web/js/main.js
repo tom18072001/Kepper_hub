@@ -23,7 +23,7 @@ import { renderVanthu } from './views/vanthu.js';
 import { renderHrm } from './views/hrm.js';
 import { renderCatalog } from './views/catalog.js';
 import { renderWork } from './views/work.js';
-import { current as projectState, reloadProject } from './views/project.js';
+import { current as projectState, reloadProject, forgetProjectData } from './views/project.js';
 import { reloadOpenItem, openItemId } from './views/item-panel.js';
 import { startRealtime, stopRealtime, onRealtime } from './realtime.js';
 import { hydrateIcons } from './icons.js';
@@ -41,7 +41,7 @@ function show(id) {
 function logout({ keepDrafts = false, reload = keepDrafts !== true } = {}) {
   if (reload) setTimeout(() => location.reload()); // chạy sau khi các dòng dưới đã dọn phiên
   stopRealtime();
-  setToken(null); store.me = null; document.title = 'Kepler Hub'; if (keepDrafts !== true) clearDrafts(); closeItem(); lastViewKey = ''; $('#view').innerHTML = ''; show('loginPage'); $('#loginUser').focus();
+  setToken(null); store.me = null; ready = false; document.title = 'Kepler Hub'; if (keepDrafts !== true) clearDrafts(); closeItem(); lastViewKey = ''; renderingKey = ''; $('#view').innerHTML = ''; show('loginPage'); $('#loginUser').focus();
 }
 
 // Cập nhật thời gian thực: tải lại bảng của dự án đang xem và panel đang mở (gộp nhiều sự kiện liên tiếp).
@@ -108,12 +108,14 @@ $('#passwordForm').addEventListener('submit', async e => {
 $('#pwLogout').addEventListener('click', () => logout());
 
 async function enter() {
+  ready = false;
   store.me = await api('/api/me');
   setPrefUser(store.me.id);
   if (store.me.mustChangePw) { show('passwordPage'); $('#pwCurrent').focus(); return; }
   await loadBasics();
   show('appShell');
   renderShell();
+  ready = true;
   // Trang chủ: "hôm nay cần làm gì" (việc cần xử lý, dự án theo mức lo, giao ban tuần này) cho người dùng nghiệp vụ; admin IT: quản trị.
   const home = isItAdmin() ? '#/admin/users' : '#/today';
   if (!location.hash || location.hash === '#/' || (isItAdmin() && !/^#\/(admin|catalog)/.test(location.hash))) location.hash = home; else route();
@@ -214,7 +216,9 @@ document.addEventListener('keydown', e => {
 });
 
 // Router
-let renderToken = 0, lastViewKey = '';
+// ready: đã tải xong danh mục (enter). Đổi địa chỉ trong lúc đang vào ứng dụng thì chưa vẽ — enter() vẽ một lần theo địa chỉ lúc xong.
+// renderingKey: trang đang vẽ dở; navSeq: số lượt điều hướng (lượt vẽ nền không tính) — lượt vẽ cũ không mở / đóng panel thay lượt mới.
+let renderToken = 0, lastViewKey = '', renderingKey = '', navSeq = 0, ready = false;
 // Tiêu đề tab đặt ngay khi đổi route (trước khi tải dữ liệu), để tab không hiện URL thô.
 function pageTitle(parts) {
   const tail = 'Kepler Hub';
@@ -248,7 +252,7 @@ export async function refreshBackground() {
   try { lastViewKey = ''; await route({ background: true }); } finally { bgBusy = false; }
 }
 export async function route({ background = false } = {}) {
-  if (!store.me) return;
+  if (!store.me || !ready) return;
   highlightNav();
   const [path, query = ''] = location.hash.replace(/^#/, '').split('?');
   const params = new URLSearchParams(query);
@@ -256,7 +260,9 @@ export async function route({ background = false } = {}) {
   // Chỉ đổi ?item= / ?focus= (mở/đóng panel) thì không vẽ lại cả trang.
   const viewParams = new URLSearchParams(query); viewParams.delete('item'); viewParams.delete('focus'); viewParams.sort();
   const viewKey = path + '?' + viewParams.toString();
-  if (viewKey === lastViewKey && $('#view').childElementCount) {
+  if (viewKey === lastViewKey && ($('#view').childElementCount || renderingKey === viewKey)) {
+    // Trang này đang vẽ dở (vd. vừa vào ứng dụng, trang còn trống): không vẽ lần hai — lượt đang vẽ mở / đóng panel theo URL khi xong.
+    if (renderingKey === viewKey) return;
     if (params.get('item')) return openItem(Number(params.get('item')));
     // Đóng panel trên các trang danh sách (không phải bảng dự án): vẽ lại danh sách để phản ánh thay đổi vừa làm.
     const wasOpen = isItemOpen(); closeItem();
@@ -268,20 +274,27 @@ export async function route({ background = false } = {}) {
   const view = $('#view');
   // Trang trước có thể đã gán trình xử lý lên #view — gỡ để không chạy nhầm ở trang sau.
   if (!background) { view.onclick = null; view.onchange = null; view.oninput = null; view.onkeydown = null; }
-  const token = ++renderToken;
+  const token = ++renderToken, seq = background ? navSeq : ++navSeq;
+  if (!background) renderingKey = viewKey;
   const setCrumbs = html => { $('#crumbs').innerHTML = html; };
-  const syncPanel = () => { if (background) return; if (params.get('item')) openItem(Number(params.get('item'))); else closeItem(); };
+  // Mở / đóng panel theo URL lúc vẽ xong (có thể đã thêm ?item= trong lúc chờ); đã sang trang khác thì để lượt mới lo.
+  const syncPanel = () => {
+    if (background || seq !== navSeq) return;
+    const item = new URLSearchParams(location.hash.split('?')[1] || '').get('item');
+    if (item) openItem(Number(item)); else closeItem();
+  };
   try {
     if (isItAdmin() && !['admin', 'catalog', 'me'].includes(parts[0])) { location.hash = '#/admin/users'; return; }
     if (parts[0] === 'projects' && parts[1]) {
       const id = Number(parts[1]);
-      if (parts[2] === 'settings') await renderProjectSettings(view, id, setCrumbs);
+      // Cài đặt dự án có thể đổi quy trình, thành viên…: quay lại trang dự án / mở việc thì tải dự án mới.
+      if (parts[2] === 'settings') { forgetProjectData(); await renderProjectSettings(view, id, setCrumbs); }
       else {
         await renderProject(view, id, params, setCrumbs, () => token === renderToken);
         // Bảng lệnh "Tạo việc trong …": mở hộp tạo việc ngay khi vào dự án.
         try { if (sessionStorage.getItem('workhub_create')) { sessionStorage.removeItem('workhub_create'); $('#newItemBtn')?.click(); } } catch { /* bỏ qua */ }
       }
-      if (params.get('item')) openItem(Number(params.get('item'))); else closeItem();
+      syncPanel();
     } else if (parts[0] === 'approvals') { await renderApprovals(view, params, setCrumbs); syncPanel(); }
     else if (['requests', 'schedule', 'ops', 'dept', 'summary', 'kpi'].includes(parts[0])) { location.replace('#/home'); return; } // nghiệp vụ NQ57 đã bỏ (Kepler Hub)
     else if (parts[0] === 'tuan') { closeItem(); await renderWeekly(view, parts[1] || '', params, setCrumbs); }
@@ -308,6 +321,8 @@ export async function route({ background = false } = {}) {
     if (moduleOff) return renderFeatureOff(view, setCrumbs, parts[0]);
     view.innerHTML = `<div class="card empty">${esc(errorMessage(error))}</div>`;
     setCrumbs('Lỗi');
+  } finally {
+    if (!background && seq === navSeq) renderingKey = '';
   }
 }
 window.addEventListener('hashchange', route);

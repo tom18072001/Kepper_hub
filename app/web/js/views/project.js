@@ -39,7 +39,34 @@ const I_FILTER = svg('<path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/
 const I_VIEW = svg('<path d="M21 4h-7"/><path d="M10 4H3"/><path d="M21 12h-9"/><path d="M8 12H3"/><path d="M21 20h-5"/><path d="M12 20H3"/><path d="M14 2v4"/><path d="M8 10v4"/><path d="M16 18v4"/>');
 const I_SAVED = svg('<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>');
 
-export const current = { project: null, items: [], cycles: [], views: [], plans: [], filters: EMPTY_FILTERS(), order: [], saved: null, restored: false, lanes: 'none', root: null, params: null, sort: { key: 'position', dir: 1 } };
+export const current = { project: null, items: [], cycles: [], views: [], plans: [], filters: EMPTY_FILTERS(), order: [], saved: null, restored: false, lanes: 'none', root: null, params: null, sort: { key: 'position', dir: 1 }, loadedAt: 0 };
+
+// Bộ dữ liệu của trang dự án: dự án, việc, chu kỳ, bộ lọc đã lưu, kế hoạch; MTL thêm phạm vi tạo việc và giai đoạn của hạng mục.
+// Mỗi lần mở trang tải một lần. Vẽ lại đúng dự án đang hiện trong vòng FRESH_MS (đổi tab, bấm lại dự án ở sidebar, liên kết trong trang)
+// thì dùng lại bộ đã tải — realtime vẫn cập nhật việc / chu kỳ / kế hoạch. Số liệu MTL (Tổng quan, Kế hoạch & Gantt, Giai đoạn) luôn tải mới.
+const FRESH_MS = 60_000;
+let inflight = null; // { id, promise } — hai lượt vẽ cùng lúc của một dự án dùng chung một lượt tải
+function fetchProjectData(id) {
+  if (inflight?.id === id) return inflight.promise;
+  const loadedAt = Date.now();
+  const promise = (async () => {
+    const [project, itemsRes, cycles, views, plans] = await Promise.all([api(`/api/projects/${id}`), api(`/api/projects/${id}/items`, { raw: true }), api(`/api/projects/${id}/cycles`), api(`/api/projects/${id}/views`), api(`/api/projects/${id}/plans`)]);
+    const items = await itemsRes.json();
+    // MTL: phạm vi tạo việc (N2 — nhân viên không thấy "Tạo việc" rồi mới bị từ chối) và giai đoạn của từng hạng mục (Bảng / Danh sách gom theo giai đoạn).
+    const [createScope, phases] = project.kind === 'MTL'
+      ? await Promise.all([api(`/api/projects/${id}/create-scope`).catch(() => null), api(`/api/projects/${id}/mtl-sprints`).catch(() => null)]) : [null, null];
+    return { project, items, cycles, views, plans, createScope, phases, totalCount: Number(itemsRes.headers.get('x-total-count')) || null, loadedAt };
+  })();
+  inflight = { id, promise };
+  const done = () => { if (inflight?.promise === promise) inflight = null; };
+  promise.then(done, done);
+  return promise;
+}
+// Dự án đổi cài đặt (T0, nhập MTL, thiết lập giai đoạn, cài đặt dự án…): lần vẽ sau tải lại cả bộ.
+export function forgetProjectData() { current.loadedAt = 0; inflight = null; }
+const freshFor = id => current.project?.id === id && Date.now() - current.loadedAt < FRESH_MS;
+// Panel việc dùng lại dự án + chu kỳ trang dự án vừa tải, không gọi lại /api/projects/:id và /cycles.
+export function loadedProject(id) { return freshFor(id) ? { project: current.project, cycles: current.cycles } : null; }
 
 function openItemHrefFor(id) {
   const [path, query = ''] = location.hash.split('?');
@@ -70,18 +97,21 @@ const prefKey = what => `proj:${current.project.id}:${what}`;
 const viewOf = () => $('#viewBody', current.root)?.dataset.view || 'board';
 
 export async function renderProject(root, id, params, setCrumbs, stillCurrent) {
-  if (params.get('item') && current.project?.id === id && current.root === root && $('#viewBody', root) && hashKey() === writtenKey) { current.params = params; return; }
-  const [project, itemsRes, cycles, views, plans] = await Promise.all([api(`/api/projects/${id}`), api(`/api/projects/${id}/items`, { raw: true }), api(`/api/projects/${id}/cycles`), api(`/api/projects/${id}/views`), api(`/api/projects/${id}/plans`)]);
-  const items = await itemsRes.json();
-  current.totalCount = Number(itemsRes.headers.get('x-total-count')) || null;
-  // MTL: phạm vi tạo việc (N2 — nhân viên không thấy "Tạo việc" rồi mới bị từ chối) và giai đoạn của từng hạng mục (Bảng / Danh sách gom theo giai đoạn).
-  const [createScope, phases] = project.kind === 'MTL'
-    ? await Promise.all([api(`/api/projects/${id}/create-scope`).catch(() => null), api(`/api/projects/${id}/mtl-sprints`).catch(() => null)]) : [null, null];
+  const shown = current.root === root && !!$('#viewBody', root);
+  if (params.get('item') && shown && current.project?.id === id && hashKey() === writtenKey) { current.params = params; return; }
+  // Đang hiện đúng dự án này, vừa tải: dùng lại. Sang Bảng / Danh sách của dự án MTL thì lấy lại giai đoạn của hạng mục (như realtime).
+  const reuse = shown && freshFor(id);
+  const data = reuse ? null : await fetchProjectData(id);
+  const phases = reuse && current.project.kind === 'MTL' && ['board', 'list'].includes(params.get('view'))
+    ? await api(`/api/projects/${id}/mtl-sprints`).catch(() => current.phases) : null;
   if (!stillCurrent()) return;
   closePop(false);
   // Vẽ lại cả trang (vào dự án, đổi tab, liên kết): số liệu MTL luôn mới — bộ nhớ đệm ngắn chỉ để mở / đóng panel việc.
   invalidateMtl();
-  Object.assign(current, { project, items, cycles, views, plans, root, params, createScope, phases });
+  if (data) Object.assign(current, data);
+  if (phases) current.phases = phases;
+  Object.assign(current, { root, params });
+  const { project } = current;
   const fromUrl = readFilters(params);
   if (fromUrl) persist(); // mở từ liên kết cũng là "bộ lọc cuối" của tôi trong dự án này
   const showIntake = false; // "Gửi yêu cầu / Tiếp nhận" đã bỏ khỏi giao diện (GĐ3f)
@@ -123,7 +153,7 @@ export async function renderProject(root, id, params, setCrumbs, stillCurrent) {
   $('#bulkDispatchBtn', root)?.addEventListener('click', () => openBulkDispatch());
   $('#exportBtn', root)?.addEventListener('click', () => exportRegister(project));
   $('#importBtn', root)?.addEventListener('click', openImportChooser);
-  if (mtl) bindMtlActions($('.proj', root), project, () => reloadProject());
+  if (mtl) bindMtlActions($('.proj', root), project, () => { forgetProjectData(); reloadProject(); });
   // Bộ lọc lấy từ bộ nhớ / mặc định / bộ lọc đã lưu: ghi lên URL để sao chép, tải lại vẫn giữ.
   if (itemView) writeUrl(); else writtenKey = hashKey();
   drawBody();
@@ -651,6 +681,8 @@ export async function reloadProject({ realtime = false, ids = null } = {}) {
   if (realtime && userBusy()) { deferredReload = true; return; }
   deferredReload = false;
   invalidateMtl();
+  // Người khác đổi cả dự án (chu kỳ, giao hàng loạt…): lần đổi tab sau tải lại cả bộ, không dùng bộ đã tải.
+  if (realtime && !ids?.length) forgetProjectData();
   const id = current.project.id;
   if (ids?.length) {
     // Cập nhật thời gian thực vài việc: tải đúng các việc đó, thay vào danh sách (việc đã xoá / không còn được xem thì bỏ ra).
@@ -683,7 +715,9 @@ function drawBodyPass() {
     if (isActive() && !filtered().length) { body.innerHTML = emptyHtml(); return; }
   }
   if (view === 'mtl' || view === 'plan' || view === 'sprint') {
-    const params = current.params || new URLSearchParams(location.hash.split('?')[1] || '');
+    // Tham số trên URL hiện tại: tab con tự ghi bộ lọc / khung Gantt / giai đoạn đang chọn bằng replaceState — vẽ lại (realtime) giữ nguyên.
+    const [path, query = ''] = location.hash.split('?');
+    const params = path === `#/projects/${current.project.id}` ? new URLSearchParams(query) : current.params || new URLSearchParams();
     const p = view === 'mtl' ? drawMtlOverview(body, current.project) : view === 'sprint' ? drawMtlSprint(body, current.project, params) : drawMtlPlan(body, current.project, params);
     p.catch(error => { body.innerHTML = `<div class="card empty">${esc(errorMessage(error))}</div>`; });
     return;
