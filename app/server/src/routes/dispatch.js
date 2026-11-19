@@ -301,8 +301,7 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
       if (item.state.category === 'REVIEW') fail(409, 'Việc đang chờ duyệt', 'APPROVAL_PENDING');
       if (['COMPLETED', 'CANCELLED'].includes(item.state.category)) fail(409, 'Việc đã kết thúc', 'CLOSED');
       const review = await tx.workflowState.findFirst({ where: { projectId: project.id, category: 'REVIEW' }, orderBy: { position: 'asc' } });
-      const steps = await approval.stepsForItem(tx, project, item);
-      if (!review || !steps.length) fail(409, 'Việc này không cần duyệt — chuyển thẳng sang Hoàn thành', 'NO_APPROVAL');
+      if (!review) fail(409, 'Dự án chưa có cột "Chờ duyệt"', 'MISSING_REVIEW_STATE');
       const t = await W.transition(tx, { project, rights, item, toState: review, overrideWip: 'bulk' });
       const updated = await tx.workItem.update({ where: { id }, data: { ...t.data, position: await W.endPosition(tx, review.id) } });
       await W.afterTransition(tx, { user: req.user, project, item: updated, fromState: item.state, toState: review, steps: t.steps });

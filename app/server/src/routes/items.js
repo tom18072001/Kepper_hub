@@ -9,6 +9,7 @@ const approval = require('../services/approval');
 const bus = require('../services/bus');
 const W = require('../services/workitems');
 const tree = require('../services/tree');
+const rules = require('../services/task-rules');
 const storage = require('../lib/storage');
 const { describe: describeRule } = require('../services/recurring');
 const { stageOf } = require('../services/stage');
@@ -105,7 +106,8 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       ...BOARD_INCLUDE, state: true,
       progressReports: { orderBy: { id: 'desc' }, take: 100 }, extensions: { orderBy: { id: 'desc' } }, documents: { orderBy: { id: 'asc' } }, parent: { select: { id: true, number: true, title: true } }, cycle: true,
       children: { where: { archivedAt: null }, select: { id: true, number: true, title: true, dueDate: true, baselineStart: true, baselineEnd: true, weight: true, startedAt: true, internalDueDate: true, progress: true, completedAt: true, returnedAt: true, dispatchStatus: true,
-        state: { select: { name: true, category: true } }, assignees: { select: { user: { select: { id: true, fullName: true } } } }, approvals: { where: { status: 'PENDING' }, select: { currentLevel: true } } }, orderBy: { id: 'asc' } },
+        state: { select: { name: true, category: true } }, assignees: { select: { user: { select: { id: true, fullName: true } } } }, approvals: { where: { status: 'PENDING' }, select: { currentLevel: true, withAssigner: true } },
+        children: { where: { archivedAt: null }, select: { state: { select: { category: true } } } } }, orderBy: { id: 'asc' } },
       plan: { select: { id: true, name: true, year: true } },
       checklist: { orderBy: [{ position: 'asc' }, { id: 'asc' }] },
       comments: { orderBy: { id: 'asc' } },
@@ -122,7 +124,9 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
     const pending = item.approvals.find(r => r.status === 'PENDING');
     // Đang chờ duyệt: hiện đúng số cấp đã chốt lúc gửi; ngược lại: số cấp hiệu lực hiện tại của việc.
     const effective = await approval.levelsForItem(prisma, project, allSteps, { id: item.id, parentId: item.parentId, approvalLevels: item.approvalLevels, priority: item.priority, labelIds: item.labels.map(l => l.labelId) });
-    const steps = allSteps.slice(0, pending ? pending.totalLevels : effective.levels);
+    // Chuỗi duyệt: cấp 1 = người giao (bắt buộc chấm mức hoàn thành), sau đó các cấp dự án. Phiếu cũ giữ chuỗi cũ.
+    const steps = pending ? await approval.chainFor(prisma, project, pending) : rules.chainOf(allSteps.slice(0, effective.levels), true);
+    const currentStep = pending ? rules.stepAt(steps, pending.currentLevel) : null;
     const canApprove = pending ? await approval.canAct(prisma, req.user, project, pending, item) : false;
     const lastLevel = pending ? pending.currentLevel === pending.totalLevels : false;
     // Lãnh đạo phòng chủ trì (trưởng / phó phòng hoặc người được uỷ quyền): tiếp nhận, phân công, duyệt cấp phòng.
@@ -163,7 +167,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       progressReports: item.progressReports.map(r => ({ ...r, authorName: names[r.authorId], answeredByName: names[r.answeredById] || null, forwardedByName: names[r.forwardedById] || null })),
       extensions: item.extensions.map(x => ({ ...x, requestedByName: names[x.requestedById], decidedByName: names[x.decidedById] || null })),
       documents: item.documents.map(d => ({ ...d, createdByName: names[d.createdById] })),
-      lastLevel,
+      lastLevel, ratingRequired: currentStep?.approverType === 'ASSIGNER', ratings: approval.RATINGS, childProgress: rules.childProgress(item.children),
       can: {
         accept: item.dispatchStatus === 'PENDING' && (isLeadLeader || rights.canManage) && !item.archivedAt,
         reassign: item.dispatchStatus === 'ACCEPTED' && (isLeadLeader || rights.canManage),
@@ -187,11 +191,18 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
         return { actual: act, planned: st.planned ?? MTL.plannedPct(item), status: st.code, statusLabel: MTL.STATUS[st.code], variance: st.variance ?? null, lateDays: st.lateDays ?? null };
       })() : null,
       submitRounds: item.approvals.length,
-      children: item.children.map(c => ({ ...c, assignees: c.assignees.map(a => a.user), stage: stageOf({ ...c, pendingApproval: c.approvals[0] }, allSteps),
+      children: item.children.map(({ children: grand, ...c }) => ({ ...c, assignees: c.assignees.map(a => a.user), stage: stageOf({ ...c, pendingApproval: c.approvals[0] }, allSteps), childProgress: rules.childProgress(grand),
         childCount: kidCount.get(c.id) || 0, actual: rolled.get(c.id) ?? c.progress })),
       ancestors, depth: chain.length, maxDepth: tree.MAX_DEPTH, descendantCount: descIds.length,
       // Người duyệt thực tế từng bước của RIÊNG việc này (việc giao về phòng: lãnh đạo phòng chủ trì, PGĐ phụ trách…).
-      stepApprovers: await (async () => { const ctx = await approval.approvalContext(prisma); return Object.fromEntries(steps.map(st => [st.level, approval.approverIdsSync(ctx, project, st, item).map(id => approverNames[id]).filter(Boolean)])); })(),
+      stepApprovers: await (async () => {
+        const ctx = await approval.approvalContext(prisma);
+        const who = pending ? approval.withDoers(item, pending.requestedById) : item;
+        const ids = Object.fromEntries(steps.map(st => [st.level, approval.approverIdsSync(ctx, project, st, who)]));
+        const extra = [...new Set(Object.values(ids).flat())].filter(id => !approverNames[id]);
+        if (extra.length) for (const u of await prisma.user.findMany({ where: { id: { in: extra } }, select: { id: true, fullName: true } })) approverNames[u.id] = u.fullName;
+        return Object.fromEntries(Object.entries(ids).map(([lv, list]) => [lv, list.map(id => approverNames[id]).filter(Boolean)]));
+      })(),
     });
   });
 
@@ -326,24 +337,22 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       }
       for (const key of Object.keys(data)) if (String(item[key] ?? '') !== String(data[key] ?? '')) changed[key] = key === 'descriptionHtml' || key === 'descriptionText' ? true : data[key];
       let moved = null;
-      // Kepper (MTL): cập nhật % tự chuyển cột — > 0% từ "Chưa bắt đầu" sang "Đang thực hiện"; 100% (không cần duyệt) sang "Hoàn thành".
+      // Kepper (MTL): cập nhật % tự chuyển cột — > 0% từ "Chưa bắt đầu" sang "Đang thực hiện"; 100% → gửi người giao duyệt ("Chờ duyệt")
+      // khi mọi việc con đã xong (còn con mở thì chỉ ghi %).
       if (project.kind === 'MTL' && data.progress !== undefined && body.stateId === undefined) {
         const cat = item.state.category;
         const want = data.progress >= 100 ? 'COMPLETED' : data.progress > 0 && ['BACKLOG', 'UNSTARTED'].includes(cat) ? 'STARTED' : null;
         if (want && want !== cat) {
           const target = await tx.workflowState.findFirst({ where: { projectId: project.id, category: want }, orderBy: { position: 'asc' } });
-          if (target) {
-            const steps = await approval.stepsForItem(tx, project, item);
-            if (!(want === 'COMPLETED' && steps.length)) body.stateId = target.id;
-          }
+          if (target && (want !== 'COMPLETED' || await W.canAutoSubmit(tx, item))) body.stateId = target.id;
         }
       }
       if (body.stateId !== undefined && Number(body.stateId) !== item.stateId) {
         const toState = await tx.workflowState.findFirst({ where: { id: intParam(body.stateId, 'Trạng thái'), projectId: project.id } });
         if (!toState) fail(422, 'Trạng thái không hợp lệ', 'INVALID_STATE');
         const t = await W.transition(tx, { project, rights, item, toState, overrideWip: body.overrideWip });
-        Object.assign(data, t.data, { position: await W.endPosition(tx, toState.id) });
-        moved = { ...t, toState };
+        Object.assign(data, t.data, { position: await W.endPosition(tx, t.toState.id) });
+        moved = t;
       }
       const assigneeIds = W.idList(body.assigneeIds, 'Người nhận');
       // Việc giao về phòng: chỉ lãnh đạo phòng chủ trì (hoặc uỷ quyền), người giao, người quản lý được phân công.
@@ -382,6 +391,9 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       const updated = await tx.workItem.update({ where: { id }, data });
       if (Object.keys(changed).length) await activity(tx, id, req.user.id, 'UPDATED', changed);
       if (moved) await W.afterTransition(tx, { user: req.user, project, item: updated, fromState: item.state, toState: moved.toState, steps: moved.steps });
+      // Gắn việc chưa xong vào dưới một việc cha đang chờ duyệt / đã hoàn thành → mở lại việc cha.
+      if (data.parentId && data.parentId !== item.parentId && !['COMPLETED', 'CANCELLED'].includes((moved?.toState || item.state).category))
+        await W.reopenAncestors(tx, { user: req.user, parentId: data.parentId, reason: `Gắn việc con ${project.key}-${item.number}` });
       if (added.length) await notify(tx, added, { type: 'ASSIGNED', title: `Bạn được giao ${project.key}-${item.number}`, body: updated.title, link: W.link(project, item) }, req.user.id);
       await audit(req, 'UPDATE', 'WorkItem', id, null, { ...changed, ...(moved ? { stateId: moved.toState.id } : {}), ...(assigneeIds ? { assigneeIds } : {}) }, tx);
       return updated;
@@ -404,10 +416,11 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       if (toState.id !== item.stateId) await mtlGuard(tx, req.user, project, rights, id, { progress: true, toState, fromCategory: item.state.category });
       if (toState.id !== item.stateId) assertDispatchChange(await dispatchRole(tx, req.user, rights, project, { ...item, assignees: await tx.workItemAssignee.findMany({ where: { workItemId: id } }) }), { toState });
       const t = await W.transition(tx, { project, rights, item, toState, overrideWip: req.body.overrideWip });
-      const position = await W.positionBetween(tx, toState.id, optionalInt(req.body.afterId, 'Thẻ phía trên'), optionalInt(req.body.beforeId, 'Thẻ phía dưới'));
+      // Kéo sang "Hoàn thành" khi chưa duyệt → vào cuối cột "Chờ duyệt".
+      const position = t.redirected ? await W.endPosition(tx, t.toState.id) : await W.positionBetween(tx, toState.id, optionalInt(req.body.afterId, 'Thẻ phía trên'), optionalInt(req.body.beforeId, 'Thẻ phía dưới'));
       const updated = await tx.workItem.update({ where: { id }, data: { ...t.data, position } });
-      await W.afterTransition(tx, { user: req.user, project, item: updated, fromState: item.state, toState, steps: t.steps });
-      if (item.stateId !== toState.id) await audit(req, 'MOVE', 'WorkItem', id, { stateId: item.stateId }, { stateId: toState.id }, tx);
+      await W.afterTransition(tx, { user: req.user, project, item: updated, fromState: item.state, toState: t.toState, steps: t.steps });
+      if (item.stateId !== t.toState.id) await audit(req, 'MOVE', 'WorkItem', id, { stateId: item.stateId }, { stateId: t.toState.id }, tx);
     });
     bus.item(project.id, id, req.user.id);
     const row = await prisma.workItem.findUnique({ where: { id }, include: BOARD_INCLUDE });

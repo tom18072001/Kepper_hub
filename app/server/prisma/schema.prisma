@@ -220,7 +220,7 @@ model WorkItem {
   internalDueDate    DateTime? // hạn nội bộ do lãnh đạo phòng chủ trì đặt khi phân công (không muộn hơn hạn chính thức)
   returnedAt         DateTime? // bị trả lại ở bước duyệt (xoá khi nộp lại / hoàn thành)
   returnNote         String? // lý do trả lại gần nhất
-  rating             String? // xếp loại khi nghiệm thu: EXCELLENT | GOOD | PASS | FAIL
+  rating             String? // mức hoàn thành khi người giao duyệt: EXCELLENT | GOOD | PASS | NEEDS_IMPROVEMENT | POOR
   ratedById          Int?
   ratedAt            DateTime?
   position           Float                @default(0)
@@ -505,6 +505,7 @@ model ApprovalRequest {
   currentLevel  Int              @default(1)
   totalLevels   Int
   fromStateId   Int? // trạng thái trước khi gửi duyệt, để trả lại khi bị từ chối
+  withAssigner  Boolean          @default(false) // true: cấp 1 = người giao duyệt + chấm mức hoàn thành; cấp k > 1 = bước k-1 của dự án
   requestedById Int
   createdAt     DateTime         @default(now())
   closedAt      DateTime?
@@ -522,6 +523,7 @@ model ApprovalAction {
   actorId      Int
   decision     String // APPROVE | REJECT | SUBMIT | CANCEL
   comment      String?
+  rating       String? // mức hoàn thành người giao chấm khi duyệt (cấp người giao)
   onBehalfOfId Int? // duyệt thay (uỷ quyền) cho người này
   createdAt    DateTime        @default(now())
 

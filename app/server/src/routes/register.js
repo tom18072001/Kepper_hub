@@ -35,7 +35,7 @@ const REGISTER_COLUMNS = [
 ];
 const DATE_COLUMNS = [8, 9, 12]; // Ngày giao, Hạn hoàn thành, Ngày hoàn thành thực tế
 const TASK_TYPE_LABEL = { PLAN: 'Kế hoạch năm', ADHOC: 'Đột xuất' };
-const RATING_LABEL = { EXCELLENT: 'Hoàn thành xuất sắc', GOOD: 'Hoàn thành tốt', PASS: 'Hoàn thành', FAIL: 'Không hoàn thành' };
+const RATING_LABEL = require('../services/task-rules').RATINGS;
 const STATUS_FILL = { OVERDUE: 'FFFDE2E2', DUE_SOON: 'FFFFEDD5', DONE_ON_TIME: 'FFDCFCE7', DONE_LATE: 'FFFEF3C7' };
 const HEAD_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0A4D8C' } };
 const SUB_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF4FB' } };
@@ -442,7 +442,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
     const settings = await R.getSettings(prisma);
     const items = await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, AND: [itemVisibleWhere(req.user)] }, orderBy: { number: 'asc' },
       include: { state: true, assignees: { include: { user: true } }, supporters: { include: { user: true } },
-        approvals: { where: { status: 'PENDING' }, select: { currentLevel: true, status: true } }, documents: { where: { kind: 'BASIS' }, orderBy: { id: 'asc' } } } });
+        approvals: { where: { status: 'PENDING' }, select: { currentLevel: true, status: true, withAssigner: true } }, documents: { where: { kind: 'BASIS' }, orderBy: { id: 'asc' } } } });
     const steps = await prisma.approvalStep.findMany({ where: { projectId: project.id }, orderBy: { level: 'asc' } });
     const names = Object.fromEntries((await prisma.user.findMany({ where: { id: { in: [...new Set(items.map(i => i.assignedById).filter(Boolean))] } }, select: { id: true, fullName: true } })).map(u => [u.id, u.fullName]));
     const deptNames = Object.fromEntries((await prisma.department.findMany({ select: { id: true, name: true } })).map(d => [d.id, d.name]));

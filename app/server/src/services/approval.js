@@ -4,6 +4,7 @@
 const { permissionScope } = require('../lib/permissions');
 const { fail } = require('../lib/http');
 const { activity, notify, notifyRequesterIfDone } = require('./events');
+const rules = require('./task-rules');
 
 const APPROVER_TYPES = {
   PROJECT_LEAD: 'Trưởng dự án',
@@ -11,8 +12,12 @@ const APPROVER_TYPES = {
   DIRECTOR: 'Ban giám đốc',
   SUPERVISOR: 'Người giao / PGĐ phụ trách',
   USER: 'Người được chỉ định',
+  ASSIGNER: 'Người giao việc',
 };
-const RATINGS = { EXCELLENT: 'Hoàn thành xuất sắc', GOOD: 'Hoàn thành tốt', PASS: 'Hoàn thành', FAIL: 'Không hoàn thành' };
+const { RATINGS, ASSIGNER_STEP } = rules;
+const assigneeIdsOf = item => (item?.assignees || []).map(a => a.userId ?? a.user?.id ?? a.id).filter(id => id != null);
+// Người làm của một phiếu: người chủ trì; việc chưa giao ai thì người gửi duyệt được coi là người làm (không tự duyệt).
+const withDoers = (item, requestedById) => (assigneeIdsOf(item).length || requestedById == null ? item : { ...item, assignees: [{ userId: requestedById }] });
 
 // Người đang được uỷ quyền thay (trong thời hạn) cho các tài khoản `ids`.
 async function withDelegates(client, ids, now = new Date()) {
@@ -29,25 +34,42 @@ async function deptLeaderIds(client, departmentId) {
 // Ngữ cảnh duyệt nạp một lần (người có quyền duyệt, PGĐ phụ trách từng phòng, uỷ quyền đang hiệu lực, các bước duyệt):
 // tính người duyệt cho nhiều phiếu trong bộ nhớ thay vì vài truy vấn cho mỗi phiếu (hàng chờ, số đếm huy hiệu).
 async function approvalContext(client, projectIds = [], now = new Date()) {
-  const [users, depts, delegations, steps] = await Promise.all([
+  const [users, depts, delegations, steps, active] = await Promise.all([
     client.user.findMany({ where: { isActive: true, permissions: { some: { permissionKey: 'work.approve' } } }, include: { permissions: true } }),
     client.department.findMany({ select: { id: true, supervisorId: true } }),
     client.delegation.findMany({ where: { revokedAt: null, startsAt: { lte: now }, endsAt: { gte: now } }, select: { fromUserId: true, toUserId: true } }),
     projectIds.length ? client.approvalStep.findMany({ where: { projectId: { in: projectIds } }, orderBy: { level: 'asc' } }) : [],
+    client.user.findMany({ where: { isActive: true, isRootAdmin: false, role: { not: 'admin' } }, select: { id: true, departmentId: true } }),
   ]);
   const scope = new Map(users.map(u => [u.id, permissionScope(u, 'work.approve', 'OPERATE')]));
   const steps_ = new Map(projectIds.map(id => [id, []]));
   for (const st of steps) steps_.get(st.projectId)?.push(st);
-  return { users, scope, sys: new Set(users.filter(u => scope.get(u.id) === 'SYSTEM').map(u => u.id)), supervisor: new Map(depts.map(d => [d.id, d.supervisorId])), delegations, steps: steps_ };
+  return { users, scope, sys: new Set(users.filter(u => scope.get(u.id) === 'SYSTEM').map(u => u.id)), supervisor: new Map(depts.map(d => [d.id, d.supervisorId])), delegations, steps: steps_,
+    active: new Map(active.map(u => [u.id, { departmentId: u.departmentId }])) };
 }
 const withDelegatesSync = (ctx, ids) => (ids.length ? [...new Set([...ids, ...ctx.delegations.filter(d => ids.includes(d.fromUserId)).map(d => d.toUserId)])] : ids);
 // `item` (tuỳ chọn): việc giao về phòng thì cấp "Trưởng phòng" là lãnh đạo PHÒNG CHỦ TRÌ, không phải phòng sở hữu sổ;
 // cấp "Người giao / PGĐ phụ trách" là người giao (nếu thuộc Ban Giám đốc) và PGĐ phụ trách phòng chủ trì.
 // `delegates: false` → chỉ người duyệt "chính chủ" (để biết ai đang duyệt thay theo uỷ quyền).
 // DIRECTOR ("Ban giám đốc"): PGĐ phụ trách phòng của việc (+ người giao nếu thuộc BGĐ); phòng chưa có PGĐ phụ trách thì bất kỳ ai trong BGĐ.
+// ASSIGNER: người giao (việc tự giao / người giao đã nghỉ → lãnh đạo bộ phận…), không bao giờ là người chủ trì,
+// kể cả qua uỷ quyền.
+function assignerApproversSync(ctx, project, item) {
+  return rules.assignerApprovers({ assignedById: item?.assignedById, reporterId: item?.reporterId, leadDepartmentId: item?.leadDepartmentId, assigneeIds: assigneeIdsOf(item) }, {
+    active: ctx.active || new Map(), projectLeadId: project.leadId ?? null, projectDepartmentId: project.departmentId ?? null,
+    leaders: dept => ctx.users.filter(u => Number(u.departmentId) === Number(dept) && ctx.scope.get(u.id)).map(u => u.id),
+    supervisorOf: dept => ctx.supervisor.get(dept) ?? null, directors: [...ctx.sys],
+  });
+}
 function approverIdsSync(ctx, project, step, item = null, { delegates = true } = {}) {
   if (!step) return [];
   let ids = [];
+  if (step.approverType === 'ASSIGNER') {
+    ids = assignerApproversSync(ctx, project, item).ids;
+    if (!delegates) return ids;
+    const mine = new Set(assigneeIdsOf(item));
+    return withDelegatesSync(ctx, ids).filter(id => !mine.has(id));
+  }
   if (step.approverType === 'PROJECT_LEAD') ids = project.leadId ? [project.leadId] : [];
   else if (step.approverType === 'USER') ids = step.approverUserId ? [step.approverUserId] : [];
   else if (step.approverType === 'DEPARTMENT_MANAGER') {
@@ -115,13 +137,19 @@ async function levelsForItem(client, project, steps, item = {}) {
   }
   return { levels: clamp(project.defaultApprovalLevels ?? steps.length), source: 'DEFAULT' };
 }
+// Chuỗi duyệt khi gửi duyệt một việc: luôn có người giao ở cấp 1, sau đó các cấp dự án áp dụng cho việc.
 async function stepsForItem(client, project, item) {
   const steps = await stepsOf(client, project.id);
-  return steps.slice(0, (await levelsForItem(client, project, steps, item)).levels);
+  return rules.chainOf(steps.slice(0, (await levelsForItem(client, project, steps, item)).levels), true);
 }
+// Chuỗi duyệt của một phiếu đã mở (phiếu cũ không có cấp người giao).
+async function chainFor(client, project, request) {
+  return rules.chainOf(await stepsOf(client, project.id), !!request.withAssigner).filter(s => s.level <= request.totalLevels);
+}
+// n = số cấp dự án (không tính cấp người giao, luôn có).
 function levelsLabel(n, total) {
-  if (!total || n === 0) return 'Không cần duyệt';
-  return n >= total ? `Đủ ${total} cấp` : `${n} cấp đầu`;
+  if (!total || n === 0) return 'Chỉ người giao duyệt';
+  return n >= total ? `Người giao + đủ ${total} cấp` : `Người giao + ${n} cấp đầu`;
 }
 
 function itemLink(project, item) { return `#/projects/${project.id}?item=${item.id}`; }
@@ -130,11 +158,12 @@ function itemCode(project, item) { return `${project.key}-${item.number}`; }
 // Gọi trong transaction khi việc vừa được chuyển vào cột REVIEW.
 async function openRequest(tx, { project, item, fromStateId, actor }) {
   const steps = await stepsForItem(tx, project, item);
-  if (!steps.length) return null;
   const pending = await tx.approvalRequest.findFirst({ where: { workItemId: item.id, status: 'PENDING' } });
   if (pending) return pending;
+  if (!item.assignees) item = { ...item, assignees: await tx.workItemAssignee.findMany({ where: { workItemId: item.id } }) };
+  item = withDoers(item, actor.id);
   const request = await tx.approvalRequest.create({ data: {
-    workItemId: item.id, totalLevels: steps.length, currentLevel: 1, fromStateId, requestedById: actor.id,
+    workItemId: item.id, totalLevels: steps.length, currentLevel: 1, fromStateId, requestedById: actor.id, withAssigner: true,
     actions: { create: { level: 0, actorId: actor.id, decision: 'SUBMIT' } },
   } });
   await tx.workItem.update({ where: { id: item.id }, data: { returnedAt: null, returnNote: null } });
@@ -161,12 +190,14 @@ async function hasApproval(tx, itemId) {
 
 // Người gửi duyệt không tự duyệt yêu cầu của chính mình (kể cả khi là trưởng phòng/trưởng dự án).
 async function canAct(client, user, project, request, item = request.workItem) {
-  if (request.requestedById === user.id) return false;
+  item = withDoers(item, request.requestedById);
+  const chain = await chainFor(client, project, request);
+  const step = rules.stepAt(chain, request.currentLevel);
+  if (assigneeIdsOf(item).includes(user.id)) return false;
+  if (step?.approverType !== 'ASSIGNER' && request.requestedById === user.id) return false;
   // Một người không duyệt hai cấp của cùng một phiếu (vd. vừa duyệt cấp phòng, vừa được uỷ quyền cấp BGĐ).
   const actions = request.actions || await client.approvalAction.findMany({ where: { requestId: request.id }, select: { actorId: true, decision: true, level: true } });
   if (actions.some(a => a.actorId === user.id && a.decision === 'APPROVE' && a.level < request.currentLevel)) return false;
-  const steps = await stepsOf(client, project.id);
-  const step = steps.find(s => s.level === request.currentLevel);
   return (await approverIds(client, project, step, item)).includes(user.id);
 }
 
@@ -177,22 +208,27 @@ async function decide(prisma, user, requestId, decision, comment, { rating } = {
     const request = await tx.approvalRequest.findUnique({ where: { id: requestId }, include: { workItem: { include: { project: true, assignees: true } }, actions: true } });
     if (!request) fail(404, 'Không tìm thấy yêu cầu duyệt', 'NOT_FOUND');
     if (request.status !== 'PENDING') fail(409, 'Yêu cầu đã được xử lý', 'APPROVAL_CLOSED');
-    const item = request.workItem, project = item.project;
-    if (request.requestedById === user.id) fail(403, 'Không thể tự duyệt việc do chính mình gửi duyệt', 'SELF_APPROVAL');
+    const item = withDoers(request.workItem, request.requestedById), project = item.project;
+    const steps = await chainFor(tx, project, request);
+    const step = rules.stepAt(steps, request.currentLevel);
+    rules.checkDecision({ step, decision, rating, comment, userId: user.id, assigneeIds: assigneeIdsOf(item), requestedById: request.requestedById });
     if (request.actions.some(a => a.actorId === user.id && a.decision === 'APPROVE' && a.level < request.currentLevel)) fail(403, 'Bạn đã duyệt ở bước trước của phiếu này — bước sau do người khác duyệt', 'DOUBLE_APPROVAL');
-    if (!(await canAct(tx, user, project, request))) fail(403, 'Bạn không phải người duyệt ở bước này', 'NOT_APPROVER');
-    const steps = await stepsOf(tx, project.id);
-    const step = steps.find(s => s.level === request.currentLevel);
+    if (!(await canAct(tx, user, project, request))) fail(403, step?.approverType === 'ASSIGNER' ? 'Chỉ người giao việc (hoặc người duyệt thay theo uỷ quyền) được duyệt và chấm mức hoàn thành' : 'Bạn không phải người duyệt ở bước này', 'NOT_APPROVER');
+    const graded = decision === 'APPROVE' && step?.approverType === 'ASSIGNER';
     const watchers = [request.requestedById, item.reporterId, ...item.assignees.map(a => a.userId)];
     const onBehalfOfId = await actingFor(tx, user, project, step, item);
     const onBehalfOf = onBehalfOfId ? (await tx.user.findUnique({ where: { id: onBehalfOfId }, select: { fullName: true } }))?.fullName : null;
-    await tx.approvalAction.create({ data: { requestId, level: request.currentLevel, actorId: user.id, decision, comment: comment || null, onBehalfOfId } });
+    await tx.approvalAction.create({ data: { requestId, level: request.currentLevel, actorId: user.id, decision, comment: comment || null, onBehalfOfId, rating: graded ? rating : null } });
+    // Người giao chấm mức hoàn thành (kèm nhận xét) ngay ở cấp của mình — lưu ai, lúc nào, mức nào, nhận xét gì.
+    if (graded) await tx.workItem.update({ where: { id: item.id }, data: { rating, ratedById: user.id, ratedAt: new Date(),
+      review: comment ? comment.slice(0, 2000) : '', reviewedById: user.id, reviewedAt: new Date() } });
     // Thông báo "Cần duyệt" của bước này hết hiệu lực với mọi người (đã có người xử lý).
     await tx.notification.updateMany({ where: { type: 'APPROVAL_REQUESTED', link: itemLink(project, item), readAt: null }, data: { readAt: new Date() } });
     const label = `${itemCode(project, item)} · ${item.title.slice(0, 80)}`;
 
     if (decision === 'REJECT') {
-      const back = request.fromStateId
+      // Phiếu mới: trả lại luôn về "Đang làm". Phiếu cũ: về trạng thái trước khi gửi duyệt.
+      const back = request.fromStateId && !request.withAssigner
         ? await tx.workflowState.findFirst({ where: { id: request.fromStateId, projectId: project.id } })
         : null;
       const target = back || await tx.workflowState.findFirst({ where: { projectId: project.id, category: 'STARTED' }, orderBy: { position: 'asc' } });
@@ -203,23 +239,37 @@ async function decide(prisma, user, requestId, decision, comment, { rating } = {
       return updated;
     }
 
-    if (request.currentLevel < request.totalLevels) {
-      const next = steps.find(s => s.level === request.currentLevel + 1);
-      const updated = await tx.approvalRequest.update({ where: { id: requestId }, data: { currentLevel: request.currentLevel + 1 } });
+    // Người giao vừa duyệt mà cũng là người duyệt (chính chủ) của các cấp dự án kế tiếp (vd. người giao là trưởng phòng,
+    // cấp 2 là "Trưởng phòng") → các cấp đó tự qua, ghi rõ trong lịch sử — tránh phiếu kẹt vì "một người không duyệt hai cấp".
+    let nextLevel = request.currentLevel + 1;
+    if (graded) while (nextLevel <= request.totalLevels) {
+      const st = rules.stepAt(steps, nextLevel);
+      if (!(await approverIds(tx, project, st, item, { delegates: false })).includes(user.id)) break;
+      await tx.approvalAction.create({ data: { requestId, level: nextLevel, actorId: user.id, decision: 'APPROVE', comment: `Tự động qua: ${user.fullName || 'người giao'} đã duyệt ở cấp người giao` } });
+      nextLevel++;
+    }
+    if (nextLevel <= request.totalLevels) {
+      const next = steps.find(s => s.level === nextLevel);
+      const updated = await tx.approvalRequest.update({ where: { id: requestId }, data: { currentLevel: nextLevel } });
       await activity(tx, item.id, user.id, 'APPROVAL_APPROVED', { requestId, level: request.currentLevel, step: step?.name, comment, next: next?.name, ...(onBehalfOf ? { onBehalfOf } : {}) });
-      await notify(tx, await approverIds(tx, project, next, item), { type: 'APPROVAL_REQUESTED', title: `Cần duyệt ${label} (${next?.name})`, body: comment || item.title, link: itemLink(project, item) }, user.id);
+      await notify(tx, (await approverIds(tx, project, next, item)).filter(id => !assigneeIdsOf(item).includes(id)), { type: 'APPROVAL_REQUESTED', title: `Cần duyệt ${label} (${next?.name})`, body: comment || item.title, link: itemLink(project, item) }, user.id);
       await notify(tx, watchers, { type: 'APPROVAL_PROGRESS', title: `${label}: đã qua bước "${step?.name}", chuyển "${next?.name}"`, body: comment || null, link: itemLink(project, item) }, user.id);
       return updated;
     }
 
+    // Việc cha: mọi việc con phải đã được duyệt hoàn thành (con có thể bị mở lại trong lúc cha chờ duyệt).
+    rules.assertChildrenDone(await tx.workItem.findMany({ where: { parentId: item.id, archivedAt: null }, select: { state: { select: { category: true } } } }), 'duyệt hoàn thành');
     const done = await tx.workflowState.findFirst({ where: { projectId: project.id, category: 'COMPLETED' }, orderBy: { position: 'asc' } });
     const position = await endPosition(tx, done.id);
-    // Cấp cuối: người duyệt nghiệm thu, có thể xếp loại (kèm nhận xét = đánh giá của người giao).
-    const graded = rating && RATINGS[rating] ? { rating, ratedById: user.id, ratedAt: new Date(), ...(comment ? { review: comment.slice(0, 2000), reviewedById: user.id, reviewedAt: new Date() } : {}) } : {};
-    await tx.workItem.update({ where: { id: item.id }, data: { stateId: done.id, completedAt: new Date(), position, progress: 100, returnedAt: null, returnNote: null, ...graded } });
-    const updated = await tx.approvalRequest.update({ where: { id: requestId }, data: { status: 'APPROVED', closedAt: new Date() } });
-    await activity(tx, item.id, user.id, 'APPROVAL_COMPLETED', { requestId, level: request.currentLevel, step: step?.name, comment, toStateId: done.id, ...(graded.rating ? { rating: graded.rating } : {}), ...(onBehalfOf ? { onBehalfOf } : {}) });
-    await notify(tx, watchers, { type: 'APPROVAL_COMPLETED', title: `${label} đã được duyệt hoàn thành${graded.rating ? ` — ${RATINGS[graded.rating]}` : ''}`, body: comment || null, link: itemLink(project, item) }, user.id);
+    // Phiếu cũ: cấp cuối có thể xếp loại tuỳ chọn. Phiếu mới: mức đã chấm ở cấp người giao.
+    const legacyGrade = !graded && rating && RATINGS[rating] ? { rating, ratedById: user.id, ratedAt: new Date(), ...(comment ? { review: comment.slice(0, 2000), reviewedById: user.id, reviewedAt: new Date() } : {}) } : {};
+    // KPI "đúng hạn" tính theo ngày người chủ trì gửi duyệt (người duyệt chậm không làm người làm bị tính trễ).
+    const completedAt = request.withAssigner ? request.createdAt : new Date();
+    await tx.workItem.update({ where: { id: item.id }, data: { stateId: done.id, completedAt, position, progress: 100, returnedAt: null, returnNote: null, ...legacyGrade } });
+    const finalRating = graded ? rating : legacyGrade.rating || (await tx.workItem.findUnique({ where: { id: item.id }, select: { rating: true } }))?.rating;
+    const updated = await tx.approvalRequest.update({ where: { id: requestId }, data: { status: 'APPROVED', closedAt: new Date(), currentLevel: request.totalLevels } });
+    await activity(tx, item.id, user.id, 'APPROVAL_COMPLETED', { requestId, level: request.currentLevel, step: step?.name, comment, toStateId: done.id, ...(finalRating ? { rating: finalRating } : {}), ...(onBehalfOf ? { onBehalfOf } : {}) });
+    await notify(tx, watchers, { type: 'APPROVAL_COMPLETED', title: `${label} đã được duyệt hoàn thành${finalRating && RATINGS[finalRating] ? ` — ${RATINGS[finalRating]}` : ''}`, body: comment || null, link: itemLink(project, item) }, user.id);
     await notifyRequesterIfDone(tx, item, project, 'COMPLETED', user.id);
     return updated;
   });
@@ -235,7 +285,7 @@ async function endPosition(client, stateId) {
 // Trả { request, step, onBehalfOfId } và kèm ngữ cảnh để nơi gọi dùng lại.
 async function queueFor(prisma, user, { withContext = false } = {}) {
   const pending = await prisma.approvalRequest.findMany({
-    where: { status: 'PENDING', requestedById: { not: user.id }, workItem: { archivedAt: null, project: { deletedAt: null } } }, orderBy: { createdAt: 'asc' },
+    where: { status: 'PENDING', workItem: { archivedAt: null, project: { deletedAt: null }, assignees: { none: { userId: user.id } } } }, orderBy: { createdAt: 'asc' },
     include: { workItem: { include: { project: true, state: true, assignees: { include: { user: { select: { id: true, fullName: true } } } } } }, actions: { orderBy: { id: 'asc' } } },
   });
   const ctx = await approvalContext(prisma, [...new Set(pending.map(r => r.workItem.projectId))]);
@@ -244,10 +294,13 @@ async function queueFor(prisma, user, { withContext = false } = {}) {
     // Một người không duyệt hai cấp của cùng một phiếu.
     if (request.actions.some(a => a.actorId === user.id && a.decision === 'APPROVE' && a.level < request.currentLevel)) continue;
     const project = request.workItem.project;
-    const step = ctx.steps.get(project.id)?.find(st => st.level === request.currentLevel);
-    if (approverIdsSync(ctx, project, step, request.workItem).includes(user.id)) out.push({ request, step, onBehalfOfId: actingForSync(ctx, user, project, step, request.workItem) });
+    const step = rules.stepAt(rules.chainOf(ctx.steps.get(project.id) || [], !!request.withAssigner), request.currentLevel);
+    if (step?.approverType !== 'ASSIGNER' && request.requestedById === user.id) continue;
+    const it = withDoers(request.workItem, request.requestedById);
+    if (assigneeIdsOf(it).includes(user.id)) continue;
+    if (approverIdsSync(ctx, project, step, it).includes(user.id)) out.push({ request, step, onBehalfOfId: actingForSync(ctx, user, project, step, it) });
   }
   return withContext ? { items: out, ctx } : out;
 }
 
-module.exports = { APPROVER_TYPES, RATINGS, withDelegates, deptLeaderIds, approvalContext, approverIdsSync, approverIds, actingFor, actingForSync, canAct, stepsOf, stepsForItem, levelsForItem, levelsLabel, openRequest, cancelPending, hasApproval, decide, queueFor, endPosition };
+module.exports = { APPROVER_TYPES, RATINGS, ASSIGNER_STEP, chainFor, assigneeIdsOf, withDoers, withDelegates, deptLeaderIds, approvalContext, approverIdsSync, approverIds, actingFor, actingForSync, canAct, stepsOf, stepsForItem, levelsForItem, levelsLabel, openRequest, cancelPending, hasApproval, decide, queueFor, endPosition };
