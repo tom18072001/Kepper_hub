@@ -29,6 +29,7 @@ const timeOn = (day, hhmm, label) => {
 };
 const phone = (v, label) => { const s = text(v, label, { max: 30 }); if (s && !/^[0-9+().\s-]{6,30}$/.test(s)) fail(422, label + ' không hợp lệ', 'INVALID_VALUE'); return s || null; };
 const emailOf = v => { const s = text(v, 'Email cá nhân', { max: 120 }); if (s && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) fail(422, 'Email cá nhân không hợp lệ', 'INVALID_VALUE'); return s || null; };
+const NO_IN_NOTE = 'Chấm ra khi chưa chấm vào — thiếu giờ vào';
 const fmtRange = (a, b) => WK.fmtD(a) + (b && b !== a ? '–' + WK.fmtD(b) : '');
 
 // Xác nhận lại mật khẩu trước khi hiện CCCD / lương: chặn AI điều khiển trình duyệt (không được nhập mật khẩu) và máy bỏ quên chưa khoá.
@@ -63,8 +64,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     if (!u) fail(404, 'Không tìm thấy nhân sự', 'NOT_FOUND');
     return u;
   };
-  const tctx = (u, cfg, extra = {}) => ({ targetUserId: u.id, departmentId: u.departmentId, targetLeader: H.isLeader(u) || H.isDirector(u), targetDirector: H.isDirector(u),
-    targetHr: cfg.hrUserIds.includes(u.id), ...extra });
+  const tctx = H.targetCtx;
   const activeIds = async ids => (ids.length ? (await prisma.user.findMany({ where: { id: { in: ids }, ...ACTIVE_USER }, select: { id: true } })).map(x => x.id) : []);
   // Người duyệt đơn / giải trình: lãnh đạo bộ phận (trừ chính người đó); lãnh đạo bộ phận / bộ phận không có lãnh đạo → Ban GĐ;
   // đơn của Ban GĐ → Ban GĐ khác + người phụ trách nhân sự (ghi nhận).
@@ -80,6 +80,8 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
   app.get('/api/hrm/meta', auth, async (req, res) => {
     const { cfg, s } = await ctxFor(req);
     const admin = P.can(s, 'edit', 'hrm.config');
+    // Số đơn nghỉ + giải trình chờ tôi duyệt (số trên tab "Chờ duyệt").
+    const pending = s.leader || s.director || s.hr ? await H.pendingDecisions(prisma, s, cfg).then(p => p.leaves.length + p.atts.length) : 0;
     res.setHeader('Cache-Control', 'private, no-store');
     res.json({
       leaveTypes: H.LEAVE_TYPES, leaveStatus: H.LEAVE_STATUS, contractTypes: H.CONTRACT_TYPES, profileStatus: H.PROFILE_STATUS, genders: GENDERS,
@@ -87,7 +89,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
         annualDays: cfg.annualDays, officeNetworkOnly: cfg.officeNetworks.length > 0, ...(admin ? { officeNetworks: cfg.officeNetworks, hrUserIds: cfg.hrUserIds } : {}) },
       // IP Kepper nhìn thấy: kiểm tra trước khi bật "chỉ chấm công trong mạng văn phòng" (Docker Desktop thường che IP thật).
       yourIp: admin ? req.ip : undefined,
-      me: { hr: s.hr, director: s.director, leader: s.leader, departmentId: s.departmentId, canConfig: admin, canRoles: P.can(s, 'edit', 'hrm.config', { field: 'roles' }), canImport: s.hr || s.director },
+      me: { hr: s.hr, director: s.director, leader: s.leader, departmentId: s.departmentId, canConfig: admin, canRoles: P.can(s, 'edit', 'hrm.config', { field: 'roles' }), canImport: s.hr || s.director, pending },
     });
   });
   app.put('/api/hrm/config', auth, async (req, res) => {
@@ -359,10 +361,28 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     const { cfg, s } = await ctxFor(req);
     const scope = ['mine', 'approve', 'team'].includes(req.query.scope) ? req.query.scope : 'mine';
     const year = /^\d{4}$/.test(String(req.query.year || '')) ? Number(req.query.year) : Number(WK.dayOf(new Date()).slice(0, 4));
-    const where = { fromDate: { lt: dayStart(`${year + 1}-01-01`) }, toDate: { gte: dayStart(`${year}-01-01`) } };
-    if (scope === 'mine') where.userId = s.userId;
-    else if (scope === 'approve') { where.status = 'PENDING'; where.userId = { not: s.userId }; delete where.fromDate; delete where.toDate; }
-    else if (!s.hr && !s.director) {
+    res.setHeader('Cache-Control', 'private, no-store');
+    if (scope === 'approve') {
+      // Cùng nguồn với số đếm "Chờ tôi duyệt" (services/hrm.pendingDecisions); đơn bắt đầu sớm nhất lên trước.
+      const { leaves, users } = await H.pendingDecisions(prisma, s, cfg);
+      const out = [];
+      for (const l of leaves) {
+        const u = users[l.userId];
+        const o = leaveOut(l, s, cfg, users, u, !!req.via);
+        // Người duyệt thấy số phép còn lại (đã trừ chính đơn này nếu là phép năm) để biết đơn có vượt không.
+        if (l.type === 'ANNUAL') { const prof = await prisma.hrProfile.findUnique({ where: { userId: u.id } }); o.balance = await balance(u, prof, cfg, Number(o.fromDate.slice(0, 4))); }
+        if (!req.via) o.conflicts = await leaveConflicts(u, o.fromDate, o.toDate);
+        out.push(o);
+      }
+      return res.json(out);
+    }
+    const inYear = { fromDate: { lt: dayStart(`${year + 1}-01-01`) }, toDate: { gte: dayStart(`${year}-01-01`) } };
+    const where = { ...inYear };
+    if (scope === 'mine') {
+      where.userId = s.userId;
+      // "Đơn nghỉ của tôi" (không chỉ định năm): năm nay + đơn sắp tới (vd. tháng 12 xin nghỉ tháng 1 năm sau vẫn thấy để theo dõi / huỷ).
+      if (!req.query.year) { delete where.fromDate; delete where.toDate; where.OR = [inYear, { toDate: { gte: dayStart(WK.dayOf(new Date())) } }]; }
+    } else if (!s.hr && !s.director) {
       if (!s.leader) fail(403, 'Chỉ lãnh đạo bộ phận, người phụ trách nhân sự, Ban giám đốc xem đơn nghỉ của bộ phận', 'FORBIDDEN');
       // Theo bộ phận hiện tại của người nghỉ (người chuyển bộ phận: lãnh đạo mới thấy cả đơn cũ).
       where.userId = { in: (await prisma.user.findMany({ where: { departmentId: s.departmentId ?? -1 }, select: { id: true } })).map(x => x.id) };
@@ -373,16 +393,41 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     for (const l of rows) {
       const u = users[l.userId];
       if (!u || !P.can(s, 'view', 'hrm.leave', tctx(u, cfg))) continue;
-      const o = leaveOut(l, s, cfg, users, u, !!req.via);
-      if (scope === 'approve') {
-        if (!o.can.decide) continue;
-        // Người duyệt thấy số phép còn lại (đã trừ chính đơn này nếu là phép năm) để biết đơn có vượt không.
-        if (l.type === 'ANNUAL') { const prof = await prisma.hrProfile.findUnique({ where: { userId: u.id } }); o.balance = await balance(u, prof, cfg, Number(o.fromDate.slice(0, 4))); }
-        if (!req.via) o.conflicts = await leaveConflicts(u, o.fromDate, o.toDate);
-      }
-      out.push(o);
+      out.push(leaveOut(l, s, cfg, users, u, !!req.via));
     }
+    res.json(out);
+  });
+  const clashText = c => `Trùng đơn nghỉ ${WK.fmtDY(WK.dayOf(c.fromDate))}–${WK.fmtDY(WK.dayOf(c.toDate))} (${H.LEAVE_STATUS[c.status]})`;
+  // Xem trước đơn nghỉ của chính mình (form "Xin nghỉ", gọi mỗi khi đổi ngày / loại): số ngày làm việc, phép năm còn lại sau đơn,
+  // đơn trùng. Chỉ đọc; POST /api/hrm/leaves vẫn kiểm tra lại đầy đủ. Lỗi nhập trả trong `error` (200) để form hiện ngay dưới ô.
+  app.get('/api/hrm/leaves/preview', auth, async (req, res) => {
+    const { cfg, s } = await ctxFor(req);
+    const u = await target(s.userId);
+    P.assertCan(s, 'edit', 'hrm.leave', tctx(u, cfg, { op: 'create' }));
     res.setHeader('Cache-Control', 'private, no-store');
+    const q = req.query, from = String(q.fromDate || ''), to = String(q.toDate || q.fromDate || '');
+    const type = H.LEAVE_TYPES[q.type] ? q.type : 'ANNUAL', halfDay = ['NONE', 'AM', 'PM'].includes(q.halfDay) ? q.halfDay : 'NONE';
+    if (!WK.isDay(from) || !WK.isDay(to)) return res.json({ error: 'Chọn từ ngày và đến ngày' });
+    if (to < from) return res.json({ error: 'Đến ngày phải sau từ ngày' });
+    if (WK.addDays(from, H.MAX_LEAVE_DAYS) < to) return res.json({ error: `Một đơn tối đa ${H.MAX_LEAVE_DAYS} ngày` });
+    const days = H.leaveDays(from, to, halfDay, cfg);
+    if (Number.isNaN(days)) return res.json({ error: 'Nghỉ nửa ngày chỉ áp dụng khi từ ngày = đến ngày và là ngày làm việc' });
+    const out = { days, type };
+    if (!days) out.error = 'Khoảng ngày chọn không có ngày làm việc nào';
+    const clash = await H.findLeaveClash(prisma, u.id, from, to, halfDay);
+    if (clash) out.overlap = { id: clash.id, fromDate: WK.dayOf(clash.fromDate), toDate: WK.dayOf(clash.toDate), status: { code: clash.status, label: H.LEAVE_STATUS[clash.status] }, message: clashText(clash) };
+    if (type === 'ANNUAL' && days) {
+      const prof = await prisma.hrProfile.findUnique({ where: { userId: u.id } });
+      out.annual = [];
+      for (const y of H.yearsOf(from, to)) {
+        const need = H.leaveDaysInYear(from, to, halfDay, y, cfg);
+        if (!need) continue;
+        const bal = await balance(u, prof, cfg, y);
+        out.annual.push({ year: y, need, remaining: bal.remaining, after: bal.remaining - need });
+      }
+      const over = out.annual.find(a => a.after < 0);
+      if (over) out.quota = `Phép năm ${over.year} còn ${over.remaining} ngày, đơn cần ${over.need} ngày — chọn "Nghỉ không lương" hoặc liên hệ người phụ trách nhân sự`;
+    }
     res.json(out);
   });
   app.post('/api/hrm/leaves', auth, async (req, res) => {
@@ -406,10 +451,8 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     const reason = text(b.reason, 'Lý do', { max: 200 }) || '';
     const row = await prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_LEAVE}::int, ${u.id}::int)`;
-      const overlaps = await tx.hrLeave.findMany({ where: { userId: u.id, status: { in: ['PENDING', 'APPROVED'] }, fromDate: { lte: dayStart(to) }, toDate: { gte: dayStart(from) } } });
-      // Sáng một loại, chiều một loại trong cùng ngày: không trùng.
-      const clash = overlaps.find(o => !(from === to && halfDay !== 'NONE' && WK.dayOf(o.fromDate) === from && WK.dayOf(o.toDate) === from && o.halfDay !== 'NONE' && o.halfDay !== halfDay));
-      if (clash) fail(409, `Trùng đơn nghỉ ${WK.fmtDY(WK.dayOf(clash.fromDate))}–${WK.fmtDY(WK.dayOf(clash.toDate))} (${H.LEAVE_STATUS[clash.status]})`, 'OVERLAP');
+      const clash = await H.findLeaveClash(tx, u.id, from, to, halfDay);
+      if (clash) fail(409, clashText(clash), 'OVERLAP');
       if (type === 'ANNUAL' && !(s.hr && b.force === true)) {
         const prof = await tx.hrProfile.findUnique({ where: { userId: u.id } });
         for (const y of H.yearsOf(from, to)) {
@@ -478,8 +521,15 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     const kind = oneOf(req.body?.kind, ['in', 'out'], 'Loại chấm công');
     const now = new Date(), day = WK.dayOf(now);
     let row = await prisma.hrAttendance.findUnique({ where: { userId_day: { userId: u.id, day } } });
+    // Chấm ra khi hôm nay chưa chấm vào: chặn (bấm nhầm lúc 0 giờ, quên chấm vào…) trừ khi người dùng xác nhận trên trang
+    // (missingIn: true) — ngày công ghi "thiếu giờ vào" (bảng công NO_IN), bổ sung bằng giải trình.
+    const missingIn = kind === 'out' && !row?.checkIn;
+    if (missingIn && req.body?.missingIn !== true) fail(409, 'Hôm nay bạn chưa chấm vào — chấm vào trước, hoặc xác nhận chấm ra và ghi "thiếu giờ vào" rồi gửi giải trình', 'NO_CHECK_IN');
+    if (kind === 'in' && row?.checkOut && !row.checkIn) fail(409, 'Hôm nay đã chấm ra (thiếu giờ vào) — bổ sung giờ vào bằng giải trình', 'CONFLICT');
+    const noIn = missingIn ? { note: NO_IN_NOTE } : {};
+    if (missingIn) await audit(req, 'HR_ATT_OUT_NO_IN', 'HrAttendance', row?.id ?? null, null, { day });
     if (!row) {
-      try { row = await prisma.hrAttendance.create({ data: { userId: u.id, departmentId: u.departmentId, day, ...(kind === 'in' ? { checkIn: now, inIp: req.ip || null } : { checkOut: now, outIp: req.ip || null }), ...H.lateEarly(kind === 'in' ? now : null, kind === 'out' ? now : null, cfg) } }); }
+      try { row = await prisma.hrAttendance.create({ data: { userId: u.id, departmentId: u.departmentId, day, ...(kind === 'in' ? { checkIn: now, inIp: req.ip || null } : { checkOut: now, outIp: req.ip || null, ...noIn }), ...H.lateEarly(kind === 'in' ? now : null, kind === 'out' ? now : null, cfg) } }); }
       catch (error) { if (error.code !== 'P2002') throw error; row = await prisma.hrAttendance.findUnique({ where: { userId_day: { userId: u.id, day } } }); if (kind === 'in') fail(409, 'Đã chấm vào hôm nay', 'CONFLICT'); }
       if (row.checkIn?.getTime() === now.getTime() || row.checkOut?.getTime() === now.getTime()) return res.json(attOut(row, s, req));
     }
@@ -488,7 +538,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     const le = row.adjustStatus === 'APPROVED' ? {} : H.lateEarly(checkIn, checkOut, cfg);
     // Chấm vào: chỉ ghi khi chưa có giờ vào (bấm hai lần / hai thiết bị không ghi đè giờ vào).
     const done = await prisma.hrAttendance.updateMany({ where: { id: row.id, ...(kind === 'in' ? { checkIn: null } : {}) },
-      data: kind === 'in' ? { checkIn: now, inIp: req.ip || null, ...le } : { checkOut: now, outIp: req.ip || null, ...le } });
+      data: kind === 'in' ? { checkIn: now, inIp: req.ip || null, ...le } : { checkOut: now, outIp: req.ip || null, ...le, ...(row.checkIn ? {} : noIn) } });
     if (!done.count) fail(409, 'Đã chấm vào hôm nay', 'CONFLICT');
     res.json(attOut(await prisma.hrAttendance.findUnique({ where: { id: row.id } }), s, req));
   });

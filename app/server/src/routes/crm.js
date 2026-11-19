@@ -8,6 +8,8 @@ const WD = require('../services/weekly-data');
 const WK = require('../services/weekly');
 const { notify } = require('../services/events');
 const { loadItem, loadProject } = require('../services/access');
+const { Prisma } = require('@prisma/client');
+const { escapeLike } = require('./search');
 
 const KINDS = { CONTRACTOR: 'Nhà thầu', CONSULTANT: 'Tư vấn', AUTHORITY: 'Cơ quan quản lý', BANK: 'Ngân hàng / tổ chức tín dụng', SUPPLIER: 'Nhà cung cấp', OTHER: 'Khác' };
 const STATUSES = { PROSPECT: 'Đang tìm hiểu', ACTIVE: 'Đang hợp tác', PAUSED: 'Tạm dừng' };
@@ -80,8 +82,15 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
       ...(STATUSES[req.query.status] ? { status: req.query.status } : {}),
       ...(req.query.mine === '1' ? { OR: [{ ownerDepartmentId: s.departmentId ?? -1 }, { ownerUserId: s.userId }] } : {}),
       ...(req.query.departmentId ? { ownerDepartmentId: optionalInt(req.query.departmentId, 'Bộ phận') } : {}),
-      ...(q ? { AND: [{ OR: [{ name: { contains: q, mode: 'insensitive' } }, { taxCode: { contains: q } }] }] } : {}),
     };
+    // Tên không phân biệt hoa thường và dấu ("xay dung" → "Xây dựng"), MST theo chuỗi con — như Tìm nhanh (routes/search.js,
+    // extension unaccent). Bước 1 lấy id ứng viên bằng SQL có tham số; các điều kiện lọc khác giữ nguyên trong Prisma.
+    if (q) {
+      const pat = '%' + escapeLike(q) + '%';
+      const ids = (await prisma.$queryRaw(Prisma.sql`SELECT "id" FROM "CrmPartner"
+        WHERE unaccent(lower("name")) LIKE unaccent(lower(${pat})) OR "taxCode" LIKE ${pat} LIMIT 5000`)).map(r => Number(r.id));
+      where.id = { in: ids };
+    }
     const rows = await prisma.crmPartner.findMany({ where, orderBy: [{ name: 'asc' }], take: 500 });
     const ids = rows.map(r => r.id);
     const open = ids.length ? await prisma.crmInteraction.groupBy({ by: ['partnerId'], where: { partnerId: { in: ids }, nextDue: { not: null }, followUpDone: false }, _count: { _all: true } }) : [];

@@ -79,5 +79,18 @@ function canStatus(doc, s, to) {
 }
 const isOverdue = (doc, today) => !!doc.dueDate && !doc.cancelledAt && !CLOSED.has(doc.status) && doc.dueDate < today;
 
+// Gắn văn bản trong sổ vào "Văn bản liên quan" của việc: số, trích yếu… chép sang việc thì AI XEM ĐƯỢC VIỆC đều thấy, nên chỉ cho
+// gắn văn bản mọi cán bộ vốn đã xem được trong sổ (Công khai / Nội bộ) và chưa hủy số. Hạn chế / Bảo mật cao không gắn được — vẫn xem
+// trong sổ theo canView như cũ (quyền xem sổ không đổi). Điều kiện cũng phải qua canView (vd. quản trị IT không thấy gì).
+const LINKABLE_SECURITY = ['CONG_KHAI', 'NOI_BO'];
+const canLink = (doc, s) => !doc.cancelledAt && LINKABLE_SECURITY.includes(doc.security) && canView(doc, s);
+// "Nơi ban hành" khi điền sẵn: văn bản đến — nơi gửi (kèm số của bên gửi); văn bản đi / nội bộ — pháp nhân (D7: bộ phận ban hành).
+function issuerOf(doc, { entityName = null, deptName = null } = {}) {
+  const v = doc.book === 'DEN'
+    ? [doc.counterpart, doc.externalNumber && `số ${doc.externalNumber}`].filter(Boolean).join(' · ')
+    : String(doc.series || '').startsWith('D7-') && deptName ? deptName : entityName || doc.entity || '';
+  return String(v || '').slice(0, 200);
+}
+
 module.exports = { CONFIG_KEY, BOOKS, SERIES, SECURITY, URGENCY, DUE_WORKDAYS, STATUS, FIRST, CLOSED, DOC_TYPES, vanthuConfig, numberOf, seriesKey,
-  addWorkdays, dueFor, canView, canRegister, canStatus, isOverdue };
+  addWorkdays, dueFor, canView, canRegister, canStatus, isOverdue, LINKABLE_SECURITY, canLink, issuerOf };
