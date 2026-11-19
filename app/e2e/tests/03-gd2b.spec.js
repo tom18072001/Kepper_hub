@@ -26,16 +26,27 @@ async function createItem(page, title, { level, assignee } = {}) {
   return c;
 }
 
-test('9. Duyệt linh hoạt: việc không cần duyệt hoàn thành ngay; việc chỉ cần trưởng phòng; nhân viên không tự hạ mức duyệt; không tự duyệt', async ({ browser }) => {
+test('9. Duyệt linh hoạt: người giao duyệt + chấm mức; việc chỉ cần trưởng phòng; nhân viên không tự hạ mức duyệt; không tự duyệt', async ({ browser }) => {
   const manager = await (await browser.newContext()).newPage();
   await login(manager, 'tp.kinhdoanh');
   await openProject(manager, 'KD');
 
-  // a) Việc nhỏ: trưởng phòng chọn "Không cần duyệt" → chuyển thẳng sang Hoàn thành.
-  await (await createItem(manager, 'In 50 bộ tài liệu hội thảo', { level: 0 })).click();
-  await expect(manager.getByTestId('no-approval-needed')).toBeVisible();
+  // a) Việc nhỏ: "Chỉ người giao duyệt". Trưởng phòng (người giao) bấm Hoàn thành thay người chủ trì → vào Chờ duyệt;
+  //    duyệt bắt buộc chấm mức hoàn thành rồi mới thành Hoàn thành.
+  await (await createItem(manager, 'In 50 bộ tài liệu hội thảo', { level: 0, assignee: 'Phạm Văn An' })).click();
+  await expect(manager.getByTestId('approval-section')).toContainText('Quy trình duyệt 1 cấp');
   await setState(manager, 'Hoàn thành');
+  await toast(manager, 'Đã chuyển vào "Chờ duyệt"');
+  await expect(column(manager, 'Chờ duyệt').locator('.kcard', { hasText: 'In 50 bộ tài liệu hội thảo' })).toBeVisible();
+  await manager.getByTestId('approve-btn').click();
+  await toast(manager, 'Hãy chấm mức hoàn thành');
+  await manager.getByTestId('rating-PASS').check();
+  await manager.getByTestId('approval-comment').fill('Đúng số lượng (giả)');
+  await manager.getByTestId('approve-btn').click();
+  await toast(manager, 'Đã duyệt');
   await expect(column(manager, 'Hoàn thành').locator('.kcard', { hasText: 'In 50 bộ tài liệu hội thảo' })).toBeVisible();
+  await expect(manager.getByTestId('item-rating')).toContainText('Đạt');
+  await expect(manager.getByTestId('item-review').first()).toHaveText('Đúng số lượng (giả)');
   await manager.getByTestId('close-panel').click();
 
   // b) Việc thường: chỉ cần trưởng phòng duyệt (1 cấp), giao cho nhân viên.
@@ -48,12 +59,16 @@ test('9. Duyệt linh hoạt: việc không cần duyệt hoàn thành ngay; vi�
   await card(staff, code).click();
   // Nhân viên chỉ thấy mức duyệt, không đổi được (giao diện + API).
   await expect(staff.getByTestId('item-approval-levels')).toHaveCount(0);
-  await expect(staff.getByTestId('approval-level-text')).toContainText('1 cấp');
+  await expect(staff.getByTestId('approval-level-text')).toContainText('Người giao → 1 cấp');
   const id = await card(staff, code).getAttribute('data-id');
   expect((await apiAs(staff, `/api/items/${id}`, { method: 'PATCH', data: { approvalLevels: 0 } })).status()).toBe(403);
   await staff.getByTestId('submit-approval').click();
-  await toast(staff, 'Đã gửi duyệt');
-  await expect(card(staff, code).getByTestId('approval-chip')).toHaveText('Chờ duyệt 1/1');
+  await toast(staff, 'Đã gửi người giao duyệt');
+  await expect(card(staff, code).getByTestId('approval-chip')).toHaveText('Chờ duyệt 1/2');
+  // Người chủ trì không có nút duyệt, API trả 403.
+  await expect(staff.getByTestId('approve-btn')).toHaveCount(0);
+  const sp = (await (await apiAs(staff, `/api/items/${id}`)).json()).approvals.find(a => a.status === 'PENDING');
+  expect((await (await apiAs(staff, `/api/approvals/${sp.id}/approve`, { method: 'POST', data: { rating: 'EXCELLENT' } })).json()).code).toBe('SELF_APPROVAL');
 
   // Giám đốc không bị làm phiền: việc 1 cấp không vào hàng chờ của giám đốc.
   const director = await (await browser.newContext()).newPage();
@@ -61,11 +76,13 @@ test('9. Duyệt linh hoạt: việc không cần duyệt hoàn thành ngay; vi�
   const dq = await (await apiAs(director, '/api/approvals/queue')).json();
   expect(dq.some(q => q.item.code === code)).toBe(false);
 
-  // Trưởng phòng duyệt → việc tự hoàn thành (không cần cấp giám đốc). Khi đang chờ duyệt thì mức duyệt bị khoá.
+  // Trưởng phòng (người giao) duyệt + chấm mức → cấp "Trưởng phòng" của dự án cũng là chính người này nên tự qua → hoàn thành
+  // (không cần cấp giám đốc). Khi đang chờ duyệt thì mức duyệt bị khoá.
   await manager.reload();
   await card(manager, code).click();
   await expect(manager.getByTestId('item-approval-levels')).toHaveCount(0);
   expect((await apiAs(manager, `/api/items/${id}`, { method: 'PATCH', data: { approvalLevels: 2 } })).status()).toBe(409);
+  await manager.getByTestId('rating-GOOD').check();
   await manager.getByTestId('approve-btn').click();
   await toast(manager, 'Đã duyệt');
   await expect(manager.getByTestId('approval-status')).toHaveText('Đã duyệt');
@@ -77,7 +94,7 @@ test('9. Duyệt linh hoạt: việc không cần duyệt hoàn thành ngay; vi�
   const ownCode = await own.locator('.code').textContent();
   await own.click();
   await manager.getByTestId('submit-approval').click();
-  await toast(manager, 'Đã gửi duyệt');
+  await toast(manager, 'Đã gửi người giao duyệt');
   await expect(manager.getByTestId('approval-status')).toHaveText('Đang chờ duyệt');
   await expect(manager.getByTestId('approve-btn')).toHaveCount(0);
   const ownId = await card(manager, ownCode).getAttribute('data-id');
@@ -113,9 +130,12 @@ test('10. Quy tắc duyệt tự động + nhãn: mặc định 1 cấp, nhãn "
   await page.getByTestId('default-levels').selectOption('1');
   await page.getByTestId('save-steps').click();
   await toast(page, 'Đã lưu quy trình duyệt');
-  await page.getByTestId('add-rule').click();
   const rule = page.getByTestId('rules-editor').locator('[data-row]').first();
-  await rule.locator('[name=label]').selectOption({ label: 'Hợp đồng' });
+  // Trang cài đặt có thể vẽ lại sau khi lưu quy trình (sự kiện thời gian thực) → thêm hàng quy tắc lại tới khi chọn được nhãn.
+  await expect(async () => {
+    if (!(await rule.locator('[name=label]').isVisible())) await page.getByTestId('add-rule').click();
+    await rule.locator('[name=label]').selectOption({ label: 'Hợp đồng' }, { timeout: 2000 });
+  }).toPass();
   await rule.getByTestId('rule-levels').selectOption('2');
   await page.getByTestId('save-rules').click();
   await toast(page, 'Đã lưu quy tắc duyệt');
@@ -123,15 +143,15 @@ test('10. Quy tắc duyệt tự động + nhãn: mặc định 1 cấp, nhãn "
 
   await page.getByRole('link', { name: 'Về bảng công việc' }).click();
   await c.click();
-  await expect(page.getByTestId('approval-section')).toContainText('Quy trình duyệt 2 cấp');
+  await expect(page.getByTestId('approval-section')).toContainText('Quy trình duyệt 3 cấp'); // người giao + 2 cấp dự án
   await expect(page.getByTestId('approval-section')).toContainText('theo quy tắc tự động');
   await page.getByTestId('close-panel').click();
   await page.locator('.kcard', { hasText: 'Tổng hợp doanh số tháng' }).click();
-  await expect(page.getByTestId('approval-section')).toContainText('Quy trình duyệt 1 cấp');
+  await expect(page.getByTestId('approval-section')).toContainText('Quy trình duyệt 2 cấp');
   await expect(page.getByTestId('approval-section')).toContainText('mặc định của dự án');
   // Chọn tay luôn thắng quy tắc.
   await page.getByTestId('item-approval-levels').selectOption('2');
-  await expect(page.getByTestId('approval-section')).toContainText('Quy trình duyệt 2 cấp');
+  await expect(page.getByTestId('approval-section')).toContainText('Quy trình duyệt 3 cấp');
   await expect(page.getByTestId('approval-section')).toContainText('chọn tay');
   await page.getByTestId('close-panel').click();
 });

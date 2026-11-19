@@ -327,10 +327,39 @@ function moreHtml() {
     <div class="fx-pop-foot">${FACETS.some(k => current.filters[k]) ? '<button type="button" class="fx-link" data-fx="clear-facets">Bỏ các bộ lọc này</button>' : ''}<span class="grow"></span><button type="button" class="btn btn-ghost btn-sm" data-pop-close>Xong</button></div>`;
 }
 const SORT_OPTS = () => [['position', 'Theo cột trạng thái'], ['code', 'Mã'], ['title', 'Tiêu đề'], ['state', 'Trạng thái'], ['priority', 'Ưu tiên'], ['assignee', personWord()], ['due', 'Hạn']];
+// Việc con trong Bảng / Danh sách: lồng dưới việc cha (thu gọn / mở rộng) hoặc thành dòng / thẻ riêng kèm nhãn việc cha.
+const SUB_MODES = [['nest', 'Lồng dưới việc cha'], ['flat', 'Dòng / thẻ riêng (kèm việc cha)']];
+const subMode = () => (uiPref('subtasks') === 'flat' ? 'flat' : 'nest');
+const folded = new Set(); // việc cha đang thu gọn (Danh sách) / đang mở danh sách con (Bảng: unfolded)
+const openKids = new Set();
+function subsHtml(withIds) {
+  return `<label class="field fx-field">Việc con<select data-display="subs"${withIds ? ' id="fSubs" data-testid="filter-subtasks"' : ''}>${SUB_MODES.map(([k, l]) => `<option value="${k}"${subMode() === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
+}
+// Nhãn việc cha (dòng / thẻ riêng của việc con) và tiến độ con x/y (việc cha).
+const parentChip = i => (i.parentRef ? `<span class="parent-ref" data-testid="parent-ref-${esc(i.code)}" title="Việc con của ${esc(i.parentRef.code)} · ${esc(i.parentRef.title)}">↳ ${esc(i.parentRef.code)} <span class="parent-title">${esc(i.parentRef.title)}</span></span>` : '');
+function kidsChip(i, { toggle = false } = {}) {
+  const { childrenDone: d = 0, childrenTotal: t = 0 } = i.counts || {};
+  if (!t) return '';
+  const cls = `pill kids-chip${d === t ? ' ok' : ''}`, title = `Việc con đã được duyệt hoàn thành: ${d}/${t}`;
+  return toggle ? `<button type="button" class="${cls}" data-kids="${i.id}" aria-expanded="${openKids.has(i.id)}" title="${title}" data-testid="kids-${esc(i.code)}">${openKids.has(i.id) ? '▾' : '▸'} ${d}/${t} việc con</button>`
+    : `<span class="${cls}" title="${title}" data-testid="kids-${esc(i.code)}">${d}/${t} việc con</span>`;
+}
+// Xếp cây theo thứ tự đã sắp: việc gốc (hoặc việc con mà việc cha không nằm trong kết quả lọc) rồi tới con cháu.
+function nestRows(rows) {
+  const ids = new Set(rows.map(i => i.id)), kids = new Map();
+  for (const i of rows) if (i.parentId && ids.has(i.parentId)) { if (!kids.has(i.parentId)) kids.set(i.parentId, []); kids.get(i.parentId).push(i); }
+  const out = [], walk = (i, depth) => {
+    const has = kids.has(i.id);
+    out.push({ item: i, depth, has, orphan: depth === 0 && !!i.parentId });
+    if (has && !folded.has(i.id)) for (const k of kids.get(i.id)) walk(k, depth + 1);
+  };
+  for (const i of rows) if (!i.parentId || !ids.has(i.parentId)) walk(i, 0);
+  return out;
+}
 function displayHtml(view, withIds) {
-  if (view === 'board') return `<label class="field fx-field">Chia làn<select data-display="lanes"${withIds ? ' id="fLanes" data-testid="filter-lanes"' : ''}>${[['none', 'Không chia làn'], ['assignee', 'Theo ' + personWord().toLowerCase()], ['priority', 'Theo ưu tiên']].map(([k, l]) => `<option value="${k}"${current.lanes === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
+  if (view === 'board') return `${subsHtml(withIds)}<label class="field fx-field">Chia làn<select data-display="lanes"${withIds ? ' id="fLanes" data-testid="filter-lanes"' : ''}>${[['none', 'Không chia làn'], ['assignee', 'Theo ' + personWord().toLowerCase()], ['priority', 'Theo ưu tiên']].map(([k, l]) => `<option value="${k}"${current.lanes === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
   if (view === 'register') return `<label class="check sm fx-check"><input type="checkbox" data-display="full"${withIds ? ' id="regFull" data-testid="reg-full"' : ''}${registerFull() ? ' checked' : ''}> Hiện đủ cột</label><p class="muted xs fx-hint">Thêm Sản phẩm đã có, Kết quả / khó khăn, Đánh giá, Ghi chú.</p>`;
-  if (view === 'list') return `<label class="field fx-field">Sắp xếp<select data-display="sort"${withIds ? ' id="fSort"' : ''}>${SORT_OPTS().map(([k, l]) => `<option value="${k}"${current.sort.key === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
+  if (view === 'list') return `${subsHtml(withIds)}<label class="field fx-field">Sắp xếp<select data-display="sort"${withIds ? ' id="fSort"' : ''}>${SORT_OPTS().map(([k, l]) => `<option value="${k}"${current.sort.key === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
     <label class="check sm fx-check"><input type="checkbox" data-display="desc"${current.sort.dir < 0 ? ' checked' : ''}> Giảm dần</label>`;
   return '';
 }
@@ -462,6 +491,7 @@ function bindPage(page) {
 }
 function focusAfterEmpty() { ($('#viewBody .kcard, #viewBody tr[data-id], #viewBody .cal-item', current.root) || $('#fQ', current.root))?.focus(); }
 function setDisplay(what, value) {
+  if (what === 'subs') { uiPref('subtasks', value === 'flat' ? 'flat' : null); return drawBody(); }
   if (what === 'lanes') { current.lanes = LANES.includes(value) ? value : 'none'; persist(); writeUrl(); return drawBody(); }
   if (what === 'full') { setRegisterFull(!!value); return drawBody(); }
   if (what === 'sort') { current.sort = { key: value, dir: current.sort.dir }; return drawBody(); }
@@ -654,16 +684,23 @@ function cardHtml(i) {
   const c = i.counts, dc = dueClass(i);
   return `<article class="kcard" draggable="${current.project.rights.canEdit}" data-id="${i.id}" data-testid="card-${esc(i.code)}" tabindex="0" aria-label="${esc(i.code + ' ' + i.title)}">
     <div class="top"><span class="code">${esc(i.code)}</span>${prioChip(i.priority)}</div>
+    ${subMode() === 'flat' || !nestedOnBoard.has(i.parentId) ? parentChip(i) : ''}
     <div class="title">${esc(i.title)}</div>
     ${i.labels.length ? `<div class="labels">${i.labels.map(labelChip).join('')}</div>` : ''}
     <div class="meta">
-      ${stageBits(i)}
+      ${stageBits(i)}${kidsChip(i, { toggle: subMode() === 'nest' && boardKids.has(i.id) })}
       ${i.dueDate ? `<span class="due ${dc}" title="Hạn">${icon('clock')}${fmtDate(i.dueDate)}</span>` : ''}
       ${i.progress && i.progress < 100 ? `<span title="Tiến độ" class="card-progress"><span class="bar-mini"><i style="width:${i.progress}%"></i></span>${i.progress}%</span>` : ''}
       ${c.checklistTotal ? `<span title="Checklist" data-meta="checklist">${icon('checklist')}${c.checklistDone}/${c.checklistTotal}</span>` : ''}
       ${c.comments ? `<span title="Bình luận" data-meta="comments">${icon('comment')}${c.comments}</span>` : ''}${c.attachments ? `<span title="Tệp đính kèm" data-meta="attachments">${icon('clip')}${c.attachments}</span>` : ''}
       <span class="push">${avatars(i.assignees)}</span>
-    </div></article>`;
+    </div>${subMode() === 'nest' && openKids.has(i.id) && boardKids.has(i.id) ? kidList(i) : ''}</article>`;
+}
+// Bảng, chế độ lồng: việc con có việc cha cùng hiện trên bảng thì nằm trong thẻ việc cha (mở bằng nút x/y việc con).
+let boardKids = new Map(), nestedOnBoard = new Set();
+function kidList(i) {
+  const states = Object.fromEntries(current.project.states.map(s => [s.id, s]));
+  return `<ul class="kid-list" data-testid="kid-list-${esc(i.code)}">${boardKids.get(i.id).map(k => `<li><a href="${openItemHrefFor(k.id)}" data-kid="${k.id}" data-testid="kid-${esc(k.code)}"><span class="state-dot" style="background:${esc(states[k.stateId]?.color || '#64748b')}" title="${esc(states[k.stateId]?.name || '')}"></span><span class="code">${esc(k.code)}</span> <span class="grow">${esc(k.title)}</span></a>${kidsChip(k)}</li>`).join('')}</ul>`;
 }
 function lanesOf(items) {
   if (current.lanes === 'assignee') {
@@ -678,7 +715,10 @@ function lanesOf(items) {
   return [{ key: 'all', title: '', items }];
 }
 function drawBoard(body) {
-  const { project } = current, items = filtered();
+  const { project } = current, all = filtered(), ids = new Set(all.map(i => i.id));
+  boardKids = new Map(); nestedOnBoard = new Set();
+  if (subMode() === 'nest') for (const i of all) if (i.parentId && ids.has(i.parentId)) { if (!boardKids.has(i.parentId)) boardKids.set(i.parentId, []); boardKids.get(i.parentId).push(i); nestedOnBoard.add(i.parentId); }
+  const items = subMode() === 'nest' ? all.filter(i => !(i.parentId && ids.has(i.parentId))) : all;
   const totals = Object.fromEntries(project.states.map(s => [s.id, current.items.filter(i => i.stateId === s.id).length]));
   const lanes = lanesOf(items);
   body.innerHTML = lanes.map(lane => `${lane.title ? `<div class="lane-title">${esc(lane.title)} · ${lane.items.length}</div>` : ''}
@@ -699,6 +739,9 @@ function bindBoard(body) {
   body.onclick = e => {
     const quick = e.target.closest('[data-quick]');
     if (quick) return showQuickAdd(quick);
+    const kids = e.target.closest('[data-kids]');
+    if (kids) { const id = Number(kids.dataset.kids); if (openKids.has(id)) openKids.delete(id); else openKids.add(id); return drawBoard(body); }
+    if (e.target.closest('[data-kid]')) return; // liên kết mở việc con
     const card = e.target.closest('.kcard');
     if (card) openItemHash(card.dataset.id);
   };
@@ -745,9 +788,10 @@ function bindBoard(body) {
 }
 export async function moveItem(id, stateId, afterId, beforeId, overrideWip = false) {
   try {
-    await api(`/api/items/${id}/move`, { method: 'POST', body: { stateId, afterId: afterId ? Number(afterId) : null, beforeId: beforeId ? Number(beforeId) : null, overrideWip } });
-    const state = current.project.states.find(s => s.id === stateId);
-    if (state?.category === 'REVIEW' && current.project.approvalSteps.length) toast('Đã gửi duyệt: ' + current.project.approvalSteps[0].name, 'ok');
+    const row = await api(`/api/items/${id}/move`, { method: 'POST', body: { stateId, afterId: afterId ? Number(afterId) : null, beforeId: beforeId ? Number(beforeId) : null, overrideWip } });
+    const state = current.project.states.find(s => s.id === stateId), landed = current.project.states.find(s => s.id === row?.stateId);
+    if (landed?.category === 'REVIEW' && state?.category === 'COMPLETED') toast('Đã chuyển vào "Chờ duyệt" — việc thành Hoàn thành khi người giao duyệt và chấm mức', 'ok');
+    else if (landed?.category === 'REVIEW') toast('Đã gửi người giao duyệt', 'ok');
   } catch (error) {
     if (error instanceof ApiError && error.code === 'WIP_LIMIT' && current.project.rights.canManage && !overrideWip) {
       if (await confirmDialog(error.message + '. Bạn là quản lý dự án — vẫn chuyển vượt giới hạn?', { okText: 'Vẫn chuyển' })) return moveItem(id, stateId, afterId, beforeId, true);
@@ -782,20 +826,25 @@ const SORTERS = {
 };
 function drawList(body) {
   const { key, dir } = current.sort, states = Object.fromEntries(current.project.states.map(s => [s.id, s]));
-  const rows = filtered().sort((a, b) => { const x = SORTERS[key](a), y = SORTERS[key](b); return (x > y ? 1 : x < y ? -1 : 0) * dir; });
+  const sorted = filtered().sort((a, b) => { const x = SORTERS[key](a), y = SORTERS[key](b); return (x > y ? 1 : x < y ? -1 : 0) * dir; });
+  const nest = subMode() === 'nest';
+  const rows = nest ? nestRows(sorted) : sorted.map(item => ({ item, depth: 0, has: false, orphan: !!item.parentId }));
+  const fold = r => (r.has ? `<button type="button" class="twisty" data-fold="${r.item.id}" aria-expanded="${!folded.has(r.item.id)}" aria-label="${folded.has(r.item.id) ? 'Mở' : 'Thu gọn'} việc con của ${esc(r.item.code)}" data-testid="fold-${esc(r.item.code)}">${folded.has(r.item.id) ? '▸' : '▾'}</button>` : nest && r.depth ? '<span class="twisty-sp"></span>' : '');
   const th = (k, label) => `<th data-sort="${k}" aria-sort="${key === k ? (dir > 0 ? 'ascending' : 'descending') : 'none'}">${label}${key === k ? icon(dir > 0 ? 'up' : 'down', 'sort') : ''}</th>`;
   // Sổ giao việc: cột Khâu (chờ phòng tiếp nhận, chờ phòng duyệt, chờ BGĐ…). Dự án thường: khâu cần chú ý hiện cạnh tiêu đề.
   const reg = isAssigned(), cols = reg ? 8 : 7;
   const stageCell = i => (i.dispatchStatus || i.stage?.code === 'RETURNED' || i.stage?.code?.startsWith('WAIT') ? stagePill(i.stage) : '');
   body.innerHTML = `<div class="tbl-scroll"><table class="table" data-testid="list-table"><thead><tr>${th('code', 'Mã')}${th('title', 'Tiêu đề')}${th('state', 'Trạng thái')}${reg ? '<th>Khâu</th>' : ''}${th('priority', 'Ưu tiên')}${th('assignee', personWord())}${th('due', 'Hạn')}<th>Nhãn</th></tr></thead>
-    <tbody>${rows.map(i => `<tr class="clickable" data-id="${i.id}" data-testid="row-${esc(i.code)}"><td class="code">${esc(i.code)}</td><td>${esc(i.title)}${reg ? '' : ' ' + stageBits(i)}</td>
+    <tbody>${rows.map(r => { const i = r.item; return `<tr class="clickable${r.depth ? ' sub-row' : ''}" data-id="${i.id}" data-depth="${r.depth}" data-testid="row-${esc(i.code)}"><td class="code">${esc(i.code)}</td><td><div class="tree-cell" style="padding-left:${r.depth * 20}px">${fold(r)}<div class="grow">${r.orphan ? parentChip(i) : ''}${esc(i.title)} ${kidsChip(i)}${reg ? '' : ' ' + stageBits(i)}</div></div></td>
       <td>${stateChip(states[i.stateId])}</td>${reg ? `<td class="nowrap">${stageCell(i)}</td>` : ''}<td class="nowrap">${i.priority === 'NONE' ? '' : `<span class="prio prio-${i.priority}">${PRIORITY[i.priority].label}</span>`}</td>
-      <td>${i.assignees.map(a => esc(a.fullName)).join(', ')}</td><td class="due ${dueClass({ ...i, state: states[i.stateId] })}">${fmtDate(i.dueDate)}</td><td>${i.labels.map(labelChip).join(' ')}</td></tr>`).join('')
+      <td>${i.assignees.map(a => esc(a.fullName)).join(', ')}</td><td class="due ${dueClass({ ...i, state: states[i.stateId] })}">${fmtDate(i.dueDate)}</td><td>${i.labels.map(labelChip).join(' ')}</td></tr>`; }).join('')
       || `<tr><td colspan="${cols}" class="empty">Dự án chưa có việc nào.</td></tr>`}</tbody></table></div>`;
   const sortSel = $('#fSort', current.root); if (sortSel) sortSel.value = key;
   body.onclick = e => {
     const sort = e.target.closest('[data-sort]');
     if (sort) { current.sort = { key: sort.dataset.sort, dir: current.sort.key === sort.dataset.sort ? -current.sort.dir : 1 }; return drawList(body); }
+    const tw = e.target.closest('[data-fold]');
+    if (tw) { const id = Number(tw.dataset.fold); if (folded.has(id)) folded.delete(id); else folded.add(id); return drawList(body); }
     const row = e.target.closest('tr[data-id]'); if (row) openItemHash(row.dataset.id);
   };
 }
@@ -806,7 +855,8 @@ function drawCalendar(body) {
   const state = calState(current.params, uiPref('cal:mode'));
   const states = Object.fromEntries(current.project.states.map(s => [s.id, s]));
   body.innerHTML = calendarHtml({ items: filtered(), state, hrefOf: i => openItemHrefFor(i.id), colorOf: i => states[i.stateId]?.color,
-    doneOf: i => ['COMPLETED', 'CANCELLED'].includes(states[i.stateId]?.category), metaOf: i => i.assignees?.[0]?.fullName?.split(' ').pop() || '' });
+    doneOf: i => ['COMPLETED', 'CANCELLED'].includes(states[i.stateId]?.category), metaOf: i => [i.parentRef ? `↳ ${i.parentRef.code}` : '', i.counts?.childrenTotal ? `${i.counts.childrenDone}/${i.counts.childrenTotal} con` : '', i.assignees?.[0]?.fullName?.split(' ').pop() || ''].filter(Boolean).join(' · '),
+    labelOf: i => `${i.code} ${i.title}${i.parentRef ? ` (việc con của ${i.parentRef.code})` : ''}` });
   if (!body._calBound) {
     body._calBound = true;
     bindCalendar(body, { get mode() { return calState(current.params, uiPref('cal:mode')).mode; }, get at() { return calState(current.params, uiPref('cal:mode')).at; } }, ({ mode, at }) => {

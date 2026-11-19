@@ -10,6 +10,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { objectKey, isStorageNotFound } = require('./attachment-utils');
 const nas = require('./nas');
+const vt = require('./vanthu-files');
 
 const DRIVER = (process.env.STORAGE_DRIVER || 'local').toLowerCase();
 const sha256 = buf => crypto.createHash('sha256').update(buf).digest('hex');
@@ -112,10 +113,14 @@ function minioDriver() {
 }
 
 const driver = DRIVER === 'minio' ? minioDriver() : localDriver();
-console.log('StorageService: driver =', driver.kind, nas.enabled() ? `+ kho file dự án (${nas.root()})` : '');
+console.log('StorageService: driver =', driver.kind, nas.enabled() ? `+ kho file dự án (${nas.root()})` : '', vt.enabled() ? `+ kho văn thư (${vt.root()})` : '');
+
+// Khoá "vt:<đường dẫn>" = tệp văn thư trên NAS (lib/vanthu-files.js) — xử lý trước, rồi mới tới "nas:" và driver cũ.
+const ofVt = (fn, other) => async key => (vt.isKey(key) ? fn(key) : other(key));
+const vtStat = key => (fs.existsSync(vt.absOf(key)) ? { size: fs.statSync(vt.absOf(key)).size } : null);
 
 // Khoá "nas:<đường dẫn>" = tệp nằm trong kho file dự án (bản gốc); còn lại theo driver cũ.
-module.exports = {
+const api = {
   driver: driver.kind,
   save: (...a) => driver.save(...a),
   // Lưu vào kho file dự án theo quy ước tên; null khi dự án chưa có thư mục trong kho (gọi save() như cũ).
@@ -134,4 +139,18 @@ module.exports = {
   discard: async key => (nas.isNasKey(key) ? nas.discard(key) : driver.remove(key)),
   minioStat,
   localPath,
+};
+module.exports = {
+  ...api,
+  // Lưu vào thư mục văn thư của phòng trên NAS; null khi chưa bật / phòng chưa có thư mục sổ (gọi save() như cũ).
+  saveToVanthu(meta, buffer) {
+    const plan = vt.planPath(meta);
+    if (!plan) return null;
+    return { objectKey: vt.save(plan.rel, buffer), size: buffer.length, checksum: sha256(buffer), version: plan.version };
+  },
+  stat: ofVt(vtStat, api.stat),
+  getStream: ofVt(key => fs.createReadStream(vt.absOf(key)), api.getStream),
+  remove: ofVt(key => vt.archive(key), api.remove),
+  discard: ofVt(key => vt.discard(key), api.discard),
+  locationOf: key => (vt.isKey(key) ? { storedIn: 'NAS', nasPath: String(key).slice(vt.PREFIX.length), version: Number(/_v(\d+)_\d{8}(\.[^./]*)?$/.exec(key)?.[1]) || null } : api.locationOf(key)),
 };

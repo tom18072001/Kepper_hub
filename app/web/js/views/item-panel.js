@@ -7,7 +7,7 @@ import { refreshCounters, refreshBackground } from '../main.js';
 import { openRepeatDialog } from './recurring-form.js';
 import { openCycleForm } from './project-extra.js';
 import { icon } from '../icons.js';
-import { dispatchParts, progressParts, documentsParts, ratingPick, handleDispatchClick, bindDispatchInputs, summaryBar, actionZone, stagePill, countdownPill, acceptDialog } from './dispatch-panel.js';
+import { dispatchParts, progressParts, documentsParts, ratingPick, RATINGS, handleDispatchClick, bindDispatchInputs, summaryBar, actionZone, stagePill, countdownPill, acceptDialog } from './dispatch-panel.js';
 import { sec, compact, bindSectionMemory, resetSectionMemory } from './sections.js';
 import { mtlPanelBlock, rebaselineDialog } from './mtl.js';
 import { help as showShortcuts } from '../shortcuts.js';
@@ -111,16 +111,18 @@ async function patch(body) {
   }
 }
 
-// Chọn mức duyệt của việc (chỉ người quản lý dự án; khoá khi đang chờ duyệt).
+// Chọn mức duyệt của việc (chỉ người quản lý dự án; khoá khi đang chờ duyệt). Người giao luôn duyệt cấp 1;
+// mức duyệt chỉ chọn thêm bao nhiêu cấp của dự án chạy sau.
 function levelControl(pending) {
   const all = data.allApprovalSteps || [];
   if (!all.length) return '';
-  const label = n => n === 0 ? 'Không cần duyệt' : n >= all.length ? `Đủ ${all.length} cấp (${all.map(s => s.name).join(' → ')})` : `${n} cấp: ${all.slice(0, n).map(s => s.name).join(' → ')}`;
+  const extra = data.approvalSteps.filter(s => s.approverType !== 'ASSIGNER').length;
+  const label = n => n === 0 ? 'Chỉ người giao duyệt' : n >= all.length ? `Người giao → đủ ${all.length} cấp (${all.map(s => s.name).join(' → ')})` : `Người giao → ${n} cấp: ${all.slice(0, n).map(s => s.name).join(' → ')}`;
   const source = { MANUAL: 'chọn tay', RULE: 'theo quy tắc tự động', DEFAULT: 'mặc định của dự án', CHILD: 'việc nhánh — lãnh đạo phòng duyệt' }[data.approvalSource] || '';
-  if (!data.rights.canManage || pending || data.archivedAt) return `<p class="muted sm" data-testid="approval-level-text">Mức duyệt: <b>${esc(label(data.approvalSteps.length))}</b>${source ? ` · ${source}` : ''}</p>`;
-  const opts = [['', data.approvalSource === 'MANUAL' ? 'Tự động (theo quy tắc / mặc định dự án)' : `Tự động — ${data.approvalSteps.length === 0 ? 'không cần duyệt' : data.approvalSteps.length >= all.length ? `đủ ${all.length} cấp` : `${data.approvalSteps.length} cấp`}`], ...Array.from({ length: all.length + 1 }, (_, n) => [String(n), label(n)])];
+  if (!data.rights.canManage || pending || data.archivedAt) return `<p class="muted sm" data-testid="approval-level-text">Mức duyệt: <b>${esc(label(extra))}</b>${source ? ` · ${source}` : ''}</p>`;
+  const opts = [['', data.approvalSource === 'MANUAL' ? 'Tự động (theo quy tắc / mặc định dự án)' : `Tự động — ${extra === 0 ? 'chỉ người giao' : extra >= all.length ? `người giao + đủ ${all.length} cấp` : `người giao + ${extra} cấp`}`], ...Array.from({ length: all.length + 1 }, (_, n) => [String(n), label(n)])];
   return `<label class="field level-pick">Mức duyệt của việc này<select id="ipLevels" data-testid="item-approval-levels">${opts.map(([v, t]) => `<option value="${v}"${String(data.approvalLevels ?? '') === v ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>
-    <span class="muted xs">Hiện tại: ${esc(label(data.approvalSteps.length))} · ${source}</span></label>`;
+    <span class="muted xs">Hiện tại: ${esc(label(extra))} · ${source}</span></label>`;
 }
 function approverNames(level) {
   if (data.stepApprovers?.[level]) return data.stepApprovers[level].join(', ') || 'Chưa có người duyệt';
@@ -137,12 +139,18 @@ function approvalBox() {
   return `<div class="approval-box zone-box" id="approval-zone"><b>Bạn đang duyệt bước ${pending.currentLevel}/${pending.totalLevels}${step ? ` · ${esc(step.name)}` : ''}${data.lastLevel ? ' — bước cuối, nghiệm thu' : ''}</b>${data.submitRounds > 1 ? ` <span class="pill warn">Lần trình ${data.submitRounds}</span>` : ''}
       ${submit ? `<div class="muted sm" style="margin-top:4px">${esc(submit.actorName || '')} trình ${ago(submit.createdAt)}${submit.comment ? `: “${esc(submit.comment)}”` : ''}</div>` : ''}
       ${data.attachments.length ? `<div class="muted xs">Tệp mới nhất: ${esc(data.attachments[0].fileName)} · ${ago(data.attachments[0].createdAt)}</div>` : ''}
-      <textarea id="approvalComment" placeholder="Ý kiến (bắt buộc khi không duyệt)" rows="2" style="margin-top:8px" data-testid="approval-comment" aria-describedby="approvalCommentHelp"></textarea>
-      <div class="field-error" id="approvalCommentHelp" role="alert"></div>${data.lastLevel ? ratingPick() : ''}
-      <div class="row" style="margin-top:8px"><button class="btn btn-ok" data-act="approve" data-testid="approve-btn">Duyệt</button><button class="btn btn-danger" data-act="reject" data-testid="reject-btn">Không duyệt</button></div></div>`;
+      ${data.ratingRequired ? ratingPick({ required: true }) : data.lastLevel ? ratingPick() : ''}
+      <textarea id="approvalComment" placeholder="${data.ratingRequired ? 'Nhận xét (tuỳ chọn khi duyệt; bắt buộc ghi lý do khi trả lại)' : 'Ý kiến (bắt buộc khi không duyệt)'}" rows="2" style="margin-top:8px" data-testid="approval-comment" aria-describedby="approvalCommentHelp"></textarea>
+      <div class="field-error" id="approvalCommentHelp" role="alert"></div>
+      <div class="row" style="margin-top:8px"><button class="btn btn-ok" data-act="approve" data-testid="approve-btn">${data.ratingRequired ? 'Duyệt hoàn thành' : 'Duyệt'}</button><button class="btn btn-danger" data-act="reject" data-testid="reject-btn">${data.ratingRequired ? 'Trả lại' : 'Không duyệt'}</button></div></div>`;
+}
+// Kết quả người giao duyệt: ai, lúc nào, mức nào, nhận xét gì.
+function ratingResult() {
+  if (!data.rating) return '';
+  return `<div class="rating-box" data-testid="item-rating" style="margin-top:10px">Mức hoàn thành: <b class="rating-${esc(data.rating)}">${esc(RATINGS[data.rating] || data.rating)}</b>${data.ratedByName ? ` · ${esc(data.ratedByName)}, ${fmtDate(data.ratedAt)}` : ''}
+    ${data.review ? `<div class="comment" style="margin-top:4px" data-testid="item-review">${esc(data.review)}</div>` : ''}</div>`;
 }
 function approvalSection(open) {
-  if (!(data.allApprovalSteps || []).length) return '';
   const latest = data.approvals[0];
   const pendingNow = latest?.status === 'PENDING' ? latest : null;
   if (!data.approvalSteps.length) return sec('approval', { title: 'Duyệt', summary: 'không cần duyệt', open, testid: 'approval-section', id: 'approval-section', body: `${levelControl(pendingNow)}
@@ -160,13 +168,15 @@ function approvalSection(open) {
   const word = { SUBMIT: 'gửi duyệt', APPROVE: 'duyệt', REJECT: 'trả lại', CANCEL: 'huỷ yêu cầu' };
   const statusText = latest ? { PENDING: 'Đang chờ duyệt', APPROVED: 'Đã duyệt', REJECTED: 'Bị trả lại', CANCELLED: 'Đã huỷ', REOPENED: 'Mở lại' }[latest.status] : '';
   const cur = pending ? data.approvalSteps.find(s => s.level === pending.currentLevel) : null;
-  const act = a => `<div class="act"><b>${esc(a.actorName || '')}</b> ${a.onBehalfOfName ? `(thay ${esc(a.onBehalfOfName)}) ` : ''}${word[a.decision] || a.decision}${a.level ? ` ở bước ${a.level}` : ''} · ${ago(a.createdAt)}${a.comment ? `<div class="comment" style="margin-top:4px">${esc(a.comment)}</div>` : ''}</div>`;
+  const act = a => `<div class="act"><b>${esc(a.actorName || '')}</b> ${a.onBehalfOfName ? `(thay ${esc(a.onBehalfOfName)}) ` : ''}${word[a.decision] || a.decision}${a.level ? ` ở bước ${a.level}` : ''}${a.rating ? ` — mức <b>${esc(RATINGS[a.rating] || a.rating)}</b>` : ''} · ${ago(a.createdAt)}${a.comment ? `<div class="comment" style="margin-top:4px">${esc(a.comment)}</div>` : ''}</div>`;
   // Lượt trả lại gần nhất luôn hiện; các thao tác duyệt cũ hơn thu vào "Lịch sử duyệt".
   const lastReject = latest?.status === 'REJECTED' ? history.find(a => a.decision === 'REJECT' && a.request.id === latest.id) : null;
   const body = `${levelControl(pending)}
     <div class="steps">${data.approvalSteps.map(s => `<div class="step ${stepClass(s)}"><span class="n">${s.level}</span><span class="grow">${esc(s.name)}</span><span class="muted xs">${esc(approverNames(s.level))}</span></div>`).join('')}</div>
     ${canSubmit && (!data.dispatchStatus || data.can?.work) ? (data.dispatchStatus ? `<button class="btn btn-ghost btn-sm" style="margin-top:10px" data-act="submit-product" data-testid="submit-product">${icon('send')}Nộp sản phẩm (phiếu trình)</button>` : `<button class="btn btn-primary btn-sm" style="margin-top:10px" data-act="submit-approval" data-testid="submit-approval">Gửi duyệt</button>`) : ''}
+    ${data.childProgress?.open ? `<p class="muted sm" data-testid="children-block-note" style="margin-top:8px">Việc cha chỉ gửi duyệt được khi mọi việc con đã được duyệt hoàn thành (${data.childProgress.done}/${data.childProgress.total}).</p>` : ''}
     ${lastReject ? `<div class="timeline-list" style="margin-top:10px">${act(lastReject)}</div>` : ''}
+    ${latest?.status === 'APPROVED' || data.state.category === 'COMPLETED' ? ratingResult() : ''}
     ${history.length ? `<details class="older" data-sub="approvalHistory"><summary class="link-btn">Lịch sử duyệt (${history.length})</summary><div class="timeline-list">${history.map(act).join('')}</div></details>` : ''}`;
   return sec('approval', { title: `Quy trình duyệt ${data.approvalSteps.length} cấp`, open, testid: 'approval-section', id: 'approval-section',
     summary: `${latest ? `<span class="pill" data-testid="approval-status">${statusText}</span>` : ''}${cur ? ` đang ở bước ${pending.currentLevel}/${pending.totalLevels} · ${esc(cur.name)} · gửi ${ago(pending.createdAt)}` : ''}`, body });
@@ -177,7 +187,8 @@ const ACT_TEXT = {
   ATTACHMENT: d => 'đã đính kèm ' + esc((d.files || []).join(', ')), ATTACHMENT_DELETED: d => 'đã xoá tệp ' + esc(d.fileName || ''),
   SUPPORTERS: () => 'đã thay đổi người phối hợp', TEMPLATE_APPLIED: d => `tạo ${d.count} việc nhánh từ mẫu "${esc(d.template)}"`, CHECKLIST_ADDED: d => 'thêm checklist: ' + esc(d.title), CHECKLIST_DONE: d => 'hoàn thành checklist: ' + esc(d.title), CHECKLIST_UNDONE: d => 'bỏ đánh dấu: ' + esc(d.title),
   APPROVAL_SUBMITTED: d => 'gửi duyệt (' + esc(d.step || '') + ')', APPROVAL_APPROVED: d => `duyệt bước ${d.level}${d.next ? ', chuyển tiếp ' + esc(d.next) : ''}`,
-  APPROVAL_COMPLETED: d => 'duyệt bước cuối — việc hoàn thành' + (d?.rating ? ` (xếp loại: ${({ EXCELLENT: 'Hoàn thành xuất sắc', GOOD: 'Hoàn thành tốt', PASS: 'Hoàn thành', FAIL: 'Không hoàn thành' })[d.rating]})` : ''),
+  APPROVAL_COMPLETED: d => 'duyệt bước cuối — việc hoàn thành' + (d?.rating ? ` (mức hoàn thành: ${esc(RATINGS[d.rating] || d.rating)})` : ''),
+  REOPENED_BY_CHILD: d => `mở lại ${esc(d?.from || '')} → ${esc(d?.to || '')}` + (d?.reason ? ': ' + esc(d.reason) : ''),
   DISPATCHED: d => d?.direct ? 'giao trực tiếp cán bộ (phòng vẫn duyệt trước khi trình)' : 'giao về phòng chủ trì', DISPATCH_ACCEPTED: d => 'tiếp nhận và phân công' + (d?.onBehalfOf ? ` (thay ${esc(d.onBehalfOf)})` : '') + (d?.internalDueDate ? `, hạn nộp phòng ${fmtDate(d.internalDueDate)}` : '') + (d?.note ? ': ' + esc(d.note) : ''), DISPATCH_REASSIGNED: () => 'phân công lại',
   PROGRESS_REPORT: d => (d.asSupporter ? `báo cáo phần phối hợp ${d.progress}%` : `báo cáo tiến độ ${d.progress}%`) + (d.hasProposal ? ' (có kiến nghị)' : ''), PROPOSAL_ANSWERED: () => 'trả lời kiến nghị',
   PROPOSAL_FORWARDED: () => 'trình kiến nghị lên Ban Giám đốc',
@@ -237,7 +248,7 @@ function childrenSection(d, editable, open) {
       <button class="btn btn-ghost btn-sm" data-act="bulk-children" data-testid="bulk-children-open">${icon('list')}Chia nhiều việc…</button>
       ${(store.templates || []).length ? `<button class="btn btn-ghost btn-sm" data-act="template-children" data-testid="template-open">${icon('checklist')}Từ mẫu…</button>` : ''}</div>` : '';
   if (!rows) return add ? compact('Việc nhánh', add, { testid: 'children-section' }) : '';
-  return sec('children', { title: 'Việc nhánh', count: `${done}/${d.children.length} xong`, open, testid: 'children-section',
+  return sec('children', { title: 'Việc nhánh', count: `${d.childProgress?.done ?? done}/${d.childProgress?.total ?? d.children.length} đã duyệt xong`, open, testid: 'children-section',
     body: `<div class="tbl-scroll"><table class="table compact children-table"><thead><tr><th>Mã</th><th>Việc</th><th>Cán bộ</th><th>Hạn</th><th>Khâu</th><th class="num">%</th></tr></thead><tbody>${rows}</tbody></table></div>${add}` });
 }
 
@@ -286,7 +297,8 @@ function render() {
   const done = d.checklist.filter(c => c.done).length;
   const states = project.states;
   // Việc cần duyệt: không kéo thẳng sang Hoàn thành (máy chủ cũng chặn) — đi qua "Gửi duyệt" / "Nộp sản phẩm".
-  const needsApproval = (d.approvalSteps || []).length > 0 && !d.approvals.some(x => x.status === 'APPROVED');
+  // Chọn "Hoàn thành" khi chưa được duyệt → máy chủ đưa vào "Chờ duyệt" (người giao duyệt + chấm mức).
+  const approvedNow = d.approvals[0]?.status === 'APPROVED';
   const progEdit = fe && d.state.category !== 'COMPLETED' && d.can?.progress !== false;
   const plan = sectionPlan(d);
   // Gọn (mặc định): chỉ tên việc, người được phân công, hạn, tài liệu hai chiều (+ vùng cần xử lý); báo cáo, bình luận thu lại.
@@ -363,7 +375,8 @@ function render() {
       </div>
       <div class="ip-side">
         <div class="ip-core">
-        <label class="${project.visibility === 'ASSIGNED' ? 'lite-hide' : ''}">Trạng thái<select id="ipState" ${fe ? '' : 'disabled'} data-testid="item-state" title="Trạng thái (S)">${states.map(s => { const locked = s.id !== d.stateId && ((needsApproval && s.category === 'COMPLETED') || (s.category === 'CANCELLED' && (d.dispatchStatus || project.visibility === 'ASSIGNED') && !(r.canManage || d.can?.isAssigner || d.reporterId === store.me.id))); return `<option value="${s.id}"${s.id === d.stateId ? ' selected' : ''}${locked ? ' disabled' : ''}>${stateLabel(s)}${locked ? (s.category === 'CANCELLED' ? ' (người giao)' : ' (qua duyệt)') : ''}</option>`; }).join('')}</select></label>
+        <label class="${project.visibility === 'ASSIGNED' ? 'lite-hide' : ''}">Trạng thái<select id="ipState" ${fe ? '' : 'disabled'} data-testid="item-state" title="Trạng thái (S)">${states.map(s => { const done = s.category === 'COMPLETED' && s.id !== d.stateId && !approvedNow, doneLock = done && (d.state.category === 'REVIEW' || d.childProgress?.open > 0);
+          const locked = s.id !== d.stateId && (doneLock || (s.category === 'CANCELLED' && (d.dispatchStatus || project.visibility === 'ASSIGNED') && !(r.canManage || d.can?.isAssigner || d.reporterId === store.me.id))); return `<option value="${s.id}"${s.id === d.stateId ? ' selected' : ''}${locked ? ' disabled' : ''}>${stateLabel(s)}${locked ? (s.category === 'CANCELLED' ? ' (người giao)' : d.state.category === 'REVIEW' ? ' (đang chờ người giao duyệt)' : ' (còn việc con chưa duyệt)') : done ? ' → gửi người giao duyệt' : ''}</option>`; }).join('')}</select></label>
         <label class="lite-hide">Ưu tiên<select id="ipPriority" ${fe ? '' : 'disabled'} data-testid="item-priority" title="Ưu tiên (P)">${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}"${k === d.priority ? ' selected' : ''}>${v.label}</option>`).join('')}</select></label>
         <label class="${project.kind === 'MTL' ? '' : 'lite-hide'}">Tiến độ (%)<span class="row progress-edit"><input type="range" min="0" max="100" step="5" id="ipProgressRange" value="${d.progress}" ${progEdit ? '' : 'disabled'} aria-label="Tiến độ"><input type="number" min="0" max="100" id="ipProgress" value="${d.progress}" ${progEdit ? '' : 'disabled'} data-testid="item-progress" style="width:72px" aria-label="Tiến độ %"></span>${editable && d.can?.progress === false ? '<span class="muted xs">Do người chủ trì cập nhật</span>' : ''}</label>
         <div><label>Người chủ trì</label>${fe ? multiSelect('assignees', users.map(u => ({ id: u.id, label: u.fullName })), d.assignees.map(a => a.id), 'Chưa giao') : `<div>${d.assignees.map(a => avatar(a) + ' ' + personLink(a)).join('<br>') || '—'}</div>`}</div>
@@ -467,12 +480,13 @@ function bind(editable) {
       return;
     }
     if (act === 'restore') { try { await api(`/api/items/${data.id}/restore`, { method: 'POST' }); toast('Đã khôi phục', 'ok'); } catch (err) { toast(errorMessage(err), 'err'); } return refresh(); }
-    if (act === 'submit-approval') { const review = project.states.find(s => s.category === 'REVIEW'); if (await patch({ stateId: review.id })) toast('Đã gửi duyệt', 'ok'); return; }
+    if (act === 'submit-approval') { const review = project.states.find(s => s.category === 'REVIEW'); if (await patch({ stateId: review.id })) toast('Đã gửi người giao duyệt', 'ok'); return; }
     if (act === 'approve' || act === 'reject') {
       const pending = data.approvals.find(a => a.status === 'PENDING');
       const comment = $('#approvalComment', p).value.trim();
       if (act === 'reject' && !comment) { $('#approvalCommentHelp', p).textContent = 'Nhập lý do trả lại để người trình sửa theo.'; toast('Hãy nhập lý do trả lại', 'err'); $('#approvalComment', p).focus(); return; }
-      const rating = act === 'approve' ? $('#approvalRating', p)?.value || undefined : undefined;
+      const rating = act !== 'approve' ? undefined : data.ratingRequired ? $('input[name="approvalRating"]:checked', p)?.value : $('#approvalRating', p)?.value || undefined;
+      if (act === 'approve' && data.ratingRequired && !rating) { $('#approvalRatingHelp', p).textContent = 'Chọn mức hoàn thành trước khi duyệt.'; toast('Hãy chấm mức hoàn thành', 'err'); $('input[name="approvalRating"]', p)?.focus(); return; }
       const doneId = data.id;
       try { await api(`/api/approvals/${pending.id}/${act}`, { method: 'POST', body: { comment, rating } }); draft(`${doneId}:approvalComment`, ''); toast(act === 'approve' ? 'Đã duyệt' : 'Đã trả lại', 'ok'); offerNextApproval(doneId); }
       catch (error) { toast(errorMessage(error), 'err'); }
@@ -513,7 +527,10 @@ function bind(editable) {
     desc.onkeydown = e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); $('#saveDesc', p)?.click(); } };
   }
   const on = (sel, fn) => { const el = $(sel, p); if (el) el.onchange = fn; };
-  on('#ipState', e => patch({ stateId: Number(e.target.value) }));
+  on('#ipState', async e => {
+    const to = project.states.find(s => s.id === Number(e.target.value));
+    if (await patch({ stateId: to.id }) && to.category === 'COMPLETED' && data.approvals[0]?.status !== 'APPROVED') toast('Đã chuyển vào "Chờ duyệt" — việc thành Hoàn thành khi người giao duyệt và chấm mức', 'ok');
+  });
   on('#ipPriority', e => patch({ priority: e.target.value }));
   on('#ipStart', e => patch({ startDate: fromDateInput(e.target.value) }));
   on('#ipDue', e => patch({ dueDate: fromDateInput(e.target.value) }));
@@ -533,6 +550,7 @@ function bind(editable) {
     patch({ cycleId: v ? Number(v) : null });
   });
   $('#ipLevels', p)?.addEventListener('change', e => patch({ approvalLevels: e.target.value === '' ? null : Number(e.target.value) }));
+  $('.rating-pick', p)?.addEventListener('change', () => { $('#approvalRatingHelp', p).textContent = ''; });
   const prog = v => patch({ progress: Math.max(0, Math.min(100, Number(v) || 0)) });
   $('#ipProgress', p)?.addEventListener('change', e => prog(e.target.value));
   $('#ipProgressRange', p)?.addEventListener('input', e => { $('#ipProgress', p).value = e.target.value; });
