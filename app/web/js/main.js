@@ -2,7 +2,7 @@
 import './pwa.js';
 import { api, setToken, getToken, onAuthEvent, lastLocalWrite } from './api.js';
 import { store, can, loadBasics, reloadProjects, isItAdmin, workScope } from './store.js';
-import { $, $$, esc, toast, closeModal, requestCloseModal, avatar, errorMessage, ago, setPrefUser, clearDrafts, uiPref } from './util.js';
+import { $, $$, esc, toast, requestCloseModal, avatar, errorMessage, ago, setPrefUser, clearDrafts, uiPref } from './util.js';
 import { renderProject } from './views/project.js';
 import { renderMyWork } from './views/mywork.js';
 import { renderApprovals } from './views/approvals.js';
@@ -27,8 +27,8 @@ import { current as projectState, reloadProject } from './views/project.js';
 import { reloadOpenItem, openItemId } from './views/item-panel.js';
 import { startRealtime, stopRealtime, onRealtime } from './realtime.js';
 import { hydrateIcons } from './icons.js';
-import { initShortcuts, help as showShortcuts, labelNavShortcuts } from './shortcuts.js';
-import { initShell, renderNav, renderMe, highlightNav, loadBrand } from './shell.js';
+import { initShortcuts, labelNavShortcuts } from './shortcuts.js';
+import { initShell, renderNav, renderMe, highlightNav, loadBrand, PAGE_TITLES } from './shell.js';
 
 hydrateIcons();
 initShortcuts();
@@ -41,7 +41,7 @@ function show(id) {
 function logout({ keepDrafts = false, reload = keepDrafts !== true } = {}) {
   if (reload) setTimeout(() => location.reload()); // chạy sau khi các dòng dưới đã dọn phiên
   stopRealtime();
-  setToken(null); store.me = null; if (keepDrafts !== true) clearDrafts(); closeItem(); lastViewKey = ''; $('#view').innerHTML = ''; show('loginPage'); $('#loginUser').focus();
+  setToken(null); store.me = null; document.title = 'Kepler Hub'; if (keepDrafts !== true) clearDrafts(); closeItem(); lastViewKey = ''; $('#view').innerHTML = ''; show('loginPage'); $('#loginUser').focus();
 }
 
 // Cập nhật thời gian thực: tải lại bảng của dự án đang xem và panel đang mở (gộp nhiều sự kiện liên tiếp).
@@ -77,6 +77,24 @@ $('#loginForm').addEventListener('submit', async e => {
     await enter();
   } catch (error) { $('#loginError').textContent = errorMessage(error); }
 });
+// Ô mật khẩu (đăng nhập, đổi mật khẩu): nút hiện / ẩn và cảnh báo Caps Lock.
+for (const btn of $$('[data-pw-toggle]')) {
+  btn.addEventListener('click', () => {
+    const input = $('#' + btn.dataset.pwToggle), shown = input.type === 'text';
+    input.type = shown ? 'password' : 'text';
+    btn.setAttribute('aria-pressed', String(!shown));
+    btn.setAttribute('aria-label', shown ? 'Hiện mật khẩu' : 'Ẩn mật khẩu');
+    btn.textContent = shown ? 'Hiện' : 'Ẩn';
+    input.focus();
+  });
+}
+for (const input of $$('#loginPass, #pwCurrent, #pwNew, #pwConfirm')) {
+  const warn = input.form.querySelector('.caps-warn');
+  const check = e => { if (typeof e.getModifierState === 'function') warn.classList.toggle('hidden', !e.getModifierState('CapsLock')); };
+  input.addEventListener('keydown', check);
+  input.addEventListener('keyup', check);
+  input.addEventListener('blur', () => warn.classList.add('hidden'));
+}
 $('#passwordForm').addEventListener('submit', async e => {
   e.preventDefault();
   $('#pwError').textContent = '';
@@ -155,7 +173,7 @@ $('#notifBtn').addEventListener('click', async e => {
   await refreshCounters();
   const { items = [] } = store.notifications || {};
   panel.innerHTML = `<div class="notif-head"><span>Thông báo</span><button class="btn btn-sm btn-ghost" id="readAll">Đánh dấu đã đọc</button></div>` +
-    (items.map(n => `<a class="notif-item${n.readAt ? '' : ' unread'}" href="${esc(n.link || '#')}" data-id="${n.id}" data-testid="notif-item"><b>${esc(n.title)}</b>${n.body ? `<div class="muted sm">${esc(n.body)}</div>` : ''}<div class="muted xs">${ago(n.createdAt)}</div></a>`).join('') || '<div class="empty">Chưa có thông báo</div>');
+    (items.map(n => `<a class="notif-item${n.readAt ? '' : ' unread'}" href="${esc(n.link || '#')}" data-id="${n.id}" data-testid="notif-item"><b>${esc(n.title)}</b>${n.body ? `<div class="muted sm notif-body">${esc(n.body)}</div>` : ''}<div class="muted xs">${ago(n.createdAt)}</div></a>`).join('') || '<div class="empty">Chưa có thông báo</div>');
   panel.classList.remove('hidden');
 });
 $('#notifPanel').addEventListener('click', async e => {
@@ -166,7 +184,7 @@ $('#notifPanel').addEventListener('click', async e => {
 document.addEventListener('click', e => { if (!e.target.closest('.notif')) $('#notifPanel').classList.add('hidden'); });
 
 // Thanh đầu trang, sidebar (thu gọn / mở trượt), bảng Ứng dụng, menu tài khoản; palette
-initShell({ onLogout: () => logout(), onShortcuts: () => showShortcuts() });
+initShell({ onLogout: () => logout() });
 $('#paletteBtn').addEventListener('click', openPalette);
 $('#modalRoot').addEventListener('mousedown', e => { if (e.target.id === 'modalRoot') requestCloseModal(); });
 $('#paletteRoot').addEventListener('mousedown', e => { if (e.target.id === 'paletteRoot') closePalette(); });
@@ -185,7 +203,8 @@ document.addEventListener('keydown', e => {
     if (menu) { e.preventDefault(); menu.open = false; menu.querySelector('summary')?.focus(); return; }
     const active = document.activeElement;
     const typing = active && active !== document.body && active.matches('input:not([type=checkbox]):not([type=radio]), textarea, select, [contenteditable="true"]');
-    if (typing && modalOpen && !$('#modal').dataset.dirty) return closeModal(null);
+    // Trong hộp thoại (vd. form Tạo việc): Esc đóng ngay; đã nhập gì thì hỏi "Bỏ nội dung đã nhập?" (không cần bấm Esc lần hai).
+    if (typing && modalOpen) return requestCloseModal();
     if (typing) { active.blur(); return; }
     if (!$('#notifPanel').classList.contains('hidden')) { $('#notifPanel').classList.add('hidden'); $('#notifBtn').focus(); return; }
     if (modalOpen) return requestCloseModal();
@@ -196,6 +215,23 @@ document.addEventListener('keydown', e => {
 
 // Router
 let renderToken = 0, lastViewKey = '';
+// Tiêu đề tab đặt ngay khi đổi route (trước khi tải dữ liệu), để tab không hiện URL thô.
+function pageTitle(parts) {
+  const tail = 'Kepler Hub';
+  let name = PAGE_TITLES[parts[0] || 'my'];
+  if (parts[0] === 'projects' && parts[1]) name = store.projects.find(p => p.id === Number(parts[1]))?.name || 'Dự án';
+  else if (parts[0] === 'admin') name = 'Quản trị';
+  return name ? `${name} · ${tail}` : tail;
+}
+// Phân hệ chưa bật cho đơn vị (API trả 404): trang giải thích thay cho lỗi kỹ thuật.
+const OPTIONAL_MODULES = { hrm: 'Nhân sự (chấm công, nghỉ phép)', crm: 'Đối tác (CRM)' };
+function renderFeatureOff(view, setCrumbs, module) {
+  setCrumbs(esc(PAGE_TITLES[module] || ''));
+  view.innerHTML = `<div class="card empty" data-testid="feature-off">
+    <h1>Tính năng chưa bật cho đơn vị</h1>
+    <p class="muted">Phân hệ <b>${esc(OPTIONAL_MODULES[module])}</b> chưa được bật cho đơn vị của bạn. Nếu cần dùng, liên hệ quản trị hệ thống.</p>
+    <p><a class="btn btn-primary" href="#/today" data-testid="feature-off-home">Về Trang chủ</a></p></div>`;
+}
 // Vẽ lại trang nền (hộp việc, điều hành, chờ duyệt…) sau thao tác trong panel, không đụng tới panel đang mở.
 // Chỉ các trang danh sách; bỏ qua khi người dùng đang gõ hoặc đã nhập dở trong trang (ghi chú, form uỷ quyền, danh mục…).
 const LIST_PAGES = ['', 'my', 'ops', 'approvals', 'dept', 'schedule', 'today'];
@@ -228,6 +264,7 @@ export async function route({ background = false } = {}) {
     return;
   }
   lastViewKey = viewKey;
+  if (!background) document.title = pageTitle(parts);
   const view = $('#view');
   // Trang trước có thể đã gán trình xử lý lên #view — gỡ để không chạy nhầm ở trang sau.
   if (!background) { view.onclick = null; view.onchange = null; view.oninput = null; view.onkeydown = null; }
@@ -265,6 +302,10 @@ export async function route({ background = false } = {}) {
   } catch (error) {
     if (token !== renderToken) return;
     lastViewKey = '';
+    // Phân hệ tắt thì router của nó không được gắn, API rơi vào 404 chung "Không tìm thấy API" (khác 404 "không tìm thấy đối tác"…).
+    const moduleOff = OPTIONAL_MODULES[parts[0]] && error?.status === 404
+      && (!(store.settings?.modules || []).includes(parts[0]) || error.message === 'Không tìm thấy API');
+    if (moduleOff) return renderFeatureOff(view, setCrumbs, parts[0]);
     view.innerHTML = `<div class="card empty">${esc(errorMessage(error))}</div>`;
     setCrumbs('Lỗi');
   }

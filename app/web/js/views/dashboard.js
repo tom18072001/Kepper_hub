@@ -1,4 +1,4 @@
-// Dashboard: số liệu chính (bấm để xem chi tiết), phân bố trạng thái, throughput 8 tuần, theo loại nhiệm vụ, khối lượng theo người,
+// Thống kê công việc: số liệu chính (bấm để xem chi tiết), phân bố trạng thái, số việc xong mỗi tuần (8 tuần), theo loại nhiệm vụ, khối lượng theo người,
 // việc quá hạn / sắp đến hạn / tồn lâu, theo phòng chủ trì và theo dự án / sổ. Xuất báo cáo tuần / kỳ (Word, tối đa 93 ngày).
 import { api, download } from '../api.js';
 import { store, can, personLink } from '../store.js';
@@ -138,10 +138,21 @@ const listRows = (rows, right) => rows.map(o => `<div class="hbar" style="grid-t
 const cnt = (n, bad = false) => `<td class="num${bad && n ? ' due overdue' : ''}">${n}</td>`;
 
 const REPORT_KEYS = ['week', 'lastWeek', 'month', 'quarter'];
+const NO_DATA = '<div class="empty" data-testid="dash-nodata">Chưa có dữ liệu.</div>';
+// Phạm vi số liệu, viết đúng cách máy chủ đếm (routes/dashboard.js + services/stats.js): việc thuộc phòng = phòng chủ trì,
+// việc không có phòng chủ trì thì theo phòng sở hữu dự án / sổ; chỉ việc người xem thấy được, dự án / sổ chưa lưu trữ.
+export function scopeText(d, deptName = '') {
+  // Máy chủ ghi phạm vi (services/stats.js scopeNote), kèm số việc người trong phòng làm nhưng phòng khác chủ trì.
+  if (d.scopeNote) return d.scopeNote;
+  const tail = 'chỉ việc bạn được xem, trong dự án / sổ chưa lưu trữ.';
+  if (d.scope === 'UNIT') return `Phạm vi: việc ${deptName || 'phòng của bạn'} chủ trì (việc không có phòng chủ trì thì tính theo phòng sở hữu dự án / sổ). Không gồm việc phòng khác chủ trì mà bạn chỉ phụ trách hoặc phối hợp; ${tail}`;
+  if (d.departmentId) return `Phạm vi: việc ${deptName || 'phòng đã chọn'} chủ trì (việc không có phòng chủ trì thì tính theo phòng sở hữu dự án / sổ); ${tail}`;
+  return `Phạm vi: mọi việc ở mọi phòng; ${tail}`;
+}
 const REPORT_MAX_DAYS = 93;
 
 export async function renderDashboard(root, params, setCrumbs) {
-  setCrumbs('Dashboard');
+  setCrumbs('Thống kê công việc');
   const view = filterView('dashboard', root, params, setCrumbs, renderDashboard);
   const deptParam = params.get('departmentId') || '';
   const q = new URLSearchParams();
@@ -171,8 +182,11 @@ export async function renderDashboard(root, params, setCrumbs) {
       <span class="st-range muted sm" id="repMsg" aria-live="polite"></span>
       <button class="btn btn-ghost st-push" id="weeklyBtn" data-testid="weekly-report" title="Báo cáo tuần / kỳ, tối đa ${REPORT_MAX_DAYS} ngày">${icon('download')}<span>Tải báo cáo</span></button>
     </div>` : '';
-  root.innerHTML = `<div class="page-head" data-st-page="dashboard"><h1>Dashboard ${deptLabel ? `<span class="muted sm">· ${esc(deptLabel)}</span>` : ''}</h1>
+  const deptName = d.departmentId ? store.departments.find(x => x.id === d.departmentId)?.name : '';
+  const tpTotal = d.throughput.reduce((n, w) => n + w.completed, 0), catAny = Object.values(d.byCategory).some(v => v > 0);
+  root.innerHTML = `<div class="page-head" data-st-page="dashboard"><h1>Thống kê công việc ${deptLabel ? `<span class="muted sm">· ${esc(deptLabel)}</span>` : ''}</h1>
       ${scopeCtl}<span class="muted xs">Hiện trạng lúc ${new Date(d.generatedAt).toLocaleTimeString('vi-VN')}</span></div>
+    <p class="muted sm" data-testid="dash-scope">${esc(scopeText(d, deptName))}</p>
     ${reportBar}
     <div class="st-body">
     <div class="kpis" data-testid="kpis">
@@ -181,17 +195,17 @@ export async function renderDashboard(root, params, setCrumbs) {
       ${card({ value: t.dueSoon, label: 'Đến hạn trong 7 ngày', tone: 'warn', testid: 'kpi-duesoon', scroll: 'dashDueSoon', hint: 'Xem danh sách việc sắp đến hạn' })}
       ${t.pendingAccept || isLeader ? card({ value: t.pendingAccept || 0, label: 'Chờ phòng tiếp nhận', tone: 'warn', testid: 'kpi-pending-accept', href: isLeader ? '#/dept?tab=PENDING' : '', scroll: !isLeader && showDepts ? 'dashDepartments' : '', hint: 'Việc giao về phòng chưa được tiếp nhận, phân công' }) : ''}
       ${card({ value: d.pendingApprovals, label: 'Đang chờ duyệt', tone: 'warn', testid: 'kpi-pending', href: canApprove ? '#/approvals' : '', hint: 'Mở hàng chờ duyệt của tôi' })}
-      ${card({ value: t.completed, label: 'Đã hoàn thành', testid: 'kpi-completed', scroll: 'dashThroughput', hint: 'Xem throughput theo tuần' })}
-      ${card({ value: d.cycleTime.medianDays ?? '—', label: 'Cycle time trung vị (ngày, 30 ngày qua)' })}
+      ${card({ value: t.completed, label: 'Đã hoàn thành', testid: 'kpi-completed', scroll: 'dashThroughput', hint: 'Xem số việc xong mỗi tuần' })}
+      ${card({ value: d.cycleTime.medianDays ?? '—', label: 'Thời gian làm trung vị (ngày) <span class="muted xs">· việc xong trong 30 ngày qua</span>', testid: 'kpi-cycle' })}
     </div>
     <div class="dash-grid st-dash">
       <div class="card"><h3>Phân bố trạng thái</h3>
-        <div class="stack">${Object.entries(d.byCategory).map(([k, v]) => `<i style="width:${v / catTotal * 100}%;background:${CAT_COLORS[k]}" title="${CATEGORY[k]}: ${v}"></i>`).join('')}</div>
-        <div class="legend">${Object.entries(d.byCategory).map(([k, v]) => `<span><span class="state-dot" style="background:${CAT_COLORS[k]}"></span> ${CATEGORY[k]}: <b>${v}</b></span>`).join('')}</div></div>
-      <div class="card" id="dashThroughput"><h3>Throughput — việc hoàn thành mỗi tuần</h3>
-        <div class="bars" data-testid="throughput">${d.throughput.map(w => `<div class="bar"><b>${w.completed}</b><i style="height:${w.completed / maxTp * 110}px"></i><span>${w.week.slice(8, 10)}/${w.week.slice(5, 7)}</span></div>`).join('')}</div></div>
+        ${!catAny ? NO_DATA : `<div class="stack">${Object.entries(d.byCategory).map(([k, v]) => `<i style="width:${v / catTotal * 100}%;background:${CAT_COLORS[k]}" title="${CATEGORY[k]}: ${v}"></i>`).join('')}</div>
+        <div class="legend">${Object.entries(d.byCategory).map(([k, v]) => `<span><span class="state-dot" style="background:${CAT_COLORS[k]}"></span> ${CATEGORY[k]}: <b>${v}</b></span>`).join('')}</div>`}</div>
+      <div class="card" id="dashThroughput"><h3>Số việc xong mỗi tuần <span class="muted xs">(8 tuần gần nhất)</span></h3>
+        ${tpTotal ? `<div class="bars" data-testid="throughput">${d.throughput.map(w => `<div class="bar"><b>${w.completed}</b><i style="height:${w.completed / maxTp * 110}px"></i><span>${w.week.slice(8, 10)}/${w.week.slice(5, 7)}</span></div>`).join('')}</div>` : NO_DATA}</div>
       <div class="card"><h3>Theo loại nhiệm vụ</h3><div class="tbl-scroll"><table class="table" data-testid="dash-types"><thead><tr><th>Loại</th><th class="num">Tổng</th><th class="num">Đang mở</th><th class="num">Hoàn thành</th><th class="num">Quá hạn</th></tr></thead><tbody>
-        ${['PLAN', 'ADHOC'].map(k => types[k] || { total: 0, open: 0, completed: 0, overdue: 0 }).map((x, n) => `<tr><td class="nowrap"><span class="type-tag type-${n ? 'ADHOC' : 'PLAN'}">${n ? 'ĐX' : 'KH'}</span> ${TYPE_LABEL[n ? 'ADHOC' : 'PLAN']}</td>${cnt(x.total)}${cnt(x.open)}${cnt(x.completed)}${cnt(x.overdue, true)}</tr>`).join('')}</tbody></table></div></div>
+        ${!Object.values(types).some(x => x.total) ? `<tr><td colspan="5">${NO_DATA}</td></tr>` : ['PLAN', 'ADHOC'].map(k => types[k] || { total: 0, open: 0, completed: 0, overdue: 0 }).map((x, n) => `<tr><td class="nowrap"><span class="type-tag type-${n ? 'ADHOC' : 'PLAN'}">${n ? 'ĐX' : 'KH'}</span> ${TYPE_LABEL[n ? 'ADHOC' : 'PLAN']}</td>${cnt(x.total)}${cnt(x.open)}${cnt(x.completed)}${cnt(x.overdue, true)}</tr>`).join('')}</tbody></table></div></div>
       ${d.peopleVisible === false ? '' : `<div class="card"><h3>Khối lượng việc theo người <span class="muted xs">(đang mở / quá hạn)</span></h3>
         ${d.workload.map(w => `<div class="hbar"><span title="${esc(w.fullName)}">${personLink({ id: w.userId, fullName: w.fullName })}</span><span class="track"><i style="width:${(w.open - w.overdue) / maxLoad * 100}%"></i><i class="bad" style="width:${w.overdue / maxLoad * 100}%"></i></span><b>${w.open}</b></div>`).join('') || '<div class="empty">Không có việc đang mở.</div>'}</div>`}
       <div class="card" id="dashOverdue"><h3>Việc quá hạn <span class="muted sm">${t.overdue}</span></h3>${listRows(d.overdueItems, o => `<span class="due overdue">${fmtDate(o.dueDate)}</span>`) || '<div class="empty">Không có việc quá hạn.</div>'}

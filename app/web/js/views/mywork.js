@@ -47,11 +47,13 @@ function nextStep(i) {
 export async function renderMyWork(root, params, setCrumbs) {
   const mode = ['created', 'notes'].includes(params.get('mode')) ? params.get('mode') : 'assigned';
   setCrumbs('Việc của tôi');
-  const tabs = `<div class="tabs"><a href="#/my" class="${mode === 'assigned' ? 'active' : ''}" data-testid="my-assigned">Được giao cho tôi</a><a href="#/my?mode=created" class="${mode === 'created' ? 'active' : ''}" data-testid="my-created">Tôi tạo</a><a href="#/my?mode=notes" class="${mode === 'notes' ? 'active' : ''}" data-testid="my-notes">Ghi chú của tôi</a></div>`;
+  // Hai tab lọc việc (được giao / tôi tạo). "Ghi chú của tôi" không phải bộ lọc việc: là một lối riêng ở góc trang.
+  const tabs = `<div class="tabs" role="tablist" aria-label="Lọc việc"><a href="#/my" class="${mode === 'assigned' ? 'active' : ''}" role="tab" aria-selected="${mode === 'assigned'}" data-testid="my-assigned">Được giao cho tôi</a><a href="#/my?mode=created" class="${mode === 'created' ? 'active' : ''}" role="tab" aria-selected="${mode === 'created'}" data-testid="my-created">Tôi tạo</a></div>`;
+  const notesLink = `<a class="btn btn-ghost btn-sm mw-notes-link" href="#/my?mode=notes" data-testid="my-notes" title="Ghi nhanh việc cá nhân (phím N)">${icon('checklist')}Ghi chú của tôi</a>`;
   root.oninput = null; root.onchange = null; root.onkeydown = null;
   if (mode === 'notes') {
     root.onclick = null;
-    root.innerHTML = `<div class="page-head"><h1>Ghi chú của tôi</h1>${tabs}</div><div id="notesBody"></div>`;
+    root.innerHTML = `<div class="page-head"><h1>Ghi chú của tôi</h1><a class="btn btn-ghost btn-sm" href="#/my" data-testid="my-back">${icon('left')}Việc của tôi</a></div><div id="notesBody"></div>`;
     return drawNotes(root.querySelector('#notesBody'));
   }
   const items = await api(`/api/my/items?mode=${mode}`);
@@ -96,7 +98,7 @@ export async function renderMyWork(root, params, setCrumbs) {
   };
   const row = i => `<tr class="clickable" tabindex="0" data-href="${href(i)}" data-testid="my-${esc(i.code)}">
       <td class="code mw-c-code">${esc(i.code)}</td>
-      <td class="mw-c-title"><span class="mw-title">${esc(i.title)}</span><span class="mw-tags">${i.myRole ? `<span class="pill role">${ROLE[i.myRole]}</span>` : ''}${prioChip(i.priority) ? `<span class="mw-prio">${prioChip(i.priority)}</span>` : ''}${i.labels.map(labelChip).join('')}</span></td>
+      <td class="mw-c-title">${i.parentRef ? `<span class="parent-ref" title="Việc con của ${esc(i.parentRef.code)} · ${esc(i.parentRef.title)}">↳ ${esc(i.parentRef.code)} <span class="parent-title">${esc(i.parentRef.title)}</span></span>` : ""}<span class="mw-title">${esc(i.title)}</span>${i.counts?.childrenTotal ? ` <span class="pill kids-chip${i.counts.childrenDone === i.counts.childrenTotal ? " ok" : ""}" title="Việc con đã được duyệt hoàn thành">${i.counts.childrenDone}/${i.counts.childrenTotal} việc con</span>` : ""}<span class="mw-tags">${i.myRole ? `<span class="pill role">${ROLE[i.myRole]}</span>` : ''}${prioChip(i.priority) ? `<span class="mw-prio">${prioChip(i.priority)}</span>` : ''}${i.labels.map(labelChip).join('')}</span></td>
       <td class="mw-c-next">${nextCell(i)}</td>
       ${multiProject ? `<td class="mw-c-proj muted sm">${esc(i.project.name)}</td>` : ''}
       <td class="mw-c-due">${dueCell(i)}</td></tr>`;
@@ -119,7 +121,7 @@ export async function renderMyWork(root, params, setCrumbs) {
       <span class="seg" role="group" aria-label="Kiểu xem"><button type="button" data-myview="list" aria-pressed="${f.view === 'list'}" class="${f.view === 'list' ? 'on' : ''}" data-testid="my-view-list">Danh sách</button><button type="button" data-myview="cal" aria-pressed="${f.view === 'cal'}" class="${f.view === 'cal' ? 'on' : ''}" data-testid="my-view-cal">Lịch</button></span>
     </div>`;
 
-  root.innerHTML = `<div class="page-head"><h1>Chào ${esc(store.me.fullName)}</h1>${tabs}</div>
+  root.innerHTML = `<div class="page-head mw-head"><h1>Chào ${esc(store.me.fullName)}</h1>${tabs}<span class="grow"></span>${notesLink}</div>
     <p class="muted mw-lead" id="myLead"></p>
     ${items.length ? filterBar : ''}
     <div id="myBody"></div>
@@ -160,8 +162,8 @@ export async function renderMyWork(root, params, setCrumbs) {
       // Không có việc giao trực tiếp: chỉ sang nơi đang có việc chờ (phiếu duyệt, việc phòng) thay vì một trang trống.
       const c = store.counts || {};
       const next = [c.total ? `<a class="btn btn-primary" href="#/approvals" data-testid="my-empty-approvals">Chờ tôi xử lý · ${c.total}</a>` : '',
-        '<a class="btn" href="#/home">Dashboard dự án</a>'].filter(Boolean).join(' ');
-      body.innerHTML = `<div class="card empty"><p>Không có việc nào giao trực tiếp cho bạn đang mở.</p>${next ? `<p class="mw-empty-next">${next}</p>` : ''}<p class="muted xs">Ghi nhanh việc cá nhân ở tab <a href="#/my?mode=notes">Ghi chú của tôi</a>.</p></div>`;
+        '<a class="btn" href="#/home">Tiến độ dự án</a>'].filter(Boolean).join(' ');
+      body.innerHTML = `<div class="card empty"><p>Không có việc nào giao trực tiếp cho bạn đang mở.</p>${next ? `<p class="mw-empty-next">${next}</p>` : ''}<p class="muted xs">Ghi nhanh việc cá nhân ở <a href="#/my?mode=notes">Ghi chú của tôi</a>.</p></div>`;
       return;
     }
     if (!list.length) {

@@ -5,11 +5,12 @@
 // khi mở hộp thoại hoặc có phím Ctrl/Alt/⌘. Phím một chữ tắt được (WCAG 2.1.4). Khớp theo vị trí phím (e.code) để không vướng bộ gõ.
 import { $, $$, esc, openModal, closeModal, uiPref } from './util.js';
 import { store } from './store.js';
+import { PAGE_TITLES as T } from './shell.js';
 
 // G + chữ → trang (chỉ khi mục menu tương ứng đang hiện với người dùng).
 const GO = [
-  ['h', 'nav-today', 'Trang chủ'], ['o', 'nav-home', 'Dashboard dự án'], ['m', 'nav-my', 'Việc của tôi'], ['a', 'nav-approvals', 'Chờ tôi duyệt'], ['w', 'nav-work', 'Tổng thể công việc'],
-  ['b', 'nav-dashboard', 'Số liệu công việc'], ['r', 'nav-trash', 'Thùng rác'],
+  ['h', 'nav-today', T.today], ['o', 'nav-home', T.home], ['m', 'nav-my', T.my], ['a', 'nav-approvals', T.approvals], ['w', 'nav-work', T.work],
+  ['b', 'nav-dashboard', T.dashboard], ['r', 'nav-trash', T.trash],
   ['n', null, 'Ghi chú của tôi', () => '#/my?mode=notes'],
 ];
 const HELP_PANEL = ['Trong panel việc', [['J / K', 'Việc sau / trước trong danh sách'], ['V', 'Tới vùng "Cần bạn xử lý" (ý kiến duyệt, trả lời, gia hạn)'], ['S', 'Đổi trạng thái'], ['P', 'Đổi ưu tiên'],
@@ -75,7 +76,8 @@ export function help() {
 
 function panelKey(key) {
   const p = $('#itemPanel');
-  const reach = el => { el.closest('details.sec, details.ip-more')?.setAttribute('open', ''); el.closest('details:not(.sec):not(.ip-more)')?.setAttribute('open', ''); };
+  // Ô cần tới nằm ở tab đang ẩn của panel (vd. M → bình luận ở tab Trao đổi): chuyển tab trước.
+  const reach = el => { const pane = el.closest('[data-pane]'); if (pane?.hidden) $(`[data-tab="${pane.dataset.pane}"]`, p)?.click(); el.closest('details.sec, details.ip-more')?.setAttribute('open', ''); el.closest('details:not(.sec):not(.ip-more)')?.setAttribute('open', ''); };
   const focus = sel => { const el = $(sel, p); if (!el || el.disabled) return false; reach(el); el.focus(); el.scrollIntoView({ block: 'center' }); try { el.showPicker?.(); } catch { /* trình duyệt không hỗ trợ */ } return true; };
   const click = sel => { const b = $(sel, p); if (!b) return false; reach(b); if (!visible(b)) return false; b.click(); return true; };
   if (key === 's') return focus('#ipState');

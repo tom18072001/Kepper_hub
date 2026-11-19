@@ -5,13 +5,17 @@ const { activity, notify, notifyRequesterIfDone } = require('./events');
 const approval = require('./approval');
 const MTL = require('./mtl');
 const tree = require('./tree');
+const rules = require('./task-rules');
 
 const PRIORITIES = ['URGENT', 'HIGH', 'MEDIUM', 'LOW', 'NONE'];
 const BOARD_INCLUDE = {
   assignees: { include: { user: { select: { id: true, fullName: true, username: true } } } },
   supporters: { include: { user: { select: { id: true, fullName: true, username: true } } } },
   labels: { include: { label: true } },
-  approvals: { where: { status: 'PENDING' }, select: { id: true, currentLevel: true, totalLevels: true } },
+  approvals: { where: { status: 'PENDING' }, select: { id: true, currentLevel: true, totalLevels: true, withAssigner: true } },
+  // Việc con hiện ở mọi view: nhãn việc cha + tiến độ con x/y.
+  parent: { select: { id: true, number: true, title: true } },
+  children: { where: { archivedAt: null }, select: { state: { select: { category: true } } } },
   supportDepartments: { select: { departmentId: true } },
   extensions: { where: { status: 'PENDING' }, select: { id: true, newDue: true } },
   documents: { where: { kind: 'BASIS' }, select: { number: true, issuedOn: true }, take: 5 },
@@ -19,14 +23,17 @@ const BOARD_INCLUDE = {
   checklist: { select: { done: true } },
 };
 function boardItem(project, item) {
-  const { assignees, supporters, labels, approvals, checklist, _count, descriptionHtml, descriptionText, supportDepartments, extensions, documents, ...rest } = item;
+  const { assignees, supporters, labels, approvals, checklist, _count, descriptionHtml, descriptionText, supportDepartments, extensions, documents, parent, children, ...rest } = item;
+  const kids = rules.childProgress(children || []);
   return {
     ...rest, code: `${project.key}-${item.number}`, excerpt: (descriptionText || '').slice(0, 160),
     supportDepartmentIds: (supportDepartments || []).map(d => d.departmentId), pendingExtension: extensions?.[0] || null,
     basisDocs: (documents || []).filter(d => !d.kind || d.kind === 'BASIS').map(d => ({ number: d.number, issuedOn: d.issuedOn })),
     assignees: assignees.map(a => a.user), supporters: (supporters || []).map(a => a.user), labels: labels.map(l => l.label),
     pendingApproval: approvals[0] || null,
-    counts: { comments: _count.comments, attachments: _count.attachments, children: _count.children, checklistDone: checklist.filter(c => c.done).length, checklistTotal: checklist.length },
+    parentRef: parent ? { id: parent.id, code: `${project.key}-${parent.number}`, title: parent.title } : null,
+    counts: { comments: _count.comments, attachments: _count.attachments, children: _count.children, checklistDone: checklist.filter(c => c.done).length, checklistTotal: checklist.length,
+      childrenDone: kids.done, childrenTotal: kids.total },
   };
 }
 const link = (project, item) => `#/projects/${project.id}?item=${item.id}`;
@@ -45,36 +52,77 @@ async function positionBetween(tx, stateId, afterId, beforeId) {
   return positionBetween(tx, stateId, afterId, beforeId);
 }
 
-// Kiểm tra trước khi chuyển trạng thái; trả về dữ liệu cập nhật.
-async function transition(tx, { project, rights, item, toState, overrideWip }) {
-  const fromState = item.state;
+const childStates = (tx, itemId) => tx.workItem.findMany({ where: { parentId: itemId, archivedAt: null }, select: { state: { select: { category: true } } } });
+
+// Kiểm tra trước khi chuyển trạng thái; trả về dữ liệu cập nhật và cột đích THỰC SỰ (`toState`):
+// chuyển sang "Hoàn thành" mà chưa được người giao duyệt → vào cột "Chờ duyệt" (mở phiếu duyệt ở afterTransition).
+// allowDirectComplete: nhập hàng loạt dữ liệu lịch sử (sổ Excel, kế hoạch năm) — ghi thẳng Hoàn thành như trước.
+async function transition(tx, { project, rights, item, toState, overrideWip, allowDirectComplete = false }) {
+  const fromState = item.state, requested = toState;
   if (toState.projectId !== project.id) fail(422, 'Trạng thái không thuộc dự án', 'INVALID_STATE');
-  if (fromState && fromState.id === toState.id) return { data: {}, fromState, steps: [] };
+  if (fromState && fromState.id === toState.id) return { data: {}, fromState, steps: [], toState };
+  const approved = toState.category === 'COMPLETED' && !!(item.id && await approval.hasApproval(tx, item.id));
+  const target = rules.completionTarget({ fromCategory: fromState?.category, toCategory: toState.category, approved, allowDirect: allowDirectComplete });
+  if (target !== toState.category) {
+    toState = await tx.workflowState.findFirst({ where: { projectId: project.id, category: target }, orderBy: { position: 'asc' } });
+    if (!toState) fail(409, 'Dự án chưa có cột "Chờ duyệt" — người quản lý dự án cần thêm cột nhóm REVIEW', 'MISSING_REVIEW_STATE');
+  }
+  // Việc cha: chỉ gửi duyệt / hoàn thành khi mọi việc con (trừ việc huỷ) đã được duyệt hoàn thành.
+  if (item.id && ['REVIEW', 'COMPLETED'].includes(toState.category) && !allowDirectComplete)
+    rules.assertChildrenDone(await childStates(tx, item.id), toState.category === 'REVIEW' ? 'gửi duyệt' : 'hoàn thành');
   if (toState.wipLimit) {
     const count = await tx.workItem.count({ where: { stateId: toState.id, archivedAt: null, id: { not: item.id || 0 } } });
     if (count >= toState.wipLimit && !(overrideWip === 'bulk' || (overrideWip && rights.canManage)))
       fail(409, `Cột "${toState.name}" đã đạt giới hạn WIP ${toState.wipLimit} việc`, 'WIP_LIMIT');
   }
-  const steps = await approval.stepsForItem(tx, project, item);
-  if (steps.length && toState.category === 'COMPLETED' && !(item.id && await approval.hasApproval(tx, item.id)))
-    fail(409, 'Việc cần được duyệt trước khi hoàn thành — hãy chuyển vào cột Chờ duyệt', 'APPROVAL_REQUIRED');
+  const steps = toState.category === 'REVIEW' ? await approval.stepsForItem(tx, project, item) : [];
   const data = { stateId: toState.id };
-  if (toState.category === 'STARTED' && !item.startedAt) data.startedAt = new Date();
+  if (['STARTED', 'REVIEW'].includes(toState.category) && !item.startedAt) data.startedAt = new Date();
   if (toState.category === 'COMPLETED') { data.completedAt = new Date(); data.progress = 100; }
   else if (fromState && ['COMPLETED', 'CANCELLED'].includes(fromState.category)) data.completedAt = null;
-  return { data, fromState, steps };
+  return { data, fromState, steps, toState, redirected: toState.id !== requested.id };
 }
-async function afterTransition(tx, { user, project, item, fromState, toState, steps }) {
+async function afterTransition(tx, { user, project, item, fromState, toState }) {
   if (!fromState || fromState.id === toState.id) return;
   await activity(tx, item.id, user.id, 'STATE', { from: fromState.name, to: toState.name, fromId: fromState.id, toId: toState.id });
   await notifyRequesterIfDone(tx, item, project, toState.category, user.id);
-  if (!steps || !steps.length) return;
   if (fromState.category === 'REVIEW' && toState.category !== 'REVIEW') await approval.cancelPending(tx, { item, actor: user, reason: 'Chuyển khỏi cột chờ duyệt' });
   if (fromState.category === 'COMPLETED' && toState.category !== 'COMPLETED') {
     const last = await tx.approvalRequest.findFirst({ where: { workItemId: item.id, status: 'APPROVED' }, orderBy: { id: 'desc' } });
     if (last) await tx.approvalRequest.update({ where: { id: last.id }, data: { status: 'REOPENED' } });
   }
   if (toState.category === 'REVIEW') await approval.openRequest(tx, { project, item, fromStateId: fromState.id, actor: user });
+  // Việc con đã xong / đã huỷ được mở lại → việc cha (đang chờ duyệt / đã hoàn thành) không còn "đủ con" nữa.
+  if (item.parentId && ['COMPLETED', 'CANCELLED'].includes(fromState.category) && !['COMPLETED', 'CANCELLED'].includes(toState.category))
+    await reopenAncestors(tx, { user, parentId: item.parentId, reason: `Việc con ${project.key}-${item.number} được mở lại` });
+}
+
+// Đưa các việc tổ tiên đang "Chờ duyệt" / "Hoàn thành" về "Đang làm" (huỷ phiếu chờ, đánh dấu phiếu đã duyệt là mở lại).
+async function reopenAncestors(tx, { user, parentId, reason }) {
+  const seen = new Set();
+  for (let pid = parentId; pid != null && !seen.has(pid); ) {
+    seen.add(pid);
+    const p = await tx.workItem.findUnique({ where: { id: pid }, include: { state: true, project: true, assignees: true } });
+    if (!p || p.archivedAt || !['REVIEW', 'COMPLETED'].includes(p.state.category)) break;
+    const started = await tx.workflowState.findFirst({ where: { projectId: p.projectId, category: 'STARTED' }, orderBy: { position: 'asc' } });
+    if (!started) break;
+    await tx.workItem.update({ where: { id: p.id }, data: { stateId: started.id, completedAt: null, position: await endPosition(tx, started.id) } });
+    if (p.state.category === 'REVIEW') await approval.cancelPending(tx, { item: p, actor: user, reason });
+    else {
+      const last = await tx.approvalRequest.findFirst({ where: { workItemId: p.id, status: 'APPROVED' }, orderBy: { id: 'desc' } });
+      if (last) await tx.approvalRequest.update({ where: { id: last.id }, data: { status: 'REOPENED' } });
+    }
+    await activity(tx, p.id, user.id, 'REOPENED_BY_CHILD', { from: p.state.name, to: started.name, reason });
+    await notify(tx, p.assignees.map(a => a.userId), { type: 'REOPENED', title: `${p.project.key}-${p.number} mở lại: ${reason}`, body: p.title, link: link(p.project, p) }, user.id);
+    pid = p.parentId;
+  }
+}
+
+// Tự chuyển cột theo % (MTL, checklist, báo cáo tuần): 100% chỉ gửi duyệt khi chưa chờ duyệt và mọi việc con đã xong —
+// còn việc con mở thì chỉ ghi %, không báo lỗi (để không chặn báo cáo tuần).
+async function canAutoSubmit(tx, item) {
+  if (['REVIEW', 'COMPLETED', 'CANCELLED'].includes(item.state.category)) return false;
+  return rules.childProgress(await childStates(tx, item.id)).open === 0;
 }
 
 async function activeUsers(tx, ids, { strict = true } = {}) {
@@ -144,6 +192,9 @@ async function registerFields(tx, input, ctx = null) {
 }
 
 const TASK_TYPES = ['PLAN', 'ADHOC'];
+// "Loại nhiệm vụ" gộp vào "Nguồn giao việc" (một trường, một danh sách ở form tạo và panel): nguồn "Kế hoạch năm" → PLAN,
+// nguồn khác → ADHOC (đột xuất); không chọn nguồn → null (giữ loại hiện có / mặc định).
+const taskTypeOfSource = source => { const s = String(source ?? '').trim(); return !s ? null : /^k[ếe] ?ho[ạa]ch\s*n[ăa]m/i.test(s.normalize('NFC')) ? 'PLAN' : 'ADHOC'; };
 async function departmentIdOf(tx, value, label) {
   const id = optionalInt(value, label);
   if (id == null) return null;
@@ -180,7 +231,7 @@ async function createWorkItem(tx, { project, user, rights, input, reporterId = u
   const assigneeIds = await activeUsers(tx, idList(input.assigneeIds, 'Người nhận') || [], { strict: strictAssignees });
   const labelIds = await labelsOf(tx, project.id, idList(input.labelIds, 'Nhãn') || []);
   const approvalLevels = approvalLevelsInput(input.approvalLevels, rights) ?? null;
-  const toState = input.stateId
+  let toState = input.stateId
     ? await tx.workflowState.findFirst({ where: { id: intParam(input.stateId, 'Trạng thái'), projectId: project.id } })
     : await tx.workflowState.findFirst({ where: { projectId: project.id, category: 'UNSTARTED' }, orderBy: { position: 'asc' } })
       // Bảng không có cột "Chưa bắt đầu" (vd. lịch tuần): cột đầu tiên không phải Chờ duyệt / Hoàn thành / Huỷ.
@@ -201,12 +252,13 @@ async function createWorkItem(tx, { project, user, rights, input, reporterId = u
   if (!shared && input.leadDepartmentId != null && leadDepartmentId != null && leadDepartmentId !== project.departmentId)
     fail(422, 'Giao về phòng khác chỉ dùng trong sổ giao việc của đơn vị', 'DISPATCH_NOT_ALLOWED');
   const supportDepartmentIds = shared ? ((await departmentIds(tx, input.supportDepartmentIds)) || []).filter(id => id !== leadDepartmentId) : [];
-  const taskType = oneOf(input.taskType, TASK_TYPES, 'Loại nhiệm vụ') || parent?.taskType || (input.source === 'Kế hoạch năm' ? 'PLAN' : 'ADHOC');
+  const taskType = oneOf(input.taskType, TASK_TYPES, 'Loại nhiệm vụ') || parent?.taskType || taskTypeOfSource(input.source) || 'ADHOC';
   const dispatched = !parent && leadDepartmentId != null && project.visibility === 'ASSIGNED';
   const cycleId = await cycleOf(tx, project.id, input.cycleId);
   const reg = await registerFields(tx, input, { user, rights, project });
   const supporterIds = await activeUsers(tx, idList(input.supporterIds, 'Người phối hợp') || [], { strict: strictAssignees });
-  const { data, steps } = await transition(tx, { project, rights, item: { id: null, state: null, parentId, approvalLevels, priority: oneOf(input.priority, PRIORITIES, 'Ưu tiên') || 'NONE', labelIds }, toState, overrideWip: silent ? 'bulk' : input.overrideWip });
+  const t0 = await transition(tx, { project, rights, item: { id: null, state: null, parentId, approvalLevels, priority: oneOf(input.priority, PRIORITIES, 'Ưu tiên') || 'NONE', labelIds }, toState, overrideWip: silent ? 'bulk' : input.overrideWip, allowDirectComplete: silent });
+  const { data } = t0; toState = t0.toState;
   const { nextNumber } = await tx.project.update({ where: { id: project.id }, data: { nextNumber: { increment: 1 } }, select: { nextNumber: true } });
   const startDate = optionalDate(input.startDate, 'Ngày bắt đầu') ?? null, dueDate = optionalDate(input.dueDate, 'Hạn') ?? null;
   // MTL: việc con / việc đột xuất lập trên ứng dụng nhận kế hoạch gốc ngay khi có hạn (để vào báo cáo tuần, KPI, cảnh báo).
@@ -227,7 +279,9 @@ async function createWorkItem(tx, { project, user, rights, input, reporterId = u
     supporters: { create: supporterIds.filter(id => !assigneeIds.includes(id)).map(userId => ({ userId })) }, labels: { create: labelIds.map(labelId => ({ labelId })) },
   }, include: { state: true } });
   await activity(tx, item.id, user.id, 'CREATED', { title, state: toState.name, ...(source ? { source } : {}) });
-  if (toState.category === 'REVIEW' && steps.length) await approval.openRequest(tx, { project, item, fromStateId: null, actor: user });
+  if (toState.category === 'REVIEW') await approval.openRequest(tx, { project, item, fromStateId: null, actor: user });
+  // Thêm việc con chưa xong dưới việc cha đang chờ duyệt / đã hoàn thành → mở lại việc cha.
+  if (parentId && !['COMPLETED', 'CANCELLED'].includes(toState.category)) await reopenAncestors(tx, { user, parentId, reason: `Thêm việc con ${project.key}-${item.number}` });
   if (dispatched) await activity(tx, item.id, user.id, 'DISPATCHED', { departmentId: leadDepartmentId, supportDepartmentIds, direct: assigneeIds.length > 0,
     ...(item.assignedById && item.assignedById !== user.id ? { onBehalfOfId: item.assignedById } : {}) });
   if (silent) return item; // nhập hàng loạt (sổ Excel, kế hoạch năm): không gửi thông báo từng việc
@@ -243,4 +297,4 @@ async function createWorkItem(tx, { project, user, rights, input, reporterId = u
   return item;
 }
 
-module.exports = { TASK_TYPES, departmentIdOf, departmentIds, registerFields, PRIORITIES, BOARD_INCLUDE, boardItem, link, endPosition, positionBetween, transition, afterTransition, activeUsers, idList, cycleOf, labelsOf, approvalLevelsInput, createWorkItem };
+module.exports = { reopenAncestors, canAutoSubmit, TASK_TYPES, taskTypeOfSource, departmentIdOf, departmentIds, registerFields, PRIORITIES, BOARD_INCLUDE, boardItem, link, endPosition, positionBetween, transition, afterTransition, activeUsers, idList, cycleOf, labelsOf, approvalLevelsInput, createWorkItem };

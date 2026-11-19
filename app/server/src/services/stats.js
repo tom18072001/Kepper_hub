@@ -3,7 +3,8 @@
 const DAY = 86_400_000, H7 = 7 * 3_600_000;
 
 // Điểm xếp loại khi nghiệm thu (thang 100).
-const RATING_POINTS = { EXCELLENT: 100, GOOD: 85, PASS: 70, FAIL: 0 };
+// Thang 5 mức của người giao; mức cũ FAIL đã đổi thành POOR (giữ 0 điểm như cũ).
+const RATING_POINTS = { EXCELLENT: 100, GOOD: 85, PASS: 70, NEEDS_IMPROVEMENT: 50, POOR: 0 };
 const WEIGHT_KEYS = ['onTime', 'rating', 'volume'];
 const DEFAULT_WEIGHTS = { onTime: 40, rating: 40, volume: 20 };
 // Điểm khối lượng (so với bình quân cán bộ cùng phòng) chỉ tính khi phòng có từ 3 cán bộ có số liệu trong kỳ:
@@ -39,6 +40,27 @@ function inDepartment(item, departmentId) {
 function departmentWhere(departmentId) {
   const id = departmentId == null ? -1 : Number(departmentId);
   return { OR: [{ leadDepartmentId: id }, { leadDepartmentId: null, project: { departmentId: id } }] };
+}
+
+// Phạm vi "phòng ban" của Thống kê / KPI / báo cáo Word / chấm điểm = phòng CHỦ TRÌ việc (departmentOf), không theo phòng của người làm.
+// Lý do giữ (review UX B5): một việc chỉ thuộc một phòng nên tổng các phòng khớp tổng chung và KPI đã chốt không đổi; đếm theo
+// người làm thì việc phòng A chủ trì, người phòng B phối hợp bị tính cho cả hai phòng. Thay vào đó, trang Thống kê ghi rõ phạm vi
+// và báo riêng số việc đang mở mà người trong phòng làm nhưng phòng khác chủ trì (không cộng vào số liệu).
+// items: { leadDepartmentId, project.departmentId, state.category, assignees: [{ user: { departmentId } } | { departmentId }],
+//          supporters?: [...] }
+function outsideScope(items, departmentId) {
+  const id = departmentId == null ? null : Number(departmentId);
+  if (id == null) return 0;
+  const deptOfPerson = p => p?.user?.departmentId ?? p?.departmentId ?? null;
+  return items.filter(i => isOpen(i) && !inDepartment(i, id)
+    && [...(i.assignees || []), ...(i.supporters || [])].some(p => deptOfPerson(p) === id)).length;
+}
+function scopeNote({ scope, departmentId, deptName = '', outside = 0 }) {
+  const tail = 'chỉ việc bạn được xem, trong dự án / sổ chưa lưu trữ.';
+  const who = deptName || (scope === 'UNIT' ? 'phòng của bạn' : 'phòng đã chọn');
+  if (scope !== 'UNIT' && departmentId == null) return `Phạm vi: mọi việc ở mọi phòng; ${tail}`;
+  const extra = outside ? ` Ngoài phạm vi này còn ${outside} việc đang mở người trong ${who} chủ trì hoặc phối hợp nhưng phòng khác chủ trì (không tính vào số liệu, xem ở Việc của tôi hoặc Tổng thể công việc).` : '';
+  return `Phạm vi: việc ${who} chủ trì (việc không có phòng chủ trì thì tính theo phòng sở hữu dự án / sổ), kể cả việc trong dự án dùng chung; ${tail}${extra}`;
 }
 
 // ---------- Thời gian xử lý ----------
@@ -199,7 +221,7 @@ function vnDateTime(d) {
 
 module.exports = {
   DAY, H7, RATING_POINTS, DEFAULT_WEIGHTS, WEIGHT_KEYS, MIN_PEERS,
-  departmentOf, inDepartment, departmentWhere, processingDays, relevant, metrics,
+  departmentOf, inDepartment, departmentWhere, outsideScope, scopeNote, processingDays, relevant, metrics,
   normalizeWeights, volumeScore, compositeScore, computeKpi,
   isOpen, isDone, isOverdue, onTimeDone, vnDay, endOfLocalDay, startOfLocalDay, vnPeriod, vnDayStart, vnDate, vnDateTime, round1, pct,
 };

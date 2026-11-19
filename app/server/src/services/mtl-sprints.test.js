@@ -32,7 +32,7 @@ test('gán bước vào sprint: khoảng theo thứ tự bước, việc con the
   assert.equal(S.specLabel('1-9'), 'B1–9'); assert.equal(S.specLabel('II.1 - II.8'), 'II.1–II.8'); assert.equal(S.specLabel('B10, 12'), 'B10, 12');
   const bad = S.assignSprints(ITEMS, [{ name: 'A', steps: '1-5' }, { name: 'B', steps: '5-7, 99' }]);
   assert.ok(bad.errors.some(e => /không có bước 99/.test(e)));
-  assert.ok(bad.errors.some(e => /Bước 5 nằm trong cả sprint "A" và "B"/.test(e)));
+  assert.ok(bad.errors.some(e => /Bước 5 nằm trong cả giai đoạn "A" và "B"/.test(e)));
 });
 
 test('tiến độ sprint theo đầu việc, tình trạng, mốc; sprint đang làm; gợi ý sprint theo mốc đường găng', () => {

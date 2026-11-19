@@ -211,11 +211,14 @@ export function errorMessage(error) { return error?.message || 'Có lỗi xảy 
 
 // Ô chọn nhiều (người nhận, nhãn): trả về HTML; trạng thái được đọc lại bằng readMulti().
 // opts.search: có ô tìm; opts.create: cho gõ để tạo mới (hàm tạo truyền qua bindMulti(..., { creators })).
-export function multiSelect(name, options, selected = [], placeholder = 'Chọn…', { search = options.length > 6, create = false } = {}) {
+// label: tên ô cho trình đọc màn hình (nút chỉ hiện các lựa chọn đã chọn) — vd. "Nhãn: Hợp đồng, Gấp".
+export function multiSelect(name, options, selected = [], placeholder = 'Chọn…', { search = options.length > 6, create = false, label = '' } = {}) {
   const sel = new Set(selected.map(Number));
   const chipOf = o => o.chip || `<span class="pill">${esc(o.label)}</span>`;
-  const chips = options.filter(o => sel.has(Number(o.id))).map(chipOf).join('') || `<span class="muted">${esc(placeholder)}</span>`;
-  return `<div class="multi" data-multi="${esc(name)}" data-placeholder="${esc(placeholder)}"><button type="button" class="multi-btn" data-testid="multi-${esc(name)}">${chips}</button>
+  const chosen = options.filter(o => sel.has(Number(o.id)));
+  const chips = chosen.map(chipOf).join('') || `<span class="muted">${esc(placeholder)}</span>`;
+  const aria = label ? ` aria-label="${esc(`${label}: ${chosen.map(o => o.label).join(', ') || placeholder}`)}" aria-haspopup="true"` : '';
+  return `<div class="multi" data-multi="${esc(name)}" data-placeholder="${esc(placeholder)}"${label ? ` data-label="${esc(label)}"` : ''}><button type="button" class="multi-btn" data-testid="multi-${esc(name)}"${aria}>${chips}</button>
     <div class="multi-list hidden">${search || create ? `<input class="multi-search" placeholder="${create ? 'Tìm hoặc gõ tên nhãn mới…' : 'Tìm…'}" aria-label="Tìm" data-testid="multi-${esc(name)}-search">` : ''}
       <div class="multi-opts">${options.map(o => multiOption(name, o, sel.has(Number(o.id)))).join('')}</div>
       <div class="muted xs multi-empty${options.length ? ' hidden' : ''}">Không có lựa chọn</div>
@@ -225,8 +228,11 @@ function multiOption(name, o, checked) {
   return `<label data-text="${esc(String(o.label).toLowerCase())}" data-chip="${esc(o.chip || `<span class="pill">${esc(o.label)}</span>`)}"><input type="checkbox" value="${o.id}"${checked ? ' checked' : ''} data-testid="multi-${esc(name)}-${o.id}">${o.chip || ''}<span>${esc(o.label)}</span></label>`;
 }
 function refreshChips(box) {
-  const chips = $$('.multi-opts input:checked', box).map(i => i.closest('label').dataset.chip).join('');
-  box.querySelector('.multi-btn').innerHTML = chips || `<span class="muted">${esc(box.dataset.placeholder || 'Chọn…')}</span>`;
+  const checked = $$('.multi-opts input:checked', box);
+  const chips = checked.map(i => i.closest('label').dataset.chip).join('');
+  const btn = box.querySelector('.multi-btn');
+  btn.innerHTML = chips || `<span class="muted">${esc(box.dataset.placeholder || 'Chọn…')}</span>`;
+  if (box.dataset.label) btn.setAttribute('aria-label', `${box.dataset.label}: ${checked.map(i => i.closest('label').textContent.trim()).join(', ') || box.dataset.placeholder || ''}`);
 }
 export function readMulti(root, name) {
   return $$(`[data-multi="${name}"] input:checked`, root).map(i => Number(i.value));

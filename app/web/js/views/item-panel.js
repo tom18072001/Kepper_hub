@@ -7,10 +7,9 @@ import { refreshCounters, refreshBackground } from '../main.js';
 import { openRepeatDialog } from './recurring-form.js';
 import { openCycleForm } from './project-extra.js';
 import { icon } from '../icons.js';
-import { dispatchParts, progressParts, documentsParts, ratingPick, handleDispatchClick, bindDispatchInputs, summaryBar, actionZone, stagePill, countdownPill, acceptDialog } from './dispatch-panel.js';
+import { dispatchParts, progressParts, documentForm, sourceOptions, ratingPick, RATINGS, handleDispatchClick, bindDispatchInputs, summaryBar, actionZone, stagePill, countdownPill, acceptDialog } from './dispatch-panel.js';
 import { sec, compact, bindSectionMemory, resetSectionMemory } from './sections.js';
 import { mtlPanelBlock, rebaselineDialog } from './mtl.js';
-import { help as showShortcuts } from '../shortcuts.js';
 
 let openId = null, data = null, project = null;
 const panel = () => $('#itemPanel');
@@ -24,7 +23,7 @@ function panelBusy() {
   if (active && p.contains(active) && active.matches('input:not([type=checkbox]), textarea, select, [contenteditable="true"]')) return true;
   if ($('#newComment', p)?.value.trim() || $('#newCheck', p)?.value.trim() || $('#newChild', p)?.value.trim()) return true;
   if ($('#rpContent', p)?.value.trim() || $('#docNumber', p)?.value.trim() || p.querySelector('[data-answer-input]')?.value.trim()) return true;
-  if ($('#saveDesc', p) && !$('#saveDesc', p).classList.contains('hidden')) return true;
+  if (descPending()) return true;
   if (p.querySelector('.multi-list:not(.hidden)')) return true;
   return !$('#modalRoot').classList.contains('hidden');
 }
@@ -41,6 +40,7 @@ export async function reloadOpenItem() {
 let opener = null; // phần tử đã mở panel — trả tiêu điểm về khi đóng
 export function closeItem(updateHash = false) {
   if (openId == null) return;
+  flushDesc();
   const closedId = openId;
   openId = null; data = null; lastRendered = null;
   panel().classList.add('hidden'); $('#panelBackdrop').classList.add('hidden');
@@ -72,7 +72,7 @@ export async function openItem(id, { focus } = {}) {
   if (focusTarget && !/^[a-z][\w-]{0,40}$/i.test(focusTarget)) focusTarget = null; // giá trị từ URL đi vào bộ chọn CSS
   if (fresh) { const a = document.activeElement; opener = a && $('#view').contains(a) ? a : opener; }
   panel().classList.remove('hidden'); $('#panelBackdrop').classList.remove('hidden');
-  if (fresh) { panel().innerHTML = '<div class="empty">Đang tải…</div>'; lastRendered = null; }
+  if (fresh) { flushDesc(); panel().innerHTML = '<div class="empty">Đang tải…</div>'; lastRendered = null; activeTab = 'overview'; }
   try { await load(); } catch (error) { panel().innerHTML = `<div class="ip-head"><b class="grow">Không mở được công việc</b><button class="icon-btn" data-close aria-label="Đóng"><svg class="i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div><div class="empty">${esc(errorMessage(error))}</div>`; panel().querySelector('[data-close]').onclick = () => closeItem(true); }
 }
 async function load({ soft = false } = {}) {
@@ -96,6 +96,7 @@ async function load({ soft = false } = {}) {
     if (t === 'accept' && data.can?.accept) return acceptDialog(data, refresh);
     const el = panel().querySelector({ approval: '#approval-zone', extension: '#extension-zone', proposal: '#proposal-zone', returned: '#returned-zone' }[t] || `[data-testid="${t}"]`)
       || panel().querySelector({ approval: '#approval-section', extension: '[data-testid="extension-pending"]', proposal: '#progress-section' }[t] || '#__none');
+    if (el) revealInPanel(el);
     if (el && !el.getClientRects().length) panel().classList.remove('ip-lite');
     if (el) { el.closest('details')?.setAttribute('open', ''); requestAnimationFrame(() => { el.scrollIntoView({ block: 'start' }); (el.querySelector('textarea, input, button') || $('.ip-summary .btn-primary', panel()))?.focus({ preventScroll: true }); }); }
   } else if (first) $('.ip-head', panel())?.focus({ preventScroll: true });
@@ -111,16 +112,18 @@ async function patch(body) {
   }
 }
 
-// Chọn mức duyệt của việc (chỉ người quản lý dự án; khoá khi đang chờ duyệt).
+// Chọn mức duyệt của việc (chỉ người quản lý dự án; khoá khi đang chờ duyệt). Người giao luôn duyệt cấp 1;
+// mức duyệt chỉ chọn thêm bao nhiêu cấp của dự án chạy sau.
 function levelControl(pending) {
   const all = data.allApprovalSteps || [];
   if (!all.length) return '';
-  const label = n => n === 0 ? 'Không cần duyệt' : n >= all.length ? `Đủ ${all.length} cấp (${all.map(s => s.name).join(' → ')})` : `${n} cấp: ${all.slice(0, n).map(s => s.name).join(' → ')}`;
+  const extra = data.approvalSteps.filter(s => s.approverType !== 'ASSIGNER').length;
+  const label = n => n === 0 ? 'Chỉ người giao duyệt' : n >= all.length ? `Người giao → đủ ${all.length} cấp (${all.map(s => s.name).join(' → ')})` : `Người giao → ${n} cấp: ${all.slice(0, n).map(s => s.name).join(' → ')}`;
   const source = { MANUAL: 'chọn tay', RULE: 'theo quy tắc tự động', DEFAULT: 'mặc định của dự án', CHILD: 'việc nhánh — lãnh đạo phòng duyệt' }[data.approvalSource] || '';
-  if (!data.rights.canManage || pending || data.archivedAt) return `<p class="muted sm" data-testid="approval-level-text">Mức duyệt: <b>${esc(label(data.approvalSteps.length))}</b>${source ? ` · ${source}` : ''}</p>`;
-  const opts = [['', data.approvalSource === 'MANUAL' ? 'Tự động (theo quy tắc / mặc định dự án)' : `Tự động — ${data.approvalSteps.length === 0 ? 'không cần duyệt' : data.approvalSteps.length >= all.length ? `đủ ${all.length} cấp` : `${data.approvalSteps.length} cấp`}`], ...Array.from({ length: all.length + 1 }, (_, n) => [String(n), label(n)])];
+  if (!data.rights.canManage || pending || data.archivedAt) return `<p class="muted sm" data-testid="approval-level-text">Mức duyệt: <b>${esc(label(extra))}</b>${source ? ` · ${source}` : ''}</p>`;
+  const opts = [['', data.approvalSource === 'MANUAL' ? 'Tự động (theo quy tắc / mặc định dự án)' : `Tự động — ${extra === 0 ? 'chỉ người giao' : extra >= all.length ? `người giao + đủ ${all.length} cấp` : `người giao + ${extra} cấp`}`], ...Array.from({ length: all.length + 1 }, (_, n) => [String(n), label(n)])];
   return `<label class="field level-pick">Mức duyệt của việc này<select id="ipLevels" data-testid="item-approval-levels">${opts.map(([v, t]) => `<option value="${v}"${String(data.approvalLevels ?? '') === v ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>
-    <span class="muted xs">Hiện tại: ${esc(label(data.approvalSteps.length))} · ${source}</span></label>`;
+    <span class="muted xs">Hiện tại: ${esc(label(extra))} · ${source}</span></label>`;
 }
 function approverNames(level) {
   if (data.stepApprovers?.[level]) return data.stepApprovers[level].join(', ') || 'Chưa có người duyệt';
@@ -137,12 +140,18 @@ function approvalBox() {
   return `<div class="approval-box zone-box" id="approval-zone"><b>Bạn đang duyệt bước ${pending.currentLevel}/${pending.totalLevels}${step ? ` · ${esc(step.name)}` : ''}${data.lastLevel ? ' — bước cuối, nghiệm thu' : ''}</b>${data.submitRounds > 1 ? ` <span class="pill warn">Lần trình ${data.submitRounds}</span>` : ''}
       ${submit ? `<div class="muted sm" style="margin-top:4px">${esc(submit.actorName || '')} trình ${ago(submit.createdAt)}${submit.comment ? `: “${esc(submit.comment)}”` : ''}</div>` : ''}
       ${data.attachments.length ? `<div class="muted xs">Tệp mới nhất: ${esc(data.attachments[0].fileName)} · ${ago(data.attachments[0].createdAt)}</div>` : ''}
-      <textarea id="approvalComment" placeholder="Ý kiến (bắt buộc khi không duyệt)" rows="2" style="margin-top:8px" data-testid="approval-comment" aria-describedby="approvalCommentHelp"></textarea>
-      <div class="field-error" id="approvalCommentHelp" role="alert"></div>${data.lastLevel ? ratingPick() : ''}
-      <div class="row" style="margin-top:8px"><button class="btn btn-ok" data-act="approve" data-testid="approve-btn">Duyệt</button><button class="btn btn-danger" data-act="reject" data-testid="reject-btn">Không duyệt</button></div></div>`;
+      ${data.ratingRequired ? ratingPick({ required: true }) : data.lastLevel ? ratingPick() : ''}
+      <textarea id="approvalComment" placeholder="${data.ratingRequired ? 'Nhận xét (tuỳ chọn khi duyệt; bắt buộc ghi lý do khi trả lại)' : 'Ý kiến (bắt buộc khi không duyệt)'}" rows="2" style="margin-top:8px" data-testid="approval-comment" aria-describedby="approvalCommentHelp"></textarea>
+      <div class="field-error" id="approvalCommentHelp" role="alert"></div>
+      <div class="row" style="margin-top:8px"><button class="btn btn-ok" data-act="approve" data-testid="approve-btn">${data.ratingRequired ? 'Duyệt hoàn thành' : 'Duyệt'}</button><button class="btn btn-danger" data-act="reject" data-testid="reject-btn">${data.ratingRequired ? 'Trả lại' : 'Không duyệt'}</button></div></div>`;
+}
+// Kết quả người giao duyệt: ai, lúc nào, mức nào, nhận xét gì.
+function ratingResult() {
+  if (!data.rating) return '';
+  return `<div class="rating-box" data-testid="item-rating" style="margin-top:10px">Mức hoàn thành: <b class="rating-${esc(data.rating)}">${esc(RATINGS[data.rating] || data.rating)}</b>${data.ratedByName ? ` · ${esc(data.ratedByName)}, ${fmtDate(data.ratedAt)}` : ''}
+    ${data.review ? `<div class="comment" style="margin-top:4px" data-testid="item-review">${esc(data.review)}</div>` : ''}</div>`;
 }
 function approvalSection(open) {
-  if (!(data.allApprovalSteps || []).length) return '';
   const latest = data.approvals[0];
   const pendingNow = latest?.status === 'PENDING' ? latest : null;
   if (!data.approvalSteps.length) return sec('approval', { title: 'Duyệt', summary: 'không cần duyệt', open, testid: 'approval-section', id: 'approval-section', body: `${levelControl(pendingNow)}
@@ -160,13 +169,15 @@ function approvalSection(open) {
   const word = { SUBMIT: 'gửi duyệt', APPROVE: 'duyệt', REJECT: 'trả lại', CANCEL: 'huỷ yêu cầu' };
   const statusText = latest ? { PENDING: 'Đang chờ duyệt', APPROVED: 'Đã duyệt', REJECTED: 'Bị trả lại', CANCELLED: 'Đã huỷ', REOPENED: 'Mở lại' }[latest.status] : '';
   const cur = pending ? data.approvalSteps.find(s => s.level === pending.currentLevel) : null;
-  const act = a => `<div class="act"><b>${esc(a.actorName || '')}</b> ${a.onBehalfOfName ? `(thay ${esc(a.onBehalfOfName)}) ` : ''}${word[a.decision] || a.decision}${a.level ? ` ở bước ${a.level}` : ''} · ${ago(a.createdAt)}${a.comment ? `<div class="comment" style="margin-top:4px">${esc(a.comment)}</div>` : ''}</div>`;
+  const act = a => `<div class="act"><b>${esc(a.actorName || '')}</b> ${a.onBehalfOfName ? `(thay ${esc(a.onBehalfOfName)}) ` : ''}${word[a.decision] || a.decision}${a.level ? ` ở bước ${a.level}` : ''}${a.rating ? ` — mức <b>${esc(RATINGS[a.rating] || a.rating)}</b>` : ''} · ${ago(a.createdAt)}${a.comment ? `<div class="comment" style="margin-top:4px">${esc(a.comment)}</div>` : ''}</div>`;
   // Lượt trả lại gần nhất luôn hiện; các thao tác duyệt cũ hơn thu vào "Lịch sử duyệt".
   const lastReject = latest?.status === 'REJECTED' ? history.find(a => a.decision === 'REJECT' && a.request.id === latest.id) : null;
   const body = `${levelControl(pending)}
     <div class="steps">${data.approvalSteps.map(s => `<div class="step ${stepClass(s)}"><span class="n">${s.level}</span><span class="grow">${esc(s.name)}</span><span class="muted xs">${esc(approverNames(s.level))}</span></div>`).join('')}</div>
     ${canSubmit && (!data.dispatchStatus || data.can?.work) ? (data.dispatchStatus ? `<button class="btn btn-ghost btn-sm" style="margin-top:10px" data-act="submit-product" data-testid="submit-product">${icon('send')}Nộp sản phẩm (phiếu trình)</button>` : `<button class="btn btn-primary btn-sm" style="margin-top:10px" data-act="submit-approval" data-testid="submit-approval">Gửi duyệt</button>`) : ''}
+    ${data.childProgress?.open ? `<p class="muted sm" data-testid="children-block-note" style="margin-top:8px">Việc cha chỉ gửi duyệt được khi mọi việc con đã được duyệt hoàn thành (${data.childProgress.done}/${data.childProgress.total}).</p>` : ''}
     ${lastReject ? `<div class="timeline-list" style="margin-top:10px">${act(lastReject)}</div>` : ''}
+    ${latest?.status === 'APPROVED' || data.state.category === 'COMPLETED' ? ratingResult() : ''}
     ${history.length ? `<details class="older" data-sub="approvalHistory"><summary class="link-btn">Lịch sử duyệt (${history.length})</summary><div class="timeline-list">${history.map(act).join('')}</div></details>` : ''}`;
   return sec('approval', { title: `Quy trình duyệt ${data.approvalSteps.length} cấp`, open, testid: 'approval-section', id: 'approval-section',
     summary: `${latest ? `<span class="pill" data-testid="approval-status">${statusText}</span>` : ''}${cur ? ` đang ở bước ${pending.currentLevel}/${pending.totalLevels} · ${esc(cur.name)} · gửi ${ago(pending.createdAt)}` : ''}`, body });
@@ -177,7 +188,8 @@ const ACT_TEXT = {
   ATTACHMENT: d => 'đã đính kèm ' + esc((d.files || []).join(', ')), ATTACHMENT_DELETED: d => 'đã xoá tệp ' + esc(d.fileName || ''),
   SUPPORTERS: () => 'đã thay đổi người phối hợp', TEMPLATE_APPLIED: d => `tạo ${d.count} việc nhánh từ mẫu "${esc(d.template)}"`, CHECKLIST_ADDED: d => 'thêm checklist: ' + esc(d.title), CHECKLIST_DONE: d => 'hoàn thành checklist: ' + esc(d.title), CHECKLIST_UNDONE: d => 'bỏ đánh dấu: ' + esc(d.title),
   APPROVAL_SUBMITTED: d => 'gửi duyệt (' + esc(d.step || '') + ')', APPROVAL_APPROVED: d => `duyệt bước ${d.level}${d.next ? ', chuyển tiếp ' + esc(d.next) : ''}`,
-  APPROVAL_COMPLETED: d => 'duyệt bước cuối — việc hoàn thành' + (d?.rating ? ` (xếp loại: ${({ EXCELLENT: 'Hoàn thành xuất sắc', GOOD: 'Hoàn thành tốt', PASS: 'Hoàn thành', FAIL: 'Không hoàn thành' })[d.rating]})` : ''),
+  APPROVAL_COMPLETED: d => 'duyệt bước cuối — việc hoàn thành' + (d?.rating ? ` (mức hoàn thành: ${esc(RATINGS[d.rating] || d.rating)})` : ''),
+  REOPENED_BY_CHILD: d => `mở lại ${esc(d?.from || '')} → ${esc(d?.to || '')}` + (d?.reason ? ': ' + esc(d.reason) : ''),
   DISPATCHED: d => d?.direct ? 'giao trực tiếp cán bộ (phòng vẫn duyệt trước khi trình)' : 'giao về phòng chủ trì', DISPATCH_ACCEPTED: d => 'tiếp nhận và phân công' + (d?.onBehalfOf ? ` (thay ${esc(d.onBehalfOf)})` : '') + (d?.internalDueDate ? `, hạn nộp phòng ${fmtDate(d.internalDueDate)}` : '') + (d?.note ? ': ' + esc(d.note) : ''), DISPATCH_REASSIGNED: () => 'phân công lại',
   PROGRESS_REPORT: d => (d.asSupporter ? `báo cáo phần phối hợp ${d.progress}%` : `báo cáo tiến độ ${d.progress}%`) + (d.hasProposal ? ' (có kiến nghị)' : ''), PROPOSAL_ANSWERED: () => 'trả lời kiến nghị',
   PROPOSAL_FORWARDED: () => 'trình kiến nghị lên Ban Giám đốc',
@@ -187,31 +199,48 @@ const ACT_TEXT = {
   DOCUMENT_ADDED: d => 'thêm văn bản ' + esc(d.number || ''), DOCUMENT_REMOVED: d => 'gỡ văn bản ' + esc(d.number || ''), APPROVAL_REJECTED: d => 'trả lại: ' + esc(d.comment || ''), APPROVAL_CANCELLED: () => 'huỷ yêu cầu duyệt', ARCHIVED: () => 'đã xoá việc (vào thùng rác)', RESTORED: () => 'đã khôi phục việc từ thùng rác',
 };
 
-// Khối "Giao việc & kết quả" theo mẫu Sổ theo dõi, kiểm soát giao việc. Ô có nội dung hiện sẵn; ô trống gom thành một dòng "+ …".
-function registerParts(editable, outputsEditable = editable) {
-  const d = data;
-  const canReview = !d.archivedAt && (d.rights.canManage || d.assignedById === store.me.id);
-  const fields = [
-    ['deliverable', 'Sản phẩm đầu ra', d.deliverable, { rows: 2 }],
-    ['outputs', 'Sản phẩm đã có theo tiến độ', d.outputs, { canWrite: outputsEditable, rows: 3, hint: 'mỗi dòng một văn bản (tờ trình, công văn, quyết định…)' }],
-    ['resultNote', 'Kết quả / Khó khăn, kiến nghị', d.resultNote, { rows: 3, hint: d.dispatchStatus ? 'tự cập nhật từ báo cáo tiến độ mới nhất' : '' }],
-    ['review', 'Đánh giá của người giao', d.review, { canWrite: canReview, rows: 2, hint: d.reviewedByName ? `— ${esc(d.reviewedByName)}, ${fmtDateTime(d.reviewedAt)}` : '' }],
-    ['note', 'Ghi chú', d.note, { rows: 2 }],
-  ].filter(([key, , value, o]) => key !== 'review' || canReview || value);
-  const rowsFor = (v, min) => Math.min(8, Math.max(min, String(v || '').split('\n').length));
-  const area = ([key, label, value, { canWrite = editable, rows = 3, hint = '' }]) => `<label class="field reg-field" data-reg="${key}"${!value && canWrite ? ' hidden' : ''}>${label}${hint ? ` <span class="muted xs">${hint}</span>` : ''}
+// Khối "Giao việc" (tab Tổng quan) theo mẫu Sổ theo dõi, kiểm soát giao việc: kế hoạch, sản phẩm đầu ra yêu cầu, ghi chú.
+// Ô có nội dung hiện sẵn; ô trống gom thành một dòng "+ …". Không còn ô nhập trùng: kết quả / khó khăn, kiến nghị ghi qua
+// "Báo cáo tiến độ"; sản phẩm đã có gửi ở tab "Kết quả & tài liệu". Dữ liệu cũ của hai ô đó vẫn hiện ở chỗ mới (không mất).
+const rowsFor = (v, min) => Math.min(8, Math.max(min, String(v || '').split('\n').length));
+function regArea([key, label, value, { canWrite = false, rows = 3, hint = '', hidden = null }]) {
+  const hide = hidden ?? (!value && canWrite);
+  return `<label class="field reg-field" data-reg="${key}"${hide ? ' hidden' : ''}>${label}${hint ? ` <span class="muted xs">${hint}</span>` : ''}
     ${canWrite ? `<textarea data-field="${key}" rows="${rowsFor(value, rows)}" data-testid="item-${key}">${esc(value || '')}</textarea>` : `<div class="reg-readonly">${esc(value || '—').replace(/\n/g, '<br>')}</div>`}</label>`;
-  const empties = fields.filter(([, , value, o]) => !value && (o.canWrite ?? editable));
+}
+const addLinks = list => (list.length ? `<div class="add-links">${list.map(([key, label]) => `<button type="button" class="link-btn" data-reveal="${key}">+ ${esc(label)}</button>`).join('')}</div>` : '');
+function registerParts(editable) {
+  const d = data;
+  const fields = [
+    ['deliverable', 'Sản phẩm đầu ra', d.deliverable, { canWrite: editable, rows: 2, hint: 'yêu cầu khi giao' }],
+    ['note', 'Ghi chú', d.note, { canWrite: editable, rows: 2 }],
+  ];
   const plan = d.plan || d.planCode || d.period || d.location || d.budget != null || d.supervisorText ? `<div class="plan-box" data-testid="item-plan">
       ${d.plan ? `<div><span class="muted xs">Kế hoạch</span><b>${esc(d.plan.name)}</b>${d.planCode ? ` · nhiệm vụ ${esc(d.planCode)}` : ''}</div>` : ''}
       ${d.planSection ? `<div><span class="muted xs">Nhóm nhiệm vụ</span>${esc(d.planSection)}</div>` : ''}
       ${d.period ? `<div><span class="muted xs">Thời gian</span>${esc(d.period)}</div>` : ''}${d.location ? `<div><span class="muted xs">Địa điểm</span>${esc(d.location)}</div>` : ''}
       ${d.budget != null ? `<div><span class="muted xs">Kinh phí</span>${Number(d.budget).toLocaleString('vi-VN')} triệu đồng</div>` : ''}${d.supervisorText ? `<div><span class="muted xs">Lãnh đạo phụ trách</span>${esc(d.supervisorText)}</div>` : ''}
     </div>` : '';
-  const filled = fields.filter(([, , v]) => v).length;
-  const body = `${plan}${fields.map(area).join('')}
-    ${empties.length ? `<div class="add-links">${empties.map(([key, label]) => `<button type="button" class="link-btn" data-reveal="${key}">+ ${esc(label)}</button>`).join('')}</div>` : ''}`;
-  return { body, filled, summary: d.deliverable ? esc(String(d.deliverable).split('\n')[0].slice(0, 60)) : '' };
+  const shown = fields.filter(([, , v, o]) => v || o.canWrite);
+  const body = `${plan}${shown.map(regArea).join('')}${addLinks(fields.filter(([, , v, o]) => !v && o.canWrite))}`;
+  return { body, empty: !plan && !shown.length, filled: fields.filter(([, , v]) => v).length,
+    summary: d.deliverable ? esc(String(d.deliverable).split('\n')[0].slice(0, 60)) : '' };
+}
+// Đánh giá của người giao (tab Kết quả & tài liệu): chỉ người giao / người quản lý ghi.
+function reviewParts() {
+  const d = data;
+  const canReview = !d.archivedAt && (d.rights.canManage || d.assignedById === store.me.id);
+  if (!canReview && !d.review) return '';
+  return regArea(['review', 'Đánh giá của người giao', d.review, { canWrite: canReview, rows: 2, hint: d.reviewedByName ? `— ${esc(d.reviewedByName)}, ${fmtDateTime(d.reviewedAt)}` : '', hidden: false }]);
+}
+// "Kết quả / Khó khăn, kiến nghị" ghi tay trước đây (ô đã gộp vào Báo cáo tiến độ): hiện chỉ đọc nếu khác bản tóm tắt
+// máy chủ tự ghi từ báo cáo ("Khó khăn: …\nKiến nghị: …").
+function legacyResult() {
+  const v = String(data.resultNote || '').trim();
+  if (!v) return '';
+  const derived = new Set((data.progressReports || []).map(r => [r.difficulties && 'Khó khăn: ' + r.difficulties, r.proposals && 'Kiến nghị: ' + r.proposals].filter(Boolean).join('\n')));
+  if (derived.has(v)) return '';
+  return `<div class="legacy-note" data-testid="item-result-legacy"><span class="muted xs">Kết quả / khó khăn, kiến nghị — ghi trước đây (nay ghi qua báo cáo tiến độ)</span><div class="reg-readonly">${esc(v).replace(/\n/g, '<br>')}</div></div>`;
 }
 
 function repeatBlock(editable) {
@@ -237,7 +266,7 @@ function childrenSection(d, editable, open) {
       <button class="btn btn-ghost btn-sm" data-act="bulk-children" data-testid="bulk-children-open">${icon('list')}Chia nhiều việc…</button>
       ${(store.templates || []).length ? `<button class="btn btn-ghost btn-sm" data-act="template-children" data-testid="template-open">${icon('checklist')}Từ mẫu…</button>` : ''}</div>` : '';
   if (!rows) return add ? compact('Việc nhánh', add, { testid: 'children-section' }) : '';
-  return sec('children', { title: 'Việc nhánh', count: `${done}/${d.children.length} xong`, open, testid: 'children-section',
+  return sec('children', { title: 'Việc nhánh', count: `${d.childProgress?.done ?? done}/${d.childProgress?.total ?? d.children.length} đã duyệt xong`, open, testid: 'children-section',
     body: `<div class="tbl-scroll"><table class="table compact children-table"><thead><tr><th>Mã</th><th>Việc</th><th>Cán bộ</th><th>Hạn</th><th>Khâu</th><th class="num">%</th></tr></thead><tbody>${rows}</tbody></table></div>${add}` });
 }
 
@@ -267,6 +296,22 @@ const SEC_KEYS = ['desc', 'dispatch', 'register', 'approval', 'progress', 'docs'
 const X = '<svg class="i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
 const FILE = '<svg class="i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h6"/></svg>';
 
+// Mô tả tự lưu (như các trường khác): không vẽ lại panel khi lưu để không mất vị trí con trỏ; chữ "Đã lưu" mờ cạnh thanh công cụ.
+let descSaved = null, descTimer = null;
+const descEl = () => $('#ipDesc', panel());
+function descPending() { const el = descEl(); return !!(el && el.isContentEditable && data && el.innerHTML !== descSaved); }
+function descState(text) { const s = $('#descState', panel()); if (s) s.textContent = text; }
+function scheduleDesc() { clearTimeout(descTimer); descState(''); descTimer = setTimeout(() => flushDesc(), 1200); }
+function flushDesc() {
+  clearTimeout(descTimer); descTimer = null;
+  if (!descPending()) return;
+  const id = data.id, html = descEl().innerHTML;
+  descSaved = html; descState('Đang lưu…');
+  api(`/api/items/${id}`, { method: 'PATCH', body: { descriptionHtml: html } })
+    .then(() => { if (data?.id === id) { data.descriptionHtml = html; descState('Đã lưu'); setTimeout(() => { if ($('#descState', panel())?.textContent === 'Đã lưu') descState(''); }, 2500); } reloadProject(); })
+    .catch(error => { if (data?.id === id) { descSaved = null; descState(''); } toast('Chưa lưu được mô tả: ' + errorMessage(error), 'err'); });
+}
+
 // Bản nháp trong sessionStorage (mất khi đóng tab, xoá khi đăng xuất): bình luận, báo cáo, ý kiến duyệt / trả lời / gia hạn.
 const DRAFT_SEL = '#newComment, #rpContent, #rpDiff, #rpProp, #approvalComment, #extNote, [data-answer-input]';
 const draftKey = el => `${data.id}:${el.dataset.answerInput ? 'answer-' + el.dataset.answerInput : el.id}`;
@@ -275,6 +320,25 @@ function restoreDrafts(p) {
     const v = draft(draftKey(el));
     if (v && !el.value) { el.value = v; el.closest('details')?.setAttribute('open', ''); el.closest('details.sec')?.setAttribute('open', ''); }
   }
+}
+
+// Ba tab của panel: Tổng quan (mô tả, giao việc, điều hành, duyệt, báo cáo tiến độ, checklist, việc nhánh) ·
+// Kết quả & tài liệu (tài liệu hai chiều, văn bản, sản phẩm, đánh giá) · Trao đổi (bình luận, lịch sử).
+// Vùng "Cần bạn xử lý", tiêu đề và thanh tóm tắt luôn ở trên các tab. Mở việc khác → về Tổng quan; vẽ lại cùng việc → giữ tab.
+const TABS = [['overview', 'Tổng quan'], ['results', 'Kết quả & tài liệu'], ['talk', 'Trao đổi']];
+let activeTab = 'overview';
+function showTab(name, { focus = false } = {}) {
+  const p = panel();
+  if (!TABS.some(([k]) => k === name)) name = 'overview';
+  activeTab = name;
+  for (const b of $$('[data-tab]', p)) { const on = b.dataset.tab === name; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; b.classList.toggle('active', on); }
+  for (const pane of $$('[data-pane]', p)) pane.hidden = pane.dataset.pane !== name;
+  if (focus) $(`[data-tab="${name}"]`, p)?.focus();
+}
+// Phần tử nằm trong tab đang ẩn (mở từ thông báo, phím tắt, nút "Báo cáo tiến độ"…): chuyển sang tab đó trước.
+export function revealInPanel(el) {
+  const pane = el?.closest?.('[data-pane]');
+  if (pane && pane.hidden) showTab(pane.dataset.pane);
 }
 
 function render() {
@@ -286,118 +350,143 @@ function render() {
   const done = d.checklist.filter(c => c.done).length;
   const states = project.states;
   // Việc cần duyệt: không kéo thẳng sang Hoàn thành (máy chủ cũng chặn) — đi qua "Gửi duyệt" / "Nộp sản phẩm".
-  const needsApproval = (d.approvalSteps || []).length > 0 && !d.approvals.some(x => x.status === 'APPROVED');
-  const progEdit = fe && d.state.category !== 'COMPLETED' && d.can?.progress !== false;
-  const plan = sectionPlan(d);
-  // Gọn (mặc định): chỉ tên việc, người được phân công, hạn, tài liệu hai chiều (+ vùng cần xử lý); báo cáo, bình luận thu lại.
+  // Chọn "Hoàn thành" khi chưa được duyệt → máy chủ đưa vào "Chờ duyệt" (người giao duyệt + chấm mức).
+  const approvedNow = d.approvals[0]?.status === 'APPROVED';
+  // Gọn (mặc định): các khối mở / đóng theo vai trò và khâu, ẩn ô thêm mới trống và trường ít dùng ở cột phải.
+  // "Mở tất cả các mục": hiện đủ trường, mở mọi khối (nhớ theo người).
   const lite = uiPref('ip:full') !== true;
-  if (lite) Object.assign(plan, { files: true, progress: false, comments: false });
+  const plan = lite ? sectionPlan(d) : Object.fromEntries(SEC_KEYS.map(k => [k, true]));
+  Object.assign(plan, { files: true, comments: true });
   const p = panel();
-  // Vẽ lại cùng một việc: giữ vị trí cuộn, khối đang mở / đóng, tiêu điểm (không nhảy về đầu sau mỗi thao tác).
+  // Vẽ lại cùng một việc: giữ vị trí cuộn, khối đang mở / đóng, tiêu điểm, tab (không nhảy về đầu sau mỗi thao tác).
   const same = lastRendered === d.id;
   const keep = same ? { top: $('.ip-body', p)?.scrollTop || 0, open: new Map($$('details[data-sec], details[data-sub]', p).map(x => [x.dataset.sec || 'sub:' + x.dataset.sub, x.open])), focus: document.activeElement && p.contains(document.activeElement) ? document.activeElement.id : null } : null;
   const dispatchedView = d.dispatchStatus || d.leadDepartmentId || d.taskType === 'PLAN' || project.visibility === 'ASSIGNED';
   const disp = dispatchedView ? dispatchParts(d, editable && !r.delegated, project.visibility === 'ASSIGNED') : null;
   const prog = progressParts(d, editable);
-  const docs = documentsParts(d, editable);
-  const reg = registerParts(fe, editable);
+  const reg = registerParts(fe);
+  const legacy = legacyResult();
   const zone = approvalBox() + actionZone(d);
-  const descEmpty = !String(d.descriptionText || '').trim() && !/<(img|li|table)/i.test(d.descriptionHtml || '');
-  const descBody = `${fe ? `<div class="toolbar"><button data-cmd="bold" title="Đậm">B</button><button data-cmd="italic" title="Nghiêng"><i>I</i></button><button data-cmd="insertUnorderedList" title="Danh sách">•</button><button data-cmd="insertOrderedList" title="Danh sách số">1.</button></div>` : ''}
-          <div class="editor rich" id="ipDesc" ${fe ? 'contenteditable="true"' : ''} data-placeholder="Thêm mô tả…" data-testid="item-description">${d.descriptionHtml}</div>
-          ${fe ? '<div class="row" style="margin-top:6px"><button class="btn btn-sm btn-primary hidden" id="saveDesc" data-testid="save-description" title="Lưu (Ctrl S)">Lưu mô tả</button></div>' : ''}`;
+  // API chi tiết không trả descriptionText (chỉ excerpt): xét trống theo chính HTML mô tả, nếu không mô tả có sẵn bị giấu sau nút '+ Thêm mô tả'.
+  const descEmpty = !String(d.descriptionHtml || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim() && !/<(img|li|table)/i.test(d.descriptionHtml || '');
+  // Mô tả tự lưu như các trường khác (sau khi ngừng gõ / rời ô / Ctrl S), kèm chữ "Đã lưu" mờ.
+  const descBody = `${fe ? `<div class="toolbar"><button type="button" data-cmd="bold" title="Đậm" aria-label="Đậm">B</button><button type="button" data-cmd="italic" title="Nghiêng" aria-label="Nghiêng"><i>I</i></button><button type="button" data-cmd="insertUnorderedList" title="Danh sách" aria-label="Danh sách">•</button><button type="button" data-cmd="insertOrderedList" title="Danh sách số" aria-label="Danh sách số">1.</button><span class="grow"></span><span class="muted xs save-state" id="descState" role="status" aria-live="polite" data-testid="description-state"></span></div>` : ''}
+          <div class="editor rich" id="ipDesc" ${fe ? 'contenteditable="true" role="textbox" aria-multiline="true" aria-label="Mô tả"' : ''} data-placeholder="Thêm mô tả…" data-testid="item-description">${d.descriptionHtml}</div>`;
   const checklistBody = `<div data-testid="checklist">${d.checklist.map(c => `<div class="checklist-row${c.done ? ' done' : ''}"><input type="checkbox" data-check="${c.id}" ${c.done ? 'checked' : ''} ${editable ? '' : 'disabled'} aria-label="${esc(c.title)}"><span class="grow">${esc(c.title)}</span>${editable ? `<button class="icon-btn" data-del-check="${c.id}" aria-label="Xoá mục checklist" title="Xoá mục này">${X}</button>` : ''}</div>`).join('')}</div>
           ${editable ? '<input id="newCheck" placeholder="Thêm mục checklist, Enter để lưu" data-testid="checklist-input" maxlength="300" aria-label="Thêm mục checklist">' : ''}`;
-  // Tài liệu hai chiều: bên giao gửi (căn cứ, tài liệu kèm khi giao) ↔ bên thực hiện gửi lại (sản phẩm, kết quả).
-  // Tệp xếp theo người tải lên: người chủ trì / phối hợp → "Bên thực hiện"; còn lại (người giao, lãnh đạo) → "Bên giao".
+  // Kết quả & tài liệu — MỘT khối hai chiều: bên giao gửi (căn cứ, tài liệu kèm khi giao) ↔ bên thực hiện gửi lại (sản phẩm tham mưu,
+  // văn bản đã phát hành, tệp kết quả, sản phẩm đã ghi bằng chữ). Thay cho 3 chỗ cũ: "Sản phẩm đã có theo tiến độ", "Văn bản liên quan",
+  // "Tài liệu". Tệp xếp theo người tải lên: người chủ trì / phối hợp → "Bên thực hiện"; còn lại (người giao, lãnh đạo) → "Bên giao".
   const doers = new Set([...d.assignees.map(a => a.id), ...(d.supporters || []).map(a => a.id)]);
   const attRow = a => `<div class="att">${FILE}<span class="name" title="${esc(a.fileName)}">${esc(a.fileName)}</span><span class="muted xs">${(a.sizeBytes / 1024).toFixed(0)} KB · ${esc(a.uploadedByName || '')} · <span title="${fmtDateTime(a.createdAt)}">${ago(a.createdAt)}</span>${a.storedIn === 'NAS' ? ` · <span class="pill ok" title="Bản gốc trong kho file dự án: ${esc(a.nasPath)}" data-testid="att-nas">Kho file${a.version ? ` · v${String(a.version).padStart(2, '0')}` : ''}</span>` : ''}</span>
-            ${/\.(pdf|png|jpe?g|gif|webp|docx?)$/i.test(a.fileName) ? `<button class="btn btn-ghost btn-sm" data-preview="${a.id}">Xem</button>` : ''}<button class="btn btn-ghost btn-sm" data-download="${a.id}" data-testid="download-${esc(a.fileName)}">Tải</button>${editable ? `<button class="icon-btn" data-del-att="${a.id}"${a.storedIn === 'NAS' ? ' data-nas="1"' : ''} aria-label="Xoá tệp" title="Xoá tệp">${X}</button>` : ''}</div>`;
-  const docRow = x => `<div class="att tw-doc" data-testid="tw-doc"><span class="pill">${x.kind === 'BASIS' ? 'Căn cứ' : x.kind === 'ISSUED' ? 'Đã phát hành' : 'Sản phẩm'}</span><b>${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.number)}</a>` : esc(x.number)}</b><span class="name" title="${esc(x.summary)}">${esc(x.summary)}</span></div>`;
+            ${/\.(pdf|png|jpe?g|gif|webp|docx?)$/i.test(a.fileName) ? `<button class="btn btn-ghost btn-sm" data-preview="${a.id}">Xem</button>` : ''}<button class="btn btn-ghost btn-sm" data-download="${a.id}" data-testid="download-${esc(a.fileName)}">Tải</button>${editable ? `<button class="icon-btn" data-del-att="${a.id}"${a.storedIn === 'NAS' ? ' data-nas="1"' : ''} aria-label="Xoá tệp ${esc(a.fileName)}" title="Xoá tệp">${X}</button>` : ''}</div>`;
+  const docRow = x => `<div class="att tw-doc" data-testid="tw-doc"><span class="pill">${x.kind === 'BASIS' ? 'Căn cứ' : x.kind === 'ISSUED' ? 'Đã phát hành' : 'Sản phẩm'}</span><b>${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.number)}</a>` : esc(x.number)}</b><span class="name" title="${esc(x.summary)}">${esc(x.summary)}${x.issuedOn ? ` <span class="muted xs">· ${fmtDate(x.issuedOn)}</span>` : ''}</span>
+            ${editable && (x.createdById === store.me.id || r.canManage) ? `<button class="icon-btn" data-del-doc="${x.id}" aria-label="Gỡ văn bản ${esc(x.number)}" title="Gỡ văn bản">${X}</button>` : ''}</div>`;
+  // Sản phẩm đã ghi bằng chữ (ô "Sản phẩm đã có theo tiến độ" cũ, cột của Sổ giao việc): mỗi dòng một mục ở cột bên thực hiện.
+  const outLines = String(d.outputs || '').split('\n').map(x => x.trim()).filter(Boolean);
+  const outRow = l => `<div class="att tw-doc tw-out" data-testid="tw-output"><span class="pill">Đã ghi</span><span class="name" title="${esc(l)}">${esc(l)}</span></div>`;
   const giveFiles = d.attachments.filter(a => !doers.has(a.uploadedById)), backFiles = d.attachments.filter(a => doers.has(a.uploadedById));
   const giveDocs = (d.documents || []).filter(x => x.kind === 'BASIS'), backDocs = (d.documents || []).filter(x => x.kind !== 'BASIS');
   const iAmDoer = doers.has(store.me.id);
-  const twCol = (title, who, docsList, files, testid) => `<div class="tw-col" data-testid="${testid}"><div class="tw-h">${title}${who ? ` <span class="muted xs">· ${who}</span>` : ''}</div>
-      ${docsList.map(docRow).join('')}${files.map(attRow).join('')}${!docsList.length && !files.length ? '<div class="muted xs tw-empty">Chưa có</div>' : ''}</div>`;
+  const twCol = (title, who, rows, testid) => `<div class="tw-col" data-testid="${testid}"><div class="tw-h">${title}${who ? ` <span class="muted xs">· ${who}</span>` : ''}</div>
+      ${rows.join('') || '<div class="muted xs tw-empty">Chưa có</div>'}</div>`;
+  const outEdit = editable ? regArea(['outputs', 'Sản phẩm đã ghi bằng chữ', d.outputs, { canWrite: true, rows: 3, hint: 'mỗi dòng một văn bản (tờ trình, công văn, quyết định…) — cột "Sản phẩm đã có" của Sổ giao việc', hidden: true }]) : '';
+  const resultCount = d.attachments.length + (d.documents || []).length + outLines.length;
   const filesBody = `<div data-testid="attachments" class="two-way">
-      ${twCol('Bên giao gửi', d.assignedByName ? esc(d.assignedByName) : '', giveDocs, giveFiles, 'tw-give')}
-      ${twCol('Bên thực hiện gửi lại', d.assignees.map(a => esc(a.fullName)).join(', '), backDocs, backFiles, 'tw-back')}</div>
-          ${editable ? `<label class="btn ${iAmDoer ? 'btn-primary' : 'btn-ghost'} btn-sm" style="margin-top:6px">${icon('plus')}${iAmDoer ? 'Gửi kết quả (đính kèm tệp)' : 'Đính kèm tài liệu giao'}<input type="file" id="attInput" multiple hidden data-testid="attach-input"></label><span class="muted xs"> PDF, Office, ảnh, ZIP, TXT/CSV · tối đa 25 MB</span>` : ''}`;
-  const commentsBody = `<div class="timeline-list" data-testid="comments">${d.comments.map(c => `<div class="comment"><div class="who">${esc(c.authorName || '')} <span>· ${ago(c.createdAt)}</span></div><div class="rich">${c.bodyHtml}</div></div>`).join('')}</div>
+      ${twCol('Bên giao gửi', d.assignedByName ? esc(d.assignedByName) : '', [...giveDocs.map(docRow), ...giveFiles.map(attRow)], 'tw-give')}
+      ${twCol('Bên thực hiện gửi lại', d.assignees.map(a => esc(a.fullName)).join(', '), [...backDocs.map(docRow), ...backFiles.map(attRow), ...outLines.map(outRow)], 'tw-back')}</div>
+    ${editable ? `<div class="row wrap tw-actions"><label class="btn ${iAmDoer ? 'btn-primary' : 'btn-ghost'} btn-sm">${icon('plus')}${iAmDoer ? 'Gửi kết quả (đính kèm tệp)' : 'Đính kèm tài liệu giao'}<input type="file" id="attInput" multiple hidden data-testid="attach-input"></label>
+      ${outEdit ? `<button type="button" class="link-btn" data-reveal="outputs" data-testid="outputs-edit">${outLines.length ? 'Sửa sản phẩm đã ghi' : '+ Ghi sản phẩm bằng chữ'}</button>` : ''}
+      <span class="muted xs">PDF, Office, ảnh, ZIP, TXT/CSV · tối đa 25 MB</span></div>
+      ${documentForm(editable, { defaultKind: iAmDoer ? 'OUTPUT' : 'BASIS' })}${outEdit}` : ''}`;
+  const commentsBody = `<div class="timeline-list" data-testid="comments">${d.comments.map(c => `<div class="comment"><div class="who">${esc(c.authorName || '')} <span>· ${ago(c.createdAt)}</span></div><div class="rich">${c.bodyHtml}</div></div>`).join('') || '<p class="muted sm">Chưa có bình luận.</p>'}</div>
           ${editable ? '<textarea id="newComment" placeholder="Viết bình luận… dùng @tàikhoản để nhắc ai đó" rows="3" style="margin-top:8px" data-testid="comment-input" aria-label="Bình luận"></textarea><div class="row" style="margin-top:6px"><button class="btn btn-primary btn-sm" data-act="comment" data-testid="comment-submit" title="Gửi (Ctrl Enter)">Gửi bình luận</button></div>' : ''}`;
   const lastAct = d.activities[0];
   const historyBody = `<div class="timeline-list" data-testid="activity">${d.activities.map(a => `<div class="act"><b>${esc(a.actorName)}</b> ${(ACT_TEXT[a.type] || (() => esc(a.type)))(a.data)} · <span title="${fmtDateTime(a.createdAt)}">${ago(a.createdAt)}</span></div>`).join('')}</div>`;
-  const stateLabel = st => (st.name === CATEGORY[st.category] ? esc(st.name) : `${esc(st.name)} · ${CATEGORY[st.category]}`);
+  // Cột tự do (nhóm OTHER) là thuật ngữ cấu hình bảng — không ghi ra cho người dùng.
+  const stateLabel = st => (st.category === 'OTHER' || st.name === CATEGORY[st.category] ? esc(st.name) : `${esc(st.name)} · ${CATEGORY[st.category]}`);
   // Cột phải: phần chính luôn hiện; trường ít dùng vào "Thêm thông tin" (đếm số trường đã có giá trị).
-  const moreFilled = [d.coordinatorText, d.source, d.assignedAt, d.startDate, d.estimate, d.cycleId, d.recurring].filter(v => v != null && v !== '').length;
+  const sourceValue = d.source || (d.taskType === 'PLAN' ? 'Kế hoạch năm' : '');
+  const moreFilled = [d.coordinatorText, sourceValue, d.startDate, d.estimate, d.cycleId, d.recurring].filter(v => v != null && v !== '').length;
   const showLabels = project.visibility !== 'ASSIGNED' || d.labels.length;
+  // % tiến độ chỉ hiển thị ở cột phải; cập nhật qua "Báo cáo tiến độ" (có lịch sử, gửi người giao). MTL: % thực tế (việc cha tự tính từ việc con).
+  const pctNow = Math.round(project.kind === 'MTL' ? (d.mtl?.actual ?? d.progress) : d.progress) || 0;
+  const autoPct = !d.mtl ? '' : d.children.length ? 'tự tính từ việc con' : d.checklist.length ? 'tự tính theo checklist' : '';
+  const tabCount = { results: resultCount, talk: d.comments.length };
+  const tabBar = `<div class="ip-tabbar"><div class="ip-tabs" role="tablist" aria-label="Các phần của việc">${TABS.map(([k, label]) => `<button type="button" role="tab" id="ipTab-${k}" aria-controls="ipPane-${k}" data-tab="${k}" data-testid="ip-tab-${k}" aria-selected="${k === activeTab}" tabindex="${k === activeTab ? 0 : -1}" class="${k === activeTab ? 'active' : ''}">${label}${tabCount[k] ? ` <span class="ip-tab-n">${tabCount[k]}</span>` : ''}</button>`).join('')}</div>
+      <button type="button" class="link-btn ip-mode" data-act="toggle-full" data-testid="panel-full-toggle" aria-pressed="${!lite}">${lite ? 'Mở tất cả các mục' : 'Thu gọn các mục'}</button></div>`;
+  const pane = (k, html) => `<div class="ip-pane" role="tabpanel" id="ipPane-${k}" aria-labelledby="ipTab-${k}" data-pane="${k}"${k === activeTab ? '' : ' hidden'}>${html}</div>`;
+  const overview = `${mtlPanelBlock(d, project, fe)}
+        ${descEmpty && fe ? `<div class="section sec-compact desc-add"><button type="button" class="link-btn" data-act="add-desc">+ Thêm mô tả</button><div class="hidden" id="descWrap">${descBody}</div></div>`
+          : descEmpty ? '' : sec('desc', { title: 'Mô tả', open: plan.desc, body: descBody })}
+        ${reg.empty ? '' : sec('register', { title: 'Giao việc', count: reg.filled ? `${reg.filled} mục` : '', summary: reg.summary, open: plan.register, testid: 'register-section', body: reg.body })}
+        ${disp ? sec('dispatch', { title: 'Điều hành', summary: `${disp.status} ${disp.summary}`, open: plan.dispatch, testid: 'dispatch-section', cls: 'dispatch', body: disp.body }) : ''}
+        ${approvalSection(plan.approval)}
+        ${prog.empty && !legacy ? '' : sec('progress', { title: 'Báo cáo tiến độ', count: prog.count || '', summary: prog.summary, open: plan.progress || prog.formOpen, testid: 'progress-section', id: 'progress-section', body: legacy + prog.body })}
+        ${d.checklist.length ? sec('check', { title: `Checklist <span class="muted xs">${done}/${d.checklist.length}</span><span class="progress"><i style="width:${done / d.checklist.length * 100}%"></i></span>`, open: plan.check, body: checklistBody })
+          : editable ? compact('Checklist', checklistBody) : ''}
+        ${childrenSection(d, editable, plan.children)}`;
+  const results = `${resultCount || editable ? sec('files', { title: 'Tài liệu, văn bản, sản phẩm', count: resultCount || '', summary: `bên giao ${giveFiles.length + giveDocs.length} · bên thực hiện ${backFiles.length + backDocs.length + outLines.length}`, open: plan.files, testid: 'files-section', body: filesBody })
+      : '<p class="muted sm">Chưa có tài liệu, văn bản hay sản phẩm.</p>'}
+        ${reviewParts()}`;
+  const talk = `${sec('comments', { title: 'Bình luận', count: d.comments.length || '', open: plan.comments, body: commentsBody })}
+        ${(store.settings?.modules || []).includes('crm') ? `<div id="ipCrm" data-testid="item-crm">${crmCache.id === d.id ? crmCache.html : ''}</div>` : ''}
+        ${sec('history', { title: 'Lịch sử', count: d.activities.length, summary: lastAct ? `gần nhất: ${esc(lastAct.actorName)} ${ago(lastAct.createdAt)}` : '', open: plan.history, body: historyBody })}`;
   p.innerHTML = `
     <div class="ip-head" tabindex="-1"><span class="code" data-testid="item-code">${esc(d.code)}</span><span class="muted sm grow">${esc(d.project.name)}${(d.ancestors?.length ? d.ancestors : d.parent ? [d.parent] : []).length ? ` · thuộc <span data-testid="item-breadcrumb">${(d.ancestors?.length ? d.ancestors : [d.parent]).map(a => `<a href="#/projects/${d.project.id}?item=${a.id}"${a.title ? ` title="${esc(a.title)}"` : ''}>${esc(d.project.key)}-${a.number}</a>`).join(' › ')}</span>` : ''}</span>
       <details class="ip-menu"><summary class="icon-btn" aria-label="Thao tác khác" title="Thao tác khác">⋯</summary><div class="ip-menu-list" role="menu">
         ${r.canDelete && !d.archivedAt ? `<button class="menu-item danger" role="menuitem" data-act="archive" data-testid="archive-item">${icon('trash')}Xoá (vào thùng rác)</button>` : ''}
         ${fe && project.rights.canManage && !d.recurring ? `<button class="menu-item" role="menuitem" data-act="repeat">${icon('history')}Lặp lại việc này…</button>` : ''}
-        <button class="menu-item" role="menuitem" data-act="reset-layout">Về bố cục mặc định</button>
-        <button class="menu-item" role="menuitem" data-act="shortcuts">Phím tắt (?)</button></div></details>
+        <button class="menu-item" role="menuitem" data-act="reset-layout">Về bố cục mặc định</button></div></details>
       <button class="icon-btn" data-act="close" aria-label="Đóng" title="Đóng (Esc)" data-testid="close-panel">${X}</button></div>
     <div class="ip-body">
       <div class="ip-main">
         ${d.archivedAt ? `<div class="approval-box" data-testid="item-deleted">Việc đang ở trong thùng rác (xoá lúc ${fmtDateTime(d.archivedAt)}), sẽ bị xoá hẳn sau 7 ngày.${r.canDelete ? ' <button class="btn btn-ghost btn-sm" data-act="restore" data-testid="restore-item">Khôi phục</button>' : ''}</div>` : ''}
         <textarea class="ip-title" id="ipTitle" rows="1" ${fe ? '' : 'readonly'} aria-label="Tiêu đề" data-testid="item-title" maxlength="300">${esc(d.title)}</textarea>
         ${summaryBar(d, { review: project.states.find(s => s.category === 'REVIEW'), editable })}
-        ${mtlPanelBlock(d, project, fe)}
         ${zone ? `<div class="action-zone" data-testid="action-zone" aria-label="Cần bạn xử lý">${zone}</div>` : ''}
-        ${descEmpty && fe ? `<div class="section sec-compact desc-add"><button type="button" class="link-btn" data-act="add-desc">+ Thêm mô tả</button><div class="hidden" id="descWrap">${descBody}</div></div>`
-          : descEmpty ? '' : sec('desc', { title: 'Mô tả', open: plan.desc, body: descBody })}
-        ${disp ? sec('dispatch', { title: 'Điều hành', summary: `${disp.status} ${disp.summary}`, open: plan.dispatch, testid: 'dispatch-section', cls: 'dispatch', body: disp.body }) : ''}
-        ${sec('register', { title: 'Giao việc &amp; kết quả', count: reg.filled ? `${reg.filled} mục` : '', summary: reg.summary, open: plan.register, testid: 'register-section', body: reg.body })}
-        ${approvalSection(plan.approval)}
-        ${prog.empty ? '' : sec('progress', { title: 'Báo cáo tiến độ', count: prog.count || '', summary: prog.summary, open: plan.progress || prog.formOpen, testid: 'progress-section', id: 'progress-section', body: prog.body })}
-        ${docs.empty && !editable ? '' : sec('docs', { title: 'Văn bản liên quan', cls: 'lite-hide', count: docs.count || '', summary: docs.summary, open: plan.docs || (!docs.empty && plan.docs !== false), testid: 'documents-section', body: docs.body || '<div class="muted sm">Chưa có văn bản.</div>' })}
-        ${d.checklist.length ? sec('check', { title: `Checklist <span class="muted xs">${done}/${d.checklist.length}</span><span class="progress"><i style="width:${done / d.checklist.length * 100}%"></i></span>`, open: plan.check, body: checklistBody })
-          : editable ? compact('Checklist', checklistBody) : ''}
-        ${childrenSection(d, editable, plan.children)}
-        ${d.attachments.length || (d.documents || []).length || editable ? sec('files', { title: 'Tài liệu', count: d.attachments.length + (d.documents || []).length || '', summary: `bên giao ${giveFiles.length + giveDocs.length} · bên thực hiện ${backFiles.length + backDocs.length}`, open: plan.files, testid: 'files-section', body: filesBody }) : ''}
-        ${(store.settings?.modules || []).includes('crm') ? `<div id="ipCrm" data-testid="item-crm">${crmCache.id === d.id ? crmCache.html : ''}</div>` : ''}
-        ${sec('comments', { title: 'Bình luận', count: d.comments.length || '', open: plan.comments || !!d.comments.length, body: commentsBody })}
-        ${sec('history', { title: 'Lịch sử', count: d.activities.length, summary: lastAct ? `gần nhất: ${esc(lastAct.actorName)} ${ago(lastAct.createdAt)}` : '', open: plan.history, body: historyBody })}
+        ${tabBar}
+        ${pane('overview', overview)}
+        ${pane('results', results)}
+        ${pane('talk', talk)}
       </div>
       <div class="ip-side">
         <div class="ip-core">
-        <label class="${project.visibility === 'ASSIGNED' ? 'lite-hide' : ''}">Trạng thái<select id="ipState" ${fe ? '' : 'disabled'} data-testid="item-state" title="Trạng thái (S)">${states.map(s => { const locked = s.id !== d.stateId && ((needsApproval && s.category === 'COMPLETED') || (s.category === 'CANCELLED' && (d.dispatchStatus || project.visibility === 'ASSIGNED') && !(r.canManage || d.can?.isAssigner || d.reporterId === store.me.id))); return `<option value="${s.id}"${s.id === d.stateId ? ' selected' : ''}${locked ? ' disabled' : ''}>${stateLabel(s)}${locked ? (s.category === 'CANCELLED' ? ' (người giao)' : ' (qua duyệt)') : ''}</option>`; }).join('')}</select></label>
+        <label class="${project.visibility === 'ASSIGNED' ? 'lite-hide' : ''}">Trạng thái<select id="ipState" ${fe ? '' : 'disabled'} data-testid="item-state" title="Trạng thái (S)">${states.map(s => { const done = s.category === 'COMPLETED' && s.id !== d.stateId && !approvedNow, doneLock = done && (d.state.category === 'REVIEW' || d.childProgress?.open > 0);
+          const locked = s.id !== d.stateId && (doneLock || (s.category === 'CANCELLED' && (d.dispatchStatus || project.visibility === 'ASSIGNED') && !(r.canManage || d.can?.isAssigner || d.reporterId === store.me.id))); return `<option value="${s.id}"${s.id === d.stateId ? ' selected' : ''}${locked ? ' disabled' : ''}>${stateLabel(s)}${locked ? (s.category === 'CANCELLED' ? ' (người giao)' : d.state.category === 'REVIEW' ? ' (đang chờ người giao duyệt)' : ' (còn việc con chưa duyệt)') : done ? ' → gửi người giao duyệt' : ''}</option>`; }).join('')}</select></label>
         <label class="lite-hide">Ưu tiên<select id="ipPriority" ${fe ? '' : 'disabled'} data-testid="item-priority" title="Ưu tiên (P)">${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}"${k === d.priority ? ' selected' : ''}>${v.label}</option>`).join('')}</select></label>
-        <label class="${project.kind === 'MTL' ? '' : 'lite-hide'}">Tiến độ (%)<span class="row progress-edit"><input type="range" min="0" max="100" step="5" id="ipProgressRange" value="${d.progress}" ${progEdit ? '' : 'disabled'} aria-label="Tiến độ"><input type="number" min="0" max="100" id="ipProgress" value="${d.progress}" ${progEdit ? '' : 'disabled'} data-testid="item-progress" style="width:72px" aria-label="Tiến độ %"></span>${editable && d.can?.progress === false ? '<span class="muted xs">Do người chủ trì cập nhật</span>' : ''}</label>
-        <div><label>Người chủ trì</label>${fe ? multiSelect('assignees', users.map(u => ({ id: u.id, label: u.fullName })), d.assignees.map(a => a.id), 'Chưa giao') : `<div>${d.assignees.map(a => avatar(a) + ' ' + personLink(a)).join('<br>') || '—'}</div>`}</div>
-        <div class="${(d.supporters || []).length ? '' : 'lite-hide'}"><label>Người phối hợp</label>${fe ? multiSelect('supporters', users.map(u => ({ id: u.id, label: u.fullName })), (d.supporters || []).map(a => a.id), 'Không') : `<div>${(d.supporters || []).map(a => personLink(a)).join(', ') || '—'}</div>`}</div>
+        <div class="side-progress ${project.kind === 'MTL' || d.progress ? '' : 'lite-hide'}"><span class="side-h" id="ipProgLabel">Tiến độ</span>
+          <div class="row progress-view" role="meter" aria-labelledby="ipProgLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pctNow}"><span class="progress"><i style="width:${pctNow}%"></i></span><b data-testid="item-progress">${pctNow}%</b></div>
+          ${autoPct ? `<span class="muted xs">${autoPct}</span>` : prog.canReport ? '<button type="button" class="link-btn" data-act="open-report" data-testid="side-report">Cập nhật qua Báo cáo tiến độ</button>' : editable && d.can?.progress === false ? '<span class="muted xs">Do người chủ trì cập nhật</span>' : ''}</div>
+        <div><span class="side-h">Người chủ trì</span>${fe ? multiSelect('assignees', users.map(u => ({ id: u.id, label: u.fullName })), d.assignees.map(a => a.id), 'Chưa giao') : `<div>${d.assignees.map(a => avatar(a) + ' ' + personLink(a)).join('<br>') || '—'}</div>`}</div>
+        <div class="${(d.supporters || []).length ? '' : 'lite-hide'}"><span class="side-h">Người phối hợp</span>${fe ? multiSelect('supporters', users.map(u => ({ id: u.id, label: u.fullName })), (d.supporters || []).map(a => a.id), 'Không') : `<div>${(d.supporters || []).map(a => personLink(a)).join(', ') || '—'}</div>`}</div>
         <label>Hạn hoàn thành<input type="date" id="ipDue" value="${dateInput(d.dueDate)}" ${fe && dueEditable(d) ? '' : 'disabled'} data-testid="item-due" title="Hạn (D)">${d.dueDate ? `<span class="muted xs">${countdownPill(d)}</span>` : ''}${fe && !dueEditable(d) ? '<span class="muted xs">Hạn do người giao đặt — dùng "Xin gia hạn"</span>' : ''}</label>
         ${d.state.category === 'COMPLETED' ? `<label>Ngày hoàn thành thực tế<input type="date" id="ipCompleted" value="${dateInput(d.completedAt)}" ${r.canManage ? '' : 'disabled'} data-testid="item-completed"></label>` : ''}
         <label class="lite-hide">Người giao${fe && d.can?.assigner !== false ? `<select id="ipAssigner" data-testid="item-assigner"><option value="">—</option>${store.users.filter(u => u.role !== 'admin').map(u => `<option value="${u.id}"${u.id === d.assignedById ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select>` : `<div class="side-text" data-testid="item-assigner">${d.assignedById ? personLink({ id: d.assignedById, fullName: d.assignedByName }) : '—'}</div>`}</label>
-        ${showLabels ? `<div class="lite-hide"><label>Nhãn</label>${fe ? multiSelect('labels', labelsFor(d.project.id).map(l => ({ id: l.id, label: l.name, chip: labelChip(l) })), d.labels.map(l => l.id), 'Không có', { create: true }) : d.labels.map(labelChip).join(' ') || '—'}</div>` : ''}
+        <label class="lite-hide">Ngày giao<input type="date" id="ipAssignedAt" value="${dateInput(d.assignedAt)}" ${fe ? '' : 'disabled'} data-testid="item-assigned-at"></label>
+        ${showLabels ? `<div class="lite-hide"><span class="side-h">Nhãn</span>${fe ? multiSelect('labels', labelsFor(d.project.id).map(l => ({ id: l.id, label: l.name, chip: labelChip(l) })), d.labels.map(l => l.id), 'Không có', { create: true }) : d.labels.map(labelChip).join(' ') || '—'}</div>` : ''}
         ${d.intake ? `<div class="pill" data-testid="item-intake" style="white-space:normal">Từ yêu cầu của ${esc(d.intake.requesterName || '')}</div>` : ''}
         </div>
         <details class="ip-more" data-sec="more"${plan.more || false ? ' open' : ''}><summary>Thêm thông tin${moreFilled ? ` <span class="muted xs">${moreFilled} mục đã có</span>` : ''}</summary>
         <div class="ip-more-body">
         <label>Đơn vị / người phối hợp khác<input id="ipCoord" value="${esc(d.coordinatorText || '')}" ${fe ? '' : 'disabled'} placeholder="VD: Văn phòng; đơn vị thi công" data-testid="item-coordinator"></label>
-        <label>Nguồn giao việc<select id="ipSource" ${fe ? '' : 'disabled'} data-testid="item-source"><option value="">—</option>${[...new Set([...(store.settings?.sources || []), ...(d.source ? [d.source] : [])])].map(x => `<option${x === d.source ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
-        <label>Ngày giao<input type="date" id="ipAssignedAt" value="${dateInput(d.assignedAt)}" ${fe ? '' : 'disabled'}></label>
+        <label>Nguồn giao việc<select id="ipSource" ${fe ? '' : 'disabled'} data-testid="item-source">${sourceOptions(sourceValue)}</select><span class="muted xs" data-testid="item-task-kind">${d.taskType === 'PLAN' ? 'Nhiệm vụ kế hoạch năm' : 'Nhiệm vụ đột xuất'}</span></label>
         <label>Ngày bắt đầu<input type="date" id="ipStart" value="${dateInput(d.startDate)}" ${fe ? '' : 'disabled'}></label>
         <label>Ước lượng (giờ)<input type="number" min="0" step="0.5" id="ipEstimate" value="${d.estimate ?? ''}" ${fe ? '' : 'disabled'}></label>
         ${(project.cycles || []).length || d.cycleId ? `<label>Chu kỳ<select id="ipCycle" ${fe ? '' : 'disabled'} data-testid="item-cycle"><option value="">— Không —</option>${(project.cycles || []).map(c => `<option value="${c.id}"${c.id === d.cycleId ? ' selected' : ''}>${esc(c.name)}${c.status === 'COMPLETED' ? ' (đã kết thúc)' : ''}</option>`).join('')}${editable ? '<option value="__new">+ Tạo chu kỳ mới…</option>' : ''}</select></label>` : ''}
         ${repeatBlock(fe)}
         <div class="muted xs">Người tạo: ${esc(d.reporterName || '—')}<br>Tạo lúc: ${fmtDateTime(d.createdAt)}${d.startedAt ? '<br>Bắt đầu: ' + fmtDateTime(d.startedAt) : ''}${d.completedAt ? '<br>Hoàn thành: ' + fmtDateTime(d.completedAt) : ''}</div>
         </div></details>
-        ${[d.source && `Nguồn: ${esc(d.source)}`, d.assignedAt && `Ngày giao ${fmtDate(d.assignedAt)}`, d.coordinatorText && `Phối hợp khác: ${esc(d.coordinatorText)}`, d.recurring && `Lặp lại: ${esc(d.recurring.schedule)}`].filter(Boolean).map(x => `<div class="muted xs side-fact">${x}</div>`).join('')}
+        <div class="side-facts">${[sourceValue && `Nguồn: ${esc(sourceValue)}`, d.coordinatorText && `Phối hợp khác: ${esc(d.coordinatorText)}`, d.recurring && `Lặp lại: ${esc(d.recurring.schedule)}`].filter(Boolean).map(x => `<div class="muted xs side-fact">${x}</div>`).join('')}</div>
       </div>
     </div>`;
-  // Gọn (mặc định): chỉ hiện việc cần làm ngay — vùng cần xử lý, mô tả, báo cáo tiến độ, bình luận, các mục đã có nội dung;
-  // người chủ trì, hạn, tiến độ ở cột phải. "Xem đầy đủ" mở mọi mục (nhớ theo người).
-  const fullView = !lite;
   p.classList.toggle('ip-lite', lite);
-  $('.ip-main', p).insertAdjacentHTML('beforeend', `<button type="button" class="link-btn ip-mode" data-act="toggle-full" data-testid="panel-full-toggle">${fullView ? 'Thu gọn — chỉ hiện phần cần làm' : 'Xem đầy đủ: điều hành, giao việc &amp; kết quả, quy trình duyệt, tiến độ, checklist, việc nhánh, văn bản, lịch sử…'}</button>`);
   if (keep) {
     for (const x of $$('details[data-sec], details[data-sub]', p)) { const k = x.dataset.sec || 'sub:' + x.dataset.sub; if (keep.open.has(k)) x.open = keep.open.get(k); }
     const body = $('.ip-body', p); if (body) body.scrollTop = keep.top;
     if (keep.focus) document.getElementById(keep.focus)?.focus({ preventScroll: true });
   }
+  descSaved = $('#ipDesc', p)?.innerHTML ?? null; // bản trình duyệt đã chuẩn hoá — chỉ lưu khi người dùng thật sự sửa
   restoreDrafts(p);
   const t = $('#ipTitle', p); if (t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
   bind(editable);
@@ -449,12 +538,18 @@ function bind(editable) {
     if (act === 'close') return closeItem(true);
     if (act === 'reload-panel') return load();
     if (act === 'rebaseline') { rebaselineDialog(data, project, refresh); return; }
-    if (act === 'toggle-full') { uiPref('ip:full', uiPref('ip:full') === true ? null : true); lastRendered = null; render(); return; }
-    if (act === 'reset-layout') { resetSectionMemory(SEC_KEYS); lastRendered = null; render(); toast('Đã về bố cục mặc định', 'ok'); return; }
-    if (act === 'shortcuts') { e.target.closest('details')?.removeAttribute('open'); return showShortcuts(); }
+    // "Mở tất cả các mục" / "Thu gọn các mục": đổi chế độ (nhớ theo người) và bỏ trạng thái mở / đóng tự chọn của từng khối.
+    if (act === 'toggle-full') { flushDesc(); resetSectionMemory(SEC_KEYS); uiPref('ip:full', uiPref('ip:full') === true ? null : true); lastRendered = null; render(); lastRendered = data.id; $('[data-act="toggle-full"]', p)?.focus(); return; }
+    if (act === 'reset-layout') { resetSectionMemory(SEC_KEYS); lastRendered = null; render(); lastRendered = data.id; toast('Đã về bố cục mặc định', 'ok'); return; }
     if (act === 'add-desc') { const w = $('#descWrap', p); w?.classList.remove('hidden'); e.target.closest('[data-act]').remove(); $('#ipDesc', p)?.focus(); return; }
+    const tab = e.target.closest('[data-tab]');
+    if (tab) { showTab(tab.dataset.tab); return; }
+    // Nút "Báo cáo tiến độ" (thanh tóm tắt, cột phải): biểu mẫu nằm ở tab Tổng quan.
+    if (act === 'open-report') showTab('overview');
+    const goto = e.target.closest('[data-goto]');
+    if (goto) revealInPanel(p.querySelector('#' + goto.dataset.goto) || p.querySelector(`[data-testid="${goto.dataset.goto}"]`));
     const reveal = e.target.closest('[data-reveal]');
-    if (reveal) { const f = p.querySelector(`[data-reg="${reveal.dataset.reveal}"]`); if (f) { f.hidden = false; f.querySelector('textarea')?.focus(); } reveal.remove(); return; }
+    if (reveal) { const f = p.querySelector(`[data-reg="${reveal.dataset.reveal}"]`); if (f) { f.hidden = false; revealInPanel(f); f.querySelector('textarea')?.focus(); } reveal.remove(); return; }
     if (await handleDispatchClick(e, p, data, refresh, patch)) return;
     if (act === 'repeat') { e.target.closest('details')?.removeAttribute('open'); return openRepeatDialog({ item: data, rule: data.recurring, onDone: refresh }); }
     if (act === 'archive') {
@@ -467,12 +562,13 @@ function bind(editable) {
       return;
     }
     if (act === 'restore') { try { await api(`/api/items/${data.id}/restore`, { method: 'POST' }); toast('Đã khôi phục', 'ok'); } catch (err) { toast(errorMessage(err), 'err'); } return refresh(); }
-    if (act === 'submit-approval') { const review = project.states.find(s => s.category === 'REVIEW'); if (await patch({ stateId: review.id })) toast('Đã gửi duyệt', 'ok'); return; }
+    if (act === 'submit-approval') { const review = project.states.find(s => s.category === 'REVIEW'); if (await patch({ stateId: review.id })) toast('Đã gửi người giao duyệt', 'ok'); return; }
     if (act === 'approve' || act === 'reject') {
       const pending = data.approvals.find(a => a.status === 'PENDING');
       const comment = $('#approvalComment', p).value.trim();
       if (act === 'reject' && !comment) { $('#approvalCommentHelp', p).textContent = 'Nhập lý do trả lại để người trình sửa theo.'; toast('Hãy nhập lý do trả lại', 'err'); $('#approvalComment', p).focus(); return; }
-      const rating = act === 'approve' ? $('#approvalRating', p)?.value || undefined : undefined;
+      const rating = act !== 'approve' ? undefined : data.ratingRequired ? $('input[name="approvalRating"]:checked', p)?.value : $('#approvalRating', p)?.value || undefined;
+      if (act === 'approve' && data.ratingRequired && !rating) { $('#approvalRatingHelp', p).textContent = 'Chọn mức hoàn thành trước khi duyệt.'; toast('Hãy chấm mức hoàn thành', 'err'); $('input[name="approvalRating"]', p)?.focus(); return; }
       const doneId = data.id;
       try { await api(`/api/approvals/${pending.id}/${act}`, { method: 'POST', body: { comment, rating } }); draft(`${doneId}:approvalComment`, ''); toast(act === 'approve' ? 'Đã duyệt' : 'Đã trả lại', 'ok'); offerNextApproval(doneId); }
       catch (error) { toast(errorMessage(error), 'err'); }
@@ -484,7 +580,7 @@ function bind(editable) {
       return;
     }
     const cmd = e.target.closest('[data-cmd]')?.dataset.cmd;
-    if (cmd) { e.preventDefault(); document.execCommand(cmd); $('#ipDesc', p).focus(); $('#saveDesc', p)?.classList.remove('hidden'); return; }
+    if (cmd) { e.preventDefault(); document.execCommand(cmd); $('#ipDesc', p).focus(); scheduleDesc(); return; }
     const dl = e.target.closest('[data-download]'); if (dl) return download(`/api/attachments/${dl.dataset.download}/download`).catch(err => toast(errorMessage(err), 'err'));
     const pv = e.target.closest('[data-preview]'); if (pv) return openPreview(`/api/attachments/${pv.dataset.preview}/preview`).catch(err => toast(errorMessage(err), 'err'));
     const da = e.target.closest('[data-del-att]');
@@ -500,20 +596,31 @@ function bind(editable) {
       } catch (err) { toast(errorMessage(err), 'err'); }
       return;
     }
-    if (e.target.id === 'saveDesc') { await patch({ descriptionHtml: $('#ipDesc', p).innerHTML }); toast('Đã lưu mô tả', 'ok'); }
+  };
+  // Thanh tab: mũi tên trái / phải, Home / End (mẫu tablist của WAI-ARIA).
+  p.onkeydown = e => {
+    const t = e.target.closest?.('[role="tab"][data-tab]'); if (!t || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const keys = TABS.map(([k]) => k), i = keys.indexOf(t.dataset.tab);
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? keys.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + keys.length) % keys.length;
+    showTab(keys[next], { focus: true });
   };
   if (!editable) return;
   const title = $('#ipTitle', p);
   title.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); title.blur(); } };
   title.onchange = () => { const v = title.value.replace(/\s*\n\s*/g, ' ').trim(); if (v && v !== data.title) patch({ title: v }); };
   const desc = $('#ipDesc', p);
-  if (desc) {
-    desc.oninput = () => $('#saveDesc', p)?.classList.remove('hidden');
-    // Ctrl/⌘ S trong mô tả: lưu (không mở hộp "Lưu trang" của trình duyệt).
-    desc.onkeydown = e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); $('#saveDesc', p)?.click(); } };
+  if (desc && desc.isContentEditable) {
+    // Mô tả tự lưu: 1,2 giây sau khi ngừng gõ, khi rời ô, hoặc Ctrl/⌘ S (không mở hộp "Lưu trang" của trình duyệt).
+    desc.oninput = () => scheduleDesc();
+    desc.onblur = () => flushDesc();
+    desc.onkeydown = e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); flushDesc(); } };
   }
   const on = (sel, fn) => { const el = $(sel, p); if (el) el.onchange = fn; };
-  on('#ipState', e => patch({ stateId: Number(e.target.value) }));
+  on('#ipState', async e => {
+    const to = project.states.find(s => s.id === Number(e.target.value));
+    if (await patch({ stateId: to.id }) && to.category === 'COMPLETED' && data.approvals[0]?.status !== 'APPROVED') toast('Đã chuyển vào "Chờ duyệt" — việc thành Hoàn thành khi người giao duyệt và chấm mức', 'ok');
+  });
   on('#ipPriority', e => patch({ priority: e.target.value }));
   on('#ipStart', e => patch({ startDate: fromDateInput(e.target.value) }));
   on('#ipDue', e => patch({ dueDate: fromDateInput(e.target.value) }));
@@ -533,10 +640,7 @@ function bind(editable) {
     patch({ cycleId: v ? Number(v) : null });
   });
   $('#ipLevels', p)?.addEventListener('change', e => patch({ approvalLevels: e.target.value === '' ? null : Number(e.target.value) }));
-  const prog = v => patch({ progress: Math.max(0, Math.min(100, Number(v) || 0)) });
-  $('#ipProgress', p)?.addEventListener('change', e => prog(e.target.value));
-  $('#ipProgressRange', p)?.addEventListener('input', e => { $('#ipProgress', p).value = e.target.value; });
-  $('#ipProgressRange', p)?.addEventListener('change', e => prog(e.target.value));
+  $('.rating-pick', p)?.addEventListener('change', () => { $('#approvalRatingHelp', p).textContent = ''; });
   $('#ipCoord', p)?.addEventListener('change', e => patch({ coordinatorText: e.target.value }));
   $('#ipAssigner', p)?.addEventListener('change', e => patch({ assignedById: e.target.value ? Number(e.target.value) : null }));
   $('#ipSource', p)?.addEventListener('change', e => patch({ source: e.target.value || null }));

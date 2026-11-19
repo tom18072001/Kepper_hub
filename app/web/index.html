@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kepler Hub · Tiến độ dự án</title>
+  <title>Kepler Hub</title>
   <meta name="theme-color" content="#09334C">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -23,6 +23,17 @@
   <link rel="stylesheet" href="css/weekly.css">
   <link rel="stylesheet" href="css/playground.css">
   <link rel="stylesheet" href="css/shell.css">
+  <style>
+    /* Ô mật khẩu có nút Hiện / Ẩn; chỉ dùng biến màu sẵn có của theme. */
+    .pw-wrap{position:relative;display:block;margin-top:6px}
+    .pw-wrap>input{margin-top:0;padding-right:64px}
+    .pw-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:transparent;color:var(--brand);
+      font:600 .82rem/1 var(--font);padding:6px 8px;border-radius:var(--radius-sm);cursor:pointer}
+    .pw-eye:hover{background:var(--brand-050)}
+    .pw-eye:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+    .caps-warn{margin:-8px 0 12px;font-size:.85rem;color:var(--warn, var(--danger));font-weight:600}
+    .login-help{margin:4px 0 0!important;font-size:.87rem;text-align:center}
+  </style>
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
@@ -32,10 +43,12 @@
       <div class="brand-mark" aria-hidden="true">K</div>
       <h1>Kepler Hub</h1>
       <p class="muted">Theo dõi tiến độ dự án theo Master Timeline</p>
-      <label class="field">Tài khoản<input id="loginUser" name="username" autocomplete="username" required data-testid="login-username"></label>
-      <label class="field">Mật khẩu<input id="loginPass" name="password" type="password" autocomplete="current-password" required data-testid="login-password"></label>
+      <label class="field" for="loginUser">Tài khoản<input id="loginUser" name="username" autocomplete="username" required data-testid="login-username"></label>
+      <div class="field"><label for="loginPass">Mật khẩu</label><span class="pw-wrap"><input id="loginPass" name="password" type="password" autocomplete="current-password" required data-testid="login-password" aria-describedby="capsWarn"><button type="button" class="pw-eye" data-pw-toggle="loginPass" aria-label="Hiện mật khẩu" aria-pressed="false" aria-controls="loginPass" data-testid="login-show-password">Hiện</button></span></div>
+      <p id="capsWarn" class="caps-warn hidden" role="status" data-testid="caps-warn">Caps Lock đang bật</p>
       <button class="btn btn-primary btn-block" type="submit" data-testid="login-submit">Đăng nhập</button>
       <p id="loginError" class="error" role="alert"></p>
+      <p class="muted login-help" data-testid="login-forgot">Quên mật khẩu? Liên hệ quản trị hệ thống để được đặt lại.</p>
       <a class="login-install" href="install.html" data-testid="login-install">Cài Kepler Hub lên máy</a>
     </form>
   </section>
@@ -45,9 +58,10 @@
     <form id="passwordForm" class="auth-card">
       <h1>Đổi mật khẩu</h1>
       <p class="muted">Tài khoản của bạn cần đổi mật khẩu trước khi tiếp tục.</p>
-      <label class="field">Mật khẩu hiện tại<input id="pwCurrent" type="password" autocomplete="current-password" required data-testid="pw-current"></label>
-      <label class="field">Mật khẩu mới<input id="pwNew" type="password" autocomplete="new-password" required minlength="6" data-testid="pw-new"></label>
-      <label class="field">Nhập lại mật khẩu mới<input id="pwConfirm" type="password" autocomplete="new-password" required minlength="6" data-testid="pw-confirm"></label>
+      <label class="field" for="pwCurrent">Mật khẩu hiện tại<input id="pwCurrent" type="password" autocomplete="current-password" required data-testid="pw-current"></label>
+      <label class="field" for="pwNew">Mật khẩu mới<input id="pwNew" type="password" autocomplete="new-password" required minlength="6" data-testid="pw-new"></label>
+      <label class="field" for="pwConfirm">Nhập lại mật khẩu mới<input id="pwConfirm" type="password" autocomplete="new-password" required minlength="6" data-testid="pw-confirm"></label>
+      <p id="capsWarnPw" class="caps-warn hidden" role="status">Caps Lock đang bật</p>
       <button class="btn btn-primary btn-block" type="submit" data-testid="pw-submit">Lưu mật khẩu</button>
       <button class="btn btn-ghost btn-block" type="button" id="pwLogout">Đăng xuất</button>
       <p id="pwError" class="error" role="alert"></p>
@@ -57,13 +71,13 @@
   <!-- Ứng dụng -->
   <div id="appShell" class="shell hidden">
     <header class="appbar">
-      <button class="ab-btn" id="menuBtn" aria-controls="sidebar" aria-expanded="true" title="Thu gọn menu" data-testid="menu-toggle"><span data-icon="menu"></span></button>
+      <button class="ab-btn" id="menuBtn" aria-controls="sidebar" aria-expanded="true" title="Thu gọn menu" aria-label="Thu gọn menu" data-testid="menu-toggle"><span data-icon="menu"></span></button>
       <a class="ab-brand" href="#/" aria-label="Kepler Hub — trang chủ"><span class="brand-mark sm" aria-hidden="true">K</span><span class="ab-name"><b>Kepler Hub</b><span id="orgName" class="hidden"></span></span></a>
-      <div class="ab-pop">
-        <button class="ab-apps" id="appsBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="appsPanel" data-testid="apps-open"><span data-icon="grid"></span><span class="t">Ứng dụng</span></button>
+      <div class="ab-pop hidden">
+        <button class="ab-apps" id="appsBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="appsPanel" aria-label="Ứng dụng" title="Ứng dụng" data-testid="apps-open"><span data-icon="grid"></span><span class="t">Ứng dụng</span></button>
         <div class="launcher hidden" id="appsPanel" role="menu" aria-label="Ứng dụng"></div>
       </div>
-      <button class="ab-search" id="paletteBtn" data-testid="palette-open"><span data-icon="search"></span><span class="lbl">Tìm dự án, trang, mã việc…</span><kbd>Ctrl K</kbd></button>
+      <button class="ab-search" id="paletteBtn" aria-label="Tìm nhanh" data-testid="palette-open"><span data-icon="search"></span><span class="lbl">Tìm dự án, trang, mã việc…</span><kbd>Ctrl K</kbd></button>
       <div class="ab-right">
         <button class="ab-btn kbd-btn" id="shortcutsBtn" title="Phím tắt (?)" aria-label="Phím tắt" data-testid="shortcuts-open"><kbd>?</kbd></button>
         <div class="notif">
@@ -71,7 +85,7 @@
           <div class="popover hidden" id="notifPanel" role="dialog" aria-label="Thông báo"></div>
         </div>
         <div class="ab-pop">
-          <button class="ab-user" id="userBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="userPanel" data-testid="user-menu"><span class="avatar" id="meAvatar"></span><span class="who"></span><span data-icon="down"></span></button>
+          <button class="ab-user" id="userBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="userPanel" aria-label="Tài khoản" data-testid="user-menu"><span class="avatar" id="meAvatar"></span><span class="who"></span><span data-icon="down"></span></button>
           <div class="popover user-pop hidden" id="userPanel" role="menu" aria-label="Tài khoản"></div>
         </div>
       </div>
@@ -95,7 +109,7 @@
   <!-- Modal + palette + toast -->
   <div id="modalRoot" class="modal-root hidden"><div class="modal" role="dialog" aria-modal="true" id="modal"></div></div>
   <div id="paletteRoot" class="modal-root hidden"><div class="palette" role="dialog" aria-label="Tìm nhanh">
-    <input id="paletteInput" placeholder="Gõ để tìm dự án, trang hoặc mã việc (VD: KD-12)…" data-testid="palette-input">
+    <input id="paletteInput" aria-label="Tìm nhanh" placeholder="Gõ để tìm dự án, trang hoặc mã việc (VD: KD-12)…" data-testid="palette-input">
     <div id="paletteList" class="palette-list"></div>
   </div></div>
   <div id="toasts" class="toasts" aria-live="polite"></div>

@@ -1,11 +1,14 @@
-// Chờ tôi xử lý: phiếu trình chờ duyệt, đề nghị gia hạn chờ quyết định, kiến nghị chờ trả lời. Mở việc ngay trên trang.
+// Chờ tôi duyệt: phiếu trình chờ duyệt, đề nghị gia hạn chờ quyết định, kiến nghị chờ trả lời; tab "Tôi đã gửi": phiếu tôi gửi duyệt
+// đang chờ ai, ở bước nào, kết quả 30 ngày gần đây (rút lại được khi chưa cấp nào xử lý). Mở việc ngay trên trang.
 // Mặc định phiếu chờ lâu nhất lên trước (chuyển được sang "Hạn gần nhất"); chip Dự án / Phòng tự sinh khi có từ 2 nguồn trở lên.
 import { api } from '../api.js';
 import { store } from '../store.js';
 import { $, $$, esc, fmtDate, ago, prioChip, avatars, toast, errorMessage, confirmDialog, uiPref, replaceHashParams, scrollFade } from '../util.js';
 import { refreshCounters } from '../main.js';
+import { PAGE_TITLES } from '../shell.js';
 
-const TABS = [['queue', 'Phiếu trình'], ['extensions', 'Đề nghị gia hạn'], ['proposals', 'Kiến nghị']];
+const TABS = [['queue', 'Phiếu trình'], ['extensions', 'Đề nghị gia hạn'], ['proposals', 'Kiến nghị'], ['sent', 'Tôi đã gửi']];
+const SENT_STATUS = { PENDING: ['Đang chờ duyệt', 'info'], APPROVED: ['Đã duyệt', 'ok'], REJECTED: ['Bị trả lại', 'danger'], CANCELLED: ['Đã rút / huỷ', ''], REOPENED: ['Đã duyệt, mở lại', 'warn'] };
 const DAY = 86_400_000;
 const vnDay = v => Math.floor((new Date(v).getTime() + 7 * 3_600_000) / DAY);
 // Số ngày làm việc (thứ Hai – thứ Sáu) đã trôi qua kể từ ngày gửi.
@@ -23,12 +26,13 @@ function parseSubmit(note) {
 // Vẽ lại sau thao tác: đọc bộ lọc hiện tại trên URL (người dùng có thể đã đổi sau lần vẽ trước).
 const liveParams = () => new URLSearchParams(location.hash.split('?')[1] || '');
 export async function renderApprovals(root, params, setCrumbs) {
-  setCrumbs('Chờ tôi xử lý');
-  const [queue, extensions, proposals] = await Promise.all([api('/api/approvals/queue'), api('/api/approvals/extensions'), api('/api/approvals/proposals')]);
-  const counts = { queue: queue.length, extensions: extensions.filter(x => x.canDecide).length, proposals: proposals.length };
+  setCrumbs(PAGE_TITLES.approvals);
+  const [queue, extensions, proposals, sent] = await Promise.all([api('/api/approvals/queue'), api('/api/approvals/extensions'), api('/api/approvals/proposals'), api('/api/approvals/sent').catch(() => [])]);
+  // "Tôi đã gửi": đếm phiếu còn chờ (không cộng vào số việc chờ tôi xử lý).
+  const counts = { queue: queue.length, extensions: extensions.filter(x => x.canDecide).length, proposals: proposals.length, sent: sent.filter(x => x.status === 'PENDING').length };
   const tab = TABS.some(([k]) => k === params.get('tab')) ? params.get('tab') : counts.queue || (!counts.extensions && !counts.proposals) ? 'queue' : counts.extensions ? 'extensions' : 'proposals';
   if (params.get('tab') !== tab && /^#\/approvals(\?|$)/.test(location.hash)) replaceHashParams({ tab });
-  const lists = { queue, extensions, proposals };
+  const lists = { queue, extensions, proposals, sent };
   const rows = lists[tab];
   const deptId = name => store.departments.find(d => d.name === name)?.id;
 
@@ -81,15 +85,31 @@ export async function renderApprovals(root, params, setCrumbs) {
       <td data-label="Kiến nghị" class="sm">${esc(x.proposals)}${x.difficulties ? `<div class="muted xs">Khó khăn: ${esc(x.difficulties)}</div>` : ''}</td>
       <td data-label="Người đề xuất">${esc(x.authorName || '')}<div class="muted xs">tiến độ ${x.progress}%</div></td>
       <td data-label="Chờ"><span class="pill${x.waitingDays >= 2 ? ' warn' : ''}">${x.waitingDays ? x.waitingDays + ' ngày' : 'hôm nay'}</span></td></tr>`;
+  // Phiếu tôi đã gửi: đang ở bước nào, chờ ai; hoặc kết quả (mức hoàn thành, lý do trả lại).
+  const sentStatus = x => {
+    const [label, tone] = SENT_STATUS[x.status] || [x.status, ''];
+    if (x.status === 'PENDING') return `<span class="pill ${tone}" data-testid="sent-status-${esc(x.item.code)}">${label} · bước ${x.currentLevel}/${x.totalLevels}${x.stepName ? ` · ${esc(x.stepName)}` : ''}</span>${x.waitingOn.length ? `<div class="muted xs">Chờ: ${esc(x.waitingOn.join(', '))}</div>` : ''}`;
+    const l = x.last;
+    return `<span class="pill ${tone}" data-testid="sent-status-${esc(x.item.code)}">${label}${l?.rating ? ` · ${esc({ EXCELLENT: 'Xuất sắc', GOOD: 'Tốt', PASS: 'Đạt', NEEDS_IMPROVEMENT: 'Cần cải thiện', POOR: 'Kém' }[l.rating] || l.rating)}` : ''}</span>
+      ${l ? `<div class="muted xs">${esc(l.actorName || '')}${l.at ? ` · ${esc(ago(l.at))}` : ''}${l.comment ? `: “${esc(l.comment)}”` : ''}</div>` : ''}`;
+  };
+  const sentRow = x => `<tr class="clickable" tabindex="0" data-href="${href(x.item.id)}" data-testid="sent-${esc(x.item.code)}">
+      <td class="code" data-label="Mã">${esc(x.item.code)}</td>
+      <td data-label="Công việc"><b>${esc(x.item.title)}</b><div class="muted xs">${esc(x.project.name)}${meta(x.item) ? ' · ' + meta(x.item) : ''}</div></td>
+      <td data-label="Trạng thái">${sentStatus(x)}</td>
+      <td data-label="Gửi" class="nowrap">${esc(ago(x.createdAt))}</td>
+      <td data-label="">${x.canWithdraw ? `<button type="button" class="btn btn-ghost btn-sm" data-withdraw="${x.id}" data-testid="sent-withdraw-${esc(x.item.code)}" title="Rút lại phiếu (chưa cấp nào xử lý): việc về trạng thái trước khi gửi">Rút lại</button>` : ''}</td></tr>`;
   const TABLE = {
     queue: ['approval-queue', '<th>Mã</th><th>Công việc</th><th>Bước</th><th>Người trình</th><th>Hạn</th><th>Chờ</th>', queueRow, 6],
     extensions: ['extension-queue', '<th>Mã</th><th>Công việc</th><th>Đề nghị</th><th>Lý do</th><th>Người đề nghị</th><th aria-label="Quyết định"></th>', extRow, 6],
     proposals: ['proposal-queue', '<th>Mã</th><th>Công việc</th><th>Kiến nghị</th><th>Người đề xuất</th><th>Chờ</th>', propRow, 5],
+    sent: ['sent-list', '<th>Mã</th><th>Công việc</th><th>Trạng thái</th><th>Gửi</th><th aria-label="Thao tác"></th>', sentRow, 5],
   };
   const EMPTY = {
     queue: '<div class="card empty" data-testid="approval-empty">Không có phiếu trình nào chờ bạn duyệt.</div>',
     extensions: '<div class="card empty">Không có đề nghị gia hạn nào.</div>',
     proposals: '<div class="card empty">Không có kiến nghị nào chờ trả lời.</div>',
+    sent: '<div class="card empty" data-testid="sent-empty">Bạn chưa gửi duyệt việc nào trong 30 ngày qua.</div>',
   };
 
   const chipGroup = (key, label, list) => list.length > 1 ? `<div class="lf-chips ap-src" role="group" aria-label="${label}"><span class="lf-label">${label}</span>
@@ -101,7 +121,7 @@ export async function renderApprovals(root, params, setCrumbs) {
       <span class="lf-count" aria-live="polite"></span></div>` : '';
 
   root.oninput = null; root.onchange = null; root.onkeydown = null;
-  root.innerHTML = `<div class="page-head"><h1>Chờ tôi xử lý</h1><span class="muted">${counts.queue + counts.extensions + counts.proposals} việc</span></div>
+  root.innerHTML = `<div class="page-head"><h1>${PAGE_TITLES.approvals}</h1><span class="muted">${counts.queue + counts.extensions + counts.proposals} việc chờ bạn${counts.sent ? ` · ${counts.sent} phiếu bạn gửi đang chờ` : ''}</span></div>
     <div class="tabs" role="tablist" aria-label="Loại">${TABS.map(([k, label]) => `<a href="#/approvals?tab=${k}" data-tab="${k}" class="${k === tab ? 'active' : ''} ${counts[k] ? 'has-n' : 'zero'}" role="tab" aria-selected="${k === tab}" data-testid="approvals-tab-${k}">${label} <b>${counts[k]}</b></a>`).join('')}</div>
     <div class="ap-body">${toolbar}<div id="apList"></div></div>`;
   for (const s of $$('.ap-src', root)) scrollFade(s);
@@ -132,6 +152,15 @@ export async function renderApprovals(root, params, setCrumbs) {
   const syncUrl = () => replaceHashParams({ sort: f.sort === 'due' ? 'due' : '', project: f.project, dept: f.dept, focus: '' });
 
   root.onclick = async e => {
+    const wd = e.target.closest('[data-withdraw]');
+    if (wd) {
+      e.stopPropagation();
+      if (!(await confirmDialog('Rút lại phiếu này? Việc về trạng thái trước khi gửi duyệt; người duyệt chưa mở thông báo thì thông báo được gỡ.', { okText: 'Rút lại' }))) return;
+      wd.disabled = true;
+      try { await api(`/api/approvals/${wd.dataset.withdraw}/withdraw`, { method: 'POST' }); toast('Đã rút lại phiếu', 'ok'); refreshCounters(); renderApprovals(root, liveParams(), setCrumbs); }
+      catch (error) { wd.disabled = false; toast(errorMessage(error), 'err'); }
+      return;
+    }
     const btn = e.target.closest('[data-ext]');
     if (btn) {
       e.stopPropagation();

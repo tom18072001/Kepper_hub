@@ -16,7 +16,8 @@ const LEVEL = { START_SOON: 'INFO', DUE_SOON: 'WARN', AHEAD: 'INFO', STALE: 'WAR
 function kindsFor(item, st, day, cfg) {
   const out = [];
   if (st.code === 'NOT_DUE' && st.startsIn != null && st.startsIn <= cfg.startSoonDays) out.push('START_SOON');
-  if (st.code === 'LATE_START') out.push('LATE_START');
+  // Việc đã có cập nhật (bắt đầu hoặc báo tiến độ) thì không nhắc "Chậm khởi động" nữa.
+  if (st.code === 'LATE_START' && !item.startedAt && !item.progressAt) out.push('LATE_START');
   if (st.code === 'BEHIND') out.push('BEHIND');
   if (st.code === 'AHEAD') out.push('AHEAD');
   if (st.code === 'OVERDUE') out.push('OVERDUE');
@@ -33,6 +34,38 @@ function shouldSend(kind, lastAt, day) {
 }
 const num = n => String(n).replace('.', ',');
 const fmt = d => (d ? new Date(new Date(d).getTime() + 7 * 3_600_000).toISOString().slice(0, 10).split('-').reverse().join('/') : '—');
+
+// Người nhận một loại cảnh báo: người chủ trì; lãnh đạo bộ phận chủ trì; PMO khi chậm / trễ; Ban lãnh đạo khi việc găng / mốc chậm, trễ.
+function recipientsFor(kind, r, { leaders = [], pmo = [], directors = [], hasKids = false } = {}) {
+  const assignees = r.assignees.map(x => x.userId);
+  if (kind === 'STALE') return [...new Set(assignees.length ? assignees : leaders)];
+  const to = hasKids ? [...leaders] : [...assignees, ...leaders];
+  if (['LATE_START', 'BEHIND', 'OVERDUE'].includes(kind)) to.push(...pmo);
+  if ((r.critical || r.milestone) && ['BEHIND', 'OVERDUE'].includes(kind)) to.push(...directors);
+  return [...new Set(to)];
+}
+// Thứ tự trình bày khi gộp: nặng trước.
+const ORDER = ['OVERDUE', 'LATE_START', 'BEHIND', 'DUE_SOON', 'STALE', 'AHEAD', 'START_SOON'];
+// Dòng chi tiết của một loại cảnh báo; số liệu ghi rõ "(lúc gửi)" vì tiến độ có thể đã đổi khi người nhận mở thông báo.
+function detailOf(kind, r, st, a) {
+  if (kind === 'START_SOON') return `Bắt đầu theo kế hoạch ${fmt(r.baselineStart)} (còn ${st.startsIn} ngày)`;
+  if (kind === 'OVERDUE') return `Quá hạn kế hoạch ${st.lateDays} ngày (hạn ${fmt(r.baselineEnd)}) · thực tế ${num(a)}% (lúc gửi)`;
+  if (kind === 'DUE_SOON') return `Hạn kế hoạch ${fmt(r.baselineEnd)} (còn ${st.daysLeft} ngày) · thực tế ${num(a)}% (lúc gửi)`;
+  if (kind === 'STALE') return `Chưa cập nhật tiến độ từ ${fmt(r.progressAt || r.startedAt)}`;
+  return `Kế hoạch ${num(st.planned)}% · thực tế ${num(a)}%, lệch ${st.variance > 0 ? '+' : ''}${num(st.variance)} điểm (lúc gửi)`;
+}
+// Một thông báo gộp cho một việc: tiêu đề nêu mọi loại cảnh báo, nội dung mỗi loại một dòng (bỏ dòng trùng), ngày gửi.
+function mergedMessage(project, r, st, a, kinds, day = new Date()) {
+  const ks = [...new Set(kinds)].sort((x, y) => ORDER.indexOf(x) - ORDER.indexOf(y));
+  const labels = ks.map(k => KIND_LABEL[k]).join(' · ');
+  const code = `${project.key}-${r.number}`;
+  const lines = [...new Set(ks.map(k => detailOf(k, r, st, a)))];
+  return {
+    code, labels, link: `#/projects/${project.id}?item=${r.id}`,
+    title: `[${labels}] ${code} · ${String(r.title).slice(0, 80)}${r.critical ? ' (đường găng)' : ''}`,
+    body: [...lines, `Gửi ngày ${fmt(day)} — mở việc để xem số liệu hiện tại.`].join('\n'),
+  };
+}
 
 async function runProjectAlerts(prisma, project, day = new Date()) {
   if (project.kind !== 'MTL' || !project.t0Date || project.archivedAt || project.deletedAt) return { project: project.id, alerts: 0, notified: 0 };
@@ -56,30 +89,25 @@ async function runProjectAlerts(prisma, project, day = new Date()) {
   for (const r of rows) {
     const a = actual.get(r.id) ?? r.progress;
     const st = M.statusOf(r, a, day, cfg);
+    // Mọi loại cảnh báo đến hạn của một việc → MỘT thông báo gộp (không gửi nhiều thông báo rời cho cùng một việc).
+    const due = [];
     for (const kind of kindsFor(r, st, day, cfg)) {
       if (!shouldSend(kind, lastAt.get(`${r.id}:${kind}`), day)) continue;
-      const level = LEVEL[kind];
       const leaders = await leadersOf(r.leadDepartmentId);
-      const hasKids = parents.has(r.id);
-      let to = hasKids ? [...leaders] : [...r.assignees.map(x => x.userId), ...leaders];
-      if (['LATE_START', 'BEHIND', 'OVERDUE'].includes(kind)) to.push(...pmo);
-      if ((r.critical || r.milestone) && ['BEHIND', 'OVERDUE'].includes(kind)) to.push(...directors);
-      if (kind === 'STALE') to = r.assignees.map(x => x.userId).length ? r.assignees.map(x => x.userId) : leaders;
-      to = [...new Set(to)];
-      const code = `${project.key}-${r.number}`;
-      const detail = kind === 'START_SOON' ? `Bắt đầu theo kế hoạch ${fmt(r.baselineStart)} (còn ${st.startsIn} ngày)`
-        : kind === 'OVERDUE' ? `Quá hạn kế hoạch ${st.lateDays} ngày (hạn ${fmt(r.baselineEnd)}) · thực tế ${num(a)}%`
-          : kind === 'DUE_SOON' ? `Hạn kế hoạch ${fmt(r.baselineEnd)} (còn ${st.daysLeft} ngày) · thực tế ${num(a)}%`
-            : kind === 'STALE' ? `Chưa cập nhật tiến độ từ ${fmt(r.progressAt || r.startedAt)}`
-              : `Kế hoạch ${num(st.planned)}% · thực tế ${num(a)}% (${st.variance > 0 ? '+' : ''}${num(st.variance)} điểm)`;
-      const created = await prisma.progressAlert.createMany({ data: [{ projectId: project.id, workItemId: r.id, kind, level, day: dayDate, variance: st.variance ?? null, lateDays: st.lateDays ?? null, recipients: to.length }], skipDuplicates: true });
+      const to = recipientsFor(kind, r, { leaders, pmo, directors, hasKids: parents.has(r.id) });
+      const created = await prisma.progressAlert.createMany({ data: [{ projectId: project.id, workItemId: r.id, kind, level: LEVEL[kind], day: dayDate, variance: st.variance ?? null, lateDays: st.lateDays ?? null, recipients: to.length }], skipDuplicates: true });
       if (!created.count) continue;
       alerts++;
-      const link = `#/projects/${project.id}?item=${r.id}`;
-      notified += await notify(prisma, to, { type: 'MTL_ALERT', title: `[${KIND_LABEL[kind]}] ${code} · ${String(r.title).slice(0, 80)}${r.critical ? ' (đường găng)' : ''}`, body: detail, link });
-      // Viber: tối thiểu hoá — chỉ mã hạng mục, loại cảnh báo, liên kết nội bộ (không tên việc, không số liệu).
-      await viber.sendToUsers(prisma, to, `Kepler Hub — ${KIND_LABEL[kind]}: ${code}. Mở: ${viber.appLink(link)}`).catch(() => {});
+      due.push({ kind, to });
     }
+    if (!due.length) continue;
+    const msg = mergedMessage(project, r, st, a, due.map(x => x.kind), day);
+    const to = [...new Set(due.flatMap(x => x.to))];
+    // Thông báo cũ chưa đọc của cùng việc đã bị thay bằng thông báo mới (số liệu cũ không còn đúng) → đánh dấu đã đọc.
+    if (to.length) await prisma.notification.updateMany({ where: { type: 'MTL_ALERT', link: msg.link, userId: { in: to }, readAt: null }, data: { readAt: new Date() } });
+    notified += await notify(prisma, to, { type: 'MTL_ALERT', title: msg.title, body: msg.body, link: msg.link });
+    // Viber: tối thiểu hoá — chỉ mã hạng mục, loại cảnh báo, liên kết nội bộ (không tên việc, không số liệu).
+    await viber.sendToUsers(prisma, to, `Kepler Hub — ${msg.labels}: ${msg.code}. Mở: ${viber.appLink(msg.link)}`).catch(() => {});
   }
   // Ảnh chụp tiến độ hôm nay: toàn dự án + từng bộ phận (đường cong S thực tế), tiến độ theo cây đầu việc như Dashboard.
   const leaves = rows.filter(r => !parents.has(r.id));
@@ -115,7 +143,7 @@ async function runAllAlerts(prisma, day = new Date()) {
   return out;
 }
 
-// Nhắc cập nhật tiến độ hằng tuần (chiều thứ Sáu): mỗi người MỘT thông báo trong ứng dụng — số việc trong sprint hiện tại
+// Nhắc cập nhật tiến độ hằng tuần (chiều thứ Sáu): mỗi người MỘT thông báo trong ứng dụng — số việc trong kỳ cập nhật tháng hiện tại
 // đã tới ngày bắt đầu mà chưa cập nhật từ 5 ngày trở lên — mở "Cập nhật nhanh". Người nhận: người phụ trách;
 // hạng mục chưa giao người → lãnh đạo bộ phận chủ trì. Chỉ thông báo trong ứng dụng (không qua Viber).
 async function runWeeklyUpdateReminder(prisma, day = new Date(), { staleDays = 5 } = {}) {
@@ -141,8 +169,8 @@ async function runWeeklyUpdateReminder(prisma, day = new Date(), { staleDays = 5
     }
   }
   let sent = 0;
-  for (const [userId, n] of count) sent += await notify(prisma, [userId], { type: 'MTL_UPDATE_REMINDER', title: `Cập nhật tiến độ tuần này: ${n} việc trong sprint chưa cập nhật`, body: 'Mở "Cập nhật nhanh" và bấm % hoàn thành cho từng việc.', link: '#/sprint' });
+  for (const [userId, n] of count) sent += await notify(prisma, [userId], { type: 'MTL_UPDATE_REMINDER', title: `Cập nhật tiến độ tuần này: ${n} việc trong kỳ này chưa cập nhật`, body: 'Mở "Cập nhật nhanh" và bấm % hoàn thành cho từng việc.', link: '#/sprint' });
   return { users: count.size, sent };
 }
 
-module.exports = { KIND_LABEL, REPEAT, LEVEL, kindsFor, shouldSend, runProjectAlerts, runAllAlerts, runWeeklyUpdateReminder };
+module.exports = { KIND_LABEL, REPEAT, LEVEL, kindsFor, shouldSend, recipientsFor, detailOf, mergedMessage, runProjectAlerts, runAllAlerts, runWeeklyUpdateReminder };

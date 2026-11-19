@@ -3,12 +3,22 @@
 const { norm } = require('./plan-parser');
 
 const DAY = 86_400_000, H7 = 7 * 3_600_000;
-const DEFAULT_ALERTS = { behindPct: 10, aheadPct: 10, startSoonDays: 7, dueSoonDays: 7, staleDays: 7 };
+// lateStartGraceDays: số ngày làm việc (thứ Hai–thứ Sáu) ân hạn sau ngày bắt đầu kế hoạch trước khi gắn "Chậm khởi động" —
+// việc vừa giao hôm nay không bị gắn nhãn đỏ ngay. Đổi mặc định bằng biến môi trường MTL_LATE_START_GRACE_DAYS.
+const graceEnv = Number(process.env.MTL_LATE_START_GRACE_DAYS);
+const DEFAULT_ALERTS = { behindPct: 10, aheadPct: 10, startSoonDays: 7, dueSoonDays: 7, staleDays: 7,
+  lateStartGraceDays: Number.isInteger(graceEnv) && graceEnv >= 0 && graceEnv <= 30 ? graceEnv : 2 };
 const alertConfigOf = project => ({ ...DEFAULT_ALERTS, ...(project?.alertConfig && typeof project.alertConfig === 'object' ? project.alertConfig : {}) });
 
 // ---------- Ngày theo giờ Việt Nam ----------
 const vnDay = d => Math.floor((new Date(d).getTime() + H7) / DAY); // số ngày lịch VN
 const vnMidnight = (y, m, d) => new Date(Date.UTC(y, m, d) - H7); // 00:00 giờ VN của ngày y-m-d (m: 0–11)
+// Số ngày làm việc (thứ Hai–thứ Sáu) đã qua sau ngày lịch VN `from` tới hết ngày `to` (không tính chính ngày `from`).
+function workdaysBetween(from, to) {
+  let n = 0;
+  for (let x = from + 1; x <= to; x++) { const wd = (x + 4) % 7; if (wd !== 0 && wd !== 6) n++; } // vnDay 0 = thứ Năm 01/01/1970
+  return n;
+}
 const vnParts = d => { const x = new Date(new Date(d).getTime() + H7); return { y: x.getUTCFullYear(), m: x.getUTCMonth(), d: x.getUTCDate() }; };
 
 // T0 = đầu tháng chứa t0Date. Tháng T bắt đầu ngày 1 của (T0 + T); kết thúc ngày cuối của tháng (T0 + endT).
@@ -198,7 +208,11 @@ function statusOf(item, actualPct, day = new Date(), cfg = DEFAULT_ALERTS) {
   const variance = Math.round((actualPct - planned) * 10) / 10;
   if (d > e) return { code: 'OVERDUE', planned, variance, lateDays: d - e };
   if (d < s) return { code: 'NOT_DUE', planned, variance: 0, startsIn: s - d };
-  if (actualPct <= 0 && !item.startedAt && d - s >= 0 && planned >= cfg.behindPct) return { code: 'LATE_START', planned, variance, daysLeft: e - d };
+  // Chưa khởi động: chưa bắt đầu, chưa từng cập nhật tiến độ, thực tế 0%. Trong khoảng ân hạn (ngày làm việc) thì chưa tính là chậm.
+  if (actualPct <= 0 && !item.startedAt && !item.progressAt && d - s >= 0) {
+    if (workdaysBetween(s, d) < (cfg.lateStartGraceDays ?? DEFAULT_ALERTS.lateStartGraceDays)) return { code: 'ON_TRACK', planned, variance, daysLeft: e - d, grace: true };
+    if (planned >= cfg.behindPct) return { code: 'LATE_START', planned, variance, daysLeft: e - d };
+  }
   if (variance <= -cfg.behindPct) return { code: 'BEHIND', planned, variance, daysLeft: e - d };
   if (variance >= cfg.aheadPct) return { code: 'AHEAD', planned, variance, daysLeft: e - d };
   return { code: 'ON_TRACK', planned, variance, daysLeft: e - d };
@@ -311,7 +325,7 @@ function sprintLane(item, sprint, next = null, { current = false } = {}) {
 const sprintTarget = (item, sprint) => ({ from: plannedPct(item, new Date(sprint.start.getTime() - 1)), to: plannedPct(item, sprint.end) });
 
 module.exports = {
-  DEFAULT_ALERTS, alertConfigOf, STATUS, vnDay, vnMidnight, monthStart, tToDates, initialBaseline, currentT, timeValue, parseMtlRows, splitOwner, norm,
+  DEFAULT_ALERTS, alertConfigOf, STATUS, vnDay, workdaysBetween, vnMidnight, monthStart, tToDates, initialBaseline, currentT, timeValue, parseMtlRows, splitOwner, norm,
   plannedPct, durationDays, weightOf, rollup, statusOf, spiOf, leavesOf, treeProgress, kpiOf, plannedCurve, isDone, isCancelled,
   sprintOf, sprintState, sprintLane, sprintTarget,
 };

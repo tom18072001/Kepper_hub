@@ -51,11 +51,11 @@ function parseSprintText(text) {
       const m = line.match(/^(.*?)\s*\(\s*((?:bước|buoc|b)?\s*[\divxlc][^()]*)\)\s*$/i);
       if (m) { name = m[1].trim(); steps = m[2].trim(); } else name = line;
     }
-    if (!name) { errors.push(`Dòng ${k + 1}: thiếu tên sprint`); return; }
+    if (!name) { errors.push(`Dòng ${k + 1}: thiếu tên giai đoạn`); return; }
     if (!parseSteps(steps).length) errors.push(`Dòng ${k + 1}: "${name}" chưa ghi các bước — ví dụ "${name} | 1-9"`);
     sprints.push({ name: name.slice(0, 120), steps: steps.slice(0, 200), goal: goal.slice(0, 300) });
   });
-  if (sprints.length > 30) errors.push('Tối đa 30 sprint');
+  if (sprints.length > 30) errors.push('Tối đa 30 giai đoạn');
   return { sprints, errors };
 }
 const sprintText = plan => (plan || []).map(s => [s.name, s.steps, s.goal].filter((v, i) => i < 2 || v).join(' | ')).join('\n');
@@ -73,10 +73,10 @@ function assignSprints(items, plan) {
     const mine = [];
     for (const r of parseSteps(sp.steps)) {
       const a = codes.indexOf(r.from), b = codes.indexOf(r.to);
-      if (codes.length && (a < 0 || b < 0)) { errors.push(`Sprint "${sp.name}": không có bước ${[a < 0 ? r.from : null, b < 0 && r.to !== r.from ? r.to : null].filter(Boolean).join(', ')} trong MTL tổng`); continue; }
-      if (a > b) { errors.push(`Sprint "${sp.name}": khoảng ${r.from}-${r.to} ngược thứ tự`); continue; }
+      if (codes.length && (a < 0 || b < 0)) { errors.push(`Giai đoạn "${sp.name}": không có bước ${[a < 0 ? r.from : null, b < 0 && r.to !== r.from ? r.to : null].filter(Boolean).join(', ')} trong MTL tổng`); continue; }
+      if (a > b) { errors.push(`Giai đoạn "${sp.name}": khoảng ${r.from}-${r.to} ngược thứ tự`); continue; }
       for (const c of codes.slice(a, b + 1)) {
-        if (owner.has(c) && owner.get(c) !== k) errors.push(`Bước ${c} nằm trong cả sprint "${plan[owner.get(c)].name}" và "${sp.name}"`);
+        if (owner.has(c) && owner.get(c) !== k) errors.push(`Bước ${c} nằm trong cả giai đoạn "${plan[owner.get(c)].name}" và "${sp.name}"`);
         else { owner.set(c, k); if (!mine.includes(c)) mine.push(c); }
       }
     }

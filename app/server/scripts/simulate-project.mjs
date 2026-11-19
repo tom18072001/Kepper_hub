@@ -264,10 +264,19 @@ async function main() {
   const helps = (sumGd?.helps || []).flatMap(g => g.list || []);
   obs('10-giao-ban', 'giamdoc', `TGĐ thấy ${helps.length} đề nghị hỗ trợ: ${helps.map(h => h.task || h.helpWhat).join('; ').slice(0, 200)}`);
   const att = Object.fromEntries(['PL', 'TC', 'TK', 'QLXD', 'GR', 'KD'].map(c => [D[c].id, c === 'GR' ? 'ABSENT' : 'PRESENT']));
-  const m1 = log('10-giao-ban', 'nv.hcns', 'Thư ký ghi điểm danh + Action Log', await as('nv.hcns', 'PUT', '/api/weekly/meeting', { week: ctx?.week, attendance: att,
-    baseActions: sumSec?.actionsVersion, actions: [{ task: 'Ban Đối ngoại nộp bổ sung báo cáo GPMB (giả)', departmentId: D.GR.id, ownerId: U['tb.doingoai'].id, due: addDays(today, 4) }] }), { expect: [200, 409] });
+  // Điểm danh và phát hành chỉ mở từ giờ giao ban (máy chủ trả 409 MEETING_NOT_STARTED nếu sớm hơn). Ngày họp không đặt lùi về
+  // quá khứ được (phải sau thứ Sáu của tuần báo cáo) → chưa tới giờ thì vẫn soạn Action Log, kết luận, nhưng bỏ qua điểm danh + phát hành.
+  const meetingAt = ctx?.schedule?.meetingAt ? Date.parse(ctx.schedule.meetingAt) : NaN;
+  const started = Number.isFinite(meetingAt) && Date.now() >= meetingAt;
+  const actions = [{ task: 'Ban Đối ngoại nộp bổ sung báo cáo GPMB (giả)', departmentId: D.GR.id, ownerId: U['tb.doingoai'].id, due: addDays(today, 4) }];
+  log('10-giao-ban', 'nv.hcns', started ? 'Thư ký ghi điểm danh + Action Log' : 'Thư ký soạn trước Action Log (chưa tới giờ họp: chưa điểm danh)', await as('nv.hcns', 'PUT', '/api/weekly/meeting', { week: ctx?.week,
+    ...(started ? { attendance: att } : {}), baseActions: sumSec?.actionsVersion, actions }), { expect: [200, 409] });
   const conc = Object.fromEntries(helps.map(h => [h.key, { decision: 'APPROVE', note: 'TGĐ sẽ làm việc trực tiếp (giả).' }]));
-  log('10-giao-ban', 'giamdoc', 'TGĐ kết luận các đề nghị hỗ trợ và phát hành', await as('giamdoc', 'PUT', '/api/weekly/meeting', { week: ctx?.week, conclusions: conc, publish: true }), { expect: [200, 422] });
+  if (started) log('10-giao-ban', 'giamdoc', 'TGĐ kết luận các đề nghị hỗ trợ và phát hành', await as('giamdoc', 'PUT', '/api/weekly/meeting', { week: ctx?.week, conclusions: conc, publish: true }), { expect: [200, 422] });
+  else {
+    log('10-giao-ban', 'giamdoc', 'TGĐ ghi trước kết luận các đề nghị hỗ trợ (chưa phát hành)', await as('giamdoc', 'PUT', '/api/weekly/meeting', { week: ctx?.week, conclusions: conc }), { expect: [200] });
+    obs('10-giao-ban', 'hệ thống', `Bỏ qua điểm danh và phát hành: chưa tới giờ giao ban (${ctx?.schedule?.meetingAt}). Chạy lại kịch bản sau giờ họp để thử bước này.`);
+  }
 
   // ---------- 11. Ban GĐ / PMO theo dõi ----------
   const mtlEnd = (await as('giamdoc', 'GET', `/api/projects/${P.id}/mtl`)).j;
