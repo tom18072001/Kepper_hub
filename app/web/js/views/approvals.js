@@ -1,9 +1,10 @@
-// Chờ tôi xử lý: phiếu trình chờ duyệt, đề nghị gia hạn chờ quyết định, kiến nghị chờ trả lời. Mở việc ngay trên trang.
+// Chờ tôi duyệt: phiếu trình chờ duyệt, đề nghị gia hạn chờ quyết định, kiến nghị chờ trả lời. Mở việc ngay trên trang.
 // Mặc định phiếu chờ lâu nhất lên trước (chuyển được sang "Hạn gần nhất"); chip Dự án / Phòng tự sinh khi có từ 2 nguồn trở lên.
 import { api } from '../api.js';
 import { store } from '../store.js';
 import { $, $$, esc, fmtDate, ago, prioChip, avatars, toast, errorMessage, confirmDialog, uiPref, replaceHashParams, scrollFade } from '../util.js';
 import { refreshCounters } from '../main.js';
+import { PAGE_TITLES } from '../shell.js';
 
 const TABS = [['queue', 'Phiếu trình'], ['extensions', 'Đề nghị gia hạn'], ['proposals', 'Kiến nghị']];
 const DAY = 86_400_000;
@@ -23,7 +24,7 @@ function parseSubmit(note) {
 // Vẽ lại sau thao tác: đọc bộ lọc hiện tại trên URL (người dùng có thể đã đổi sau lần vẽ trước).
 const liveParams = () => new URLSearchParams(location.hash.split('?')[1] || '');
 export async function renderApprovals(root, params, setCrumbs) {
-  setCrumbs('Chờ tôi xử lý');
+  setCrumbs(PAGE_TITLES.approvals);
   const [queue, extensions, proposals] = await Promise.all([api('/api/approvals/queue'), api('/api/approvals/extensions'), api('/api/approvals/proposals')]);
   const counts = { queue: queue.length, extensions: extensions.filter(x => x.canDecide).length, proposals: proposals.length };
   const tab = TABS.some(([k]) => k === params.get('tab')) ? params.get('tab') : counts.queue || (!counts.extensions && !counts.proposals) ? 'queue' : counts.extensions ? 'extensions' : 'proposals';
@@ -101,7 +102,7 @@ export async function renderApprovals(root, params, setCrumbs) {
       <span class="lf-count" aria-live="polite"></span></div>` : '';
 
   root.oninput = null; root.onchange = null; root.onkeydown = null;
-  root.innerHTML = `<div class="page-head"><h1>Chờ tôi xử lý</h1><span class="muted">${counts.queue + counts.extensions + counts.proposals} việc</span></div>
+  root.innerHTML = `<div class="page-head"><h1>${PAGE_TITLES.approvals}</h1><span class="muted">${counts.queue + counts.extensions + counts.proposals} việc</span></div>
     <div class="tabs" role="tablist" aria-label="Loại">${TABS.map(([k, label]) => `<a href="#/approvals?tab=${k}" data-tab="${k}" class="${k === tab ? 'active' : ''} ${counts[k] ? 'has-n' : 'zero'}" role="tab" aria-selected="${k === tab}" data-testid="approvals-tab-${k}">${label} <b>${counts[k]}</b></a>`).join('')}</div>
     <div class="ap-body">${toolbar}<div id="apList"></div></div>`;
   for (const s of $$('.ap-src', root)) scrollFade(s);

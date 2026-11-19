@@ -1,29 +1,54 @@
-// Khung giao diện kiểu bộ phần mềm văn phòng (1Office, Base…): thanh đầu trang có "Ứng dụng", tìm nhanh, thông báo, menu tài khoản;
-// sidebar chia nhóm theo phân hệ (Tiến độ · Công việc · Nghiệp vụ · Dự án · Quản trị), thu gọn thành dải icon, nhớ theo người dùng.
-// Một nguồn khai báo (NAV) cho cả sidebar và bảng "Ứng dụng".
+// Khung giao diện kiểu bộ phần mềm văn phòng (1Office, Base…): thanh đầu trang có tìm nhanh, thông báo, menu tài khoản
+// (nút "Ứng dụng" chỉ hiện khi sidebar đã thu gọn hoặc trên điện thoại); sidebar chia nhóm theo nghiệp vụ
+// (Trang chủ · Công việc · Dự án · Giao ban · Nghiệp vụ · Thống kê · Quản trị), thu gọn thành dải icon, nhớ theo người dùng.
+// Một nguồn khai báo (NAV) cho cả sidebar và bảng "Ứng dụng". Tên trang ở menu trùng tiêu đề trang (PAGE_TITLES).
 import { canInstall, promptInstall, onInstallChange } from './pwa.js';
 import { store, can, isItAdmin, workScope } from './store.js';
 import { $, $$, esc, uiPref, toast } from './util.js';
 import { icon } from './icons.js';
 
 const mods = () => store.settings?.modules || [];
-// Nhóm phân hệ: màu ô icon (chỉ dùng cho ô màu và chỉ báo, không tô chữ).
+// Một tên cho mỗi trang: dùng chung cho menu, tiêu đề tab (document.title), bảng lệnh và tiêu đề trang.
+export const PAGE_TITLES = {
+  today: 'Trang chủ',
+  home: 'Tiến độ dự án',
+  my: 'Việc của tôi',
+  approvals: 'Chờ tôi duyệt',
+  sprint: 'Cập nhật nhanh',
+  work: 'Việc toàn đơn vị',
+  trash: 'Thùng rác',
+  tuan: 'Báo cáo tuần',
+  vanthu: 'Văn thư',
+  crm: 'Đối tác',
+  hrm: 'Nhân sự',
+  dashboard: 'Thống kê công việc',
+  me: 'Thông tin cá nhân',
+  claude: 'Kết nối Claude',
+  catalog: 'Danh mục',
+};
+const T = PAGE_TITLES;
+// Nhóm phân hệ: màu ô icon (chỉ dùng cho ô màu và chỉ báo, không tô chữ). Nhóm "Dự án" có thêm danh sách dự án (#projectNav).
 const NAV = [
-  { id: 'progress', name: 'Tiến độ', color: '#2E6DB4', icon: 'trend', items: [
-    { href: '#/home', label: 'Tiến độ dự án', icon: 'dashboard', testid: 'nav-home', id: 'navHome', desc: 'Dashboard các dự án theo MTL' },
-    { href: '#/sprint', label: 'Cập nhật nhanh', icon: 'checklist', testid: 'nav-sprint', desc: 'Cập nhật % việc tháng này' },
-    { href: '#/tuan', label: 'Báo cáo tuần', icon: 'calendar', testid: 'nav-tuan', match: '#/tuan', desc: 'BM-TH-01, tổng hợp giao ban' },
-  ] },
   { id: 'work', name: 'Công việc', color: '#1E8A6E', icon: 'briefcase', items: [
-    { href: '#/my', label: 'Việc của tôi', icon: 'target', testid: 'nav-my', desc: 'Việc được giao, ghi chú' },
-    { href: '#/approvals', label: 'Chờ tôi duyệt', icon: 'approve', testid: 'nav-approvals', id: 'navApprovals', badge: 'approvalBadge', desc: 'Duyệt, gia hạn, kiến nghị' },
-    { href: '#/work', label: 'Việc toàn đơn vị', icon: 'users', testid: 'nav-work', id: 'navWork', show: () => ['SYSTEM', 'UNIT'].includes(workScope()), desc: 'Theo người, theo phòng' },
-    { href: '#/dashboard', label: 'Thống kê', icon: 'chart', testid: 'nav-dashboard', id: 'navDashboard', show: () => can('reports.dashboard'), desc: 'Thống kê, KPI' },
+    { href: '#/my', label: T.my, icon: 'target', testid: 'nav-my', desc: 'Việc được giao, ghi chú' },
+    { href: '#/approvals', label: T.approvals, icon: 'approve', testid: 'nav-approvals', id: 'navApprovals', badge: 'approvalBadge', desc: 'Duyệt, gia hạn, kiến nghị' },
+    { href: '#/sprint', label: T.sprint, icon: 'checklist', testid: 'nav-sprint', desc: 'Kỳ cập nhật tháng: cập nhật % việc tháng này' },
+    { href: '#/work', label: T.work, icon: 'users', testid: 'nav-work', id: 'navWork', show: () => ['SYSTEM', 'UNIT'].includes(workScope()), desc: 'Theo người, theo phòng' },
+    { href: '#/trash', label: T.trash, icon: 'trash', testid: 'nav-trash', desc: 'Khôi phục việc đã xoá' },
+  ] },
+  { id: 'projects', name: 'Dự án', color: '#B28A33', icon: 'folder', projects: true, items: [
+    { href: '#/home', label: T.home, icon: 'dashboard', testid: 'nav-home', id: 'navHome', desc: 'Tổng các dự án theo Master Timeline' },
+  ] },
+  { id: 'meeting', name: 'Giao ban', color: '#2E6DB4', icon: 'calendar', items: [
+    { href: '#/tuan', label: T.tuan, icon: 'calendar', testid: 'nav-tuan', match: '#/tuan', desc: 'BM-TH-01, tổng hợp giao ban, chấm điểm' },
   ] },
   { id: 'biz', name: 'Nghiệp vụ', color: '#B8641C', icon: 'building', items: [
-    { href: '#/vanthu', label: 'Văn thư', icon: 'file', testid: 'nav-vanthu', id: 'navVanthu', match: '#/vanthu', show: () => mods().includes('vanthu'), desc: 'Sổ văn bản đến, đi, nội bộ' },
-    { href: '#/crm', label: 'Đối tác', icon: 'building', testid: 'nav-crm', id: 'navCrm', match: '#/crm', show: () => mods().includes('crm'), desc: 'Nhà thầu, cơ quan, ngân hàng' },
-    { href: '#/hrm', label: 'Nhân sự', icon: 'users', testid: 'nav-hrm', id: 'navHrm', match: '#/hrm', show: () => mods().includes('hrm'), desc: 'Hồ sơ, nghỉ phép, chấm công' },
+    { href: '#/vanthu', label: T.vanthu, icon: 'file', testid: 'nav-vanthu', id: 'navVanthu', match: '#/vanthu', show: () => mods().includes('vanthu'), desc: 'Sổ văn bản đến, đi, nội bộ' },
+    { href: '#/crm', label: T.crm, icon: 'building', testid: 'nav-crm', id: 'navCrm', match: '#/crm', show: () => mods().includes('crm'), desc: 'Nhà thầu, cơ quan, ngân hàng' },
+    { href: '#/hrm', label: T.hrm, icon: 'users', testid: 'nav-hrm', id: 'navHrm', match: '#/hrm', show: () => mods().includes('hrm'), desc: 'Hồ sơ, nghỉ phép, chấm công' },
+  ] },
+  { id: 'stats', name: 'Thống kê', color: '#2E6DB4', icon: 'chart', items: [
+    { href: '#/dashboard', label: T.dashboard, icon: 'chart', testid: 'nav-dashboard', id: 'navDashboard', show: () => can('reports.dashboard'), desc: 'Số việc, thời gian làm, KPI' },
   ] },
 ];
 const ADMIN = { id: 'admin', name: 'Quản trị', color: '#5B6676', icon: 'shield', items: [
@@ -36,7 +61,7 @@ const ADMIN = { id: 'admin', name: 'Quản trị', color: '#5B6676', icon: 'shie
 ] };
 
 const visible = it => (it.perm ? can(it.perm) : true) && (!it.show || it.show());
-const groupsFor = () => isItAdmin() ? [] : NAV.map(g => ({ ...g, items: g.items.filter(visible) })).filter(g => g.items.length);
+const groupsFor = () => isItAdmin() ? [] : NAV.map(g => ({ ...g, items: g.items.filter(visible) })).filter(g => g.items.length || g.projects);
 const adminFor = () => ({ ...ADMIN, items: ADMIN.items.filter(visible) });
 const tile = (g, size = '') => `<span class="tile${size}" style="--g:${g.color}">${icon(g.icon)}</span>`;
 const open = id => uiPref('nav:g:' + id) !== false;
@@ -56,14 +81,13 @@ function group(g, body, extra = '') {
 export function renderNav({ onNewProject } = {}) {
   const groups = groupsFor(), admin = adminFor();
   const canNew = !isItAdmin() && can('projects.manage', 'operate');
-  const projects = isItAdmin() ? '' : group({ id: 'projects', name: 'Dự án', color: '#B28A33', icon: 'folder' }, '<div id="projectNav" class="sb-projects"></div>',
-    canNew ? `<button class="icon-btn sb-add" id="newProjectBtn" title="Tạo dự án" aria-label="Tạo dự án" data-testid="new-project">${icon('plus')}</button>` : '');
-  const home = isItAdmin() ? '' : `<a href="#/today" class="sb-home" data-testid="nav-today" title="Trang chủ">${icon('home')}<span class="t">Trang chủ</span></a>`;
-  $('#sidebarNav').innerHTML = `${home}<nav id="workNav" aria-label="Điều hướng chính">${groups.map(g => group(g, g.items.map(link).join(''))).join('')}</nav>
-    ${projects}
+  const addBtn = canNew ? `<button class="icon-btn sb-add" id="newProjectBtn" title="Tạo dự án" aria-label="Tạo dự án" data-testid="new-project">${icon('plus')}</button>` : '';
+  const body = g => g.items.map(link).join('') + (g.projects ? '<div id="projectNav" class="sb-projects"></div>' : '');
+  const home = isItAdmin() ? '' : `<a href="#/today" class="sb-home" data-testid="nav-today" title="${T.today}">${icon('home')}<span class="t">${T.today}</span></a>`;
+  $('#sidebarNav').innerHTML = `${home}<nav id="workNav" aria-label="Điều hướng chính">${groups.map(g => group(g, body(g), g.projects ? addBtn : '')).join('')}</nav>
     ${admin.items.length ? `<nav id="adminNav" aria-label="Quản trị">${group(admin, admin.items.map(link).join(''))}</nav>` : ''}`;
   $('#newProjectBtn')?.addEventListener('click', e => { e.stopPropagation(); onNewProject?.(); });
-  renderLauncher(groups, admin);
+  renderLauncher(groups.filter(g => g.items.length), admin);
   renderUserMenu();
   applyCollapsed();
 }
@@ -82,9 +106,7 @@ function renderUserMenu() {
   $('#userPanel').innerHTML = `<div class="um-head"><b>${esc(store.me.fullName)}</b><span class="muted xs">${esc(store.me.departmentName || (store.me.isRootAdmin ? 'Quản trị gốc' : ''))}${store.me.displayTitle ? ' — ' + esc(store.me.displayTitle) : ''}</span></div>
     <a class="menu-item" role="menuitem" href="#/me" data-testid="nav-me">${icon('users')}Thông tin cá nhân</a>
     ${it ? '' : `<a class="menu-item" role="menuitem" href="#/claude" data-testid="nav-claude">${icon('send')}Kết nối Claude</a>`}
-    ${it ? '' : `<a class="menu-item" role="menuitem" href="#/trash" data-testid="nav-trash">${icon('trash')}Thùng rác</a>`}
     <button type="button" class="menu-item${canInstall() ? '' : ' hidden'}" role="menuitem" id="installApp" data-testid="install-app">${icon('download')}Cài Kepler Hub lên máy</button>
-    <button type="button" class="menu-item" role="menuitem" id="userShortcuts">${icon('settings')}Phím tắt</button>
     <div class="um-sep"></div>
     <button type="button" class="menu-item danger" role="menuitem" id="logoutBtn" data-testid="logout">${icon('logout')}Đăng xuất</button>`;
 }
@@ -96,6 +118,14 @@ function applyCollapsed() {
   document.body.classList.toggle('nav-collapsed', c);
   $('#menuBtn').setAttribute('aria-expanded', String(mobile() ? $('#sidebar').classList.contains('open') : !c));
   $('#menuBtn').title = mobile() ? 'Mở menu' : c ? 'Mở rộng menu' : 'Thu gọn menu';
+  $('#menuBtn').setAttribute('aria-label', $('#menuBtn').title);
+  // Bảng "Ứng dụng" chép lại menu trái: chỉ cần khi menu trái đã thu gọn thành dải icon, hoặc trên điện thoại.
+  const apps = $('#appsBtn')?.closest('.ab-pop');
+  if (apps) {
+    const need = c || mobile();
+    apps.classList.toggle('hidden', !need);
+    if (!need) { $('#appsPanel').classList.add('hidden'); $('#appsBtn').setAttribute('aria-expanded', 'false'); }
+  }
 }
 export function toggleNav() {
   if (mobile()) { const o = !$('#sidebar').classList.contains('open'); $('#sidebar').classList.toggle('open', o); $('#sbScrim').classList.toggle('hidden', !o); }
@@ -103,7 +133,7 @@ export function toggleNav() {
   applyCollapsed();
 }
 export function closeMobileNav() { $('#sidebar').classList.remove('open'); $('#sbScrim').classList.add('hidden'); applyCollapsed(); }
-addEventListener('resize', () => { if (!mobile()) closeMobileNav(); else document.body.classList.remove('nav-collapsed'); });
+addEventListener('resize', () => { if (!mobile()) closeMobileNav(); else { document.body.classList.remove('nav-collapsed'); applyCollapsed(); } });
 
 export function highlightNav() {
   const hash = location.hash, base = hash.split('?')[0];
@@ -126,7 +156,7 @@ function setGroup(id, on, remember = true) {
 }
 
 // ---------- Sự kiện (gắn một lần) ----------
-export function initShell({ onLogout, onShortcuts }) {
+export function initShell({ onLogout }) {
   $('#menuBtn').addEventListener('click', toggleNav);
   $('#sbScrim').addEventListener('click', closeMobileNav);
   $('#sidebar').addEventListener('click', e => {
@@ -149,7 +179,6 @@ export function initShell({ onLogout, onShortcuts }) {
   pop('#userBtn', '#userPanel');
   $('#userPanel').addEventListener('click', e => {
     if (e.target.closest('#logoutBtn')) onLogout?.();
-    if (e.target.closest('#userShortcuts')) onShortcuts?.();
     if (e.target.closest('#installApp')) promptInstall().then(r => { if (r === 'accepted') toast('Đã cài Kepler Hub — mở từ biểu tượng trên máy'); });
   });
   document.addEventListener('click', e => { if (!e.target.closest('.ab-pop')) closePops(); });
@@ -177,6 +206,7 @@ export function renderMe() {
   const me = store.me, org = brand.name || store.settings?.orgName;
   const mark = $('.ab-brand .brand-mark');
   if (mark && brand.files?.includes('mark.png')) mark.replaceWith(Object.assign(document.createElement('img'), { className: 'ab-logo', src: '/branding/mark.png', alt: '' }));
+  $('#userBtn').setAttribute('aria-label', `Tài khoản: ${me.fullName}`);
   $('#userBtn .who').innerHTML = `<b id="meName">${esc(me.fullName)}</b><span id="meDept">${esc(me.departmentName || (me.isRootAdmin ? 'Quản trị gốc' : ''))}</span>`;
   $('#orgName').textContent = org || '';
   $('#orgName').classList.toggle('hidden', !org);
