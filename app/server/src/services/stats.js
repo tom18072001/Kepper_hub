@@ -3,7 +3,8 @@
 const DAY = 86_400_000, H7 = 7 * 3_600_000;
 
 // Điểm xếp loại khi nghiệm thu (thang 100).
-const RATING_POINTS = { EXCELLENT: 100, GOOD: 85, PASS: 70, FAIL: 0 };
+// Thang 5 mức của người giao; mức cũ FAIL đã đổi thành POOR (giữ 0 điểm như cũ).
+const RATING_POINTS = { EXCELLENT: 100, GOOD: 85, PASS: 70, NEEDS_IMPROVEMENT: 50, POOR: 0 };
 const WEIGHT_KEYS = ['onTime', 'rating', 'volume'];
 const DEFAULT_WEIGHTS = { onTime: 40, rating: 40, volume: 20 };
 // Điểm khối lượng (so với bình quân cán bộ cùng phòng) chỉ tính khi phòng có từ 3 cán bộ có số liệu trong kỳ:

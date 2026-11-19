@@ -74,7 +74,7 @@ export function bindQuick(root, onSaved) {
     box.querySelectorAll('button,input').forEach(b => { b.disabled = true; });
     try {
       await api(`/api/items/${id}`, { method: 'PATCH', body: { progress: v } });
-      toast(v >= 100 ? `${code}: đã xong` : `${code}: đã cập nhật ${v}%`, 'ok');
+      toast(v >= 100 ? `${code}: đã gửi người giao duyệt` : `${code}: đã cập nhật ${v}%`, 'ok');
       await onSaved();
     } catch (error) { toast(errorMessage(error), 'err'); box.querySelectorAll('button,input').forEach(b => { b.disabled = false; }); }
   };

@@ -678,3 +678,39 @@ cho nhân viên; (3) chạy trên **máy ảo Ubuntu (Hyper-V) trên máy chủ 
 
 - Tài khoản mới dùng mật khẩu mặc định của hệ thống cho tới lần đăng nhập đầu → gửi thông tin đăng nhập ngay và theo dõi danh sách "chưa đăng nhập" trong Quản trị.
 - Máy ảo chạy trên chính máy chủ DC: hỏng phần cứng mất cả hai → bản sao lưu phải ra ngoài máy chủ.
+
+## Việc con ở mọi view, người giao duyệt và chấm mức hoàn thành (19/11/2026)
+
+Theo yêu cầu: (1) việc con hiện trong Bảng / Danh sách / Lịch / Việc của tôi (lồng dưới việc cha hoặc dòng riêng kèm nhãn việc cha),
+việc cha chỉ gửi duyệt / hoàn thành khi mọi việc con đã được duyệt; (2) chuyển "Hoàn thành" → "Chờ duyệt", **người giao duyệt và bắt buộc
+chấm mức hoàn thành** (Xuất sắc / Tốt / Đạt / Cần cải thiện / Kém, nhận xét tuỳ chọn) hoặc trả lại kèm lý do; người chủ trì không tự duyệt.
+Luật nằm ở `server/src/services/task-rules.js` (có test `task-rules.test.js`).
+
+**Kết luận cổng:** ĐẠT — kèm một khuyến nghị cho chủ dự án về phạm vi xem mức hoàn thành (mục 4).
+
+### 1. Phân loại
+
+| Tập dữ liệu | Nhãn nội bộ | Phân loại pháp lý | Ghi chú |
+|---|---|---|---|
+| Mức hoàn thành + nhận xét của người giao (`WorkItem.rating/review/ratedById/ratedAt`, `ApprovalAction.rating/comment`) | Nội bộ | DLCN cơ bản (đánh giá kết quả công việc gắn với người chủ trì) | Mức cũ "Không hoàn thành" (FAIL) đổi thành "Kém" (POOR) bằng migration, giữ 0 điểm KPI như cũ |
+| Lý do trả lại (`returnNote`, `ApprovalAction.comment`) | Nội bộ | DLCN cơ bản | Như bình luận công việc |
+
+### 2. Dòng dữ liệu
+
+- Người chủ trì chọn "Hoàn thành" (giao diện, kéo thẻ, 100% từ báo cáo tuần / checklist / cập nhật nhanh / Claude) → máy chủ đưa vào "Chờ duyệt", mở phiếu cấp 1 = người giao.
+- Người giao duyệt trong ứng dụng → ghi mức, nhận xét, người duyệt, thời điểm; thông báo trong ứng dụng cho người chủ trì. Không gửi ra ngoài.
+- Ngày hoàn thành (KPI đúng hạn) = ngày gửi duyệt của lần được duyệt; ngày duyệt lưu riêng trên phiếu.
+
+### 3. Rà năng lực (thay đổi)
+
+| Mã | Trạng thái | Ghi chú | Ưu tiên |
+|---|---|---|---|
+| PRE-01 | Đầy đủ | Chỉ người giao (hoặc người được uỷ quyền) duyệt + chấm mức; việc tự giao → lãnh đạo bộ phận → trưởng dự án → PGĐ phụ trách → Ban GĐ; người chủ trì bị chặn ở máy chủ (`SELF_APPROVAL`), kể cả qua uỷ quyền | Bắt buộc |
+| DET-01 | Đầy đủ | Mỗi lần gửi / trả lại / duyệt ghi `ApprovalAction` (người, cấp, mức, nhận xét) + AuditLog `APPROVAL_*` | Bắt buộc |
+| PRI-02 | Một phần | Mức hoàn thành hiện cho ai xem được việc (dự án dùng chung MTL: cả công ty). KPI theo người vẫn chỉ Ban GĐ / trưởng bộ phận / PMO | Khuyến nghị |
+
+### 4. Khuyến nghị và rủi ro còn lại
+
+- **Khuyến nghị (chờ chủ dự án chốt):** chỉ hiện mức hoàn thành + nhận xét cho người chủ trì, người giao / người duyệt, lãnh đạo bộ phận chủ trì,
+  người quản lý dự án và Ban GĐ — người khác (vd. thành viên dự án dùng chung) chỉ thấy "Đã duyệt". Hiện chưa áp dụng để không đổi cách xem đang có.
+- Dữ liệu cũ: không việc nào đổi trạng thái; việc cha đã Hoàn thành mà còn con mở (nếu có trên máy chạy thật) giữ nguyên tới khi có thao tác trên cây việc đó.
