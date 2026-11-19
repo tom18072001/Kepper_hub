@@ -49,6 +49,8 @@ function scheduleOf(f, meeting = null) {
     summaryDue: at(meetingDay, 8, 0), meetingAt: at(meetingDay, 8, 30), absentEmergency: at(meetingDay, 8, 0), actionLogDue: at(meetingDay, 14, 0),
   };
 }
+// Điểm danh và phát hành kết luận + Action Log chỉ mở từ giờ giao ban: bấm nhầm từ thứ Năm, thứ Sáu không ghi được.
+const meetingStarted = (S, now = new Date()) => now.getTime() >= new Date(S.meetingAt).getTime();
 
 // ---------- Tình trạng hạng mục ----------
 // Quá hạn = đã QUA deadline mà chưa hoàn thành (QC-TH-01 Điều 4): hạn trước thứ Sáu của tuần báo cáo.
@@ -372,7 +374,7 @@ function fridaysOf(ym, now = new Date(), startWeek = null) {
 
 module.exports = {
   SOURCES, MTL_SOURCE, STATUSES, DONE, HELP_BGD, HELP_SELF, REASONS, NOTICE_TYPES, ATTENDANCE, DECISIONS, POINTS, POINT_LABEL,
-  isDay, addDays, dayOf, at, weekday, currentFriday, isFriday, fmtD, fmtDY, fmtTime, scheduleOf,
+  isDay, addDays, dayOf, at, weekday, currentFriday, isFriday, fmtD, fmtDY, fmtTime, scheduleOf, meetingStarted,
   isOverdue, needsIssue, issueLabel, statusFromMtl, deptCandidates, buildPrefill, sanitize, validate, finalize, writeBacks,
   submissionStatus, absenceNoticed, SUBMITTED, buildSummary, briefSummary, summaryText, compliance, fridaysOf, stableStringify,
 };

@@ -26,6 +26,19 @@ test('tuần theo giờ VN: thứ Sáu của tuần, mốc hạn nộp / nộp m
   assert.equal(WK.isFriday('2026-10-30'), true); assert.equal(WK.isFriday('2026-10-29'), false);
 });
 
+test('điểm danh / phát hành kết luận chỉ mở từ giờ giao ban (08:30 ngày họp, theo ngày họp đã đổi)', () => {
+  const S = WK.scheduleOf(F); // giao ban 08:30 T2 02/11
+  assert.equal(WK.meetingStarted(S, new Date('2026-10-29T10:00:00+07:00')), false); // thứ Năm trước buổi họp
+  assert.equal(WK.meetingStarted(S, new Date('2026-11-02T08:29:59+07:00')), false);
+  assert.equal(WK.meetingStarted(S, new Date('2026-11-02T08:30:00+07:00')), true);
+  assert.equal(WK.meetingStarted(S, new Date('2026-11-09T09:00:00+07:00')), true); // tuần đã qua: vẫn mở
+  const H = WK.scheduleOf(F, { data: { meetingDay: '2026-11-03' } }); // thứ Hai nghỉ lễ → họp thứ Ba
+  assert.equal(WK.meetingStarted(H, new Date('2026-11-02T09:00:00+07:00')), false);
+  assert.equal(WK.meetingStarted(H, new Date('2026-11-03T08:30:00+07:00')), true);
+  // Lịch đã qua JSON (API → giao diện): meetingAt là chuỗi ISO.
+  assert.equal(WK.meetingStarted(JSON.parse(JSON.stringify(S)), new Date('2026-11-02T08:31:00+07:00')), true);
+});
+
 test('điền sẵn từ MTL: đến hạn / quá hạn / xong trong tuần → I, chạy nhiều tuần → II, bắt đầu tuần tới → III; chỉ mức chi tiết nhất', () => {
   const items = [
     item(1, '2026-10-01', '2026-10-28', { status: 'BEHIND', actual: 60 }), // hạn T4 trong tuần, chưa xong → I, Chậm, Quá hạn
