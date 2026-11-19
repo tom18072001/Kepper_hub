@@ -76,7 +76,8 @@ export function help() {
 
 function panelKey(key) {
   const p = $('#itemPanel');
-  const reach = el => { el.closest('details.sec, details.ip-more')?.setAttribute('open', ''); el.closest('details:not(.sec):not(.ip-more)')?.setAttribute('open', ''); };
+  // Ô cần tới nằm ở tab đang ẩn của panel (vd. M → bình luận ở tab Trao đổi): chuyển tab trước.
+  const reach = el => { const pane = el.closest('[data-pane]'); if (pane?.hidden) $(`[data-tab="${pane.dataset.pane}"]`, p)?.click(); el.closest('details.sec, details.ip-more')?.setAttribute('open', ''); el.closest('details:not(.sec):not(.ip-more)')?.setAttribute('open', ''); };
   const focus = sel => { const el = $(sel, p); if (!el || el.disabled) return false; reach(el); el.focus(); el.scrollIntoView({ block: 'center' }); try { el.showPicker?.(); } catch { /* trình duyệt không hỗ trợ */ } return true; };
   const click = sel => { const b = $(sel, p); if (!b) return false; reach(b); if (!visible(b)) return false; b.click(); return true; };
   if (key === 's') return focus('#ipState');

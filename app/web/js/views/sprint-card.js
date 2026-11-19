@@ -1,5 +1,6 @@
-// Kepper — thẻ hạng mục (màn hình Sprint, Theo tháng, trang "Cập nhật nhanh") + nút cập nhật một chạm: "✓ Xong" hoặc % khi đang làm dở.
-// Cập nhật % dùng PATCH /api/items/:id (máy chủ tự chuyển cột: > 0% → Đang thực hiện, 100% → Hoàn thành); ghi chú = bình luận của hạng mục.
+// Kepper — thẻ hạng mục (tab Giai đoạn, Kỳ cập nhật tháng, trang "Cập nhật nhanh") + nút cập nhật một chạm: "✓ Gửi duyệt" (hoặc "Xong")
+// và % khi đang làm dở. Cập nhật % dùng PATCH /api/items/:id (máy chủ tự chuyển cột: > 0% → Đang thực hiện, 100% → "Chờ duyệt",
+// người giao duyệt mới thành Hoàn thành). Gửi duyệt xong có 5 giây để hoàn tác (rút lại phiếu). Ghi chú = bình luận của hạng mục.
 import { api } from '../api.js';
 import { personLink } from '../store.js';
 import { $, esc, fmtDate, ago, toast, errorMessage } from '../util.js';
@@ -28,11 +29,13 @@ function progressBar(i, { t, goal = 'month' }) {
     <span class="sc-nums"><b>${num(a, 1)}%</b><span class="muted"> / ${goal === 'today' ? 'KH' : 'mục tiêu'} ${num(g, 1)}%</span></span></div>`;
 }
 
-// Nút cập nhật nhanh: 25 / 50 / 75 / Xong + ô số; ghi chú gửi thành bình luận.
+// Nút cập nhật nhanh: 25 / 50 / 75 / Gửi duyệt (Xong) + ô số; ghi chú gửi thành bình luận.
+// Việc cần duyệt (mọi việc khi dự án có cột "Chờ duyệt"): nút ghi "Gửi duyệt" — 100% chỉ đưa việc vào Chờ duyệt, chưa Hoàn thành.
 function quickControls(i) {
   const a = Math.round(i.actual || 0);
-  return `<div class="qk" data-qk="${i.id}" data-code="${esc(i.code)}">
-    <button type="button" class="btn btn-sm qk-xong" data-qv="100" data-testid="qk-${esc(i.code)}-100" title="Đánh dấu việc này đã xong"><svg class="gl gl-ck" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>Xong</button>
+  const label = i.needsApproval ? 'Gửi duyệt' : 'Xong';
+  return `<div class="qk" data-qk="${i.id}" data-code="${esc(i.code)}" data-was="${a}"${i.needsApproval ? ' data-approval="1"' : ''}>
+    <button type="button" class="btn btn-sm qk-xong" data-qv="100" data-testid="qk-${esc(i.code)}-100" title="${i.needsApproval ? 'Xong việc: gửi người giao duyệt và chấm mức (hoàn tác được trong 5 giây)' : 'Đánh dấu việc này đã xong'}"><svg class="gl gl-ck" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>${label}</button>
     <span class="qk-seg" role="group" aria-label="Đang làm dở: cập nhật % ${esc(i.code)}">${STEPS.map(v => `<button type="button" class="qk-b${a === v ? ' on' : ''}" data-qv="${v}" data-testid="qk-${esc(i.code)}-${v}">${v}%</button>`).join('')}</span>
     <label class="qk-n-wrap" title="Nhập % khác rồi bấm Enter"><input type="number" class="qk-n" min="0" max="100" step="5" value="${a}" aria-label="Tiến độ % khác ${esc(i.code)}" data-testid="qk-${esc(i.code)}-n">%</label>
     <button type="button" class="link-btn qk-note-btn" data-qnote aria-expanded="false">Ghi chú</button>
@@ -43,7 +46,8 @@ function quickControls(i) {
 // Một thẻ. opts: { t (tháng T), goal ('month' | 'today'), href(i) → liên kết mở hạng mục, canEdit, showDept, showSprint }.
 // Việc có checklist: tiến độ tự tính theo số mục đã xong — vẫn bấm được "Xong" / % khi không dùng checklist.
 export function sprintCard(i, { t, goal = 'month', href, canEdit = false, showDept = true, showSprint = false, compactDone = false } = {}) {
-  const tone = i.done ? 'ok' : TONE[i.status] || '';
+  // Đang chờ duyệt: thẻ hiện "Chờ duyệt" (không ghi tình trạng tiến độ như "Vượt tiến độ" khi đã 100%), không còn nút cập nhật.
+  const tone = i.done ? 'ok' : i.inReview ? 'review' : TONE[i.status] || '';
   // Việc đã xong: một dòng gọn, để mắt dồn vào việc còn lại.
   if (i.done && compactDone) return `<article class="sc sc-ok sc-isdone sc-compact" data-id="${i.id}" data-testid="sc-${esc(i.code)}">
     <span class="ok-t"><svg class="gl gl-ck" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span><a class="code" href="${href(i)}">${esc(i.code)}</a>${i.planCode ? `<span class="muted xs">Bước ${esc(i.planCode)}</span>` : ''}
@@ -52,16 +56,17 @@ export function sprintCard(i, { t, goal = 'month', href, canEdit = false, showDe
   return `<article class="sc ${tone ? 'sc-' + tone : ''}${i.done ? ' sc-isdone' : ''}" data-id="${i.id}" data-testid="sc-${esc(i.code)}">
     <div class="sc-top"><a class="code" href="${href(i)}">${esc(i.code)}</a>${i.planCode ? `<span class="muted xs">Bước ${esc(i.planCode)}</span>` : ''}
       ${i.critical ? '<span class="crit" title="Đường găng"><svg class="gl gl-crit" viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="currentColor"/></svg></span>' : ''}${i.milestone ? '<span class="ms" title="Mốc"><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg></span>' : ''}
-      <span class="grow"></span>${i.done ? '<span class="pill ok">Đã xong</span>' : `<span class="pill ${tone}" data-testid="sc-status">${esc(i.statusLabel || '')}</span>`}</div>
+      <span class="grow"></span>${i.done ? '<span class="pill ok">Đã xong</span>' : i.inReview ? '<span class="pill info" data-testid="sc-status" title="Đã gửi người giao duyệt — thành Hoàn thành khi được duyệt và chấm mức">Chờ duyệt</span>' : `<span class="pill ${tone}" data-testid="sc-status">${esc(i.statusLabel || '')}</span>`}</div>
     <a class="sc-title" href="${href(i)}">${esc(i.title)}</a>
     ${i.parentCode && i.parentTitle ? `<div class="muted xs sc-parent">thuộc bước ${esc(i.parentCode)} · ${esc(i.parentTitle.slice(0, 70))}</div>` : ''}
     <div class="sc-meta muted xs">${showDept && i.leadDepartmentName ? `<span>${esc(i.leadDepartmentName)}</span>` : ''}<span>${who}</span><span class="${!i.done && vnDay(i.baselineEnd) < vnDay(Date.now()) ? 'danger-t' : ''}">${dueText(i)}</span>
       ${i.carriedFrom != null ? `<span class="pill danger sc-carry" title="Phải xong trong tháng T${i.carriedFrom} nhưng chưa xong">trễ từ T${i.carriedFrom}</span>` : ''}
-      ${showSprint && i.sprintName ? `<span class="pill info sc-sprint" title="Sprint">${esc(i.sprintName)}</span>` : ''}</div>
+      ${showSprint && i.sprintName ? `<span class="pill info sc-sprint" title="Giai đoạn">${esc(i.sprintName)}</span>` : ''}</div>
     ${progressBar(i, { t, goal })}
-    ${!i.done && i.progressAt ? `<div class="muted xs">cập nhật ${ago(i.progressAt)}</div>` : !i.done && !i.actual ? '<div class="muted xs">chưa cập nhật tiến độ</div>' : ''}
-    ${canEdit && !i.done && i.canProgress !== false ? quickControls(i) : ''}
-    ${canEdit && !i.done && i.canProgress === false ? '<div class="muted xs">Người được giao hoặc lãnh đạo ban cập nhật % (việc có checklist thì tích checklist)</div>' : ''}
+    ${i.inReview ? `<div class="muted xs" data-testid="sc-review-note">Đã gửi người giao duyệt${i.progressAt ? ` ${ago(i.progressAt)}` : ''} · thành Hoàn thành khi được duyệt</div>`
+      : !i.done && i.progressAt ? `<div class="muted xs">cập nhật ${ago(i.progressAt)}</div>` : !i.done && !i.actual ? '<div class="muted xs">chưa cập nhật tiến độ</div>' : ''}
+    ${canEdit && !i.done && !i.inReview && i.canProgress !== false ? quickControls(i) : ''}
+    ${canEdit && !i.done && !i.inReview && i.canProgress === false ? '<div class="muted xs">Người được giao hoặc lãnh đạo ban cập nhật % (việc có checklist thì tích checklist)</div>' : ''}
   </article>`;
 }
 
@@ -72,9 +77,17 @@ export function bindQuick(root, onSaved) {
     const v = Math.max(0, Math.min(100, Math.round(Number(value))));
     if (!Number.isFinite(v)) return;
     box.querySelectorAll('button,input').forEach(b => { b.disabled = true; });
+    const was = Number(box.dataset.was) || 0;
     try {
-      await api(`/api/items/${id}`, { method: 'PATCH', body: { progress: v } });
-      toast(v >= 100 ? `${code}: đã gửi người giao duyệt` : `${code}: đã cập nhật ${v}%`, 'ok');
+      const row = await api(`/api/items/${id}`, { method: 'PATCH', body: { progress: v } });
+      const req = row?.pendingApproval;
+      // Đã vào "Chờ duyệt": thanh "Đã gửi duyệt · Hoàn tác" 5 giây — hoàn tác = rút lại phiếu, việc về trạng thái và % cũ.
+      if (v >= 100 && req?.id) toast(`${code}: đã gửi duyệt`, 'ok', { ms: 5000, action: { label: 'Hoàn tác', run: async () => {
+        await api(`/api/approvals/${req.id}/withdraw`, { method: 'POST', body: { progress: was } });
+        toast(`${code}: đã rút lại, tiến độ về ${was}%`, 'ok');
+        await onSaved();
+      } } });
+      else toast(v >= 100 ? `${code}: đã cập nhật 100%` : `${code}: đã cập nhật ${v}%`, 'ok');
       await onSaved();
     } catch (error) { toast(errorMessage(error), 'err'); box.querySelectorAll('button,input').forEach(b => { b.disabled = false; }); }
   };

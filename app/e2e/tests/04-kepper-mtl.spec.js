@@ -88,14 +88,20 @@ test('18. Dự án MTL: tạo, nhập MTL tổng / bộ phận, tiến độ, c�
   expect(child.parentId).toBe(d3.items.find(i => i.planCode === '2').id);
   expect(child.assignees.map(a => a.id)).toContain(users.find(u => u.username === 'nv.phaply').id);
 
-  // 5) Cán bộ cập nhật tiến độ ngay trong chi tiết (dạng gọn) → tự chuyển "Đang thực hiện"; hạng mục cha lấy % từ con.
+  // 5) Cán bộ cập nhật tiến độ trong chi tiết (dạng gọn): % ở cột phải chỉ để xem, cập nhật qua "Báo cáo tiến độ"
+  //    → tự chuyển "Đang thực hiện"; hạng mục cha lấy % từ con.
   const staff = await (await browser.newContext()).newPage();
   await login(staff, 'nv.phaply');
   await staff.evaluate(() => { for (const k of Object.keys(localStorage)) if (k.endsWith(':ip:full')) localStorage.removeItem(k); });
   await staff.goto(`/#/projects/${project.id}?view=plan&item=${child.id}`);
   await expect(staff.getByTestId('mtl-box')).toBeVisible();
-  await staff.getByTestId('item-progress').fill('60');
-  await staff.getByTestId('item-progress').press('Tab');
+  await expect(staff.locator('#itemPanel input[type=range], #itemPanel input#ipProgress')).toHaveCount(0);
+  await staff.getByTestId('side-report').click();
+  await staff.getByTestId('report-progress').fill('60');
+  await staff.getByTestId('report-content').fill('Đã soạn xong hồ sơ (giả)');
+  await staff.getByTestId('report-submit').click();
+  await toast(staff, 'Đã gửi báo cáo tiến độ');
+  await expect(staff.getByTestId('item-progress')).toHaveText('60%');
   await expect.poll(async () => (await (await apiAs(staff, `/api/items/${child.id}`)).json()).state.category).toBe('STARTED');
   const d4 = await (await apiAs(pmo, `/api/projects/${project.id}/mtl`)).json();
   expect(d4.items.find(i => i.planCode === '2').actual).toBe(60);

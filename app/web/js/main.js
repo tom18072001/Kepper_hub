@@ -2,7 +2,7 @@
 import './pwa.js';
 import { api, setToken, getToken, onAuthEvent, lastLocalWrite } from './api.js';
 import { store, can, loadBasics, reloadProjects, isItAdmin, workScope } from './store.js';
-import { $, $$, esc, toast, closeModal, requestCloseModal, avatar, errorMessage, ago, setPrefUser, clearDrafts, uiPref } from './util.js';
+import { $, $$, esc, toast, requestCloseModal, avatar, errorMessage, ago, setPrefUser, clearDrafts, uiPref } from './util.js';
 import { renderProject } from './views/project.js';
 import { renderMyWork } from './views/mywork.js';
 import { renderApprovals } from './views/approvals.js';
@@ -171,7 +171,7 @@ $('#notifBtn').addEventListener('click', async e => {
   await refreshCounters();
   const { items = [] } = store.notifications || {};
   panel.innerHTML = `<div class="notif-head"><span>Thông báo</span><button class="btn btn-sm btn-ghost" id="readAll">Đánh dấu đã đọc</button></div>` +
-    (items.map(n => `<a class="notif-item${n.readAt ? '' : ' unread'}" href="${esc(n.link || '#')}" data-id="${n.id}" data-testid="notif-item"><b>${esc(n.title)}</b>${n.body ? `<div class="muted sm">${esc(n.body)}</div>` : ''}<div class="muted xs">${ago(n.createdAt)}</div></a>`).join('') || '<div class="empty">Chưa có thông báo</div>');
+    (items.map(n => `<a class="notif-item${n.readAt ? '' : ' unread'}" href="${esc(n.link || '#')}" data-id="${n.id}" data-testid="notif-item"><b>${esc(n.title)}</b>${n.body ? `<div class="muted sm notif-body">${esc(n.body)}</div>` : ''}<div class="muted xs">${ago(n.createdAt)}</div></a>`).join('') || '<div class="empty">Chưa có thông báo</div>');
   panel.classList.remove('hidden');
 });
 $('#notifPanel').addEventListener('click', async e => {
@@ -201,7 +201,8 @@ document.addEventListener('keydown', e => {
     if (menu) { e.preventDefault(); menu.open = false; menu.querySelector('summary')?.focus(); return; }
     const active = document.activeElement;
     const typing = active && active !== document.body && active.matches('input:not([type=checkbox]):not([type=radio]), textarea, select, [contenteditable="true"]');
-    if (typing && modalOpen && !$('#modal').dataset.dirty) return closeModal(null);
+    // Trong hộp thoại (vd. form Tạo việc): Esc đóng ngay; đã nhập gì thì hỏi "Bỏ nội dung đã nhập?" (không cần bấm Esc lần hai).
+    if (typing && modalOpen) return requestCloseModal();
     if (typing) { active.blur(); return; }
     if (!$('#notifPanel').classList.contains('hidden')) { $('#notifPanel').classList.add('hidden'); $('#notifBtn').focus(); return; }
     if (modalOpen) return requestCloseModal();

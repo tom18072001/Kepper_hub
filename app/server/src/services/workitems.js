@@ -192,6 +192,9 @@ async function registerFields(tx, input, ctx = null) {
 }
 
 const TASK_TYPES = ['PLAN', 'ADHOC'];
+// "Loại nhiệm vụ" gộp vào "Nguồn giao việc" (một trường, một danh sách ở form tạo và panel): nguồn "Kế hoạch năm" → PLAN,
+// nguồn khác → ADHOC (đột xuất); không chọn nguồn → null (giữ loại hiện có / mặc định).
+const taskTypeOfSource = source => { const s = String(source ?? '').trim(); return !s ? null : /^k[ếe] ?ho[ạa]ch\s*n[ăa]m/i.test(s.normalize('NFC')) ? 'PLAN' : 'ADHOC'; };
 async function departmentIdOf(tx, value, label) {
   const id = optionalInt(value, label);
   if (id == null) return null;
@@ -249,7 +252,7 @@ async function createWorkItem(tx, { project, user, rights, input, reporterId = u
   if (!shared && input.leadDepartmentId != null && leadDepartmentId != null && leadDepartmentId !== project.departmentId)
     fail(422, 'Giao về phòng khác chỉ dùng trong sổ giao việc của đơn vị', 'DISPATCH_NOT_ALLOWED');
   const supportDepartmentIds = shared ? ((await departmentIds(tx, input.supportDepartmentIds)) || []).filter(id => id !== leadDepartmentId) : [];
-  const taskType = oneOf(input.taskType, TASK_TYPES, 'Loại nhiệm vụ') || parent?.taskType || (input.source === 'Kế hoạch năm' ? 'PLAN' : 'ADHOC');
+  const taskType = oneOf(input.taskType, TASK_TYPES, 'Loại nhiệm vụ') || parent?.taskType || taskTypeOfSource(input.source) || 'ADHOC';
   const dispatched = !parent && leadDepartmentId != null && project.visibility === 'ASSIGNED';
   const cycleId = await cycleOf(tx, project.id, input.cycleId);
   const reg = await registerFields(tx, input, { user, rights, project });
@@ -294,4 +297,4 @@ async function createWorkItem(tx, { project, user, rights, input, reporterId = u
   return item;
 }
 
-module.exports = { reopenAncestors, canAutoSubmit, TASK_TYPES, departmentIdOf, departmentIds, registerFields, PRIORITIES, BOARD_INCLUDE, boardItem, link, endPosition, positionBetween, transition, afterTransition, activeUsers, idList, cycleOf, labelsOf, approvalLevelsInput, createWorkItem };
+module.exports = { reopenAncestors, canAutoSubmit, TASK_TYPES, taskTypeOfSource, departmentIdOf, departmentIds, registerFields, PRIORITIES, BOARD_INCLUDE, boardItem, link, endPosition, positionBetween, transition, afterTransition, activeUsers, idList, cycleOf, labelsOf, approvalLevelsInput, createWorkItem };

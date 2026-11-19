@@ -86,7 +86,7 @@ export function dispatchParts(d, editable, assigned = true) {
     ? `<input type="date" id="ipInternalDue" value="${dateInput(d.internalDueDate)}"${d.dueDate ? ` max="${dateInput(d.dueDate)}"` : ''} data-testid="item-internal-due">`
     : `<div><b>${d.internalDueDate ? fmtDate(d.internalDueDate) : '—'}</b></div>`}</label>` : '';
   const body = `<div class="dispatch-grid">
-      <label>Loại nhiệm vụ${ownerEdit ? `<select id="ipTaskType" data-testid="item-task-type">${Object.entries(TASK_TYPES).map(([k, v]) => `<option value="${k}"${d.taskType === k ? ' selected' : ''}>${v}</option>`).join('')}</select>` : `<div><b>${esc(TASK_TYPES[d.taskType] || '—')}</b></div>`}</label>
+      <div><span class="muted xs">Nguồn giao việc</span><div><b data-testid="item-task-type">${esc(d.source || (d.taskType === 'PLAN' ? 'Kế hoạch năm' : TASK_TYPES[d.taskType] || '—'))}</b></div></div>
       ${assigned ? `<label>Đơn vị chủ trì${ownerEdit && !d.parent ? `<select id="ipLeadDept" data-testid="item-lead-dept"><option value="">— Không giao về phòng —</option>${deptList().map(x => `<option value="${x.id}"${d.leadDepartmentId === x.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : `<div><b>${esc(d.leadDepartment?.name || '—')}</b></div>`}</label>
       <div><label>Đơn vị phối hợp</label>${ownerEdit && !d.parent ? multiSelect('supportDepts', deptList().filter(x => x.id !== d.leadDepartmentId).map(x => ({ id: x.id, label: x.name })), d.supportDepartmentIds || [], 'Không') : `<div>${(d.supportDepartments || []).map(x => esc(x.name)).join(', ') || '—'}</div>`}</div>` : ''}
       ${internal}
@@ -131,10 +131,25 @@ export function progressParts(d, editable) {
   const list = reports.length ? `<div class="timeline-list" style="margin-top:8px">${reports.slice(0, 2).map(row).join('')}
       ${reports.length > 2 ? `<details class="older" data-sub="olderReports"><summary class="link-btn">Xem ${reports.length - 2} báo cáo trước</summary>${reports.slice(2).map(row).join('')}</details>` : ''}</div>` : '';
   const summary = last ? `${last.progress}% · ${esc(last.authorName || '')} ${ago(last.createdAt)}` : 'chưa có báo cáo';
-  return { count: reports.length, summary, body: form + list, empty: !reports.length && !form, formOpen };
+  return { count: reports.length, summary, body: form + list, empty: !reports.length && !form, formOpen, canReport: !!form };
 }
 
 // Văn bản liên quan: số hiệu từ hệ thống văn bản điện tử (không tích hợp tự động). Không nhập văn bản mật.
+// Biểu mẫu "Thêm văn bản" — dùng trong khối Kết quả & tài liệu của panel (căn cứ ở cột bên giao, sản phẩm / đã phát hành ở cột bên thực hiện).
+export function documentForm(editable, { defaultKind = 'BASIS' } = {}) {
+  if (!editable) return '';
+  return `<details class="doc-form" data-sub="docForm"><summary class="btn btn-ghost btn-sm" data-testid="document-open">${icon('plus')}Thêm văn bản</summary>
+      <div class="report-grid">
+        <label>Loại<select id="docKind" data-testid="document-kind">${Object.entries(DOC_KINDS).map(([k, v]) => `<option value="${k}"${k === defaultKind ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+        <label>Số, ký hiệu<input id="docNumber" maxlength="80" placeholder="VD: 45/BC-TT" data-testid="document-number"></label>
+        <label>Ngày văn bản<input type="date" id="docDate"></label>
+        <label>Nơi ban hành<input id="docIssuer" maxlength="200"></label>
+        <label class="wide">Trích yếu<input id="docSummary" maxlength="500" data-testid="document-summary"></label>
+        <label class="wide">Liên kết (tuỳ chọn)<input id="docUrl" maxlength="500" placeholder="https://…"></label>
+      </div>
+      <p class="muted xs">Không nhập văn bản Mật / Tối mật / Tuyệt mật — chỉ số hiệu, trích yếu.</p>
+      <button class="btn btn-primary btn-sm" data-act="add-document" data-testid="document-submit">Lưu văn bản</button></details>`;
+}
 export function documentsParts(d, editable) {
   const rows = (d.documents || []).map(x => `<div class="doc-row" data-testid="document-row"><span class="pill">${esc(DOC_KINDS[x.kind] || x.kind)}</span>
       <b>${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.number)}</a>` : esc(x.number)}</b>${x.issuedOn ? ` <span class="muted xs">ngày ${fmtDate(x.issuedOn)}</span>` : ''}
@@ -153,6 +168,14 @@ export function documentsParts(d, editable) {
       <button class="btn btn-primary btn-sm" data-act="add-document" data-testid="document-submit">Lưu văn bản</button></details>` : '';
   const summary = (d.documents || []).slice(0, 2).map(x => esc(x.number)).join(', ');
   return { count: (d.documents || []).length, summary, body: rows + form, empty: !rows };
+}
+
+// Một danh sách "Nguồn giao việc" dùng chung cho form tạo việc, giao nhiều việc và panel. Trường này gộp "Loại nhiệm vụ":
+// nguồn "Kế hoạch năm" = nhiệm vụ kế hoạch năm (PLAN), nguồn khác = đột xuất (ADHOC) — cùng quy tắc với máy chủ (workitems.taskTypeOfSource).
+export function taskTypeOfSource(source) { const s = String(source ?? '').trim(); return !s ? null : /^k[ếe] ?ho[ạa]ch\s*n[ăa]m/i.test(s.normalize('NFC')) ? 'PLAN' : 'ADHOC'; }
+export function sourceOptions(selected = '', { empty = '—' } = {}) {
+  const list = [...new Set([...(store.settings?.sources || []), 'Kế hoạch năm', ...(selected ? [selected] : [])])];
+  return `<option value="">${esc(empty)}</option>${list.map(x => `<option${x === selected ? ' selected' : ''}>${esc(x)}</option>`).join('')}`;
 }
 
 // Chấm mức hoàn thành. required = cấp người giao duyệt (bắt buộc chọn 1 trong 5 mức); không bắt buộc = phiếu duyệt cũ, bước cuối.
@@ -384,7 +407,6 @@ export async function handleDispatchClick(e, p, d, refresh, patch) {
   return false;
 }
 export function bindDispatchInputs(p, patch) {
-  $('#ipTaskType', p)?.addEventListener('change', e => patch({ taskType: e.target.value }));
   $('#ipLeadDept', p)?.addEventListener('change', e => patch({ leadDepartmentId: e.target.value ? Number(e.target.value) : null }));
   $('#ipInternalDue', p)?.addEventListener('change', e => patch({ internalDueDate: fromDateInput(e.target.value) }));
 }

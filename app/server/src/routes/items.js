@@ -1,7 +1,7 @@
 // Công việc: danh sách theo dự án (Board/List/Calendar/Timeline), tạo, sửa, kéo-thả, checklist, bình luận.
 const { fail, intParam, optionalInt, optionalDate, text, oneOf } = require('../lib/http');
 const { sanitizeHtml, htmlToText, mentions } = require('../lib/rich-text');
-const { permissionScope } = require('../lib/permissions');
+const { permissionScope, isItAdmin } = require('../lib/permissions');
 const MTL = require('../services/mtl');
 const { loadProject, loadItem, projectRights, itemVisibleWhere, isDeptLeader, canSeeItem, isRegisterWriter, ITEM_ACCESS_SELECT } = require('../services/access');
 const { activity, notify } = require('../services/events');
@@ -77,6 +77,24 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
     if (rows.length === ITEMS_LIMIT) res.setHeader('X-Total-Count', String(await prisma.workItem.count({ where })));
     const steps = await approval.stepsOf(prisma, project.id);
     res.json(rows.map(r => { const { state, ...rest } = r; return { ...boardItem(project, rest), stage: stageOf({ ...r, pendingApproval: r.approvals[0] }, steps) }; }));
+  });
+
+  // Phạm vi tạo việc của người xem (giao diện ẩn nút "Tạo việc" / giới hạn ô "Việc cha" TRƯỚC khi điền form — cùng luật với POST bên dưới):
+  //   root: được tạo việc gốc; parents: null = việc cha nào cũng được (máy chủ vẫn kiểm từng lần), hoặc danh sách id việc được thêm việc con.
+  // Dự án MTL: người không quản lý dự án chỉ thêm việc con dưới hạng mục bộ phận mình chủ trì (lãnh đạo bộ phận, services/mtl-guard.js).
+  app.get('/api/projects/:id/create-scope', auth, async (req, res) => {
+    const { project, rights, member } = await loadProject(prisma, req.user, intParam(req.params.id));
+    if (!rights.canEdit) return res.json({ root: false, parents: [] });
+    if (project.kind === 'MTL') {
+      if (rights.canManage && !isItAdmin(req.user)) return res.json({ root: true, parents: null });
+      const rows = await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, state: { category: { notIn: ['COMPLETED', 'CANCELLED'] } }, AND: [itemVisibleWhere(req.user)] },
+        select: { id: true, leadDepartmentId: true } });
+      const mine = new Set();
+      for (const d of new Set(rows.map(r => r.leadDepartmentId).filter(x => x != null))) if ((await approval.deptLeaderIds(prisma, d)).includes(req.user.id)) mine.add(d);
+      return res.json({ root: false, parents: rows.filter(r => mine.has(r.leadDepartmentId)).map(r => r.id), reason: 'MTL_CHILD_ONLY' });
+    }
+    if (project.visibility === 'ASSIGNED' && !rights.canManage && !isRegisterWriter(member)) return res.json({ root: false, parents: null, reason: 'REGISTER_CHILD_ONLY' });
+    res.json({ root: true, parents: null });
   });
 
   app.post('/api/projects/:id/items', auth, async (req, res) => {
@@ -289,6 +307,11 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
             await notify(tx, await approval.deptLeaderIds(tx, data.leadDepartmentId), { type: 'DISPATCH', title: `Phòng được giao chủ trì ${project.key}-${item.number} — cần tiếp nhận, phân công`, body: item.title, link: W.link(project, item) }, req.user.id);
           }
         }
+      }
+      // Nguồn giao việc quyết định loại nhiệm vụ (một trường trên giao diện): người được đổi loại nhiệm vụ đổi nguồn thì loại đi theo.
+      if (body.source !== undefined && body.taskType === undefined && (rights.canManage || item.assignedById === req.user.id)) {
+        const derived = W.taskTypeOfSource(body.source);
+        if (derived && derived !== item.taskType) data.taskType = derived;
       }
       const supportDepartmentIds = await W.departmentIds(tx, body.supportDepartmentIds);
       if (supportDepartmentIds && project.visibility !== 'ASSIGNED' && project.kind !== 'MTL') fail(422, 'Đơn vị phối hợp chỉ dùng trong sổ giao việc của đơn vị', 'DISPATCH_NOT_ALLOWED');
