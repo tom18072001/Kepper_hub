@@ -2,7 +2,7 @@
 // đề nghị gia hạn, văn bản liên quan, nộp sản phẩm (phiếu trình), xếp loại khi nghiệm thu.
 import { api } from '../api.js';
 import { store, personLink } from '../store.js';
-import { $, esc, fmtDate, fmtDateTime, ago, toast, errorMessage, openModal, closeModal, multiSelect, readMulti, bindMulti, dateInput, fromDateInput, dueCountdown, draft } from '../util.js';
+import { $, esc, fmtDate, fmtDateTime, ago, toast, errorMessage, openModal, closeModal, multiSelect, readMulti, bindMulti, dateInput, fromDateInput, dueCountdown, draft, debounce } from '../util.js';
 import { icon } from '../icons.js';
 
 export const TASK_TYPES = { PLAN: 'Kế hoạch năm', ADHOC: 'Đột xuất (theo chỉ đạo)' };
@@ -140,10 +140,45 @@ export function progressParts(d, editable) {
 }
 
 // Văn bản liên quan: số hiệu từ hệ thống văn bản điện tử (không tích hợp tự động). Không nhập văn bản mật.
+// Bật phân hệ Văn thư: thêm ô "Chọn từ sổ Văn thư" — tìm theo số / trích yếu rồi điền sẵn các ô bên dưới (người dùng vẫn bấm Lưu).
+// Máy chủ (/api/vanthu/pick) chỉ trả văn bản Công khai / Nội bộ, chưa hủy, người dùng xem được trong sổ.
+const vanthuOn = () => (store.settings?.modules || []).includes('vanthu');
+const vtLink = id => `${location.origin}${location.pathname}#/vanthu/${id}`;
+const dmy = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '');
+const pickRows = new Map();
+let pickSeq = 0;
+async function loadPick(p) {
+  const input = $('#docPickQ', p), list = $('#docPickList', p);
+  if (!input || !list) return;
+  const my = ++pickSeq;
+  list.setAttribute('aria-busy', 'true');
+  try {
+    const rows = await api('/api/vanthu/pick?' + new URLSearchParams({ q: input.value.trim() }));
+    if (my !== pickSeq || !list.isConnected) return;
+    for (const r of rows) pickRows.set(r.id, r);
+    list.innerHTML = rows.length ? rows.map(r => `<button type="button" class="doc-pick-item" data-pick-vt="${r.id}" aria-pressed="false" data-testid="document-pick-item">
+        <b class="nowrap">${esc(r.number)}</b><span class="t" title="${esc(r.title)}">${esc(r.title)}</span><span class="muted xs nowrap">${esc(r.book.label)}${r.docDate ? ' · ' + dmy(r.docDate) : ''}</span></button>`).join('')
+      : `<p class="muted xs" data-testid="document-pick-empty">${input.value.trim() ? 'Không có văn bản phù hợp trong sổ.' : 'Sổ chưa có văn bản gắn được vào việc.'}</p>`;
+  } catch (error) { if (my === pickSeq && list.isConnected) list.innerHTML = `<p class="muted xs">${esc(errorMessage(error))}</p>`; }
+  finally { if (my === pickSeq) list.removeAttribute('aria-busy'); }
+}
+function fillFromVanthu(p, r) {
+  const set = (sel, v) => { const el = $(sel, p); if (el) el.value = v ?? ''; };
+  set('#docNumber', r.number); set('#docDate', r.docDate || ''); set('#docIssuer', r.issuer); set('#docSummary', String(r.title || '').slice(0, 500)); set('#docUrl', vtLink(r.id));
+  p.querySelectorAll('[data-pick-vt]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.pickVt) === r.id)));
+  const note = $('#docPickNote', p); if (note) note.textContent = `Đã điền sẵn từ sổ: ${r.number}. Chọn loại rồi bấm Lưu văn bản.`;
+  $('[data-testid="document-submit"]', p)?.focus();
+}
 // Biểu mẫu "Thêm văn bản" — dùng trong khối Kết quả & tài liệu của panel (căn cứ ở cột bên giao, sản phẩm / đã phát hành ở cột bên thực hiện).
 export function documentForm(editable, { defaultKind = 'BASIS' } = {}) {
   if (!editable) return '';
-  return `<details class="doc-form" data-sub="docForm"><summary class="btn btn-ghost btn-sm" data-testid="document-open">${icon('plus')}Thêm văn bản</summary>
+  const pick = vanthuOn() ? `<div class="doc-pick" data-testid="document-pick">
+        <label for="docPickQ">Chọn từ sổ Văn thư</label>
+        <input type="search" id="docPickQ" autocomplete="off" maxlength="100" placeholder="Tìm theo số hoặc trích yếu…" aria-describedby="docPickHelp" data-testid="document-pick-q">
+        <div id="docPickList" class="doc-pick-list" aria-live="polite" data-testid="document-pick-list"></div>
+        <p class="muted xs" id="docPickHelp">Chỉ hiện văn bản Công khai, Nội bộ bạn được xem trong sổ. Chọn một văn bản để điền sẵn các ô bên dưới, hoặc tự nhập.</p>
+        <p class="muted xs" id="docPickNote" aria-live="polite" data-testid="document-pick-note"></p></div>` : '';
+  return `<details class="doc-form" data-sub="docForm"><summary class="btn btn-ghost btn-sm" data-testid="document-open">${icon('plus')}Thêm văn bản</summary>${pick}
       <div class="report-grid">
         <label>Loại<select id="docKind" data-testid="document-kind">${Object.entries(DOC_KINDS).map(([k, v]) => `<option value="${k}"${k === defaultKind ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
         <label>Số, ký hiệu<input id="docNumber" maxlength="80" placeholder="VD: 45/BC-TT" data-testid="document-number"></label>
@@ -371,6 +406,8 @@ export async function handleDispatchClick(e, p, d, refresh, patch) {
     try { await api(`/api/items/${d.id}/progress-reports`, { method: 'POST', body }); for (const k of ['rpContent', 'rpDiff', 'rpProp']) draft(`${d.id}:${k}`, ''); toast('Đã gửi báo cáo tiến độ', 'ok'); refresh(); } catch (error) { toast(errorMessage(error), 'err'); }
     return true;
   }
+  const pick = e.target.closest('[data-pick-vt]');
+  if (pick) { const r = pickRows.get(Number(pick.dataset.pickVt)); if (r) fillFromVanthu(p, r); return true; }
   if (act === 'add-document') {
     const body = { kind: $('#docKind', p).value, number: $('#docNumber', p).value.trim(), issuedOn: fromDateInput($('#docDate', p).value), issuer: $('#docIssuer', p).value.trim(), summary: $('#docSummary', p).value.trim(), url: $('#docUrl', p).value.trim() };
     if (!body.number || !body.summary) { toast('Nhập số, ký hiệu và trích yếu', 'err'); return true; }
@@ -416,4 +453,13 @@ export async function handleDispatchClick(e, p, d, refresh, patch) {
 export function bindDispatchInputs(p, patch) {
   $('#ipLeadDept', p)?.addEventListener('change', e => patch({ leadDepartmentId: e.target.value ? Number(e.target.value) : null }));
   $('#ipInternalDue', p)?.addEventListener('change', e => patch({ internalDueDate: fromDateInput(e.target.value) }));
+  // Chọn từ sổ Văn thư: mở "Thêm văn bản" là nạp văn bản mới vào sổ gần đây; gõ thì tìm sau ~300 ms, Enter tìm ngay.
+  const pickQ = $('#docPickQ', p);
+  if (pickQ) {
+    const typed = debounce(() => loadPick(p), 300);
+    pickQ.addEventListener('input', typed);
+    pickQ.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); loadPick(p); } if (e.key === 'ArrowDown') { e.preventDefault(); $('[data-pick-vt]', p)?.focus(); } });
+    pickQ.closest('details')?.addEventListener('toggle', e => { if (e.target.open && !$('#docPickList', p)?.childElementCount) loadPick(p); });
+    if (pickQ.closest('details')?.open) loadPick(p);
+  }
 }

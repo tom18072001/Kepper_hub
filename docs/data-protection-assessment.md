@@ -797,6 +797,43 @@ trả việc người xem được thêm việc con (N2); (5) panel việc bỏ 
 - Thống kê phòng ban **giữ** cách đếm theo phòng chủ trì (cùng quy tắc với KPI, báo cáo Word, chấm điểm); đổi sang đếm theo phòng của người làm
   sẽ tính một việc cho nhiều phòng và làm lệch KPI đã chốt — nếu chủ dự án muốn đổi, cần quyết định riêng và soát lại KPI.
 
+## Review UX đợt C1 — Văn thư: lọc ngay khi gõ, trang trống, chọn văn bản từ sổ khi gắn vào việc (20/11/2026)
+
+Thay đổi chạm dữ liệu: (1) trang Văn thư lọc ngay khi gõ / chọn, ghi bộ lọc lên URL (`replaceState`) — chỉ là từ khoá người dùng tự gõ, không thêm
+dữ liệu; (2) `GET /api/vanthu/pick?q=` trả tối đa 20 văn bản để **chép số, ngày, nơi ban hành, trích yếu, liên kết sang "Văn bản liên quan" của việc**
+(`WorkItemDocument`). Đây là dòng dữ liệu mới từ sổ văn thư sang việc: ai xem được việc đều thấy các trường đã chép, nên phạm vi người thấy có thể
+**rộng hơn** phạm vi xem văn bản trong sổ; (3) ô tìm của sổ và của ô chọn tìm không phân biệt dấu (`unaccent`, như Tìm nhanh): bước 1 lấy id
+bằng SQL có tham số trong cùng phạm vi sổ / năm / pháp nhân, bước 2 lọc quyền bằng `visible` như cũ — phạm vi xem không đổi.
+
+**Kết luận cổng:** ĐẠT, với điều kiện đã cài: chỉ văn bản Công khai / Nội bộ (mức mọi cán bộ vốn đã xem được trong sổ), chưa hủy số, và người chọn
+xem được trong sổ (`V.canLink` = `canView` + mức bảo mật + chưa hủy). Không đổi quyền xem sổ (`canView`, `canRegister`, `canStatus` giữ nguyên).
+
+### 1. Phân loại
+
+| Tập dữ liệu | Nhãn nội bộ | Phân loại pháp lý | Ghi chú |
+|---|---|---|---|
+| Kết quả chọn từ sổ (số, trích yếu, sổ, mức bảo mật, ngày, nơi ban hành) | Nội bộ | Không phải DLCN theo mặc định; nơi gửi có thể là tên tổ chức | Chỉ văn bản Công khai / Nội bộ; không trả người xử lý, ghi chú, danh sách được xem, tệp |
+| "Văn bản liên quan" chép sang việc | Nội bộ (theo việc) | Như trên | Người dùng vẫn bấm "Lưu văn bản"; sửa / gỡ như văn bản nhập tay |
+
+### 2. Dòng dữ liệu
+
+- Panel việc → `GET /api/vanthu/pick` (máy chủ nội bộ, cần đăng nhập; quản trị IT bị chặn 403 như sổ) → điền sẵn ô trong trình duyệt → người dùng bấm Lưu →
+  `POST /api/items/:id/documents` (quyền sửa việc như cũ). Liên kết là đường dẫn nội bộ `#/vanthu/<id>`: người không có quyền mở văn bản vẫn bị máy chủ chặn.
+- Không có dữ liệu nào rời máy chủ nội bộ; không ghi từ khoá tìm vào nhật ký.
+
+### 3. Rà năng lực (thay đổi)
+
+| Mã | Trạng thái | Ghi chú | Ưu tiên |
+|---|---|---|---|
+| PRE-01 | Đầy đủ | Lọc ở máy chủ: SQL chỉ lấy `security IN (CONG_KHAI, NOI_BO)` và `cancelledAt IS NULL`, rồi lọc lại bằng `canLink` + `visible` (Claude không thấy Bảo mật cao) | Bắt buộc |
+| PRI-02 | Đầy đủ | Văn bản Hạn chế / Bảo mật cao không chép được sang việc, kể cả với Ban GĐ, người xử lý — tránh mở rộng người thấy | Bắt buộc |
+| GOV-05 | Đầy đủ | Luồng mới sổ văn thư → "Văn bản liên quan" của việc ghi ở mục 2; kiểm bằng unit test `canLink`, `issuerOf` và e2e C1.3 (API và giao diện không lộ văn bản Hạn chế / Bảo mật cao / đã hủy) | Khuyến nghị |
+
+### 4. Rủi ro còn lại
+
+- Văn bản đã chép sang việc **không tự cập nhật** khi văn bản trong sổ bị sửa, nâng mức bảo mật hoặc hủy số sau đó (không có khoá ngoại). Nếu văn bản
+  bị nâng lên Hạn chế / Bảo mật cao, văn thư cần gỡ ở việc liên quan. Có thể bổ sung sau: lưu id văn bản sổ trong `WorkItemDocument` và ẩn khi mất quyền.
+
 ## Review UX đợt C2: Nhân sự (chấm công, đơn nghỉ trong "Chờ tôi duyệt") và Đối tác (tìm không dấu) (20/11/2026)
 
 Thay đổi chạm dữ liệu (phân hệ chỉ chạy khi `MODULES` có `hrm` / `crm`):

@@ -40,3 +40,24 @@ test('ai được vào sổ / đổi trạng thái', () => {
   assert.ok(V.canStatus(doc, { userId: 9 }, 'DONE')); assert.ok(!V.canStatus(doc, { userId: 9 }, 'FILED'));
   assert.ok(!V.canStatus({ ...doc, cancelledAt: new Date() }, { director: true }, 'DONE'));
 });
+
+test('gắn văn bản trong sổ vào việc: chỉ Công khai / Nội bộ, chưa hủy, vẫn qua quyền xem sổ', () => {
+  const staff = { userId: 9, departmentId: 3 }, dir = { userId: 1, director: true }, it = { it: true, userId: 50 };
+  assert.ok(V.canLink({ security: 'NOI_BO', createdById: 2 }, staff));
+  assert.ok(V.canLink({ security: 'CONG_KHAI', createdById: 2 }, staff));
+  assert.ok(!V.canLink({ security: 'NOI_BO', createdById: 2, cancelledAt: new Date() }, staff)); // đã hủy số
+  assert.ok(!V.canLink({ security: 'NOI_BO', createdById: 2 }, it)); // quản trị IT không xem sổ
+  // Hạn chế / Bảo mật cao: kể cả người được xem trong sổ cũng không gắn vào việc (người xem việc chưa chắc được xem văn bản).
+  assert.ok(V.canView({ security: 'HAN_CHE', departmentId: 3 }, staff) && !V.canLink({ security: 'HAN_CHE', departmentId: 3 }, staff));
+  assert.ok(V.canView({ security: 'BAO_MAT_CAO', createdById: 2 }, dir) && !V.canLink({ security: 'BAO_MAT_CAO', createdById: 2 }, dir));
+  assert.deepEqual(V.LINKABLE_SECURITY, ['CONG_KHAI', 'NOI_BO']);
+});
+
+test('nơi ban hành điền sẵn khi chọn văn bản trong sổ', () => {
+  assert.equal(V.issuerOf({ book: 'DEN', counterpart: 'UBND phường Mẫu', externalNumber: '45/UBND' }), 'UBND phường Mẫu · số 45/UBND');
+  assert.equal(V.issuerOf({ book: 'DEN', counterpart: null, externalNumber: null }), '');
+  assert.equal(V.issuerOf({ book: 'DI', series: 'D9', entity: 'HLD' }, { entityName: 'Công ty mẹ' }), 'Công ty mẹ');
+  assert.equal(V.issuerOf({ book: 'NOIBO', series: 'D7-KD', entity: 'HLD' }, { entityName: 'Công ty mẹ', deptName: 'Phòng Kinh doanh' }), 'Phòng Kinh doanh');
+  assert.equal(V.issuerOf({ book: 'NOIBO', series: 'D5', entity: 'DXA' }), 'DXA'); // chưa có tên pháp nhân → mã
+  assert.equal(V.issuerOf({ book: 'DEN', counterpart: 'x'.repeat(300) }).length, 200);
+});

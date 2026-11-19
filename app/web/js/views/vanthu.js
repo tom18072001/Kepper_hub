@@ -2,7 +2,7 @@
 // Quyền do máy chủ quyết (routes/vanthu.js) — giao diện chỉ ẩn nút theo cờ "can" / "canRegister".
 import { api, download } from '../api.js';
 import { store, deptName } from '../store.js';
-import { esc, fmtDate, fmtDateTime, toast, openModal, closeModal, confirmDialog, errorMessage } from '../util.js';
+import { esc, fmtDate, fmtDateTime, toast, openModal, closeModal, confirmDialog, errorMessage, debounce, replaceHashParams } from '../util.js';
 
 let meta = null;
 const getMeta = async (fresh = false) => (meta = !fresh && meta ? meta : await api('/api/vanthu/meta'));
@@ -23,35 +23,62 @@ export async function renderVanthu(root, id, params, setCrumbs) {
   if (id) return renderDoc(root, Number(id), setCrumbs, m);
   setCrumbs('Văn thư');
   const tab = TABS.some(t => t[0] === params.get('book')) ? params.get('book') : 'DEN';
-  const year = params.get('year') || String(new Date().getFullYear()), q = params.get('q') || '', overdue = params.get('overdue') === '1', entity = params.get('entity') || '';
-  const qs = new URLSearchParams({ year, ...(tab === 'mine' ? { mine: '1' } : { book: tab }), ...(q && { q }), ...(overdue && { overdue: '1' }), ...(entity && { entity }) });
-  const rows = await api('/api/vanthu/docs?' + qs);
+  const thisYear = String(new Date().getFullYear());
+  const init = { year: params.get('year') || thisYear, q: params.get('q') || '', overdue: params.get('overdue') === '1', entity: params.get('entity') || '' };
+  const fetchRows = f => api('/api/vanthu/docs?' + new URLSearchParams({ year: f.year, ...(tab === 'mine' ? { mine: '1' } : { book: tab }), ...(f.q && { q: f.q }), ...(f.overdue && { overdue: '1' }), ...(f.entity && { entity: f.entity }) }));
+  const rows = await fetchRows(init);
   const series = Object.entries(m.series).filter(([k, s]) => (tab === 'mine' || s.book === tab) && m.canRegister[k]);
   const isIn = tab === 'DEN' || tab === 'mine';
+  const register = () => openRegister(m, series, tab, d => { location.hash = `#/vanthu/${d.id}`; });
+  // Trang trống: sổ năm hiện tại chưa có văn bản → mời vào sổ (chỉ người được vào sổ dãy của sổ này); đang lọc → gợi ý xoá bộ lọc.
+  const emptyHtml = f => (f.q || f.overdue || f.entity
+    ? '<div class="empty" data-testid="vt-empty"><p>Không có văn bản khớp bộ lọc.</p><button type="button" class="btn btn-ghost btn-sm" data-act="vt-clear" data-testid="vt-clear">Xoá bộ lọc</button></div>'
+    : tab === 'mine' ? '<div class="empty" data-testid="vt-empty">Không có văn bản nào giao bạn xử lý.</div>'
+      : `<div class="empty" data-testid="vt-empty"><p>Chưa có văn bản trong sổ năm này.</p>${series.length && f.year === thisYear ? '<button type="button" class="btn btn-primary" data-act="vt-new-first" data-testid="vt-new-first">Vào sổ văn bản đầu tiên</button>' : ''}</div>`);
+  const listHtml = (list, f) => (list.length ? `<div class="tbl-scroll"><table class="table" data-testid="vt-list"><thead><tr><th>Số</th><th>Trích yếu</th><th>${tab === 'DI' ? 'Nơi nhận' : tab === 'NOIBO' ? 'Người ký' : 'Nơi gửi'}</th>${isIn ? '<th>Người xử lý</th><th>Hạn</th>' : '<th>Ngày</th>'}<th>Trạng thái</th></tr></thead><tbody>
+      ${list.map(d => `<tr class="clickable" data-href="#/vanthu/${d.id}"><td class="code nowrap"><a href="#/vanthu/${d.id}">${esc(d.number)}</a></td>
+        <td>${esc(d.title)}${d.urgency.code !== 'THUONG' ? ` <span class="pill ${TONE[d.urgency.code]}">${esc(d.urgency.label)}</span>` : ''}${SEC_TONE[d.security.code] ? ` <span class="pill ${SEC_TONE[d.security.code]}">${esc(d.security.label)}</span>` : ''}</td>
+        <td>${esc((tab === 'NOIBO' ? d.signerName : d.counterpart) || '—')}</td>
+        ${isIn ? `<td>${esc(d.handler?.fullName || '—')}</td><td class="nowrap">${d.overdue ? `<b class="danger-text">${dmy(d.dueDate)}</b>` : dmy(d.dueDate)}</td>` : `<td class="nowrap">${dmy(d.docDate || vnDay(d.registeredAt))}</td>`}
+        <td>${statusPill(d)}</td></tr>`).join('')}</tbody></table></div>` : emptyHtml(f));
   root.innerHTML = `<div class="page-head"><h1>Văn thư</h1><span class="muted sm">Vào sổ là có số ngay, theo đúng dãy của từng pháp nhân. Văn bản đến tự tính hạn theo độ khẩn.</span>
       ${m.me.director ? '<a class="btn btn-ghost" href="#/vanthu/thiet-lap" data-testid="vt-settings">Thiết lập</a>' : ''}
       ${series.length ? `<button class="btn btn-primary" id="vtNew" data-testid="vt-new">Vào sổ</button>` : ''}</div>
     <div class="seg vt-tabs" role="tablist">${TABS.map(([k, l]) => `<a role="tab" href="#/vanthu?book=${k}" class="${k === tab ? 'on' : ''}" data-testid="vt-tab-${k}">${l}</a>`).join('')}</div>
-    <form class="row pg-filters" id="vtFilter">
-      <input name="q" value="${esc(q)}" placeholder="Số, trích yếu, nơi gửi / nhận" class="grow" data-testid="vt-q">
-      <select name="year">${[0, 1, 2].map(i => String(new Date().getFullYear() - i)).map(y => `<option${y === year ? ' selected' : ''}>${y}</option>`).join('')}</select>
-      ${m.entities.length > 1 ? `<select name="entity"><option value="">Mọi pháp nhân</option>${m.entities.map(e => `<option value="${e.code}"${e.code === entity ? ' selected' : ''}>${esc(e.code)} · ${esc(e.name)}</option>`).join('')}</select>` : ''}
-      ${isIn ? `<label class="check"><input type="checkbox" name="overdue" value="1"${overdue ? ' checked' : ''}> Quá hạn</label>` : ''}
-      <button class="btn btn-ghost">Lọc</button></form>
-    ${rows.length ? `<div class="tbl-scroll"><table class="table" data-testid="vt-list"><thead><tr><th>Số</th><th>Trích yếu</th><th>${tab === 'DI' ? 'Nơi nhận' : tab === 'NOIBO' ? 'Người ký' : 'Nơi gửi'}</th>${isIn ? '<th>Người xử lý</th><th>Hạn</th>' : '<th>Ngày</th>'}<th>Trạng thái</th></tr></thead><tbody>
-      ${rows.map(d => `<tr class="clickable" data-href="#/vanthu/${d.id}"><td class="code nowrap"><a href="#/vanthu/${d.id}">${esc(d.number)}</a></td>
-        <td>${esc(d.title)}${d.urgency.code !== 'THUONG' ? ` <span class="pill ${TONE[d.urgency.code]}">${esc(d.urgency.label)}</span>` : ''}${SEC_TONE[d.security.code] ? ` <span class="pill ${SEC_TONE[d.security.code]}">${esc(d.security.label)}</span>` : ''}</td>
-        <td>${esc((tab === 'NOIBO' ? d.signerName : d.counterpart) || '—')}</td>
-        ${isIn ? `<td>${esc(d.handler?.fullName || '—')}</td><td class="nowrap">${d.overdue ? `<b class="danger-text">${dmy(d.dueDate)}</b>` : dmy(d.dueDate)}</td>` : `<td class="nowrap">${dmy(d.docDate || vnDay(d.registeredAt))}</td>`}
-        <td>${statusPill(d)}</td></tr>`).join('')}</tbody></table></div>`
-      : `<div class="empty">${tab === 'mine' ? 'Không có văn bản nào giao bạn xử lý.' : 'Chưa có văn bản trong sổ năm này.'}</div>`}`;
-  root.querySelector('#vtFilter').onsubmit = e => {
-    e.preventDefault();
-    const b = formObj(e.target);
-    location.hash = '#/vanthu?' + new URLSearchParams({ book: tab, ...Object.fromEntries(Object.entries(b).filter(([, v]) => v)) });
+    <form class="row pg-filters" id="vtFilter" role="search" aria-label="Lọc văn bản">
+      <input name="q" type="search" value="${esc(init.q)}" placeholder="Số, trích yếu, nơi gửi / nhận" class="grow" aria-label="Tìm văn bản" data-testid="vt-q">
+      <select name="year" aria-label="Năm" data-testid="vt-year">${[0, 1, 2].map(i => String(new Date().getFullYear() - i)).map(y => `<option${y === init.year ? ' selected' : ''}>${y}</option>`).join('')}</select>
+      ${m.entities.length > 1 ? `<select name="entity" aria-label="Pháp nhân" data-testid="vt-entity"><option value="">Mọi pháp nhân</option>${m.entities.map(e => `<option value="${e.code}"${e.code === init.entity ? ' selected' : ''}>${esc(e.code)} · ${esc(e.name)}</option>`).join('')}</select>` : ''}
+      ${isIn ? `<label class="check"><input type="checkbox" name="overdue" value="1"${init.overdue ? ' checked' : ''} data-testid="vt-overdue"> Quá hạn</label>` : ''}</form>
+    <div id="vtList" aria-live="polite">${listHtml(rows, init)}</div>`;
+  const form = root.querySelector('#vtFilter'), listEl = root.querySelector('#vtList');
+  const bindRows = () => listEl.querySelectorAll('tr[data-href]').forEach(tr => tr.addEventListener('click', e => { if (!e.target.closest('a')) location.hash = tr.dataset.href; }));
+  bindRows();
+  // Lọc ngay khi gõ / chọn (không có nút "Lọc"): vẽ lại riêng danh sách, ghi bộ lọc lên URL bằng replaceState để tải lại trang vẫn giữ.
+  let seq = 0;
+  const reload = async () => {
+    if (!form.isConnected) return; // đã chuyển trang trong lúc chờ gõ
+    const b = formObj(form), my = ++seq;
+    const f = { year: b.year || thisYear, q: String(b.q || '').trim(), overdue: b.overdue === '1', entity: b.entity || '' };
+    replaceHashParams({ q: f.q, year: f.year, entity: f.entity, overdue: f.overdue ? '1' : null });
+    listEl.setAttribute('aria-busy', 'true');
+    try {
+      const list = await fetchRows(f);
+      if (my !== seq || !form.isConnected) return; // kết quả cũ về muộn
+      listEl.innerHTML = listHtml(list, f); bindRows();
+    } catch (error) { if (my === seq && form.isConnected) listEl.innerHTML = `<div class="empty">${esc(errorMessage(error))}</div>`; }
+    finally { if (my === seq) listEl.removeAttribute('aria-busy'); }
   };
-  root.querySelectorAll('tr[data-href]').forEach(tr => tr.addEventListener('click', e => { if (!e.target.closest('a')) location.hash = tr.dataset.href; }));
-  root.querySelector('#vtNew')?.addEventListener('click', () => openRegister(m, series, tab, d => { location.hash = `#/vanthu/${d.id}`; }));
+  const typed = debounce(reload, 300);
+  form.q.addEventListener('input', typed);
+  form.addEventListener('change', e => { if (e.target !== form.q) reload(); });
+  form.addEventListener('submit', e => { e.preventDefault(); reload(); }); // Enter: lọc ngay, không chờ
+  listEl.addEventListener('click', e => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'vt-new-first') register();
+    if (act === 'vt-clear') { form.q.value = ''; if (form.overdue) form.overdue.checked = false; if (form.entity) form.entity.value = ''; reload(); form.q.focus(); }
+  });
+  root.querySelector('#vtNew')?.addEventListener('click', register);
 }
 
 function openRegister(m, series, tab, done) {
