@@ -191,10 +191,11 @@ export function closeModal(value) {
   const back = modalOpener; modalOpener = null;
   if (had && back?.isConnected) setTimeout(() => { if (root.classList.contains('hidden') && (document.activeElement === document.body || !document.activeElement)) back.focus?.({ preventScroll: true }); }, 0);
 }
-export function confirmDialog(message, { okText = 'Đồng ý', danger = false, input = null } = {}) {
+// cancelText: đặt chữ khác "Huỷ" khi nút đồng ý cũng nói "Huỷ …" (vd. "Giữ đơn" / "Huỷ đơn") để khỏi bấm nhầm.
+export function confirmDialog(message, { okText = 'Đồng ý', cancelText = 'Huỷ', danger = false, input = null } = {}) {
   return new Promise(resolve => {
     const modal = openModal(`<h2>Xác nhận</h2><p>${esc(message)}</p>${input ? `<label class="field">${esc(input)}<textarea id="confirmInput" autofocus data-testid="confirm-input"></textarea></label>` : ''}
-      <div class="modal-actions"><button class="btn btn-ghost" data-act="cancel">Huỷ</button><button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-act="ok" data-testid="confirm-ok">${esc(okText)}</button></div>`);
+      <div class="modal-actions"><button class="btn btn-ghost" data-act="cancel" data-testid="confirm-cancel">${esc(cancelText)}</button><button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-act="ok" data-testid="confirm-ok">${esc(okText)}</button></div>`);
     modalResolve = resolve;
     modal.addEventListener('click', e => {
       const act = e.target.closest('[data-act]')?.dataset.act;

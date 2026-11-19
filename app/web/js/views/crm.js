@@ -2,7 +2,7 @@
 // việc cần theo dõi, hợp đồng / gói thầu. Quyền do máy chủ quyết (lib/policy.js crm.*) — giao diện chỉ ẩn nút theo cờ "can".
 import { api } from '../api.js';
 import { store, deptName } from '../store.js';
-import { $, esc, fmtDate, fmtDateTime, toast, openModal, closeModal, confirmDialog, errorMessage, dateInput, fromDateInput } from '../util.js';
+import { $, esc, fmtDate, fmtDateTime, toast, openModal, closeModal, confirmDialog, errorMessage, dateInput, fromDateInput, debounce, replaceHashParams } from '../util.js';
 
 let meta = null;
 const getMeta = async () => (meta ||= await api('/api/crm/meta'));
@@ -15,6 +15,11 @@ const money = v => (v == null ? '—' : Number(v).toLocaleString('vi-VN') + ' đ
 const formObj = form => Object.fromEntries(new FormData(form).entries());
 const vnToday = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10); // ngày giờ Việt Nam
 const vnDay = d => new Date(new Date(d).getTime() + 7 * 3600e3).toISOString().slice(0, 10);
+const liveParams = () => new URLSearchParams(location.hash.split('?')[1] || '');
+const FILTERS = ['q', 'kind', 'status', 'mine', 'archived'];
+const partnerRows = rows => rows.map(p => `<tr${p.archivedAt ? ' class="muted"' : ''}><td><a href="#/crm/${p.id}" data-testid="crm-partner-link"><b>${esc(p.name)}</b></a>${p.archivedAt ? ' <span class="pill warn">Ngừng theo dõi</span>' : ''}${p.taxCode ? `<div class="muted xs">MST ${esc(p.taxCode)}</div>` : ''}</td><td>${esc(p.kind.label)}</td>
+  <td>${esc(p.ownerDepartment.name || '')}</td><td>${esc(p.ownerUser?.fullName || '')}</td><td>${statusPill(p.status)}</td><td>${p.rating !== undefined ? stars(p.rating) : ''}</td><td class="num">${p.openFollowups ?? ''}</td></tr>`).join('')
+  || '<tr><td colspan="7" class="empty" data-testid="crm-partners-empty">Chưa có đối tác phù hợp.</td></tr>';
 
 export async function renderCrm(root, id, params, setCrumbs) {
   const m = await getMeta();
@@ -33,31 +38,42 @@ export async function renderCrm(root, id, params, setCrumbs) {
           <td>${esc(f.nextStep || f.summary)}</td><td>${esc(f.nextOwner?.fullName || '')}</td><td class="actions"><button class="btn btn-ghost btn-sm" data-done="${f.id}" data-testid="crm-fu-done">Xong</button></td></tr>`).join('')}</tbody></table>`
         : '<div class="empty">Không có việc cần theo dõi.</div>'}
     </section>
-    <form class="row pg-filters" id="crmFilter">
-      <input name="q" value="${esc(q)}" placeholder="Tên hoặc mã số thuế" class="grow" data-testid="crm-q">
-      <select name="kind"><option value="">Mọi loại</option>${opts(m.kinds, kind)}</select>
-      <select name="status"><option value="">Mọi trạng thái</option>${opts(m.statuses, status)}</select>
-      <label class="check"><input type="checkbox" name="mine" value="1"${mine ? ' checked' : ''}> Bộ phận tôi phụ trách</label>
+    <form class="row pg-filters" id="crmFilter" role="search" aria-label="Lọc đối tác">
+      <input name="q" type="search" value="${esc(q)}" placeholder="Tên hoặc mã số thuế (gõ không dấu cũng được)" class="grow" aria-label="Tìm đối tác" data-testid="crm-q">
+      <select name="kind" aria-label="Loại đối tác" data-testid="crm-kind"><option value="">Mọi loại</option>${opts(m.kinds, kind)}</select>
+      <select name="status" aria-label="Trạng thái" data-testid="crm-status"><option value="">Mọi trạng thái</option>${opts(m.statuses, status)}</select>
+      <label class="check"><input type="checkbox" name="mine" value="1"${mine ? ' checked' : ''} data-testid="crm-mine"> Bộ phận tôi phụ trách</label>
       <label class="check"><input type="checkbox" name="archived" value="1"${archived ? ' checked' : ''}> Gồm đối tác đã ngừng theo dõi</label>
-      <button class="btn">Lọc</button></form>
-    <div class="card" style="padding:0"><table class="table" data-testid="crm-partners"><thead><tr><th>Đối tác</th><th>Loại</th><th>Bộ phận phụ trách</th><th>Người phụ trách</th><th>Trạng thái</th><th>Đánh giá</th><th class="num">Theo dõi</th></tr></thead><tbody>
-      ${rows.map(p => `<tr${p.archivedAt ? ' class="muted"' : ''}><td><a href="#/crm/${p.id}" data-testid="crm-partner-link"><b>${esc(p.name)}</b></a>${p.archivedAt ? ' <span class="pill warn">Ngừng theo dõi</span>' : ''}${p.taxCode ? `<div class="muted xs">MST ${esc(p.taxCode)}</div>` : ''}</td><td>${esc(p.kind.label)}</td>
-        <td>${esc(p.ownerDepartment.name || '')}</td><td>${esc(p.ownerUser?.fullName || '')}</td><td>${statusPill(p.status)}</td><td>${p.rating !== undefined ? stars(p.rating) : ''}</td><td class="num">${p.openFollowups ?? ''}</td></tr>`).join('')
-        || '<tr><td colspan="7" class="empty">Chưa có đối tác phù hợp.</td></tr>'}</tbody></table></div>`;
-  $('#crmFilter', root).onsubmit = e => {
-    e.preventDefault();
-    const f = formObj(e.target), p = new URLSearchParams();
-    for (const k of ['q', 'kind', 'status', 'mine', 'archived']) if (f[k]) p.set(k, f[k]);
-    location.hash = '#/crm' + (p.toString() ? '?' + p : '');
+      <span class="muted sm" aria-live="polite" data-testid="crm-count">${rows.length} đối tác</span></form>
+    <div class="card" style="padding:0"><table class="table" data-testid="crm-partners"><thead><tr><th>Đối tác</th><th>Loại</th><th>Bộ phận phụ trách</th><th>Người phụ trách</th><th>Trạng thái</th><th>Đánh giá</th><th class="num">Theo dõi</th></tr></thead>
+      <tbody id="crmRows">${partnerRows(rows)}</tbody></table></div>`;
+  // Lọc ngay: gõ tên / MST (chờ 300 ms sau phím cuối), đổi ô chọn / ô đánh dấu. Chỉ vẽ lại bảng (ô tìm giữ nguyên con trỏ);
+  // bộ lọc ghi lên URL bằng replaceState (quay lại / chia sẻ link vẫn đúng bộ lọc, không thêm lịch sử mỗi phím).
+  const form = $('#crmFilter', root);
+  let seq = 0;
+  const apply = async () => {
+    const f = formObj(form), p = new URLSearchParams(), my = ++seq;
+    for (const k of FILTERS) { const v = String(f[k] || '').trim(); if (v) p.set(k, v); }
+    replaceHashParams(Object.fromEntries(FILTERS.map(k => [k, p.get(k) || ''])));
+    try {
+      const list = await api('/api/crm/partners?' + p);
+      if (my !== seq || !form.isConnected) return; // đã gõ tiếp / đã rời trang
+      $('#crmRows', root).innerHTML = partnerRows(list);
+      $('[data-testid="crm-count"]', root).textContent = `${list.length} đối tác`;
+    } catch (error) { if (my === seq) toast(errorMessage(error), 'err'); }
   };
+  const later = debounce(apply, 300);
+  form.oninput = e => { if (e.target.name === 'q') later(); };
+  form.onchange = e => { if (e.target.name !== 'q') apply(); };
+  form.onsubmit = e => { e.preventDefault(); apply(); };
   root.onclick = async e => {
     const fu = e.target.closest('[data-fu]');
-    if (fu) { const p = new URLSearchParams(params); p.set('fu', fu.dataset.fu); location.hash = '#/crm?' + p; return; }
+    if (fu) { const p = liveParams(); p.set('fu', fu.dataset.fu); location.hash = '#/crm?' + p; return; }
     const d = e.target.closest('[data-done]');
     if (d) {
       const note = await confirmDialog('Đánh dấu việc theo dõi đã xong?', { okText: 'Xong', input: 'Kết quả (ghi vào nhật ký, không bắt buộc)' });
       if (note === null) return;
-      try { await api(`/api/crm/followups/${d.dataset.done}/done`, { method: 'POST', body: { note } }); toast('Đã cập nhật', 'ok'); renderCrm(root, null, params, setCrumbs); } catch (error) { toast(errorMessage(error), 'err'); }
+      try { await api(`/api/crm/followups/${d.dataset.done}/done`, { method: 'POST', body: { note } }); toast('Đã cập nhật', 'ok'); renderCrm(root, null, liveParams(), setCrumbs); } catch (error) { toast(errorMessage(error), 'err'); }
     }
     if (e.target.id === 'crmNew') partnerForm(null, m, p => { location.hash = `#/crm/${p.id}`; });
   };
@@ -94,6 +110,8 @@ function partnerForm(p, m, done) {
 async function renderPartner(root, id, setCrumbs, m) {
   const p = await api(`/api/crm/partners/${id}`);
   setCrumbs(`<a href="#/crm">Đối tác</a> / ${esc(p.name)}`);
+  // Tiêu đề tab trình duyệt: tên đối tác (main.js chỉ biết "Đối tác" trước khi tải xong).
+  if (location.hash.split('?')[0] === `#/crm/${id}`) document.title = `${p.name} · Kepler Hub`;
   const redraw = () => renderPartner(root, id, setCrumbs, m);
   const today = vnToday();
   root.innerHTML = `<div class="page-head"><h1>${esc(p.name)}</h1>${statusPill(p.status)}<span class="pill">${esc(p.kind.label)}</span>${p.archivedAt ? '<span class="pill warn">Ngừng theo dõi</span>' : ''}
