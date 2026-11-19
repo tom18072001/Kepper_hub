@@ -142,6 +142,10 @@ Thư mục dữ liệu nên nằm trên volume / thư mục chia sẻ **mã hoá
 sudo sh deploy/upgrade.sh [nhánh]   # sao lưu → giữ image cũ → git pull → build → chờ healthy; lỗi thì in lệnh quay lại
 ```
 
+Sau khi nâng cấp, tab Kepler Hub đang mở tự hiện thanh **"Có bản mới · Tải lại"** (máy chủ trả mã bản giao diện trong header
+`X-Kepler-Build` và `/api/health`; log khởi động ghi `"build"`). Tab đã ẩn quá 1 phút mà không có gì nhập dở thì tự tải lại; đăng xuất cũng tải lại trang.
+Lần nâng cấp **đầu tiên** lên bản có tính năng này, tab cũ chưa có mã kiểm tra: vẫn nhắc mọi người tải lại trang (F5) một lần.
+
 ## 9. Kiểm tra sau khi cài
 
 - [ ] Laptop mở `https://kepper.<tên-miền>`: chứng chỉ hợp lệ, không cảnh báo.

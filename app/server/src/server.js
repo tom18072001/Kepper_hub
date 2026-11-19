@@ -77,7 +77,7 @@ async function start() {
     tasks.push(cron.schedule('*/15 * * * *', runRecurring, { timezone: 'Asia/Ho_Chi_Minh' }));
     runRecurring();
   }
-  const server = app.listen(config.port, () => console.log(JSON.stringify({ level: 'info', msg: 'listening', port: config.port })));
+  const server = app.listen(config.port, () => console.log(JSON.stringify({ level: 'info', msg: 'listening', port: config.port, build: app.locals.buildId })));
   // Dừng êm: ngừng nhận việc mới, đóng luồng SSE, chờ request / job đang chạy tối đa 15 giây rồi mới ngắt CSDL.
   let stopping = false;
   const stop = async () => {

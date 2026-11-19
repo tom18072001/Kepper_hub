@@ -12,6 +12,7 @@ const { HttpError } = require('./lib/http');
 const { auditFor } = require('./services/events');
 const { createAccessLog } = require('./lib/access-log');
 const { isToken, sha256 } = require('./lib/tokens');
+const { computeBuildId } = require('./lib/build-id');
 
 function createApp({ prisma, config }) {
   const app = express();
@@ -34,6 +35,10 @@ function createApp({ prisma, config }) {
     } },
     crossOriginEmbedderPolicy: false,
   }));
+  // Mã bản giao diện (lib/build-id.js) trên mọi phản hồi API: tab mở từ trước khi nâng cấp nhận ra mình đang chạy bản cũ.
+  const buildId = config.buildId || computeBuildId(config.webDir);
+  app.locals.buildId = buildId;
+  app.use('/api', (req, res, next) => { res.setHeader('X-Kepler-Build', buildId); next(); });
   // CORS: chỉ các origin khai báo trong APP_ORIGIN (phân tách bằng dấu phẩy).
   app.use('/api', cors({
     origin(origin, callback) {
@@ -76,7 +81,7 @@ function createApp({ prisma, config }) {
 
   app.get('/api/health', async (req, res) => {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ ok: true });
+    res.json({ ok: true, build: buildId });
   });
   // Nhận diện công ty (tên, logo) — đặt trên máy chạy (ORG_NAME, thư mục BRANDING_DIR), không nằm trong mã nguồn.
   // Công khai (trang đăng nhập cần), chỉ 4 tệp ảnh cố định, không liệt kê thư mục.
@@ -170,6 +175,14 @@ function createApp({ prisma, config }) {
         { name: 'Việc của tôi', url: './#/mywork' },
       ],
     }));
+  });
+  // Trang chính ghi sẵn mã bản giao diện (<meta name="kepler-build">) — mã của chính JS mà tab này nạp, để so với header API.
+  app.get(['/', '/index.html'], (req, res, next) => {
+    fsSync.readFile(path.join(config.webDir, 'index.html'), 'utf8', (error, html) => {
+      if (error) return next();
+      res.setHeader('Cache-Control', 'no-cache');
+      res.type('html').send(html.replace(/(<meta name="kepler-build" content=")[^"]*"/, `$1${buildId}"`));
+    });
   });
   // HTML/JS/CSS luôn kiểm tra lại (ETag) để bản cập nhật hiện ngay; font giữ cache 7 ngày.
   app.use(express.static(config.webDir, { index: 'index.html', setHeaders(res, file) {

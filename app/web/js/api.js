@@ -1,4 +1,6 @@
 // Gọi API kèm token; tự xử lý hết phiên và yêu cầu đổi mật khẩu.
+import { noteBuild, writeStarted } from './version.js';
+
 const TOKEN_KEY = 'workhub_token';
 let token = null;
 try { token = localStorage.getItem(TOKEN_KEY); } catch { token = null; }
@@ -35,8 +37,10 @@ export async function api(path, { method = 'GET', body, form, raw = false, signa
   let payload;
   if (form) payload = form;
   else if (body !== undefined) { headers['content-type'] = 'application/json'; payload = JSON.stringify(body); }
-  const res = await fetch(path, { method, headers, body: payload, signal });
+  const writing = method !== 'GET' ? writeStarted() : null;
+  const res = await fetch(path, { method, headers, body: payload, signal }).finally(() => writing?.());
   checkClock(res);
+  noteBuild(res.headers.get('x-kepler-build'));
   if (raw && res.ok) return res;
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {

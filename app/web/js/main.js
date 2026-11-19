@@ -37,7 +37,9 @@ function show(id) {
   for (const page of ['loginPage', 'passwordPage', 'appShell']) $('#' + page).classList.toggle('hidden', page !== id);
 }
 // Hết phiên (401): giữ bản nháp (đã khoá theo người dùng) để đăng nhập lại vẫn còn; tự bấm Đăng xuất thì xoá.
-function logout({ keepDrafts = false } = {}) {
+// Tự bấm Đăng xuất còn tải lại trang: nạp giao diện mới nhất (máy chủ có thể vừa nâng cấp), không giữ dữ liệu phiên cũ trong bộ nhớ.
+function logout({ keepDrafts = false, reload = keepDrafts !== true } = {}) {
+  if (reload) setTimeout(() => location.reload()); // chạy sau khi các dòng dưới đã dọn phiên
   stopRealtime();
   setToken(null); store.me = null; document.title = 'Kepler Hub'; if (keepDrafts !== true) clearDrafts(); closeItem(); lastViewKey = ''; $('#view').innerHTML = ''; show('loginPage'); $('#loginUser').focus();
 }
@@ -332,5 +334,5 @@ window.addEventListener('workhub:hashreplaced', () => {
 (async function init() {
   await loadBrand();
   if (!getToken()) { show('loginPage'); return; }
-  try { await enter(); } catch { logout(); }
+  try { await enter(); } catch { logout({ reload: false }); } // trang vừa nạp: không cần tải lại
 })();
