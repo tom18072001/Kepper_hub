@@ -1,0 +1,77 @@
+// Luật hoàn thành công việc (thuần, không chạm CSDL — có test riêng trong task-rules.test.js):
+//   • Người chủ trì tự đổi trạng thái giữa các bước trung gian. Chuyển sang "Hoàn thành" thì việc chỉ vào "Chờ duyệt";
+//     người giao duyệt (bắt buộc chấm mức hoàn thành) mới thành Hoàn thành, hoặc trả lại kèm lý do → "Đang làm".
+//   • Cấp 1 của phiếu duyệt luôn là người giao; các cấp duyệt dự án đã cấu hình (nếu có) chạy sau.
+//   • Người chủ trì không tự duyệt việc của mình. Việc tự giao cho mình → lãnh đạo bộ phận duyệt.
+//   • Việc cha chỉ được gửi duyệt / hoàn thành khi mọi việc con (trừ việc huỷ) đã được duyệt hoàn thành.
+const { fail } = require('../lib/http');
+
+// Thang 5 mức hoàn thành người giao chấm khi duyệt.
+const RATINGS = { EXCELLENT: 'Xuất sắc', GOOD: 'Tốt', PASS: 'Đạt', NEEDS_IMPROVEMENT: 'Cần cải thiện', POOR: 'Kém' };
+// Bước duyệt ảo của người giao (cấp 1 của phiếu withAssigner).
+const ASSIGNER_STEP = Object.freeze({ level: 1, name: 'Người giao duyệt', approverType: 'ASSIGNER', virtual: true });
+
+// Chuỗi bước duyệt của một phiếu: phiếu mới = [người giao, ...bước dự án dời lên 1 cấp]; phiếu cũ = bước dự án.
+function chainOf(projectSteps, withAssigner = true) {
+  const steps = [...projectSteps].sort((a, b) => a.level - b.level);
+  if (!withAssigner) return steps;
+  return [ASSIGNER_STEP, ...steps.map((s, i) => ({ ...s, level: i + 2 }))];
+}
+const stepAt = (chain, level) => chain.find(s => s.level === level) || null;
+
+// Tiến độ việc con trực tiếp: x/y không tính việc con đã huỷ. children: [{ state: { category } } | { category }].
+function childProgress(children = []) {
+  const cats = children.map(c => c.state?.category ?? c.category);
+  const counted = cats.filter(c => c !== 'CANCELLED');
+  const done = counted.filter(c => c === 'COMPLETED').length;
+  return { done, total: counted.length, open: counted.length - done };
+}
+function assertChildrenDone(children, action = 'hoàn thành') {
+  const p = childProgress(children);
+  if (p.open > 0) fail(409, `Còn ${p.open} việc con chưa được duyệt hoàn thành (${p.done}/${p.total}) — chưa thể ${action} việc cha`, 'CHILDREN_OPEN');
+  return p;
+}
+
+// Đích thực sự của một lần chuyển trạng thái.
+//   to = 'COMPLETED' mà chưa có phiếu đã duyệt → vào cột Chờ duyệt (REVIEW).
+//   allowDirect = nhập hàng loạt dữ liệu lịch sử (sổ Excel, MTL) do người quản lý thực hiện.
+function completionTarget({ fromCategory, toCategory, approved, allowDirect = false }) {
+  if (toCategory !== 'COMPLETED' || approved || allowDirect) return toCategory;
+  if (fromCategory === 'REVIEW') fail(409, 'Việc đang chờ người giao duyệt — người giao duyệt xong việc mới thành Hoàn thành', 'APPROVAL_PENDING');
+  return 'REVIEW';
+}
+
+// Người duyệt cấp "người giao" của một việc.
+//   item: { assignedById, reporterId, leadDepartmentId, assigneeIds: number[] }
+//   ctx:  { active: Map<userId, { departmentId }>, leaders(deptId) → ids lãnh đạo bộ phận có quyền duyệt,
+//           projectLeadId, supervisorOf(deptId) → PGĐ phụ trách, directors: ids Ban Giám đốc }
+// Trả { ids, reason }: ASSIGNER = người giao; DEPT_LEADER / PROJECT_LEAD / SUPERVISOR / DIRECTOR = thay vì việc tự giao
+// (hoặc người giao đã nghỉ). Không bao giờ chứa người chủ trì.
+function assignerApprovers(item, ctx) {
+  const assignees = new Set(item.assigneeIds || []);
+  const ok = id => id != null && ctx.active.has(id) && !assignees.has(id);
+  const assigner = item.assignedById ?? item.reporterId ?? null;
+  if (ok(assigner)) return { ids: [assigner], reason: 'ASSIGNER' };
+  const firstAssignee = [...assignees].find(id => ctx.active.has(id));
+  const dept = item.leadDepartmentId ?? (firstAssignee != null ? ctx.active.get(firstAssignee).departmentId : null) ?? ctx.projectDepartmentId ?? null;
+  const pick = (ids, reason) => { const out = [...new Set(ids)].filter(ok); return out.length ? { ids: out, reason } : null; };
+  return pick(dept != null ? ctx.leaders(dept) : [], 'DEPT_LEADER')
+    || pick([ctx.projectLeadId], 'PROJECT_LEAD')
+    || pick([dept != null ? ctx.supervisorOf(dept) : null], 'SUPERVISOR')
+    || pick(ctx.directors || [], 'DIRECTOR')
+    || { ids: [], reason: 'NONE' };
+}
+
+// Kiểm tra một quyết định duyệt (ngoài việc người dùng có nằm trong danh sách người duyệt của cấp hay không).
+function checkDecision({ step, decision, rating, comment, userId, assigneeIds = [], requestedById }) {
+  if (assigneeIds.includes(userId)) fail(403, 'Người chủ trì không tự duyệt việc của mình', 'SELF_APPROVAL');
+  // Người giao tự bấm "Hoàn thành" thay người chủ trì vẫn duyệt được (để chấm điểm); các cấp dự án thì không tự duyệt phiếu mình gửi.
+  if (step?.approverType !== 'ASSIGNER' && requestedById === userId) fail(403, 'Không thể tự duyệt việc do chính mình gửi duyệt', 'SELF_APPROVAL');
+  if (decision === 'REJECT' && !String(comment || '').trim()) fail(422, 'Trả lại phải ghi lý do', 'REASON_REQUIRED');
+  if (decision === 'APPROVE' && step?.approverType === 'ASSIGNER') {
+    if (!rating) fail(422, 'Hãy chấm mức hoàn thành (Xuất sắc / Tốt / Đạt / Cần cải thiện / Kém) trước khi duyệt', 'RATING_REQUIRED');
+    if (!RATINGS[rating]) fail(422, 'Mức hoàn thành không hợp lệ', 'INVALID_RATING');
+  } else if (rating && !RATINGS[rating]) fail(422, 'Mức hoàn thành không hợp lệ', 'INVALID_RATING');
+}
+
+module.exports = { RATINGS, ASSIGNER_STEP, chainOf, stepAt, childProgress, assertChildrenDone, completionTarget, assignerApprovers, checkDecision };

@@ -126,12 +126,17 @@ test('4. Kanban: tạo việc (form + thêm nhanh), kéo-thả giữa các cột
   await toast(page, 'đã đạt giới hạn WIP 1');
   await expect(column(page, 'Cần làm').getByTestId('card-SK-2')).toBeVisible();
   await expect(column(page, 'Đang làm')).toHaveClass(/over-wip/);
-  // Không được chuyển thẳng sang Hoàn thành khi dự án yêu cầu duyệt (qua panel chi tiết)
+  // Chọn "Hoàn thành" khi chưa được duyệt → việc vào "Chờ duyệt" (người giao duyệt + chấm mức), không thành Hoàn thành ngay.
   await card(page, 'SK-2').click();
   const doneValue = await page.getByTestId('item-state').locator('option', { hasText: 'Hoàn thành' }).getAttribute('value');
   await page.getByTestId('item-state').selectOption(doneValue);
-  await toast(page, 'Việc cần được duyệt trước khi hoàn thành');
+  await toast(page, 'Đã chuyển vào "Chờ duyệt"');
   await expect(page.getByTestId('item-state')).not.toHaveValue(doneValue);
+  await expect(page.getByTestId('item-state').locator('option:checked')).toHaveText('Chờ duyệt');
+  // Rút lại về "Cần làm" (huỷ phiếu chờ) để các bước sau giữ nguyên dữ liệu.
+  const todoValue = await page.getByTestId('item-state').locator('option', { hasText: 'Cần làm' }).getAttribute('value');
+  await page.getByTestId('item-state').selectOption(todoValue);
+  await expect(page.getByTestId('item-state')).toHaveValue(todoValue);
   await page.getByTestId('close-panel').click();
   await expect(column(page, 'Cần làm').getByTestId('card-SK-2')).toBeVisible();
 });
@@ -183,13 +188,24 @@ test('5. Chi tiết việc: mô tả, checklist, việc con, đính kèm (chặn
   await expect(card(page, 'SK-1').locator('[data-meta="attachments"]')).toHaveText('1');
 });
 
-test('6. Duyệt nhiều cấp: gửi duyệt → trưởng phòng trả lại → gửi lại → trưởng phòng duyệt → giám đốc duyệt → tự hoàn thành', async ({ browser }) => {
+// SK-1 do nv.kinhdoanh2 tự giao cho mình → cấp "Người giao duyệt" chuyển cho lãnh đạo phòng (tp.kinhdoanh); trưởng phòng duyệt + chấm mức
+// thì cấp "Trưởng phòng duyệt" của dự án (cũng là người này) tự qua → còn cấp Giám đốc.
+test('6. Duyệt nhiều cấp: gửi duyệt → trưởng phòng trả lại → gửi lại → trưởng phòng duyệt + chấm mức → giám đốc duyệt → tự hoàn thành', async ({ browser }) => {
   const staff = await (await browser.newContext()).newPage();
   await login(staff, 'nv.kinhdoanh2');
   await openProject(staff, 'SK');
+  // SK-1 còn việc con (tạo ở bước 5) chưa xong → không gửi duyệt được; huỷ việc con (việc huỷ không tính) rồi gửi lại.
   await card(staff, 'SK-1').dragTo(column(staff, 'Chờ duyệt').locator('.col-body'));
-  await toast(staff, 'Đã gửi duyệt: Trưởng phòng duyệt');
-  await expect(column(staff, 'Chờ duyệt').getByTestId('card-SK-1').getByTestId('approval-chip')).toHaveText('Chờ duyệt 1/2');
+  await toast(staff, 'Còn 1 việc con chưa được duyệt hoàn thành (0/1)');
+  const sk1 = await card(staff, 'SK-1').getAttribute('data-id');
+  const kid = (await (await apiAs(staff, `/api/items/${sk1}`)).json()).children[0];
+  const projectId = (await (await apiAs(staff, '/api/projects')).json()).find(p => p.key === 'SK').id;
+  const cancelled = (await (await apiAs(staff, `/api/projects/${projectId}`)).json()).states.find(st => st.category === 'CANCELLED');
+  expect((await apiAs(staff, `/api/items/${kid.id}`, { method: 'PATCH', data: { stateId: cancelled.id } })).status()).toBe(200);
+  await staff.reload();
+  await card(staff, 'SK-1').dragTo(column(staff, 'Chờ duyệt').locator('.col-body'));
+  await toast(staff, 'Đã gửi người giao duyệt');
+  await expect(column(staff, 'Chờ duyệt').getByTestId('card-SK-1').getByTestId('approval-chip')).toHaveText('Chờ duyệt 1/3');
   // Người gửi không tự duyệt được
   await card(staff, 'SK-1').click();
   await expect(staff.getByTestId('approve-btn')).toHaveCount(0);
@@ -214,17 +230,20 @@ test('6. Duyệt nhiều cấp: gửi duyệt → trưởng phòng trả lại �
   await staff.reload();
   await expect(staff.getByTestId('notif-count')).toBeVisible();
   await staff.getByTestId('notif-btn').click();
-  await expect(staff.getByTestId('notif-item').first()).toContainText('bị trả lại ở bước Trưởng phòng duyệt');
+  await expect(staff.getByTestId('notif-item').first()).toContainText('bị trả lại ở bước Người giao duyệt');
   await staff.getByTestId('notif-item').first().click();
   await expect(staff.getByTestId('item-code')).toHaveText('SK-1');
   await expect(staff.getByTestId('approval-section')).toContainText('Thiếu báo giá so sánh');
   await staff.getByTestId('submit-approval').click();
-  await toast(staff, 'Đã gửi duyệt');
+  await toast(staff, 'Đã gửi người giao duyệt');
 
-  // Trưởng phòng duyệt cấp 1
+  // Trưởng phòng duyệt cấp người giao: bắt buộc chấm mức hoàn thành
   await manager.goto('/#/approvals');
   await manager.getByTestId('queue-SK-1').click();
   await manager.getByTestId('approval-comment').fill('Đồng ý');
+  await manager.getByTestId('approve-btn').click();
+  await toast(manager, 'Hãy chấm mức hoàn thành');
+  await manager.getByTestId('rating-GOOD').check();
   await manager.getByTestId('approve-btn').click();
   await toast(manager, 'Đã duyệt');
   await manager.goto('/#/approvals');
@@ -234,7 +253,7 @@ test('6. Duyệt nhiều cấp: gửi duyệt → trưởng phòng trả lại �
   const director = await (await browser.newContext()).newPage();
   await login(director, 'giamdoc');
   await director.goto('/#/approvals');
-  await expect(director.getByTestId('queue-SK-1')).toContainText('2/2 · Giám đốc duyệt');
+  await expect(director.getByTestId('queue-SK-1')).toContainText('3/3 · Giám đốc duyệt');
   await director.getByTestId('queue-SK-1').click();
   await director.getByTestId('approve-btn').click();
   await toast(director, 'Đã duyệt');

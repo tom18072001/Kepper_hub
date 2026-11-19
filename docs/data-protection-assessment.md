@@ -678,3 +678,85 @@ cho nhân viên; (3) chạy trên **máy ảo Ubuntu (Hyper-V) trên máy chủ 
 
 - Tài khoản mới dùng mật khẩu mặc định của hệ thống cho tới lần đăng nhập đầu → gửi thông tin đăng nhập ngay và theo dõi danh sách "chưa đăng nhập" trong Quản trị.
 - Máy ảo chạy trên chính máy chủ DC: hỏng phần cứng mất cả hai → bản sao lưu phải ra ngoài máy chủ.
+
+## Văn thư liên thông NAS: tệp văn bản lưu trong thư mục văn thư của phòng (19/11/2026)
+
+Theo yêu cầu của chủ dự án: tệp văn bản (bản scan, phụ lục) gắn với sổ văn thư được lưu **bản gốc** vào thư mục văn thư sẵn có
+của từng phòng trên máy chủ file (`D:\DATA\<phòng>\NN.VanBanDen | NN.VanBanDi | NN.VanBanNoiBo\<năm>\`). Hub chỉ giữ đường dẫn + metadata.
+Lúc kiểm tra (19/11/2026), 18 thư mục VanBanDen / VanBanDi của 9 phòng đều **trống**: chưa có dữ liệu cũ cần chuyển.
+
+Chủ dự án đã chọn (19/11/2026):
+- **Mọi mức bảo mật lên NAS, kể cả Bảo mật cao.** Đã nêu rủi ro (mục 4) và khuyến nghị giữ Bảo mật cao trong Hub. Chủ dự án vẫn chọn đưa tất cả lên NAS.
+- Tạo thêm thư mục `NN.VanBanNoiBo` cho văn bản nội bộ (D5–D7). Thư mục mới lấy quyền giống `VanBanDi` cùng phòng.
+- Cấp `Modify` cho `svc-kepler-hub` trên thư mục văn thư của cả 9 phòng, kể cả `#1.BOD`.
+
+**Kết luận cổng:** ĐẠT CÓ ĐIỀU KIỆN. Có ba điều kiện:
+1. Xác nhận lại danh sách quyền NTFS của các thư mục văn thư trước khi vào sổ văn bản Bảo mật cao.
+2. Có bản sao lưu ngoài máy chủ (RES-01, đã ghi từ trước).
+3. Lần đầu vào sổ văn bản Bảo mật cao, Ban GĐ phải được báo rằng bản scan trên NAS **mở được bởi mọi người có quyền vào thư mục văn thư của phòng đó**.
+
+### 1. Phân loại
+
+| Tập dữ liệu | Nhãn nội bộ | Phân loại pháp lý | Ghi chú |
+|---|---|---|---|
+| Tệp văn bản (`DocFile` + tệp trên NAS) | Theo mức của văn bản. Cao nhất là Bảo mật cao, nên áp mức cao nhất cho cả thư mục | Có thể chứa DLCN cơ bản; DLCN nhạy cảm nếu văn bản về nhân sự / tranh chấp | Bản gốc trên NAS. Không ghi đè (`_vNN`). Gỡ trên Hub thì tệp chuyển vào `_LuuTru` |
+
+### 2. Dòng dữ liệu
+
+- Người dùng tải tệp lên trên Hub. Máy chủ kiểm quyền **trước khi nhận tệp** và kiểm loại tệp.
+- Tệp được ghi vào share `DATA` bằng tài khoản `svc-kepler-hub`. Share mount vào máy ảo bằng CIFS 3.1.1 trong mạng nội bộ, không ra Internet.
+- Phòng hoặc sổ chưa có thư mục thì tệp lưu trong Hub như trước. Hub không tự tạo thư mục phòng hay thư mục sổ.
+- Mỗi lần tải lên, tải về, gỡ tệp đều ghi AuditLog. Lịch sử văn bản ghi thêm `FILE` / `FILE_DELETED`.
+- Claude (token) không tải lên, không tải về nội dung tệp, và không thấy văn bản Bảo mật cao.
+
+### 3. Rà năng lực (thay đổi)
+
+| Mã | Trạng thái | Ghi chú | Ưu tiên |
+|---|---|---|---|
+| PRE-01 | Một phần | Trên Hub, quyền xem tệp bằng quyền xem văn bản (Điều 5). **Trên NAS, quyền theo NTFS của thư mục phòng, không theo mức của từng văn bản.** Văn bản Hạn chế / Bảo mật cao vì vậy mở được bởi mọi người có quyền vào thư mục đó | Bắt buộc |
+| PRE-02 | Một phần | `svc-kepler-hub` chỉ có quyền Modify trên thư mục văn thư và quyền xem danh sách thư mục phòng. Không có quyền xoá tệp ngoài các thư mục này. Mật khẩu chỉ nằm trong `/root/.smb-kepler-hub` (quyền 600) | Bắt buộc |
+| DET-01 | Đầy đủ | AuditLog `UPLOAD / DOWNLOAD / DELETE` DocFile kèm SHA-256 | Bắt buộc |
+| RES-01 | Một phần | Shadow Copies ổ D: (07:00, 12:00); tệp không ghi đè; gỡ thì chuyển vào `_LuuTru`. Còn thiếu bản sao lưu ngoài máy chủ | Bắt buộc |
+
+### 4. Rủi ro còn lại
+
+- **Văn bản Bảo mật cao trên NAS lệch quyền so với Hub.** Hub chỉ cho Ban GĐ và danh sách đích danh xem. NAS cho cả người có quyền vào thư mục phòng xem.
+  Khuyến nghị: vào sổ Bảo mật cao thì chỉ ghi siêu dữ liệu và chưa tải bản scan lên, cho tới khi có thư mục riêng giới hạn quyền.
+- Máy ảo mount cả share `DATA`. Tài khoản dịch vụ là người dùng miền, nên có thể đọc được các thư mục cấp quyền cho "Domain Users". Ứng dụng chỉ truy cập đường dẫn văn thư đã kiểm (`inside()`), nhưng nếu máy ảo bị chiếm quyền thì phạm vi đọc rộng hơn. Nên rà các thư mục đang cấp quyền cho "Everyone" / "Domain Users".
+- Đổi bộ phận của văn bản sau khi đã có tệp: tệp cũ giữ ở thư mục phòng cũ (đường dẫn lưu trong `DocFile`).
+
+## Việc con ở mọi view, người giao duyệt và chấm mức hoàn thành (19/11/2026)
+
+Theo yêu cầu: (1) việc con hiện trong Bảng / Danh sách / Lịch / Việc của tôi (lồng dưới việc cha hoặc dòng riêng kèm nhãn việc cha),
+việc cha chỉ gửi duyệt / hoàn thành khi mọi việc con đã được duyệt; (2) chuyển "Hoàn thành" → "Chờ duyệt", **người giao duyệt và bắt buộc
+chấm mức hoàn thành** (Xuất sắc / Tốt / Đạt / Cần cải thiện / Kém, nhận xét tuỳ chọn) hoặc trả lại kèm lý do; người chủ trì không tự duyệt.
+Luật nằm ở `server/src/services/task-rules.js` (có test `task-rules.test.js`).
+
+**Kết luận cổng:** ĐẠT — kèm một khuyến nghị cho chủ dự án về phạm vi xem mức hoàn thành (mục 4).
+
+### 1. Phân loại
+
+| Tập dữ liệu | Nhãn nội bộ | Phân loại pháp lý | Ghi chú |
+|---|---|---|---|
+| Mức hoàn thành + nhận xét của người giao (`WorkItem.rating/review/ratedById/ratedAt`, `ApprovalAction.rating/comment`) | Nội bộ | DLCN cơ bản (đánh giá kết quả công việc gắn với người chủ trì) | Mức cũ "Không hoàn thành" (FAIL) đổi thành "Kém" (POOR) bằng migration, giữ 0 điểm KPI như cũ |
+| Lý do trả lại (`returnNote`, `ApprovalAction.comment`) | Nội bộ | DLCN cơ bản | Như bình luận công việc |
+
+### 2. Dòng dữ liệu
+
+- Người chủ trì chọn "Hoàn thành" (giao diện, kéo thẻ, 100% từ báo cáo tuần / checklist / cập nhật nhanh / Claude) → máy chủ đưa vào "Chờ duyệt", mở phiếu cấp 1 = người giao.
+- Người giao duyệt trong ứng dụng → ghi mức, nhận xét, người duyệt, thời điểm; thông báo trong ứng dụng cho người chủ trì. Không gửi ra ngoài.
+- Ngày hoàn thành (KPI đúng hạn) = ngày gửi duyệt của lần được duyệt; ngày duyệt lưu riêng trên phiếu.
+
+### 3. Rà năng lực (thay đổi)
+
+| Mã | Trạng thái | Ghi chú | Ưu tiên |
+|---|---|---|---|
+| PRE-01 | Đầy đủ | Chỉ người giao (hoặc người được uỷ quyền) duyệt + chấm mức; việc tự giao → lãnh đạo bộ phận → trưởng dự án → PGĐ phụ trách → Ban GĐ; người chủ trì bị chặn ở máy chủ (`SELF_APPROVAL`), kể cả qua uỷ quyền | Bắt buộc |
+| DET-01 | Đầy đủ | Mỗi lần gửi / trả lại / duyệt ghi `ApprovalAction` (người, cấp, mức, nhận xét) + AuditLog `APPROVAL_*` | Bắt buộc |
+| PRI-02 | Một phần | Mức hoàn thành hiện cho ai xem được việc (dự án dùng chung MTL: cả công ty). KPI theo người vẫn chỉ Ban GĐ / trưởng bộ phận / PMO | Khuyến nghị |
+
+### 4. Khuyến nghị và rủi ro còn lại
+
+- **Khuyến nghị (chờ chủ dự án chốt):** chỉ hiện mức hoàn thành + nhận xét cho người chủ trì, người giao / người duyệt, lãnh đạo bộ phận chủ trì,
+  người quản lý dự án và Ban GĐ — người khác (vd. thành viên dự án dùng chung) chỉ thấy "Đã duyệt". Hiện chưa áp dụng để không đổi cách xem đang có.
+- Dữ liệu cũ: không việc nào đổi trạng thái; việc cha đã Hoàn thành mà còn con mở (nếu có trên máy chạy thật) giữ nguyên tới khi có thao tác trên cây việc đó.

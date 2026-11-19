@@ -46,8 +46,20 @@ test('19. Sprint theo giai đoạn: lộ trình, thiết lập sprint, tiến đ
   await expect(pmo.getByTestId('sp-kids-8')).toContainText('1/4 việc con đã xong');
   const step8 = async () => (await (await apiAs(pmo, `/api/projects/${project.id}/mtl`)).json()).items.find(i => i.planCode === '8');
   const b8 = await step8();
+  // "✓ Xong" chỉ gửi duyệt: DA-21 do tb.phaply tự giao cho mình → trưởng dự án (pmo) duyệt + chấm mức thì mới tính là xong.
   await pmo.getByTestId('qk-DA-21-100').click();
-  await toast(pmo, 'DA-21: đã xong');
+  await toast(pmo, 'DA-21: đã gửi người giao duyệt');
+  await expect(pmo.getByTestId('sp-kids-8')).toContainText('1/4 việc con đã xong');
+  const approve = async code => {
+    const id = (await (await apiAs(pmo, `/api/projects/${project.id}/mtl`)).json()).items.find(i => i.code === code).id;
+    const d = await (await apiAs(pmo, `/api/items/${id}`)).json();
+    expect(d.state.category).toBe('REVIEW'); expect(d.ratingRequired).toBe(true);
+    const r = await apiAs(pmo, `/api/approvals/${d.approvals.find(a => a.status === 'PENDING').id}/approve`, { method: 'POST', data: { rating: 'GOOD' } });
+    expect(r.status()).toBe(200);
+  };
+  await approve('DA-21');
+  await pmo.reload();
+  await pmo.getByTestId('sp-road-1').click();
   await expect(pmo.getByTestId('sp-kids-8')).toContainText('2/4 việc con đã xong');
   expect((await step8()).actual).toBe(b8.actual + 25);
   // Checklist: việc lá có checklist → % = số mục đã xong / tổng (không phải tự khai); đủ mục → Hoàn thành.
@@ -58,7 +70,9 @@ test('19. Sprint theo giai đoạn: lộ trình, thiết lập sprint, tiến đ
   expect((await (await apiAs(pmo, `/api/items/${id22}`)).json()).progress).toBe(50);
   await apiAs(pmo, `/api/checklist/${c2.id}`, { method: 'PATCH', data: { done: true } });
   const i22 = await (await apiAs(pmo, `/api/items/${id22}`)).json();
-  expect(i22.progress).toBe(100); expect(i22.state.category).toBe('COMPLETED');
+  expect(i22.progress).toBe(100); expect(i22.state.category).toBe('REVIEW'); // đủ mục → gửi người giao duyệt
+  await approve('DA-22');
+  expect((await (await apiAs(pmo, `/api/items/${id22}`)).json()).state.category).toBe('COMPLETED');
   expect((await step8()).actual).toBe(b8.actual + 50); // 8.3 xong (+25) và 8.4 xong qua checklist (+25)
 
   // 4) Kế hoạch & Gantt: hàng gom theo sprint, thu gọn / mở; lọc theo sprint; khung 12 tháng; đầu cột mở "Theo tháng".
@@ -69,9 +83,12 @@ test('19. Sprint theo giai đoạn: lộ trình, thiết lập sprint, tiến đ
   await expect(pmo.getByTestId('mtl-row-3')).toHaveCount(0);
   await pmo.getByTestId('mtl-sprint-0').click();
   await expect(pmo.getByTestId('mtl-row-3')).toBeVisible();
-  await pmo.getByTestId('mtl-f-sprint').selectOption('4');
+  // Bảng có thể vẽ lại một lần do sự kiện thời gian thực của các lượt duyệt phía trên → chọn lại tới khi bộ lọc có hiệu lực.
+  await expect(async () => {
+    await pmo.getByTestId('mtl-f-sprint').selectOption('4');
+    await expect(pmo.getByTestId('mtl-row-3')).toHaveCount(0, { timeout: 2000 });
+  }).toPass();
   await expect(pmo.getByTestId('mtl-row-II.1')).toBeVisible();
-  await expect(pmo.getByTestId('mtl-row-3')).toHaveCount(0);
   await pmo.getByTestId('mtl-f-sprint').selectOption('');
   await expect(pmo.getByTestId('gz-range')).toHaveText('T8–T19');
   await pmo.getByTestId('gz-fwd').click();
