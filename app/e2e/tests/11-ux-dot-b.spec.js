@@ -283,10 +283,11 @@ test('B7 + N1 + N3 + N4. Việc của tôi: "Ghi chú của tôi" ngoài dãy ta
   await expect(page.getByTestId('my-back')).toBeVisible();
   await expect(page.locator('body')).not.toContainText('Dashboard dự án');
   // Thông báo: nội dung nhiều dòng giữ xuống dòng; bảng thông báo nằm trọn trong màn hình 375 px.
+  // Bảng chỉ hiện sau khi tải xong danh sách thông báo (bất đồng bộ): chờ hiện rồi mới đọc vị trí.
   await page.getByTestId('notif-btn').click();
-  const box = await page.locator('#notifPanel').boundingBox();
-  expect(box.x).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width).toBeLessThanOrEqual(375);
-  const body = page.locator('#notifPanel .notif-body').first();
+  const notif = page.locator('#notifPanel');
+  await expect(notif).toBeVisible();
+  await expect.poll(async () => { const b = await notif.boundingBox(); return b && b.x >= 0 && b.x + b.width <= 375; }).toBe(true);
+  const body = notif.locator('.notif-body').first();
   if (await body.count()) expect(await body.evaluate(el => getComputedStyle(el).whiteSpace)).toBe('pre-line');
 });
