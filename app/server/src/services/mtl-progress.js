@@ -1,4 +1,4 @@
-// Kepper — đặt % tiến độ một hạng mục MTL (dùng chung: checklist, báo cáo tuần ghi ngược % vào MTL).
+// Kepper — đặt % tiến độ một hạng mục MTL (dùng chung: báo cáo tiến độ, báo cáo tuần ghi ngược % vào MTL).
 // > 0% từ "Chưa bắt đầu" → "Đang thực hiện"; 100% → gửi người giao duyệt ("Chờ duyệt", khi mọi việc con đã xong);
 // hạ dưới 100% khi đã hoàn thành → mở lại.
 // Gọi trong giao dịch, sau khi đã khoá hạng mục (pg_advisory_xact_lock 'item:<id>').

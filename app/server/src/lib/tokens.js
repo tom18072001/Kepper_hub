@@ -19,9 +19,8 @@ const READ_DENY = [/\.(xlsx|docx|pdf|csv|zip)$/, /^\/api\/stream$/, /^\/api\/att
   /^\/api\/me\/viber(\/|$)/, /^\/api\/hrm\/people\/\d+\/identity$/, /^\/api\/claude\/connect(\/|$)/];
 // Ghi cho phép với phạm vi write (khớp method + đường dẫn). Mọi đường khác → 403 "làm trên giao diện".
 const WRITE_ALLOW = [
-  ['PATCH', /^\/api\/items\/\d+$/],                 // % / nội dung / người phụ trách — vẫn qua mtl-guard + policy
+  ['PATCH', /^\/api\/items\/\d+$/],                 // % / nội dung / người phụ trách — vẫn qua services/task-access.js
   ['POST', /^\/api\/items\/\d+\/comments$/],
-  ['POST', /^\/api\/items\/\d+\/checklist$/], ['PATCH', /^\/api\/checklist\/\d+$/],
   ['POST', /^\/api\/items\/\d+\/move$/],
   ['POST', /^\/api\/projects\/\d+\/items$/],        // giao việc (MTL: mtl-guard)
   ['POST', /^\/api\/items\/\d+\/progress-reports$/],

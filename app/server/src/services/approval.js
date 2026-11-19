@@ -219,9 +219,9 @@ async function decide(prisma, user, requestId, decision, comment, { rating } = {
     const onBehalfOfId = await actingFor(tx, user, project, step, item);
     const onBehalfOf = onBehalfOfId ? (await tx.user.findUnique({ where: { id: onBehalfOfId }, select: { fullName: true } }))?.fullName : null;
     await tx.approvalAction.create({ data: { requestId, level: request.currentLevel, actorId: user.id, decision, comment: comment || null, onBehalfOfId, rating: graded ? rating : null } });
-    // Người giao chấm mức hoàn thành (kèm nhận xét) ngay ở cấp của mình — lưu ai, lúc nào, mức nào, nhận xét gì.
-    if (graded) await tx.workItem.update({ where: { id: item.id }, data: { rating, ratedById: user.id, ratedAt: new Date(),
-      review: comment ? comment.slice(0, 2000) : '', reviewedById: user.id, reviewedAt: new Date() } });
+    // Người giao chấm mức hoàn thành ngay ở cấp của mình — lưu ai, lúc nào, mức nào; nhận xét nằm ở lượt duyệt (ApprovalAction.comment).
+    // Đánh giá = mức chấm + nhận xét lúc duyệt; KHÔNG ghi đè / xoá nội dung ô "Đánh giá của người giao" cũ (WorkItem.review, chỉ đọc).
+    if (graded) await tx.workItem.update({ where: { id: item.id }, data: { rating, ratedById: user.id, ratedAt: new Date() } });
     // Thông báo "Cần duyệt" của bước này hết hiệu lực với mọi người (đã có người xử lý).
     await tx.notification.updateMany({ where: { type: 'APPROVAL_REQUESTED', link: itemLink(project, item), readAt: null }, data: { readAt: new Date() } });
     const label = `${itemCode(project, item)} · ${item.title.slice(0, 80)}`;
@@ -262,7 +262,7 @@ async function decide(prisma, user, requestId, decision, comment, { rating } = {
     const done = await tx.workflowState.findFirst({ where: { projectId: project.id, category: 'COMPLETED' }, orderBy: { position: 'asc' } });
     const position = await endPosition(tx, done.id);
     // Phiếu cũ: cấp cuối có thể xếp loại tuỳ chọn. Phiếu mới: mức đã chấm ở cấp người giao.
-    const legacyGrade = !graded && rating && RATINGS[rating] ? { rating, ratedById: user.id, ratedAt: new Date(), ...(comment ? { review: comment.slice(0, 2000), reviewedById: user.id, reviewedAt: new Date() } : {}) } : {};
+    const legacyGrade = !graded && rating && RATINGS[rating] ? { rating, ratedById: user.id, ratedAt: new Date() } : {};
     // KPI "đúng hạn" tính theo ngày người chủ trì gửi duyệt (người duyệt chậm không làm người làm bị tính trễ).
     const completedAt = request.withAssigner ? request.createdAt : new Date();
     await tx.workItem.update({ where: { id: item.id }, data: { stateId: done.id, completedAt, position, progress: 100, returnedAt: null, returnNote: null, ...legacyGrade } });

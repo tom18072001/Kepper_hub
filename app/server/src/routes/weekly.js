@@ -89,8 +89,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     ]);
     const memberIds = new Set(members.map(u => u.id));
     const cand = WK.deptCandidates(items, departmentId, memberIds);
-    const checklist = cand.length ? await prisma.checklistItem.findMany({ where: { workItemId: { in: cand.map(i => i.id) } }, orderBy: [{ position: 'asc' }, { id: 'asc' }], select: { workItemId: true, title: true, done: true } }) : [];
-    for (const i of items) { const cl = checklist.filter(c => c.workItemId === i.id); i.hasChecklist = cl.length > 0; i.checklistNext = cl.find(c => !c.done)?.title || ''; }
+    for (const i of items) i.pctAuto = i.children > 0; // % việc có việc nhánh tự tính từ việc nhánh
     const { actions } = await D.openActions(prisma, week, departmentId);
     const prev = prevRep?.firstSubmittedAt ? prevRep.data : null; // chỉ bản ĐÃ NỘP tuần trước
     const prefill = WK.buildPrefill({ week, deptId: departmentId, items, memberIds, prev, actions });
@@ -189,14 +188,13 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     const { prefill, cand, actions } = await prefillFor(req.user, departmentId, week, now);
     stripForeignActions(data, actions);
     const candIds = new Set(cand.map(i => i.id)), byId = new Map(ctx.items.map(i => [i.id, i]));
-    const locked = new Set((await prisma.checklistItem.findMany({ where: { workItemId: { in: [...data.results, ...data.ongoing].map(r => r.itemId).filter(Boolean) } }, distinct: ['workItemId'], select: { workItemId: true } })).map(c => c.workItemId));
     // Dòng MTL: tên, mã, bước, găng, mốc, hạn, người phụ trách, khoá % lấy từ MTL; tình trạng tính lại từ MTL theo % mới —
     // người lập chỉ nâng lên "Vướng" (một nguồn sự thật; báo cáo không đổi được tên / mã hạng mục MTL).
     for (const r of [...data.results, ...data.ongoing]) {
       const i = r.itemId && byId.get(r.itemId);
       if (!i) continue;
       Object.assign(r, { task: i.title, ref: i.code, step: i.planCode || '', critical: !!i.critical, milestone: !!i.milestone });
-      r.pctLocked = locked.has(i.id) || i.children > 0;
+      r.pctLocked = i.children > 0;
       if (i.assignees?.length) r.ownerIds = i.assignees.map(a => a.id);
       r.due = WK.dayOf(i.baselineEnd) || r.due;
       if (r.pctLocked) r.pct = i.done ? 100 : Math.round(i.actual || 0);
@@ -219,14 +217,12 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     // Kiểm quyền trước; GHI trong cùng transaction với bản nộp + phiên bản (nộp lỗi thì % không vào MTL).
     const skipped = [], plan = [];
     if (!acc.onBehalf) {
-      const leaderCache = new Map();
       for (const w of WK.writeBacks(data)) {
         if (!candIds.has(w.itemId)) { skipped.push(w.itemId); continue; }
         try {
           const { project, rights } = await loadItem(prisma, req.user, w.itemId, 'edit');
           const it = byId.get(w.itemId);
-          if (!leaderCache.has(it.leadDepartmentId)) leaderCache.set(it.leadDepartmentId, await approval.deptLeaderIds(prisma, it.leadDepartmentId));
-          if (project.kind !== 'MTL' || !P.can(s, 'edit', 'mtl.progress', { item: { assigneeIds: (it.assignees || []).map(a => a.id), leadLeaderIds: leaderCache.get(it.leadDepartmentId), projectManager: rights.canManage } })) { skipped.push(w.itemId); continue; }
+          if (project.kind !== 'MTL' || !P.can(s, 'edit', 'mtl.progress', { item: { assigneeIds: (it.assignees || []).map(a => a.id) } })) { skipped.push(w.itemId); continue; }
           plan.push({ w, project, rights, code: it.code, row: [...data.results, ...data.ongoing].find(r => r.itemId === w.itemId) });
         } catch (error) { if (error.status && error.status < 500) skipped.push(w.itemId); else throw error; }
       }
@@ -243,7 +239,8 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
       for (const p of plan) {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'item:' + p.w.itemId}))`;
         const item = await tx.workItem.findUnique({ where: { id: p.w.itemId }, include: { state: true, _count: { select: { children: { where: { archivedAt: null } } } } } });
-        if (!item || item.archivedAt || item._count.children) { skipped.push(p.w.itemId); continue; }
+        // Việc đã xong / huỷ: người chủ trì không mở lại bằng % (mở lại là của người giao / Ban Giám đốc).
+        if (!item || item.archivedAt || item._count.children || ['COMPLETED', 'CANCELLED'].includes(item.state.category)) { skipped.push(p.w.itemId); continue; }
         if (item.progress !== p.row.pct0) { conflicts.push(p.code); continue; }
         if (await setProgress(tx, { user: req.user, project: p.project, rights: p.rights, item, pct: p.w.pct, via: 'WEEKLY_REPORT' })) updated.push(p);
         p.row.pct0 = p.w.pct;

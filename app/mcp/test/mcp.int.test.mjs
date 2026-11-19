@@ -54,7 +54,7 @@ test('MCP: Claude dùng đúng quyền người dùng — đọc / ghi / từ ch
 
     // Không sửa % hạng mục MTL của bộ phận khác (policy mtl.progress).
     const plItem = await prisma.workItem.findFirst({ where: { archivedAt: null, project: { kind: 'MTL' }, leadDepartmentId: { notIn: [member.departmentId] }, assignees: { none: { userId: member.id } },
-      children: { none: {} }, checklist: { none: {} }, state: { category: { notIn: ['COMPLETED', 'CANCELLED'] } } } });
+      children: { none: {} }, state: { category: { notIn: ['COMPLETED', 'CANCELLED'] } } } });
     const deny = await call(cNv, 'kepper_update_progress', { itemId: plItem.id, progress: 77 });
     assert.ok(deny.error && /Không đủ quyền/.test(deny.text), deny.text);
     assert.notEqual((await prisma.workItem.findUnique({ where: { id: plItem.id } })).progress, 77);

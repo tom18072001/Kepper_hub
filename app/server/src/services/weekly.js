@@ -67,7 +67,7 @@ function statusFromMtl(code, done) {
 
 // ---------- Điền sẵn ----------
 // items: hạng mục MTL người lập xem được, mỗi hạng mục { id, code, projectKey, planCode, title, parentId, baselineStart, baselineEnd,
-//   done, cancelled, completedAt, status, actual, assignees: [{ id }], leadDepartmentId, checklistNext, hasChecklist, critical, milestone }.
+//   done, cancelled, completedAt, status, actual, assignees: [{ id }], leadDepartmentId, pctAuto (có việc nhánh: % tự tính), critical, milestone }.
 // memberIds: tài khoản thuộc bộ phận. prev: báo cáo tuần trước (data). actions: Action Log của buổi giao ban vừa rồi giao cho bộ phận.
 let seq = 0;
 const newKey = p => `${p}${Date.now().toString(36)}${(seq++).toString(36)}`;
@@ -91,7 +91,7 @@ function mtlRow(i, extra = {}) {
   return {
     key: `m${i.id}`, itemId: i.id, ref: i.code, step: i.planCode || '', project: i.projectKey || '', task: i.title, source: MTL_SOURCE,
     ownerIds: (i.assignees || []).map(a => a.id), start: dayOf(i.baselineStart), due: dayOf(i.baselineEnd), status, pct, pct0: pct,
-    pctLocked: !!i.hasChecklist, critical: !!i.critical, milestone: !!i.milestone, ...blankIssue(), next: '', mandatory: true, ...extra,
+    pctLocked: !!i.pctAuto, critical: !!i.critical, milestone: !!i.milestone, ...blankIssue(), next: '', mandatory: true, ...extra,
   };
 }
 
@@ -129,7 +129,7 @@ function buildPrefill({ week: f, deptId, items = [], memberIds = new Set(), prev
     const s = dayOf(i.baselineStart), e = dayOf(i.baselineEnd), c = dayOf(i.completedAt);
     if (i.done) { if (c >= S.from && c <= S.to) add(results, mtlRow(i)); continue; }
     if (e <= S.to) add(results, mtlRow(i));
-    else if (s <= S.to) add(ongoing, mtlRow(i, { next: i.checklistNext || '' }));
+    else if (s <= S.to) add(ongoing, mtlRow(i));
     else if (s <= S.nextTo) { if (!seen.has(i.id)) { seen.add(i.id); plans.push({ key: `m${i.id}`, itemId: i.id, ref: i.code, step: i.planCode || '', task: i.title, basis: MTL_SOURCE, ownerIds: (i.assignees || []).map(a => a.id), due: e, output: '' }); } }
   }
   // Nguyên nhân / giải pháp của tuần trước (bản đã nộp) cho cùng hạng mục còn chậm: điền sẵn để bộ phận xem lại, sửa nếu đã khác —
@@ -230,7 +230,7 @@ function finalize(data, f) {
   const fix = r => (needsIssue(r, f) ? { ...r, overdue: isOverdue(r, f) } : { ...r, ...blankIssue(), overdue: false });
   return { ...data, results: data.results.filter(r => r.task).map(fix), ongoing: data.ongoing.filter(r => r.task).map(fix), plans: data.plans.filter(p => p.task) };
 }
-// % đề xuất ghi ngược vào MTL: hạng mục liên kết, không tự tính theo checklist, % khác lúc điền sẵn (pct0).
+// % đề xuất ghi ngược vào MTL: hạng mục liên kết, không tự tính từ việc nhánh, % khác lúc điền sẵn (pct0).
 // Máy chủ chỉ ghi khi % trong MTL vẫn bằng pct0 (chưa ai đổi từ lúc điền sẵn) — tránh đè số mới bằng số cũ khi gửi lại.
 const writeBacks = data => [...data.results, ...data.ongoing]
   .filter(r => r.itemId && !r.pctLocked && r.pct !== '' && r.pct !== r.pct0)

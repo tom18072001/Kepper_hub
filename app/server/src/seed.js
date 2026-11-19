@@ -8,7 +8,10 @@ const { grantInitialPermissions } = require('./lib/permissions');
 const { DEFAULT_PASSWORD, MIN_PASSWORD_LENGTH } = require('./lib/passwords');
 const { DEFAULT_STATES } = require('./routes/projects');
 
+// "Ban Tổng Giám đốc" (TGĐ) = Ban Giám đốc của mọi việc (services/task-access.js, cấu hình TOP_DEPARTMENT).
+// "Ban Giám đốc" (BGD) ở đây chỉ là một phòng: PMO thuộc phòng này nhưng KHÔNG phải Ban Giám đốc của việc.
 const DEPARTMENTS = [
+  { code: 'TGD', name: 'Ban Tổng Giám đốc' },
   { code: 'BGD', name: 'Ban Giám đốc' }, { code: 'KD', name: 'Phòng Kinh doanh' },
   { code: 'KT', name: 'Phòng Kỹ thuật' }, { code: 'HCNS', name: 'Phòng Hành chính – Nhân sự' },
   // Kepper: bộ phận theo đầu mối trong Master Timeline.
@@ -16,7 +19,7 @@ const DEPARTMENTS = [
   { code: 'QLXD', name: 'Ban Quản lý xây dựng' }, { code: 'GR', name: 'Ban Đối ngoại – GPMB' },
 ];
 const USERS = [
-  { username: 'giamdoc', fullName: 'Trần Minh Giám', displayTitle: 'Giám đốc', role: 'director', dept: 'BGD' },
+  { username: 'giamdoc', fullName: 'Trần Minh Giám', displayTitle: 'Tổng Giám đốc', role: 'director', dept: 'TGD' },
   { username: 'tp.kinhdoanh', fullName: 'Lê Thu Hà', displayTitle: 'Trưởng phòng Kinh doanh', role: 'manager', dept: 'KD' },
   { username: 'nv.kinhdoanh1', fullName: 'Phạm Văn An', displayTitle: 'Chuyên viên kinh doanh', role: 'member', dept: 'KD' },
   { username: 'nv.kinhdoanh2', fullName: 'Đỗ Thị Bình', displayTitle: 'Chuyên viên kinh doanh', role: 'member', dept: 'KD' },
@@ -82,7 +85,7 @@ async function seed(prisma = new PrismaClient(), env = process.env) {
       const due = it.dueInDays == null ? null : new Date(Date.now() + it.dueInDays * 86_400_000);
       await tx.workItem.create({ data: {
         projectId: project.id, number: n, title: it.title, descriptionHtml: `<p>${it.title}.</p>`, descriptionText: it.title + '.', stateId: state.id, priority: it.priority || 'MEDIUM',
-        reporterId: users[lead].id, dueDate: due, startDate: due ? new Date(due.getTime() - 5 * 86_400_000) : null, position: n * 1024,
+        reporterId: users[lead].id, assignedById: users[lead].id, assignedAt: new Date(), dueDate: due, startDate: due ? new Date(due.getTime() - 5 * 86_400_000) : null, position: n * 1024,
         startedAt: ['STARTED', 'REVIEW', 'COMPLETED'].includes(it.category) ? new Date(Date.now() - (it.startedDaysAgo || 3) * 86_400_000) : null,
         completedAt: it.category === 'COMPLETED' ? new Date() : null,
         assignees: { create: (it.assignees || []).map(u => ({ userId: users[u].id })) },

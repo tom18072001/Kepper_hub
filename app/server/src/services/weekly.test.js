@@ -44,7 +44,7 @@ test('điền sẵn từ MTL: đến hạn / quá hạn / xong trong tuần → 
     item(1, '2026-10-01', '2026-10-28', { status: 'BEHIND', actual: 60 }), // hạn T4 trong tuần, chưa xong → I, Chậm, Quá hạn
     item(2, '2026-09-01', '2026-10-15', { status: 'OVERDUE' }), // quá hạn từ trước → I
     item(3, '2026-10-01', '2026-10-31', { done: true, completedAt: d('2026-10-27'), status: 'DONE_ON_TIME' }), // xong trong tuần → I
-    item(4, '2026-10-01', '2026-12-31', { status: 'ON_TRACK', actual: 30, checklistNext: 'Gửi hồ sơ (giả)', hasChecklist: true }), // → II
+    item(4, '2026-10-01', '2026-12-31', { status: 'ON_TRACK', actual: 30, pctAuto: true }), // → II
     item(5, '2026-11-02', '2026-11-30', { status: 'NOT_DUE', actual: 0 }), // → III
     item(6, '2026-12-01', '2026-12-31', { status: 'NOT_DUE', actual: 0 }), // còn xa → không có
     item(7, '2026-10-01', '2026-12-31', { leadDepartmentId: 2 }), // bộ phận khác
@@ -61,7 +61,7 @@ test('điền sẵn từ MTL: đến hạn / quá hạn / xong trong tuần → 
   assert.ok(WK.isOverdue(r1, F)); assert.ok(WK.needsIssue(r1, F)); assert.equal(WK.issueLabel(r1, F), 'Chậm · Quá hạn');
   assert.equal(p.results.find(r => r.itemId === 3).status, 'Hoàn thành');
   const r4 = p.ongoing.find(r => r.itemId === 4);
-  assert.equal(r4.next, 'Gửi hồ sơ (giả)'); assert.equal(r4.pctLocked, true);
+  assert.equal(r4.next, ''); assert.equal(r4.pctLocked, true); // % tự tính từ việc nhánh
   assert.deepEqual(p.ongoing.find(r => r.itemId === 81).ownerIds, [50]);
 });
 
@@ -127,7 +127,7 @@ test('làm sạch + kiểm tra: Chậm / Vướng / Quá hạn bắt buộc nguy
   assert.ok(WK.validate(data, F, { mandatory: [{ itemId: 77, task: 'Bước găng (giả)', ref: 'DA-77' }] }).some(e => /Không được bỏ “Bước găng \(giả\)” \(DA-77\)/.test(e)));
   assert.deepEqual(WK.writeBacks(data), [{ itemId: 1, pct: 70 }]); // hạng mục 4 không đổi %
   data.results[0].pctLocked = true;
-  assert.deepEqual(WK.writeBacks(data), []); // hạng mục dùng checklist: không ghi ngược
+  assert.deepEqual(WK.writeBacks(data), []); // hạng mục có việc nhánh (% tự tính): không ghi ngược
   const fin = WK.finalize(data, F);
   assert.equal(fin.results[0].overdue, true); assert.equal(fin.results[1].cause, '');
 });

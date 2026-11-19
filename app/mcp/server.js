@@ -148,15 +148,14 @@ export function buildServer({ call = createSession() } = {}) {
   server.registerTool('kepper_sprint_tasks', { title: 'Việc trong kỳ (Cập nhật nhanh)', description: 'Hạng mục MTL của tôi (lãnh đạo: cả bộ phận) đang trong kỳ thực hiện hoặc trễ, kèm sprint — giống trang "Cập nhật nhanh".', inputSchema: {}, annotations: R },
     run(async () => call('/api/my/sprint')));
 
-  server.registerTool('kepper_get_item', { title: 'Chi tiết một việc', description: 'Chi tiết việc / hạng mục: tình trạng, %, hạn, người phụ trách, checklist, việc con, bình luận gần nhất.',
+  server.registerTool('kepper_get_item', { title: 'Chi tiết một việc', description: 'Chi tiết việc / hạng mục: tình trạng, %, hạn, người phụ trách, việc nhánh, bình luận gần nhất. Người không liên quan tới việc chỉ nhận tóm tắt.',
     inputSchema: { itemId: z.number().int().positive() }, annotations: R },
     run(async ({ itemId }) => {
       const i = await call(`/api/items/${itemId}`);
       return { ...itemBrief(i), description: i.excerpt || undefined, forecastEnd: day(i.forecastEnd), mtl: i.mtl || undefined, leadDepartment: i.leadDepartment?.name,
-        checklist: (i.checklist || []).map(c => ({ id: c.id, title: c.title, done: c.done })),
         children: (i.children || []).map(c => ({ id: c.id, title: c.title, progress: c.progress, state: c.state?.name, due: day(c.dueDate || c.baselineEnd) })),
         comments: (i.comments || []).slice(-10).map(c => ({ by: c.authorName, at: c.createdAt, text: c.bodyText })),
-        canEdit: i.rights?.canEdit, canProgress: i.can?.progress };
+        summaryOnly: !!i.summary, canProgress: !!i.capabilities?.progress, myRoles: i.capabilities?.roles };
     }));
 
   server.registerTool('kepper_search', { title: 'Tìm việc', description: 'Tìm việc theo tên hoặc mã (vd. DA-12) trong các dự án tôi được xem.', inputSchema: { q: z.string().min(2).max(100) }, annotations: R },
@@ -192,12 +191,11 @@ export function buildServer({ call = createSession() } = {}) {
     run(async () => (await call('/api/me/notes')).slice(0, MAX_ROWS).map(n => pick(n, ['id', 'title', 'body', 'dueDate', 'done']))));
 
   // ---------- Ghi (Claude Desktop hỏi xác nhận trước mỗi lần dùng, trừ khi người dùng chọn luôn cho phép) ----------
-  server.registerTool('kepper_update_progress', { title: 'Cập nhật tiến độ', description: 'Cập nhật % một việc của tôi, hoặc đánh dấu một mục checklist xong / chưa xong; có thể kèm ghi chú (thành bình luận). Việc cha / việc có checklist: % tính tự động — đánh dấu checklist hoặc cập nhật việc con.',
-    inputSchema: { itemId: z.number().int().positive(), progress: z.number().int().min(0).max(100).optional(), checklistItemId: z.number().int().positive().optional(), done: z.boolean().optional(), note: z.string().max(2000).optional() }, annotations: W },
-    run(async ({ itemId, progress, checklistItemId, done, note }) => {
-      if (checklistItemId) await call(`/api/checklist/${checklistItemId}`, { method: 'PATCH', body: { done: done !== false } });
-      else if (progress !== undefined) await call(`/api/items/${itemId}`, { method: 'PATCH', body: { progress } });
-      else if (!note) throw new Error('Cần progress, checklistItemId hoặc note');
+  server.registerTool('kepper_update_progress', { title: 'Cập nhật tiến độ', description: 'Cập nhật % một việc tôi chủ trì; có thể kèm ghi chú (thành bình luận). Việc có việc nhánh: % tính tự động từ việc nhánh — cập nhật ở việc nhánh.',
+    inputSchema: { itemId: z.number().int().positive(), progress: z.number().int().min(0).max(100).optional(), note: z.string().max(2000).optional() }, annotations: W },
+    run(async ({ itemId, progress, note }) => {
+      if (progress !== undefined) await call(`/api/items/${itemId}`, { method: 'PATCH', body: { progress } });
+      else if (!note) throw new Error('Cần progress hoặc note');
       if (note) await call(`/api/items/${itemId}/comments`, { method: 'POST', body: { body: note } });
       return itemBrief(await call(`/api/items/${itemId}`));
     }));

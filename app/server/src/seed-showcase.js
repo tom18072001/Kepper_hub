@@ -1,6 +1,6 @@
 // Dữ liệu TRÌNH DIỄN đầy đủ (dữ liệu GIẢ — không dùng dữ liệu thật, Data Protection Gate) để thử hết tính năng:
 // duyệt nhiều cấp đang chờ ở từng cấp + quy tắc tự động, chia làn theo người, chu kỳ, việc lặp lại, yêu cầu liên phòng ban,
-// nhãn riêng dự án, checklist, bình luận, lịch sử hoàn thành 3 tháng (cho KPI), ghi chú cá nhân, thùng rác.
+// nhãn riêng dự án, bình luận, lịch sử hoàn thành 3 tháng (cho KPI), ghi chú cá nhân, thùng rác.
 // Chạy: npm run seed:showcase   (sau khi đã chạy seed thường với SEED_DEMO=true). Chạy lại không tạo trùng.
 const path = require('node:path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
@@ -66,7 +66,6 @@ async function showcase(prisma) {
       archivedAt: it.deletedAgo != null ? daysFromNow(-it.deletedAgo) : null, deletedById: it.deletedAgo != null ? reporter.id : null, estimate: it.est ?? null,
       assignees: { create: (it.to || []).map(u => ({ userId: U[u].id })) },
       labels: { create: (it.labels || []).map(l => ({ labelId: p.L[l].id })) },
-      checklist: { create: (it.check || []).map(([title, done], i) => ({ title, done, position: i })) },
       comments: { create: (it.comments || []).map(([who, body], i) => ({ authorId: U[who].id, bodyHtml: `<p>${body}</p>`, bodyText: body, createdAt: daysFromNow(-(it.comments.length - i) * 0.3) })) },
       activities: { create: [{ actorId: reporter.id, type: 'CREATED', data: { title: it.title, source: 'SEED' }, createdAt: daysFromNow(-(it.startedAgo ?? 4) - 1) },
         ...(completed ? [{ actorId: (U[(it.to || [])[0]] || reporter).id, type: 'STATE', data: { from: 'Đang làm', to: 'Hoàn thành' }, createdAt: completed }] : [])] },
@@ -106,11 +105,11 @@ async function showcase(prisma) {
   const TKI = [
     // Đang chờ duyệt ở các cấp khác nhau
     { title: 'Ký hợp đồng triển khai với Công ty Minh Phát', cat: 'REVIEW', to: ['nv.kinhdoanh1'], labels: ['Hợp đồng', 'Khách VIP'], pri: 'HIGH', due: 2, atLevel: 2, cycle: c2.id, comments: [['nv.kinhdoanh1', 'Đã gửi bản hợp đồng cuối, khách đồng ý điều khoản thanh toán 3 đợt.'], ['tp.kinhdoanh', 'Đã duyệt cấp 1, chuyển @giamdoc ký.']] },
-    { title: 'Báo giá gói bảo trì năm 2027 cho Hưng Thịnh', cat: 'REVIEW', to: ['nv.kinhdoanh2'], labels: ['Báo giá'], due: 3, atLevel: 1, cycle: c2.id, rejectedBefore: 'Thiếu bảng so sánh giá với năm ngoái.', check: [['Lập bảng giá', true], ['So sánh giá năm 2026', true], ['Gửi khách xác nhận', false]] },
+    { title: 'Báo giá gói bảo trì năm 2027 cho Hưng Thịnh', cat: 'REVIEW', to: ['nv.kinhdoanh2'], labels: ['Báo giá'], due: 3, atLevel: 1, cycle: c2.id, rejectedBefore: 'Thiếu bảng so sánh giá với năm ngoái.' },
     { title: 'Phụ lục hợp đồng gia hạn cho Thành Công', cat: 'REVIEW', to: ['nv.kinhdoanh3'], labels: ['Hợp đồng'], due: 1, atLevel: 1, cycle: c2.id },
     { title: 'Xử lý khiếu nại giao hàng chậm của Đại Việt', cat: 'REVIEW', to: ['nv.kinhdoanh1'], pri: 'URGENT', due: 0, atLevel: 1, cycle: c2.id, comments: [['nv.kinhdoanh1', 'Đã gọi điện xin lỗi và đề xuất giảm 5% đơn tiếp theo.']] },
     // Đang làm (chia làn theo người)
-    { title: 'Khảo sát nhu cầu phần mềm kế toán của An Khang', cat: 'STARTED', to: ['nv.kinhdoanh1'], labels: ['Khách hàng'], due: 4, cycle: c2.id, est: 6, check: [['Gửi bảng câu hỏi', true], ['Họp với kế toán trưởng', false]] },
+    { title: 'Khảo sát nhu cầu phần mềm kế toán của An Khang', cat: 'STARTED', to: ['nv.kinhdoanh1'], labels: ['Khách hàng'], due: 4, cycle: c2.id, est: 6 },
     { title: 'Chuẩn bị demo sản phẩm cho Phương Nam', cat: 'STARTED', to: ['nv.kinhdoanh2'], labels: ['Khách VIP'], pri: 'HIGH', due: 1, cycle: c2.id, startedAgo: 9 },
     { title: 'Cập nhật CRM danh sách khách hàng quý III', cat: 'STARTED', to: ['nv.kinhdoanh3'], due: -2, cycle: c2.id, startedAgo: 12 },
     { title: 'Soạn hồ sơ năng lực công ty bản 2026', cat: 'STARTED', to: ['nv.kinhdoanh2', 'nv.kinhdoanh3'], due: 6, cycle: c2.id },
@@ -143,7 +142,7 @@ async function showcase(prisma) {
     members: [['tp.hcns', 'OWNER'], ['nv.hcns', 'MEMBER']], steps: [{ name: 'Trưởng phòng HCNS duyệt', type: 'DEPARTMENT_MANAGER' }],
     labels: [{ name: 'Phỏng vấn', color: '#0891b2' }, { name: 'Onboarding', color: '#65a30d' }] });
   td.lead = 'tp.hcns'; td.approverOf = () => 'tp.hcns'; td.notifyApprover = () => ['tp.hcns'];
-  const tdParent = await item(td, { title: 'Tuyển 2 kỹ sư phần mềm', cat: 'STARTED', to: ['nv.hcns'], pri: 'HIGH', due: 20, check: [['Đăng tin tuyển dụng', true], ['Lọc hồ sơ', true], ['Phỏng vấn vòng 1', false], ['Phỏng vấn vòng 2', false]] });
+  const tdParent = await item(td, { title: 'Tuyển 2 kỹ sư phần mềm', cat: 'STARTED', to: ['nv.hcns'], pri: 'HIGH', due: 20 });
   for (const it of [
     { title: 'Phỏng vấn ứng viên vòng 1 (5 người)', cat: 'UNSTARTED', to: ['nv.hcns'], labels: ['Phỏng vấn'], due: 4, parent: tdParent.id },
     { title: 'Kế hoạch đào tạo hội nhập tháng 11', cat: 'REVIEW', to: ['nv.hcns'], labels: ['Onboarding'], due: 5, atLevel: 1 },
@@ -411,13 +410,13 @@ async function centreShowcase(prisma) {
 // và bảng Kanban việc nội bộ cho từng phòng.
 const CENTRE_BOARDS = [
   { code: 'VP', name: 'Việc nội bộ Văn phòng', items: [
-    { title: 'Chuẩn bị phòng họp, tài liệu giao ban tuần', lead: 'pcvp', by: 'cvp', cat: 'STARTED', due: 1, progress: 60, pri: 'HIGH', check: ['Đặt phòng họp', 'In tài liệu', 'Gửi giấy mời'] },
+    { title: 'Chuẩn bị phòng họp, tài liệu giao ban tuần', lead: 'pcvp', by: 'cvp', cat: 'STARTED', due: 1, progress: 60, pri: 'HIGH' },
     { title: 'Tổng hợp đề xuất mua sắm văn phòng phẩm Quý IV', lead: 'cv.vp1', by: 'cvp', cat: 'STARTED', due: 3, progress: 40 },
     { title: 'Cập nhật lịch trực, danh bạ nội bộ tháng 11', lead: 'cv.vp1', by: 'pcvp', cat: 'UNSTARTED', due: 8, pri: 'MEDIUM' },
     { title: 'Lưu trữ hồ sơ giao ban tháng 9', lead: 'cv.vp1', by: 'pcvp', cat: 'COMPLETED', due: -4, doneAt: -5, pri: 'LOW' },
   ] },
   { code: 'KHCN', name: 'Việc nội bộ Phòng Khoa học Công nghệ', items: [
-    { title: 'Họp nhóm chuẩn bị đề cương Hội thi Tin học trẻ', lead: 'cv.khcn1', by: 'tp.khcn', cat: 'UNSTARTED', due: 5, check: ['Đặt lịch họp', 'Dự thảo đề cương', 'Gửi phòng góp ý'] },
+    { title: 'Họp nhóm chuẩn bị đề cương Hội thi Tin học trẻ', lead: 'cv.khcn1', by: 'tp.khcn', cat: 'UNSTARTED', due: 5 },
     { title: 'Cập nhật cơ sở dữ liệu chuyên gia, giám khảo', lead: 'cv.khcn2', by: 'pp.khcn', cat: 'STARTED', due: 10, progress: 30, pri: 'MEDIUM' },
     { title: 'Rà soát hồ sơ đề tài cấp cơ sở năm 2026', lead: 'pp.khcn', by: 'tp.khcn', cat: 'BACKLOG', due: 20, pri: 'LOW' },
     { title: 'Gửi báo cáo tuần cho Văn phòng', lead: 'cv.khcn2', by: 'tp.khcn', cat: 'COMPLETED', due: -1, doneAt: -1, pri: 'MEDIUM' },
@@ -490,7 +489,6 @@ async function centreFinal(prisma) {
         dueDate: due, originalDueDate: due, progress: it.cat === 'COMPLETED' ? 100 : it.progress || 0,
         startedAt: ['STARTED', 'COMPLETED'].includes(it.cat) ? daysFromNow(-5) : null, completedAt: it.cat === 'COMPLETED' ? daysFromNow(it.doneAt ?? -1) : null,
         assignees: { create: [{ userId: U[it.lead].id }] },
-        checklist: { create: (it.check || []).map((title, i) => ({ title, position: i * 1024, done: i === 0 && it.cat === 'STARTED' })) },
         activities: { create: { actorId: U[it.by].id, type: 'CREATED', data: { title: it.title, source: 'SEED' } } },
       } });
     }

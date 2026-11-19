@@ -20,10 +20,9 @@ const BOARD_INCLUDE = {
   extensions: { where: { status: 'PENDING' }, select: { id: true, newDue: true } },
   documents: { where: { kind: 'BASIS' }, select: { number: true, issuedOn: true }, take: 5 },
   _count: { select: { comments: true, attachments: true, children: true } },
-  checklist: { select: { done: true } },
 };
 function boardItem(project, item) {
-  const { assignees, supporters, labels, approvals, checklist, _count, descriptionHtml, descriptionText, supportDepartments, extensions, documents, parent, children, ...rest } = item;
+  const { assignees, supporters, labels, approvals, _count, descriptionHtml, descriptionText, supportDepartments, extensions, documents, parent, children, ...rest } = item;
   const kids = rules.childProgress(children || []);
   return {
     ...rest, code: `${project.key}-${item.number}`, excerpt: (descriptionText || '').slice(0, 160),
@@ -32,8 +31,7 @@ function boardItem(project, item) {
     assignees: assignees.map(a => a.user), supporters: (supporters || []).map(a => a.user), labels: labels.map(l => l.label),
     pendingApproval: approvals[0] || null,
     parentRef: parent ? { id: parent.id, code: `${project.key}-${parent.number}`, title: parent.title } : null,
-    counts: { comments: _count.comments, attachments: _count.attachments, children: _count.children, checklistDone: checklist.filter(c => c.done).length, checklistTotal: checklist.length,
-      childrenDone: kids.done, childrenTotal: kids.total },
+    counts: { comments: _count.comments, attachments: _count.attachments, children: _count.children, childrenDone: kids.done, childrenTotal: kids.total },
   };
 }
 const link = (project, item) => `#/projects/${project.id}?item=${item.id}`;
@@ -118,7 +116,7 @@ async function reopenAncestors(tx, { user, parentId, reason }) {
   }
 }
 
-// Tự chuyển cột theo % (MTL, checklist, báo cáo tuần): 100% chỉ gửi duyệt khi chưa chờ duyệt và mọi việc con đã xong —
+// Tự chuyển cột theo % (MTL, báo cáo tuần): 100% chỉ gửi duyệt khi chưa chờ duyệt và mọi việc con đã xong —
 // còn việc con mở thì chỉ ghi %, không báo lỗi (để không chặn báo cáo tuần).
 async function canAutoSubmit(tx, item) {
   if (['REVIEW', 'COMPLETED', 'CANCELLED'].includes(item.state.category)) return false;

@@ -181,7 +181,7 @@ model WorkItem {
   deliverable        String               @default("") // sản phẩm đầu ra
   outputs            String               @default("") // sản phẩm đã có theo tiến độ (mỗi dòng một văn bản)
   resultNote         String               @default("") // kết quả / khó khăn, kiến nghị
-  review             String               @default("") // đánh giá của người giao
+  review             String               @default("") // ô "Đánh giá của người giao" cũ — CHỈ ĐỌC (đánh giá nay = mức chấm + nhận xét lúc duyệt)
   reviewedById       Int?
   reviewedAt         DateTime?
   coordinatorText    String               @default("") // đơn vị / người phối hợp ngoài hệ thống (ghi tự do)
@@ -233,7 +233,7 @@ model WorkItem {
   assignees          WorkItemAssignee[] // người chủ trì
   supporters         WorkItemSupporter[] // người phối hợp (tài khoản trong hệ thống)
   labels             WorkItemLabel[]
-  checklist          ChecklistItem[]
+  checklist          ChecklistItem[] // đã bỏ — chỉ còn để giữ bảng cũ
   comments           Comment[]
   activities         Activity[]
   attachments        Attachment[]
@@ -430,14 +430,17 @@ model WorkItemLabel {
   @@id([workItemId, labelId])
 }
 
+// ĐÃ BỎ (20/11/2026): Checklist thay bằng việc nhánh. Migration 20261120100000 chuyển mỗi mục thành một việc nhánh (migratedItemId).
+// Bảng giữ lại chỉ để đối chiếu / quay lui — không route nào đọc / ghi; xoá ở bản sau.
 model ChecklistItem {
-  id         Int      @id @default(autoincrement())
-  workItemId Int
-  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  title      String
-  done       Boolean  @default(false)
-  position   Int      @default(0)
-  createdAt  DateTime @default(now())
+  id             Int      @id @default(autoincrement())
+  workItemId     Int
+  workItem       WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  title          String
+  done           Boolean  @default(false)
+  position       Int      @default(0)
+  createdAt      DateTime @default(now())
+  migratedItemId Int? // việc nhánh đã tạo từ mục này
 
   @@index([workItemId])
 }
