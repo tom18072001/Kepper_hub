@@ -1,6 +1,6 @@
 # Bảng thư mục kho file `\\192.168.130.2\DATA`
 
-Chụp ngày 20/11/2026. Tên thật có thể đổi: luôn kiểm tra bằng `nas_list` trước khi chỉ đường dẫn cho người dùng.
+Chụp ngày 20/11/2026 (thư mục văn bản nội bộ đã đổi số: `06.VanBanNoiBo`, HCNS `07.VanBanNoiBo`). Tên thật có thể đổi: luôn kiểm tra bằng `nas_list` trước khi chỉ đường dẫn cho người dùng.
 Nhân viên chỉ mở được thư mục phòng mình, nên `nas_list` của họ thường chỉ thấy một phần bảng này.
 
 ## Thư mục phòng ban
@@ -25,9 +25,9 @@ Nhân viên chỉ mở được thư mục phòng mình, nên `nas_list` của h
 | `01.VanBanDen` | Văn bản đến — Hub ghi vào, theo năm |
 | `02.VanBanDi` | Văn bản đi đã ký — Hub ghi vào, theo năm |
 | `03.HoSoCongViec` | Hồ sơ công việc đang làm, dự thảo |
-| `03.VanBanNoiBo` | Văn bản nội bộ — Hub ghi vào, theo năm |
 | `04.BaoCao` | Báo cáo của phòng, theo năm |
 | `05.BieuMau` | Biểu mẫu riêng của phòng |
+| `06.VanBanNoiBo` | Văn bản nội bộ — Hub ghi vào, theo năm |
 | `99.LuuTru` | Hồ sơ đã xong, lưu trữ |
 
 ### `#2.HCNS` (đánh số khác)
@@ -39,9 +39,9 @@ Nhân viên chỉ mở được thư mục phòng mình, nên `nas_list` của h
 | `02.VanBanDi` | Văn bản đi — Hub ghi vào |
 | `03.VanBanDen` | Văn bản đến — Hub ghi vào |
 | `04.BaoCao` | Báo cáo |
-| `04.VanBanNoiBo` | Văn bản nội bộ — Hub ghi vào |
 | `05.BieuMau` | Biểu mẫu của phòng |
 | `06.HoSoCongViec` | Hồ sơ công việc |
+| `07.VanBanNoiBo` | Văn bản nội bộ — Hub ghi vào |
 | `99.LuuTru` | Lưu trữ |
 
 ### `#8.CNTT`
