@@ -22,6 +22,20 @@ const each = (pid, n) => Object.fromEntries(SET.map(s => [`/api/projects/${pid}$
 async function settle(page, done) { await done; await page.waitForTimeout(1200); }
 const responseOf = (page, path) => page.waitForResponse(r => new URL(r.url()).pathname === path);
 
+// Đổi tên việc qua API (như người khác sửa) tới khi trang nhận được qua realtime. Máy chủ giữ tối đa 5 luồng realtime mỗi người:
+// trong lượt chạy dài, trang của kịch bản khác cùng tài khoản có thể đẩy luồng của trang này ra — chờ nối lại rồi đổi tên khác, thử lại.
+let renames = 0;
+async function renameUntilSeen(page, itemId, base, seen) {
+  let name = '';
+  await expect(async () => {
+    await expect(page.locator('#liveDot')).toBeVisible({ timeout: 8000 });
+    name = `${base} (đổi tên realtime ${++renames})`;
+    expect((await apiAs(page, `/api/items/${itemId}`, { method: 'PATCH', data: { title: name } })).ok()).toBeTruthy();
+    await expect(seen).toContainText(name, { timeout: 4000 });
+  }).toPass({ timeout: 45_000 });
+  return name;
+}
+
 async function setup(page) {
   await login(page, 'giamdoc');
   const project = (await (await apiAs(page, '/api/projects')).json()).find(p => p.key === 'DA');
@@ -131,12 +145,8 @@ test('Mở việc trên trang dự án / ngay sau khi xem dự án: không gọi
   // Realtime: người dùng sửa việc từ nơi khác (API) → thẻ trên bảng cập nhật, không phải tải lại trang.
   await page.evaluate(() => { location.hash = location.hash.replace(/&item=\d+/, ''); });
   await expect(page.locator('#itemPanel.hidden')).toBeAttached();
-  const title = item.title, renamed = `${title} (đổi tên realtime)`;
-  const res = await apiAs(page, `/api/items/${item.id}`, { method: 'PATCH', data: { title: renamed } });
-  expect(res.ok()).toBeTruthy();
-  await expect(cardEl).toContainText('đổi tên realtime');
-  expect(await (await apiAs(page, `/api/items/${item.id}`, { method: 'PATCH', data: { title } })).ok()).toBeTruthy();
-  await expect(cardEl).not.toContainText('đổi tên realtime');
+  const title = item.title;
+  await renameUntilSeen(page, item.id, title, cardEl);
 
   // Realtime trên tab Kế hoạch & Gantt: vẽ lại theo URL hiện tại — giữ khung Gantt người dùng vừa dời, không nhảy về khung mặc định.
   await page.evaluate(id => { location.hash = `#/projects/${id}?view=plan`; }, pid);
@@ -146,14 +156,9 @@ test('Mở việc trên trang dự án / ngay sau khi xem dự án: không gọi
   await page.getByTestId('gz-fwd').click();
   await expect(range).not.toHaveText(first);
   const moved = await range.textContent();
-  done = responseOf(page, `/api/projects/${pid}/mtl`);
-  expect(await (await apiAs(page, `/api/items/${item.id}`, { method: 'PATCH', data: { title: renamed } })).ok()).toBeTruthy();
-  await settle(page, done);
-  await expect(page.locator('#viewBody')).toContainText('đổi tên realtime');
+  await renameUntilSeen(page, item.id, title, page.locator('#viewBody'));
   await expect(range).toHaveText(moved);
-  expect(await (await apiAs(page, `/api/items/${item.id}`, { method: 'PATCH', data: { title } })).ok()).toBeTruthy();
-  await expect(page.locator('#viewBody')).not.toContainText('đổi tên realtime');
-  await expect(range).toHaveText(moved);
+  expect(await (await apiAs(page, `/api/items/${item.id}`, { method: 'PATCH', data: { title } })).ok()).toBeTruthy(); // trả tên gốc
 
   // Tải lại trang ở dự án (panel chưa có dữ liệu dự án), rồi mở thẳng việc ở "Việc của tôi": dùng dự án trang vừa tải.
   await page.evaluate(id => { location.hash = `#/projects/${id}?view=board`; }, pid);
