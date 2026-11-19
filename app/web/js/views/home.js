@@ -1,8 +1,9 @@
-// Trang chủ Kepper: Dashboard các dự án theo Master Timeline — tháng T hiện tại, kế hoạch / thực tế, SPI, KPI tiến độ,
+// Trang "Tiến độ dự án" (#/home): tổng các dự án theo Master Timeline — tháng T hiện tại, kế hoạch / thực tế, SPI, KPI tiến độ,
 // hạng mục cần chú ý (đường găng / mốc / của bộ phận mình đang chậm, trễ), mốc kế tiếp; phần "của tôi / bộ phận tôi".
 import { api } from '../api.js';
 import { store, can } from '../store.js';
 import { esc, fmtDate } from '../util.js';
+import { PAGE_TITLES } from '../shell.js';
 import { icon } from '../icons.js';
 
 const num = (v, d = 1) => (v == null ? '—' : Number(v).toLocaleString('vi-VN', { maximumFractionDigits: d }));
@@ -11,7 +12,7 @@ const spiTone = s => (s == null ? '' : s >= 0.95 ? 'ok' : s >= 0.8 ? 'warn' : 'd
 const TONE = { OVERDUE: 'danger', BEHIND: 'warn', LATE_START: 'warn' };
 
 export async function renderHome(root, params, setCrumbs) {
-  setCrumbs('Dashboard');
+  setCrumbs(PAGE_TITLES.home);
   const d = await api('/api/mtl/portfolio');
   const card = p => {
     const s = p.summary, m = p.mine, link = `#/projects/${p.id}`;
@@ -36,7 +37,7 @@ export async function renderHome(root, params, setCrumbs) {
   };
   const canCreate = can('projects.manage', 'operate');
   root.onclick = null;
-  root.innerHTML = `<div class="page-head"><h1>Dashboard dự án</h1><span class="muted sm">Cập nhật ${fmtDate(d.generatedAt)} · tự nhắc lúc 07:30 mỗi sáng</span>
+  root.innerHTML = `<div class="page-head"><h1>${PAGE_TITLES.home}</h1><span class="muted sm">Cập nhật ${fmtDate(d.generatedAt)} · tự nhắc lúc 07:30 mỗi sáng</span>
       ${d.projects.length ? `<a class="btn btn-primary hm-quick" href="#/sprint" data-testid="home-quick">${icon('checklist')}Cập nhật nhanh việc của tôi</a>` : ''}</div>
     ${d.projects.length ? `<div class="hm-grid">${d.projects.map(card).join('')}</div>`
       : `<div class="card empty" data-testid="home-empty"><p>Chưa có dự án theo Master Timeline.</p>${canCreate ? `<p class="muted sm">Tạo dự án (nút + ở mục Dự án), chọn kiểu <b>Theo Master Timeline</b>, đặt tháng T0 rồi nhập bảng MTL từ Excel.</p>` : ''}<p><a class="btn" href="#/my">${icon('target')}Việc của tôi</a></p></div>`}`;
