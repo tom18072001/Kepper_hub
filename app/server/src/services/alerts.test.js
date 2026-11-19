@@ -63,3 +63,74 @@ test('Viber: chặn dò mã liên kết sau 5 lần sai trong 1 giờ; gọi API
   await V.call('x', {}, async (_u, o) => { opts = o; return { json: async () => ({ status: 0 }) }; });
   assert.ok(opts.signal instanceof AbortSignal);
 });
+
+test('ân hạn "Chậm khởi động": chỉ gắn nhãn sau N ngày làm việc kể từ ngày bắt đầu (mặc định 2)', () => {
+  assert.equal(cfg.lateStartGraceDays, 2);
+  const at = s => new Date(s + 'T03:00:00Z'); // 10:00 giờ VN
+  const it = item('2027-02-15', '2027-02-19'); // thứ Hai → thứ Sáu, giao hôm nay
+  const st = d => M.statusOf(it, 0, at(d), cfg);
+  assert.equal(st('2027-02-15').code, 'ON_TRACK', 'giao trong ngày: chưa gắn nhãn');
+  assert.equal(st('2027-02-15').grace, true);
+  assert.equal(st('2027-02-16').code, 'ON_TRACK', 'mới qua 1 ngày làm việc');
+  assert.equal(st('2027-02-17').code, 'LATE_START', 'qua 2 ngày làm việc');
+  assert.deepEqual(A.kindsFor(it, st('2027-02-15'), at('2027-02-15'), cfg).includes('LATE_START'), false);
+  // Bắt đầu thứ Sáu: thứ Bảy, Chủ nhật không tính.
+  const fri = item('2027-02-19', '2027-03-05');
+  assert.equal(M.statusOf(fri, 0, at('2027-02-22'), cfg).code, 'ON_TRACK'); // thứ Hai: 1 ngày làm việc
+  assert.equal(M.statusOf(fri, 0, at('2027-02-23'), cfg).code, 'LATE_START'); // thứ Ba: 2 ngày
+  // Cấu hình theo dự án: 0 = gắn ngay như trước.
+  assert.equal(M.statusOf(it, 0, at('2027-02-15'), { ...cfg, lateStartGraceDays: 0 }).code, 'LATE_START');
+  assert.equal(M.alertConfigOf({ alertConfig: { lateStartGraceDays: 5 } }).lateStartGraceDays, 5);
+  assert.equal(M.workdaysBetween(M.vnDay(at('2027-02-19')), M.vnDay(at('2027-02-22'))), 1);
+});
+
+test('không nhắc lại "Chậm khởi động" khi việc đã có cập nhật tiến độ', () => {
+  const it = item('2027-02-01', '2027-03-31', { progressAt: new Date('2027-02-14T03:00:00Z') });
+  const st = M.statusOf(it, 0, day, cfg);
+  assert.notEqual(st.code, 'LATE_START');
+  assert.equal(A.kindsFor(it, st, day, cfg).includes('LATE_START'), false);
+  // Trạng thái cũ còn ghi LATE_START (vd. tính trước khi cập nhật) cũng không sinh cảnh báo.
+  assert.deepEqual(A.kindsFor(it, { code: 'LATE_START', daysLeft: 40 }, day, cfg), []);
+});
+
+test('thông báo gộp một việc: nêu mọi loại cảnh báo, số liệu ghi "(lúc gửi)"', () => {
+  const r = { id: 7, number: 2, title: 'Xin chủ trương đầu tư', critical: true, baselineStart: new Date('2027-01-01'), baselineEnd: new Date('2027-02-20T16:59:59Z') };
+  const st = { code: 'BEHIND', planned: 80, variance: -70, daysLeft: 5 };
+  const m = A.mergedMessage({ id: 3, key: 'DEMO' }, r, st, 10, ['DUE_SOON', 'BEHIND', 'BEHIND'], day);
+  assert.equal(m.title, '[Chậm tiến độ · Sắp đến hạn] DEMO-2 · Xin chủ trương đầu tư (đường găng)');
+  assert.equal(m.link, '#/projects/3?item=7');
+  const lines = m.body.split('\n');
+  assert.equal(lines.length, 3);
+  assert.match(lines[0], /^Kế hoạch 80% · thực tế 10%, lệch -70 điểm \(lúc gửi\)$/);
+  assert.match(lines[1], /thực tế 10% \(lúc gửi\)$/);
+  assert.match(lines[2], /^Gửi ngày 15\/02\/2027/);
+});
+
+test('chạy cảnh báo: nhiều loại của cùng một việc → một thông báo; thông báo cũ chưa đọc của việc được đánh dấu đã đọc', async () => {
+  const project = { id: 1, key: 'DEMO', kind: 'MTL', t0Date: new Date('2026-12-31T17:00:00Z'), leadId: 50 };
+  const rows = [{ id: 1, number: 1, title: 'Việc A', parentId: null, leadDepartmentId: null, critical: false, milestone: false, weight: null, progress: 10,
+    progressAt: new Date('2027-02-14T03:00:00Z'), startedAt: new Date('2027-01-02'), completedAt: null,
+    baselineStart: new Date('2026-12-31T17:00:00Z'), baselineEnd: new Date('2027-02-20T16:59:59Z'), state: { category: 'STARTED' }, assignees: [{ userId: 11 }] }];
+  const created = [], notes = [], marked = [];
+  const prisma = {
+    workItem: { findMany: async () => rows },
+    progressAlert: { groupBy: async () => [], createMany: async ({ data }) => { created.push(...data); return { count: 1 }; } },
+    projectMember: { findMany: async () => [] },
+    user: { findMany: async () => [] },
+    notification: { createMany: async ({ data }) => { notes.push(...data); return { count: data.length }; }, updateMany: async a => { marked.push(a.where); return { count: 0 }; } },
+    progressSnapshot: { upsert: async () => ({}) },
+  };
+  const r = await A.runProjectAlerts(prisma, project, day);
+  assert.deepEqual(created.map(c => c.kind).sort(), ['BEHIND', 'DUE_SOON']);
+  assert.equal(r.alerts, 2);
+  assert.equal(notes.length, 2, 'một thông báo cho mỗi người nhận (người chủ trì + PMO)');
+  assert.ok(notes.every(n => n.title.startsWith('[Chậm tiến độ · Sắp đến hạn] DEMO-1')));
+  assert.equal(new Set(notes.map(n => n.userId)).size, 2);
+  assert.equal(marked.length, 1);
+  assert.equal(marked[0].link, '#/projects/1?item=1');
+});
+
+test('nhắc cập nhật tuần dùng chữ "kỳ này", không dùng "sprint"', async () => {
+  const src = require('node:fs').readFileSync(require.resolve('./alerts'), 'utf8');
+  assert.match(src, /việc trong kỳ này chưa cập nhật/);
+});

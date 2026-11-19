@@ -25,7 +25,7 @@ export async function drawMtlSprint(body, project, params) {
   const mode = params.get('mode') === 'month' ? 'month' : 'sprint';
   const modes = `<div class="sp-modes"><div class="chips" role="group" aria-label="Cách xem">
       <a class="chip${mode === 'sprint' ? ' on' : ''}" href="${hrefWith({}, ['mode', 't', 's'])}" data-testid="sp-mode-sprint">Theo sprint (giai đoạn)</a>
-      <a class="chip${mode === 'month' ? ' on' : ''}" href="${hrefWith({ mode: 'month' }, ['s'])}" data-testid="sp-mode-month">Theo tháng</a></div>
+      <a class="chip${mode === 'month' ? ' on' : ''}" href="${hrefWith({ mode: 'month' }, ['s'])}" data-testid="sp-mode-month">Kỳ cập nhật tháng</a></div>
     ${project.rights.canManage ? `<button type="button" class="btn btn-sm" data-sp-setup data-testid="sp-setup">${icon('settings')}Thiết lập sprint</button>` : ''}</div>`;
   if (mode === 'month') return drawMonth(body, project, params, modes);
   return drawPhases(body, project, params, modes);
@@ -165,7 +165,9 @@ function bindDept(body, project, prefKey) {
   };
 }
 
-// ---------- Theo tháng ----------
+// ---------- Kỳ cập nhật tháng (mỗi tháng lịch là một kỳ cập nhật tiến độ; không gọi là "sprint" để khỏi lẫn với giai đoạn) ----------
+// "11/2026" — tháng lịch (giờ Việt Nam) của kỳ.
+const monthOf = d => { const x = new Date(new Date(d).getTime() + 7 * 3_600_000); return `${String(x.getUTCMonth() + 1).padStart(2, '0')}/${x.getUTCFullYear()}`; };
 async function drawMonth(body, project, params, modes) {
   const asked = params.get('t');
   const d = await api(`/api/projects/${project.id}/mtl-month${asked != null && asked !== '' ? `?t=${encodeURIComponent(asked)}` : ''}`);
@@ -197,15 +199,15 @@ async function drawMonth(body, project, params, modes) {
     <td class="num${r.behind ? ' warn-t' : ''}">${r.behind ?? '—'}</td><td class="num"><span class="pill ${spiTone(r.spi)}">${num(r.spi)}</span></td></tr>`).join('');
   const ms = d.milestones.length ? `<div class="sp-ms" data-testid="sp-milestones"><b><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> Mốc trong tháng:</b> ${d.milestones.map(m => `<a href="${itemHref(m.id)}">${esc(m.planCode ? `Bước ${m.planCode} · ` : '')}${esc(m.title)}</a> <span class="pill ${m.done ? 'ok' : ['OVERDUE', 'BEHIND', 'LATE_START'].includes(m.status) ? 'danger' : ''}">${m.done ? 'Đã xong' : esc(m.statusLabel)}</span>`).join(' · ')}</div>` : '';
   const doneDue = s.due ? Math.round(s.done / s.due * 100) : null;
-  const STATE = { CURRENT: 'Tháng hiện tại', PAST: 'Tháng đã qua', FUTURE: 'Tháng sắp tới' };
+  const STATE = { CURRENT: 'Kỳ hiện tại', PAST: 'Kỳ đã qua', FUTURE: 'Kỳ sắp tới' };
   body.innerHTML = `<div class="mtl sp" data-testid="month-view">
     ${modes}
     <section class="card sp-head">
       <div class="sp-nav">
         ${t > 0 ? `<a class="btn btn-ghost btn-sm" href="${monthHref(t - 1)}" aria-label="Tháng trước" data-testid="mo-prev">${icon('left')}</a>` : '<span class="sp-navgap"></span>'}
-        <div class="sp-title"><h2 data-testid="mo-title">Tháng T${t}</h2><span class="muted sm">${fmtDate(s.start)} – ${fmtDate(s.end)} · ${STATE[s.state]}${s.state === 'CURRENT' ? ` · còn ${s.daysLeft} ngày` : ''}</span></div>
+        <div class="sp-title"><h2 data-testid="mo-title">Kỳ cập nhật tháng ${monthOf(s.start)} · T${t}</h2><span class="muted sm">${fmtDate(s.start)} – ${fmtDate(s.end)} · ${STATE[s.state]}${s.state === 'CURRENT' ? ` · còn ${s.daysLeft} ngày` : ''}</span></div>
         ${t < d.project.totalT ? `<a class="btn btn-ghost btn-sm" href="${monthHref(t + 1)}" aria-label="Tháng sau" data-testid="mo-next">${icon('right')}</a>` : '<span class="sp-navgap"></span>'}
-        ${t !== cur && cur != null && cur >= 0 ? `<a class="btn btn-sm" href="${monthHref(cur)}" data-testid="mo-now">Về tháng hiện tại (T${cur})</a>` : ''}
+        ${t !== cur && cur != null && cur >= 0 ? `<a class="btn btn-sm" href="${monthHref(cur)}" data-testid="mo-now">Về kỳ hiện tại (T${cur})</a>` : ''}
       </div>
       <div class="sp-kpis">
         <div><span class="muted xs">Phải xong trong tháng</span><b data-testid="mo-due">${s.done}/${s.due}</b><small class="muted">${doneDue == null ? 'không có' : `đã xong ${doneDue}%`}</small></div>
@@ -226,7 +228,7 @@ async function drawMonth(body, project, params, modes) {
       <section class="sp-lane" data-testid="sp-lane-running"><div class="sp-lh"><h3>Đang chạy</h3><span class="pill">${lanes.running.length}</span></div><p class="muted xs">Còn chạy sau T${t} · vạch = mục tiêu cuối tháng</p>${cards(lanes.running, 'Không có hạng mục đang chạy.')}</section>
       <section class="sp-lane sp-lane-next" data-testid="sp-lane-next"><div class="sp-lh"><h3>Chuẩn bị cho T${t + 1}</h3><span class="pill">${lanes.next.length}</span></div><p class="muted xs">Bắt đầu ở tháng sau — chuẩn bị hồ sơ, nguồn lực</p>${cards(lanes.next, 'Tháng sau chưa có hạng mục bắt đầu.')}</section>
     </div>
-    <section class="card"><div class="mtl-h"><h3>Tổng kết tháng T${t} theo ban</h3><span class="muted xs">${s.state === 'PAST' ? '"Đã xong" = xong trước khi hết tháng · SPI theo ảnh chụp tiến độ ngày cuối tháng' : s.state === 'CURRENT' ? 'tính đến hôm nay' : 'tháng chưa bắt đầu'}</span></div>
+    <section class="card"><div class="mtl-h"><h3>Tổng kết kỳ cập nhật T${t} theo ban</h3><span class="muted xs">${s.state === 'PAST' ? '"Đã xong" = xong trước khi hết tháng · SPI theo ảnh chụp tiến độ ngày cuối tháng' : s.state === 'CURRENT' ? 'tính đến hôm nay' : 'tháng chưa bắt đầu'}</span></div>
       <div class="tbl-scroll"><table class="table" data-testid="mo-summary"><thead><tr><th>Ban</th><th class="num">Phải xong</th><th class="num">Đã xong</th><th class="num">Chưa xong</th><th class="num">Trễ từ tháng trước</th><th class="num">Đang chạy</th><th class="num">Đang chạy chậm</th><th class="num">SPI</th></tr></thead>
       <tbody>${deptRows || '<tr><td colspan="8" class="muted">—</td></tr>'}</tbody></table></div></section>
   </div>`;
