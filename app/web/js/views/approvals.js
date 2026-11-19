@@ -1,4 +1,5 @@
-// Chờ tôi duyệt: phiếu trình chờ duyệt, đề nghị gia hạn chờ quyết định, kiến nghị chờ trả lời; tab "Tôi đã gửi": phiếu tôi gửi duyệt
+// Chờ tôi duyệt: phiếu trình chờ duyệt, đề nghị gia hạn chờ quyết định, kiến nghị chờ trả lời, đơn nghỉ & giải trình chấm công
+// (khi bật phân hệ Nhân sự — duyệt ngay tại tab, dùng chung views/hrm.js renderHrDecisions); tab "Tôi đã gửi": phiếu tôi gửi duyệt
 // đang chờ ai, ở bước nào, kết quả 30 ngày gần đây (rút lại được khi chưa cấp nào xử lý). Mở việc ngay trên trang.
 // Mặc định phiếu chờ lâu nhất lên trước (chuyển được sang "Hạn gần nhất"); chip Dự án / Phòng tự sinh khi có từ 2 nguồn trở lên.
 import { api } from '../api.js';
@@ -6,8 +7,10 @@ import { store } from '../store.js';
 import { $, $$, esc, fmtDate, ago, prioChip, avatars, toast, errorMessage, confirmDialog, uiPref, replaceHashParams, scrollFade } from '../util.js';
 import { refreshCounters } from '../main.js';
 import { PAGE_TITLES } from '../shell.js';
+import { renderHrDecisions } from './hrm.js';
 
-const TABS = [['queue', 'Phiếu trình'], ['extensions', 'Đề nghị gia hạn'], ['proposals', 'Kiến nghị'], ['sent', 'Tôi đã gửi']];
+const ALL_TABS = [['queue', 'Phiếu trình'], ['extensions', 'Đề nghị gia hạn'], ['proposals', 'Kiến nghị'], ['hr', 'Đơn nghỉ & giải trình'], ['sent', 'Tôi đã gửi']];
+const hrmOn = () => (store.settings?.modules || []).includes('hrm');
 const SENT_STATUS = { PENDING: ['Đang chờ duyệt', 'info'], APPROVED: ['Đã duyệt', 'ok'], REJECTED: ['Bị trả lại', 'danger'], CANCELLED: ['Đã rút / huỷ', ''], REOPENED: ['Đã duyệt, mở lại', 'warn'] };
 const DAY = 86_400_000;
 const vnDay = v => Math.floor((new Date(v).getTime() + 7 * 3_600_000) / DAY);
@@ -27,13 +30,18 @@ function parseSubmit(note) {
 const liveParams = () => new URLSearchParams(location.hash.split('?')[1] || '');
 export async function renderApprovals(root, params, setCrumbs) {
   setCrumbs(PAGE_TITLES.approvals);
-  const [queue, extensions, proposals, sent] = await Promise.all([api('/api/approvals/queue'), api('/api/approvals/extensions'), api('/api/approvals/proposals'), api('/api/approvals/sent').catch(() => [])]);
+  const hr = hrmOn();
+  const TABS = ALL_TABS.filter(([k]) => k !== 'hr' || hr);
+  const [queue, extensions, proposals, sent, hrLeaves, hrAtts] = await Promise.all([api('/api/approvals/queue'), api('/api/approvals/extensions'), api('/api/approvals/proposals'), api('/api/approvals/sent').catch(() => []),
+    hr ? api('/api/hrm/leaves?scope=approve').catch(() => []) : [], hr ? api('/api/hrm/attendance/pending').catch(() => []) : []]);
   // "Tôi đã gửi": đếm phiếu còn chờ (không cộng vào số việc chờ tôi xử lý).
-  const counts = { queue: queue.length, extensions: extensions.filter(x => x.canDecide).length, proposals: proposals.length, sent: sent.filter(x => x.status === 'PENDING').length };
-  const tab = TABS.some(([k]) => k === params.get('tab')) ? params.get('tab') : counts.queue || (!counts.extensions && !counts.proposals) ? 'queue' : counts.extensions ? 'extensions' : 'proposals';
+  const counts = { queue: queue.length, extensions: extensions.filter(x => x.canDecide).length, proposals: proposals.length, hr: hrLeaves.length + hrAtts.length, sent: sent.filter(x => x.status === 'PENDING').length };
+  const tab = TABS.some(([k]) => k === params.get('tab')) ? params.get('tab')
+    : counts.queue || (!counts.extensions && !counts.proposals && !counts.hr) ? 'queue' : counts.extensions ? 'extensions' : counts.proposals ? 'proposals' : 'hr';
   if (params.get('tab') !== tab && /^#\/approvals(\?|$)/.test(location.hash)) replaceHashParams({ tab });
   const lists = { queue, extensions, proposals, sent };
-  const rows = lists[tab];
+  // Tab Nhân sự vẽ riêng (không có dự án / phòng để lọc).
+  const rows = tab === 'hr' ? [] : lists[tab];
   const deptId = name => store.departments.find(d => d.name === name)?.id;
 
   // Nguồn để lọc: dự án và phòng có trong danh sách của tab đang xem (chỉ hiện khi ≥ 2 nguồn).
@@ -121,13 +129,17 @@ export async function renderApprovals(root, params, setCrumbs) {
       <span class="lf-count" aria-live="polite"></span></div>` : '';
 
   root.oninput = null; root.onchange = null; root.onkeydown = null;
-  root.innerHTML = `<div class="page-head"><h1>${PAGE_TITLES.approvals}</h1><span class="muted">${counts.queue + counts.extensions + counts.proposals} việc chờ bạn${counts.sent ? ` · ${counts.sent} phiếu bạn gửi đang chờ` : ''}</span></div>
+  root.innerHTML = `<div class="page-head"><h1>${PAGE_TITLES.approvals}</h1><span class="muted">${counts.queue + counts.extensions + counts.proposals + counts.hr} việc chờ bạn${counts.sent ? ` · ${counts.sent} phiếu bạn gửi đang chờ` : ''}</span></div>
     <div class="tabs" role="tablist" aria-label="Loại">${TABS.map(([k, label]) => `<a href="#/approvals?tab=${k}" data-tab="${k}" class="${k === tab ? 'active' : ''} ${counts[k] ? 'has-n' : 'zero'}" role="tab" aria-selected="${k === tab}" data-testid="approvals-tab-${k}">${label} <b>${counts[k]}</b></a>`).join('')}</div>
     <div class="ap-body">${toolbar}<div id="apList"></div></div>`;
   for (const s of $$('.ap-src', root)) scrollFade(s);
 
   function draw() {
     const box = $('#apList', root);
+    if (tab === 'hr') {
+      renderHrDecisions(box, { data: [hrLeaves, hrAtts], onChange: () => { refreshCounters(); renderApprovals(root, liveParams(), setCrumbs); } });
+      return;
+    }
     if (!rows.length) { box.innerHTML = EMPTY[tab]; return; }
     const inProject = x => !f.project || String(x.project.id) === f.project;
     const inDept = x => !f.dept || String(deptId(x.item.departmentName)) === f.dept;

@@ -32,7 +32,18 @@ const canDecideExt = (s, userId, ext, item) => item.assignedById === userId || (
 const ITEM_SELECT = { id: true, number: true, title: true, dueDate: true, priority: true, taskType: true, assignedById: true, leadDepartmentId: true, archivedAt: true,
   project: { select: { id: true, key: true, name: true, departmentId: true, deletedAt: true } }, assignees: { select: { user: { select: { id: true, fullName: true } } } } };
 
-module.exports = function mountApprovals(app, { prisma, auth, audit }) {
+// Đơn nghỉ + giải trình chấm công chờ tôi duyệt (khi bật phân hệ Nhân sự): cùng nguồn với Nhân sự → Chờ duyệt.
+async function hrPending(prisma, user) {
+  const H = require('../services/hrm');
+  const cfg = await H.hrmConfig(prisma);
+  const s = await H.subjectOf(prisma, user, cfg);
+  if (s.it || !(s.leader || s.director || s.hr)) return 0;
+  const p = await H.pendingDecisions(prisma, s, cfg);
+  return p.leaves.length + p.atts.length;
+}
+
+module.exports = function mountApprovals(app, { prisma, auth, audit, config = {} }) {
+  const hrmOn = (config.modules || []).includes('hrm');
   async function names(ids) {
     return Object.fromEntries((await prisma.user.findMany({ where: { id: { in: [...new Set(ids.filter(Boolean))] } }, select: { id: true, fullName: true } })).map(u => [u.id, u.fullName]));
   }
@@ -92,17 +103,18 @@ module.exports = function mountApprovals(app, { prisma, auth, audit }) {
       project: { id: r.workItem.project.id, key: r.workItem.project.key, name: r.workItem.project.name } })));
   });
 
-  // Số đếm cho huy hiệu menu.
+  // Số đếm cho huy hiệu menu (và "Việc cần xử lý" ở Trang chủ): phiếu trình, gia hạn, kiến nghị, đơn nghỉ & giải trình (hr).
   app.get('/api/approvals/counts', auth, async (req, res) => {
     const s = await decisionScope(prisma, req.user);
-    const [queue, extensions, proposals] = await Promise.all([
+    const [queue, extensions, proposals, hr] = await Promise.all([
       approval.queueFor(prisma, req.user).then(q => q.length),
       // Chỉ đếm đề nghị mình được quyết định (khớp tab "Đề nghị gia hạn"); PGĐ phụ trách xem để nắm nhưng không đếm.
       prisma.dueExtension.findMany({ where: { status: 'PENDING', requestedById: { not: req.user.id }, workItem: { archivedAt: null, project: { deletedAt: null }, ...scopeWhere(s) } },
         select: { requestedById: true, workItem: { select: { assignedById: true, leadDepartmentId: true } } }, take: 500 }).then(rows => rows.filter(r => canDecideExt(s, req.user.id, r, r.workItem)).length),
       prisma.progressReport.count({ where: { proposals: { not: '' }, answer: null, authorId: { not: req.user.id }, workItem: { archivedAt: null, project: { deletedAt: null } }, AND: [proposalScope(s)] } }),
+      hrmOn ? hrPending(prisma, req.user) : 0,
     ]);
-    res.json({ queue, extensions, proposals, total: queue + extensions + proposals });
+    res.json({ queue, extensions, proposals, hr, total: queue + extensions + proposals + hr });
   });
 
   // "Tôi đã gửi": phiếu tôi gửi duyệt — đang chờ (ở bước nào, ai duyệt) và kết quả 30 ngày gần đây.

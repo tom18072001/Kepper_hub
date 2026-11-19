@@ -1,5 +1,6 @@
 // Playground HRM — thiết lập, vai trò, tính ngày nghỉ, chấm công. Quyền: lib/policy.js (hrm.*).
 const { permissionScope } = require('../lib/permissions');
+const P = require('../lib/policy');
 const WK = require('./weekly');
 const WD = require('./weekly-data');
 
@@ -130,6 +131,7 @@ function monthSheet(month, records, leaves, cfg, today = WK.dayOf(new Date()), {
     else if (leave && !half) status = 'LEAVE';
     else if (adj?.status === 'APPROVED') status = 'ADJUSTED';
     else if (!inT && !outT) status = d < today ? 'MISSING' : d === today ? 'TODAY' : 'FUTURE';
+    else if (!inT) status = 'NO_IN'; // chấm ra khi chưa chấm vào (người dùng đã xác nhận) / máy chấm công thiếu giờ vào: không tính đủ công
     else if (!outT && d < today) status = 'NO_OUT';
     else if (le.minutesLate || le.minutesEarly) status = 'LATE_EARLY';
     else status = half ? 'HALF_LEAVE' : 'OK';
@@ -147,12 +149,35 @@ function sheetTotals(sheet) {
     if (leaveDay) { if (d.leave.type === 'UNPAID') t.leaveUnpaid += leaveDay; else t.leavePaid += leaveDay; }
     if (d.status === 'OK' || d.status === 'HALF_LEAVE') t.ok++;
     else if (d.status === 'LATE_EARLY') t.lateEarly++;
-    else if (d.status === 'MISSING' || d.status === 'NO_OUT') t.missing++;
+    else if (d.status === 'MISSING' || d.status === 'NO_OUT' || d.status === 'NO_IN') t.missing++;
     else if (d.status === 'ADJUSTED') t.adjusted++;
     t.minutesLate += d.minutesLate || 0;
   }
   return t;
 }
 
+// ---------- Duyệt ----------
+// Ngữ cảnh policy của người bị xét (hrm.*): bộ phận, lãnh đạo / Ban GĐ, người phụ trách nhân sự.
+const targetCtx = (u, cfg, extra = {}) => ({ targetUserId: u.id, departmentId: u.departmentId, targetLeader: isLeader(u) || isDirector(u), targetDirector: isDirector(u),
+  targetHr: cfg.hrUserIds.includes(u.id), ...extra });
+// Đơn nghỉ và giải trình chấm công CHỜ người dùng (subject s) duyệt — một nguồn cho Nhân sự → Chờ duyệt, "Chờ tôi duyệt" và số đếm huy hiệu.
+async function pendingDecisions(prisma, s, cfg) {
+  if (s.it) return { leaves: [], atts: [], users: {} };
+  const [leaves, atts] = await Promise.all([
+    prisma.hrLeave.findMany({ where: { status: 'PENDING', userId: { not: s.userId } }, orderBy: [{ fromDate: 'asc' }, { id: 'asc' }], take: 1000 }),
+    prisma.hrAttendance.findMany({ where: { adjustStatus: 'PENDING', userId: { not: s.userId } }, orderBy: { day: 'asc' }, take: 300 }),
+  ]);
+  const ids = [...new Set([...leaves, ...atts].map(r => r.userId))];
+  const users = ids.length ? Object.fromEntries((await prisma.user.findMany({ where: { id: { in: ids } }, include: { permissions: true, department: { select: { id: true, name: true } } } })).map(u => [u.id, u])) : {};
+  const can = (u, scope) => !!u && P.can(s, 'view', scope, targetCtx(u, cfg)) && P.can(s, 'edit', scope, targetCtx(u, cfg, { op: 'approve' }));
+  return { leaves: leaves.filter(l => can(users[l.userId], 'hrm.leave')), atts: atts.filter(r => can(users[r.userId], 'hrm.attendance')), users };
+}
+// Đơn còn hiệu lực (chờ duyệt / đã duyệt) trùng khoảng ngày; sáng một đơn, chiều một đơn trong cùng ngày: không trùng.
+async function findLeaveClash(db, userId, from, to, halfDay) {
+  const day = d => new Date(Date.parse(d + 'T00:00:00+07:00'));
+  const overlaps = await db.hrLeave.findMany({ where: { userId, status: { in: ['PENDING', 'APPROVED'] }, fromDate: { lte: day(to) }, toDate: { gte: day(from) } }, orderBy: { fromDate: 'asc' } });
+  return overlaps.find(o => !(from === to && halfDay !== 'NONE' && WK.dayOf(o.fromDate) === from && WK.dayOf(o.toDate) === from && o.halfDay !== 'NONE' && o.halfDay !== halfDay)) || null;
+}
+
 module.exports = { CONFIG_KEY, LEAVE_TYPES, LEAVE_STATUS, CONTRACT_TYPES, PROFILE_STATUS, HHMM, DEFAULTS, MAX_LEAVE_DAYS, hrmConfig, subjectOf, isLeader, isDirector,
-  isWorkday, workdaysBetween, leaveDays, leaveDaysInYear, yearsOf, hasHolidays, annualQuota, lateEarly, normTime, normDay, cidrValid, inNetworks, monthSheet, sheetTotals, vnMinutes };
+  isWorkday, workdaysBetween, leaveDays, leaveDaysInYear, yearsOf, hasHolidays, annualQuota, lateEarly, normTime, normDay, cidrValid, inNetworks, monthSheet, sheetTotals, vnMinutes, targetCtx, pendingDecisions, findLeaveClash };

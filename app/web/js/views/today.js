@@ -1,5 +1,5 @@
 // Trang chủ — "hôm nay cần làm gì" (theo cách trang chủ của Base Work OS): một trang gom việc cần xử lý (phiếu trình, gia hạn,
-// kiến nghị, việc của tôi quá hạn / sắp đến hạn — xếp theo hạn), dự án xếp theo mức lo, giao ban tuần này và thông báo mới.
+// kiến nghị, đơn nghỉ & giải trình chấm công chờ duyệt khi bật Nhân sự, việc của tôi quá hạn / sắp đến hạn — xếp theo hạn), dự án xếp theo mức lo, giao ban tuần này và thông báo mới.
 // Chỉ đọc lại các API sẵn có theo đúng quyền người dùng; không có dữ liệu mới.
 import { api } from '../api.js';
 import { store } from '../store.js';
@@ -28,19 +28,28 @@ function duePill(due) {
   if (n <= 2) return `<span class="pill warn">Còn ${n} ngày</span>`;
   return `<span class="pill">Còn ${n} ngày</span>`;
 }
+// Đơn nghỉ: ngày bắt đầu nghỉ (đã qua: đơn bổ sung, không phải "quá hạn").
+function leavePill(day) {
+  const n = daysLeft(day + 'T00:00:00+07:00');
+  return n < 0 ? `<span class="pill">Đã nghỉ từ ${dm(day)}</span>` : n <= 2 ? `<span class="pill warn">${n ? `Nghỉ sau ${n} ngày` : 'Nghỉ hôm nay'}</span>` : `<span class="pill">Nghỉ từ ${dm(day)}</span>`;
+}
 const KIND = {
   queue: { label: 'Duyệt', color: '#1E8A6E', icon: 'approve' },
   ext: { label: 'Gia hạn', color: '#B8641C', icon: 'clock' },
   prop: { label: 'Kiến nghị', color: '#B28A33', icon: 'comment' },
   item: { label: 'Việc', color: '#2E6DB4', icon: 'target' },
+  leave: { label: 'Đơn nghỉ', color: '#7A4FB5', icon: 'calendar' },
+  att: { label: 'Giải trình', color: '#7A4FB5', icon: 'clock' },
 };
+const dm = day => day.split('-').reverse().slice(0, 2).join('/');
 const RISK = p => [-(p.summary.criticalLate || 0), -(p.summary.overdue || 0), -(p.summary.behind || 0), p.summary.spi ?? 9];
 const byRisk = (a, b) => { const x = RISK(a), y = RISK(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; };
 
 export async function renderToday(root, params, setCrumbs, isCurrent = () => true) {
   setCrumbs('');
   const me = store.me;
-  const [items, queue, exts, props, portfolio, ctx, notes] = await Promise.all([
+  const hrm = (store.settings?.modules || []).includes('hrm');
+  const [items, queue, exts, props, portfolio, ctx, notes, hrLeaves, hrAtts] = await Promise.all([
     api('/api/my/items').catch(() => []),
     api('/api/approvals/queue').catch(() => []),
     api('/api/approvals/extensions').catch(() => []),
@@ -48,6 +57,9 @@ export async function renderToday(root, params, setCrumbs, isCurrent = () => tru
     api('/api/mtl/portfolio').catch(() => ({ projects: [] })),
     api('/api/weekly/context').catch(() => null),
     api('/api/notifications').catch(() => ({ items: [], unread: 0 })),
+    // Đơn nghỉ / giải trình chờ tôi duyệt (Nhân sự). Không hiện loại nghỉ, lý do ở Trang chủ (tối thiểu hoá — xem ở "Chờ tôi duyệt").
+    hrm ? api('/api/hrm/leaves?scope=approve').catch(() => []) : [],
+    hrm ? api('/api/hrm/attendance/pending').catch(() => []) : [],
   ]);
   if (!isCurrent()) return;
   const [report, summary] = await Promise.all([
@@ -63,6 +75,10 @@ export async function renderToday(root, params, setCrumbs, isCurrent = () => tru
       href: `#/approvals?tab=extensions&item=${e.item.id}&focus=extension` })),
     ...props.map(p => ({ kind: 'prop', due: null, wait: p.waitingDays, code: p.item.code, title: p.item.title, meta: `${esc(p.authorName || '')}: ${esc(String(p.proposals).slice(0, 90))}`,
       href: `#/approvals?tab=proposals&item=${p.item.id}&focus=proposal` })),
+    ...hrLeaves.map(l => ({ kind: 'leave', due: l.fromDate + 'T00:00:00+07:00', leaveFrom: l.fromDate, code: '', title: `${l.user.fullName} xin nghỉ ${num(l.days)} ngày`,
+      meta: `${dm(l.fromDate)}${l.toDate !== l.fromDate ? '–' + dm(l.toDate) : ''}`, href: '#/approvals?tab=hr' })),
+    // Giải trình xếp theo ngày được giải trình (đã qua → lên trước), nhãn "Chờ duyệt" thay cho nhãn hạn.
+    ...hrAtts.map(a => ({ kind: 'att', due: a.day + 'T00:00:00+07:00', code: '', title: `${a.user.fullName} giải trình chấm công ${dm(a.day)}`, meta: 'chờ bạn duyệt', href: '#/approvals?tab=hr' })),
     ...items.filter(i => !['COMPLETED', 'CANCELLED'].includes(i.state?.category) && (i.internalDueDate || i.dueDate) && daysLeft(i.internalDueDate || i.dueDate) <= 7)
       .map(i => ({ kind: 'item', due: i.myRole === 'LEAD' && i.internalDueDate ? i.internalDueDate : i.dueDate, code: i.code, title: i.title,
         meta: `${esc(i.project?.name || '')}${i.progress != null ? ` · ${i.progress}%` : ''}`, href: `#/projects/${i.projectId}?item=${i.id}` })),
@@ -70,12 +86,12 @@ export async function renderToday(root, params, setCrumbs, isCurrent = () => tru
   const row = t => { const k = KIND[t.kind]; return `<a class="td-row" href="${t.href}" data-testid="today-${t.kind}">
       <span class="tile" style="--g:${k.color}" title="${k.label}">${icon(k.icon)}</span>
       <span class="td-main"><span class="td-title"><span class="code">${esc(t.code)}</span> ${esc(t.title)}</span><span class="td-meta"><b>${k.label}</b> · ${t.meta}</span></span>
-      <span class="td-due">${t.kind === 'prop' ? `<span class="pill${t.wait >= 3 ? ' warn' : ''}">Chờ ${t.wait} ngày</span>` : duePill(t.due)}</span></a>`; };
+      <span class="td-due">${t.kind === 'prop' ? `<span class="pill${t.wait >= 3 ? ' warn' : ''}">Chờ ${t.wait} ngày</span>` : t.kind === 'leave' ? leavePill(t.leaveFrom) : t.kind === 'att' ? '<span class="pill">Chờ duyệt</span>' : duePill(t.due)}</span></a>`; };
   const SHOW = 8;
   const todoBox = `<section class="card td-card" data-testid="today-todo">
     <div class="td-h"><h2>Việc cần xử lý</h2><span class="muted sm">${todo.length ? `${todo.length} việc · xếp theo hạn` : ''}</span></div>
     ${todo.length ? `<div class="td-list">${todo.slice(0, SHOW).map(row).join('')}</div>
-      <div class="td-more">${todo.length > SHOW ? `<span class="muted sm">và ${todo.length - SHOW} việc khác</span>` : ''}<a href="#/my">Việc của tôi</a>${queue.length + exts.length + props.length ? '<a href="#/approvals">Chờ tôi duyệt</a>' : ''}</div>`
+      <div class="td-more">${todo.length > SHOW ? `<span class="muted sm">và ${todo.length - SHOW} việc khác</span>` : ''}<a href="#/my">Việc của tôi</a>${queue.length + exts.length + props.length + hrLeaves.length + hrAtts.length ? '<a href="#/approvals">Chờ tôi duyệt</a>' : ''}</div>`
       : '<div class="td-empty">Không có việc quá hạn hay đến hạn trong 7 ngày, không có phiếu chờ duyệt.</div>'}
   </section>`;
 

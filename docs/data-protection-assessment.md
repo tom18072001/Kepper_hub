@@ -833,3 +833,47 @@ xem được trong sổ (`V.canLink` = `canView` + mức bảo mật + chưa h�
 
 - Văn bản đã chép sang việc **không tự cập nhật** khi văn bản trong sổ bị sửa, nâng mức bảo mật hoặc hủy số sau đó (không có khoá ngoại). Nếu văn bản
   bị nâng lên Hạn chế / Bảo mật cao, văn thư cần gỡ ở việc liên quan. Có thể bổ sung sau: lưu id văn bản sổ trong `WorkItemDocument` và ẩn khi mất quyền.
+
+## Review UX đợt C2: Nhân sự (chấm công, đơn nghỉ trong "Chờ tôi duyệt") và Đối tác (tìm không dấu) (20/11/2026)
+
+Thay đổi chạm dữ liệu (phân hệ chỉ chạy khi `MODULES` có `hrm` / `crm`):
+(1) **H6** — chấm ra khi hôm nay chưa chấm vào bị chặn ở máy chủ (`409 NO_CHECK_IN`); người dùng xác nhận trên trang (`missingIn: true`)
+thì ghi giờ ra, ghi chú "thiếu giờ vào", bảng công tính trạng thái mới `NO_IN` (không tính đủ công, cộng vào "Thiếu") và AuditLog `HR_ATT_OUT_NO_IN`;
+(2) **H9** — đơn nghỉ + giải trình chờ duyệt có thêm ở "Chờ tôi duyệt" (tab "Đơn nghỉ & giải trình"), số đếm huy hiệu (`/api/approvals/counts` → `hr`),
+Trang chủ và tab "Chờ duyệt" của Nhân sự (`/api/hrm/meta` → `me.pending`) — cả bốn chỗ đọc **một** hàm `services/hrm.pendingDecisions`;
+(3) **H11** — `GET /api/hrm/leaves/preview` (chỉ đơn của chính mình, chỉ đọc): số ngày làm việc, phép năm còn lại sau đơn, đơn trùng;
+(4) **H5 / H8** — chỉ đổi chữ / thêm nút "Ẩn" trên giao diện; (5) **R4** — tìm đối tác bằng `unaccent(lower(...)) LIKE` qua `$queryRaw` có tham số.
+
+**Kết luận cổng:** ĐẠT. Không thêm tập dữ liệu mới, không gửi ra ngoài, không đổi ai được xem / duyệt gì; CCCD và lương vẫn chỉ hiện sau khi nhập lại mật khẩu.
+
+### 1. Phân loại
+
+| Tập dữ liệu | Nhãn nội bộ | Phân loại pháp lý | Ghi chú |
+|---|---|---|---|
+| Giờ ra khi thiếu giờ vào + ghi chú "thiếu giờ vào" (`HrAttendance.checkOut/note`) | Bảo mật | DLCN cơ bản (thời gian làm việc, IP như cũ) | Cùng bảng, cùng thời hạn xoá IP 90 ngày như chấm công thường |
+| Đơn nghỉ / giải trình chờ duyệt ở "Chờ tôi duyệt" | Bảo mật | DLCN cơ bản; **có thể nhạy cảm** (loại "Nghỉ ốm", "Thai sản" = thông tin sức khoẻ) | Cùng dữ liệu người duyệt vốn thấy ở Nhân sự → Chờ duyệt; Trang chủ chỉ hiện họ tên, số ngày, ngày nghỉ — **không** hiện loại nghỉ / lý do (tối thiểu hoá) |
+| Số đếm chờ duyệt (`hr`, `me.pending`) | Nội bộ | Không phải DLCN (con số) | |
+| Xem trước đơn nghỉ (số ngày, phép còn lại, đơn trùng) | Bảo mật | DLCN cơ bản của chính người xem | Chỉ `userId = người đăng nhập`; không nhận `userId` khác |
+| Tên đối tác trong tiêu đề tab (R6), từ khoá tìm đối tác | Nội bộ | Không phải DLCN (tên tổ chức) | Từ khoá đi qua tham số SQL, không ghi log |
+
+### 2. Dòng dữ liệu
+
+- Chấm công: trình duyệt → `POST /api/hrm/attendance/check` (chỉ trên giao diện, không qua Claude — như cũ) → giờ máy chủ; trường hợp thiếu giờ vào ghi thêm AuditLog.
+- Duyệt: "Chờ tôi duyệt" gọi lại đúng các API của Nhân sự (`/api/hrm/leaves?scope=approve`, `/api/hrm/attendance/pending`, `…/decide`); quyền vẫn do `lib/policy.js hrm.*` quyết ở máy chủ.
+- Không dữ liệu nào rời máy chủ nội bộ; thông báo vẫn trung tính (không ghi loại nghỉ).
+
+### 3. Rà năng lực (thay đổi)
+
+| Mã | Trạng thái | Ghi chú | Ưu tiên |
+|---|---|---|---|
+| PRE-01 | Đầy đủ | Danh sách và số đếm chờ duyệt lọc bằng đúng `P.can(view)` + `P.can(edit, op: 'approve')` như trước; quản trị hệ thống (IT) không thấy gì; có unit test `hrm-ux-c2.test.js` | Bắt buộc |
+| PRE-07 | Đầy đủ | API / trang chỉ trả trường cần thiết: Trang chủ không hiện loại nghỉ / lý do; xem trước đơn chỉ của chính mình | Bắt buộc |
+| DET-01 | Đầy đủ | Chấm ra thiếu giờ vào: AuditLog `HR_ATT_OUT_NO_IN` (chỉ ngày, không DLCN khác); duyệt / huỷ đơn giữ `HR_LEAVE_*` như cũ | Bắt buộc |
+| PRI-02 | Đầy đủ | Không mở rộng ai thấy gì; CCCD / lương: "Hiện" vẫn nhập lại mật khẩu + ghi nhật ký, "Ẩn" chỉ che lại trên màn hình | Bắt buộc |
+| PRI-03 | Một phần | Dữ liệu chấm công của nhân viên chính xác hơn: ngày chỉ có giờ ra không còn bị tính "Đủ công" (trước đây là lỗi); sửa giờ vẫn qua giải trình | Nên có |
+
+### 4. Rủi ro còn lại
+
+- Người làm qua nửa đêm bấm "Chấm ra" lúc 0 giờ sẽ được hỏi lại; nếu vẫn xác nhận, ngày **mới** bị ghi thiếu giờ vào và hôm đó không chấm vào chồng được —
+  phải gửi giải trình (đã ghi rõ trong hộp hỏi lại). Chưa hỗ trợ ca làm qua đêm — nếu Kepper có ca đêm cần quyết định riêng.
+- Bảng công tháng cũ: ngày nào trước đây có giờ ra mà không có giờ vào (vd. nhập CSV thiếu cột vào) nay hiện "Thiếu giờ vào" thay vì "Đủ công" — người phụ trách nhân sự nên soát lại trước khi chốt công tháng đang mở.
