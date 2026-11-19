@@ -57,6 +57,14 @@ async function load(project, fresh = false) {
   return data;
 }
 export function invalidateMtl() { cache = null; }
+// Lượt vẽ mới nhất của một vùng thắng: lượt gọi trước mà dữ liệu về sau (vd. realtime vẽ lại trong lúc người dùng vừa lọc / dời khung Gantt)
+// không vẽ đè lên kết quả mới hơn. Trả về hàm kiểm "còn là lượt mới nhất".
+const drawSeq = new WeakMap();
+export function latestDraw(body) {
+  const n = (drawSeq.get(body) || 0) + 1;
+  drawSeq.set(body, n);
+  return () => drawSeq.get(body) === n;
+}
 
 // ---------- Thanh thao tác của dự án MTL ----------
 // Lãnh đạo bộ phận (trưởng / phó, có quyền duyệt): tự tải và nhập MTL của bộ phận mình. Máy chủ kiểm tra lại.
@@ -99,7 +107,9 @@ export function bindMtlActions(root, project, reload) {
 
 // ---------- Tổng quan dự án (Dashboard) ----------
 export async function drawMtlOverview(body, project) {
+  const latest = latestDraw(body);
   const d = await load(project);
+  if (!latest()) return;
   const s = d.summary, p = d.project;
   const tile = (label, value, sub, tone, href, testid, tip = '') => `<a class="mtl-tile ${tone || ''}" href="${href}" data-testid="${testid}"><span class="mtl-tl">${label}${tip ? help(tip) : ''}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ''}</a>`;
   const nm = d.nextMilestone;
@@ -174,7 +184,9 @@ function curveSvg(d) {
 
 // ---------- Kế hoạch & Gantt ----------
 export async function drawMtlPlan(body, project, params) {
+  const latest = latestDraw(body);
   const d = await load(project);
+  if (!latest()) return;
   const f = { dept: params.get('dept') || '', st: params.get('st') || '', plan: params.get('plan') || '', q: params.get('q') || '', gz: params.get('gz') || '', gw: params.get('gw') || '', sp: params.get('sp') || '' };
   const T = Math.max(1, d.project.totalT), cur = d.project.currentT;
   const byParent = new Map();
