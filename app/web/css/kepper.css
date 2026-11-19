@@ -250,6 +250,11 @@
 .vt-log{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
 .danger-text{color:var(--danger)}
 
+/* Văn thư: tệp văn bản */
+.vt-files { list-style: none; margin: 0 0 10px; padding: 0; }
+.vt-files li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.vt-files li > span:first-child { font-weight: 500; overflow-wrap: anywhere; }
+
 /* ---- Việc con ở mọi view + duyệt của người giao ---- */
 .parent-ref{display:inline-flex;align-items:baseline;gap:4px;max-width:100%;font-size:.75rem;color:var(--muted);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .parent-ref .parent-title{overflow:hidden;text-overflow:ellipsis}

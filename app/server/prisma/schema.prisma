@@ -1029,6 +1029,7 @@ model DocRecord {
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
   events         DocEvent[]
+  files          DocFile[]
 
   @@unique([series, entity, year, seq])
   @@unique([number])
@@ -1042,11 +1043,27 @@ model DocEvent {
   docId     Int
   doc       DocRecord @relation(fields: [docId], references: [id], onDelete: Cascade)
   userId    Int?
-  action    String // CREATE | STATUS | ASSIGN | UPDATE | CANCEL
+  action    String // CREATE | STATUS | ASSIGN | UPDATE | CANCEL | FILE | FILE_DELETED
   fromValue String?
   toValue   String?
   note      String?
   createdAt DateTime  @default(now())
+
+  @@index([docId])
+}
+
+// Tệp của văn bản (bản scan, phụ lục). objectKey "vt:…" = bản gốc trong thư mục văn thư của phòng trên NAS (lib/vanthu-files.js).
+model DocFile {
+  id           Int       @id @default(autoincrement())
+  docId        Int
+  doc          DocRecord @relation(fields: [docId], references: [id], onDelete: Cascade)
+  fileName     String
+  objectKey    String
+  mimeType     String
+  sizeBytes    Int
+  checksum     String
+  uploadedById Int
+  createdAt    DateTime  @default(now())
 
   @@index([docId])
 }
