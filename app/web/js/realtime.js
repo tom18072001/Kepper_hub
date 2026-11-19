@@ -1,5 +1,6 @@
 // Nhận cập nhật thời gian thực qua fetch streaming (gửi token trong header, không đưa lên URL).
 import { getToken } from './api.js';
+import { noteBuild } from './version.js';
 
 let controller = null, retryTimer = null, handlers = {}, connected = false, failures = 0;
 const listeners = new Set();
@@ -31,6 +32,8 @@ async function connect() {
   const mine = controller;
   try {
     const res = await fetch('/api/stream', { headers: { authorization: 'Bearer ' + token }, signal: mine.signal, cache: 'no-store' });
+    // Máy chủ khởi động lại sau nâng cấp → luồng kết nối lại → so mã bản ngay, không chờ thao tác kế tiếp.
+    noteBuild(res.headers.get('x-kepler-build'));
     // Phiên hết hạn / bị thu hồi: dừng hẳn (không gọi lại mỗi 3 giây cả đêm) — api.js đưa về màn đăng nhập ở lần gọi kế tiếp.
     if (res.status === 401 || res.status === 403) { setLive(false); controller = null; return; }
     if (!res.ok || !res.body) throw new Error('stream ' + res.status);
