@@ -8,6 +8,15 @@ const WD = require('../services/weekly-data');
 const WK = require('../services/weekly');
 const H = require('../services/hrm');
 const { notify } = require('../services/events');
+const fsp = require('node:fs/promises');
+const nodePath = require('node:path');
+const multer = require('multer');
+const storage = require('../lib/storage');
+const { downloadName, contentDisposition } = require('../lib/attachment-utils');
+const { verifyUpload, typeOf } = require('../lib/files');
+const { assertNotVia } = require('../lib/tokens');
+
+const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
 const LOCK = 731301; // pg_advisory_xact_lock(LOCK, hash(dãy, pháp nhân, năm)): cấp số tuần tự, không trùng / nhảy số khi vào sổ song song
 const ACTIVE_USER = { isActive: true, isRootAdmin: false, role: { not: 'admin' } };
@@ -56,9 +65,13 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
       viewerIds: (s.director || s.clerk) && d.security === 'BAO_MAT_CAO' ? d.viewerIds : undefined,
       cancelled: d.cancelledAt ? { at: d.cancelledAt, reason: d.cancelReason } : null,
       createdBy: { id: d.createdById, fullName: users[d.createdById] || null },
-      can: { edit: !s.ai && !d.cancelledAt && (s.director || s.clerk), status: (ks => ks.filter((k, i) => i > ks.indexOf(d.status) && !s.ai && V.canStatus(d, s, k)))(Object.keys(V.STATUS[d.book])) }, // chỉ các bước kế tiếp
+      can: { edit: !s.ai && !d.cancelledAt && (s.director || s.clerk), upload: canUpload(d, s), deleteFile: !s.ai && (s.director || s.clerk), status: (ks => ks.filter((k, i) => i > ks.indexOf(d.status) && !s.ai && V.canStatus(d, s, k)))(Object.keys(V.STATUS[d.book])) }, // chỉ các bước kế tiếp
     };
   }
+
+  // Tải tệp lên: người vào sổ, Ban GĐ, người xử lý, lãnh đạo bộ phận xử lý. Claude (token) không tải lên.
+  const canUpload = (d, s) => !s.ai && !s.it && !d.cancelledAt && (s.director || s.clerk || d.handlerId === s.userId || d.createdById === s.userId || (s.leader && d.departmentId != null && d.departmentId === s.departmentId));
+  const fileOut = (f, names = {}) => ({ id: f.id, fileName: f.fileName, mimeType: f.mimeType, sizeBytes: f.sizeBytes, createdAt: f.createdAt, uploadedBy: names[f.uploadedById] || null, ...storage.locationOf(f.objectKey) });
 
   app.get('/api/vanthu/meta', auth, async (req, res) => {
     const s = await subject(req);
@@ -94,9 +107,9 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
   app.get('/api/vanthu/docs/:id', auth, async (req, res) => {
     const s = await subject(req);
     const d = await load(req.params.id, s);
-    const events = await prisma.docEvent.findMany({ where: { docId: d.id }, orderBy: { createdAt: 'asc' } });
-    const names = await WD.userNames(prisma, [...events.map(e => e.userId), d.handlerId, d.createdById]);
-    res.json({ ...(await docOut(d, s)), events: events.map(e => ({ ...e, user: e.userId ? names[e.userId] || null : null })) });
+    const [events, files] = await Promise.all([prisma.docEvent.findMany({ where: { docId: d.id }, orderBy: { createdAt: 'asc' } }), prisma.docFile.findMany({ where: { docId: d.id }, orderBy: { createdAt: 'asc' } })]);
+    const names = await WD.userNames(prisma, [...events.map(e => e.userId), ...files.map(f => f.uploadedById), d.handlerId, d.createdById]);
+    res.json({ ...(await docOut(d, s)), files: files.map(f => fileOut(f, names)), events: events.map(e => ({ ...e, user: e.userId ? names[e.userId] || null : null })) });
   });
 
   app.post('/api/vanthu/docs', auth, async (req, res) => {
@@ -217,6 +230,76 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
       return r;
     });
     res.json(await docOut(u, s));
+  });
+
+  // Tệp văn bản: bản gốc vào thư mục văn thư của phòng trên NAS (lib/vanthu-files.js); phòng chưa có thư mục sổ → lưu trong Hub.
+  const upload = multer({ dest: nodePath.join(config.uploadTmpDir, 'workhub-upload'), limits: { fileSize: MAX_FILE_BYTES, files: 5 } });
+  app.post('/api/vanthu/docs/:id/files', auth, async (req, res, next) => {
+    const s = await subject(req);
+    const d = await load(req.params.id, s);
+    if (!canUpload(d, s)) fail(403, 'Chỉ văn thư, Ban GĐ, người xử lý hoặc lãnh đạo bộ phận xử lý tải tệp văn bản', 'FORBIDDEN');
+    req.vt = { d }; // kiểm tra quyền TRƯỚC khi nhận tệp
+    next();
+  }, upload.array('files', 5), async (req, res) => {
+    const files = req.files || [], saved = [];
+    const { d } = req.vt;
+    try {
+      if (!files.length) fail(400, 'Chưa chọn tệp', 'REQUIRED');
+      const deptCode = d.departmentId ? (await prisma.department.findUnique({ where: { id: d.departmentId }, select: { code: true } }))?.code ?? null : null;
+      for (const file of files) {
+        const fileName = downloadName(file.originalname);
+        const mimeType = await verifyUpload(fileName, file.path);
+        const buffer = await fsp.readFile(file.path);
+        const stored = storage.saveToVanthu({ doc: d, deptCode, fileName }, buffer) || await storage.save(fileName, buffer, `vanthu/${d.year}/${d.id}`);
+        saved.push({ fileName, mimeType, stored });
+      }
+      const rows = await prisma.$transaction(async tx => {
+        const out = [];
+        for (const x of saved) out.push(await tx.docFile.create({ data: { docId: d.id, fileName: x.fileName, objectKey: x.stored.objectKey, mimeType: x.mimeType, sizeBytes: x.stored.size, checksum: x.stored.checksum, uploadedById: req.user.id } }));
+        await tx.docEvent.create({ data: { docId: d.id, userId: req.user.id, action: 'FILE', note: out.map(f => f.fileName).join(', ').slice(0, 500) } });
+        await audit(req, 'UPLOAD', 'DocFile', out.map(f => f.id).join(','), null, { docId: d.id, number: d.number, files: out.map(f => ({ name: f.fileName, sha256: f.checksum })) }, tx);
+        return out;
+      });
+      res.status(201).json(rows.map(f => fileOut(f, { [req.user.id]: req.user.fullName })));
+    } catch (error) {
+      await Promise.allSettled(saved.map(x => storage.discard(x.stored.objectKey)));
+      throw error;
+    } finally {
+      await Promise.allSettled(files.map(f => fsp.rm(f.path, { force: true })));
+    }
+  });
+
+  const fileFor = async (req, s) => {
+    const f = await prisma.docFile.findUnique({ where: { id: intParam(req.params.fid) } });
+    if (!f) fail(404, 'Không tìm thấy tệp', 'NOT_FOUND');
+    return { f, d: await load(f.docId, s) }; // quyền xem tệp = quyền xem văn bản
+  };
+  app.get('/api/vanthu/files/:fid/download', auth, async (req, res) => {
+    assertNotVia(req); // Claude (token) không tải nội dung tệp
+    const s = await subject(req);
+    const { f, d } = await fileFor(req, s);
+    if (!(await storage.stat(f.objectKey))) fail(404, 'Tệp không còn trong kho lưu trữ', 'NOT_FOUND');
+    res.setHeader('Content-Type', (typeOf(f.fileName) || {}).mime || 'application/octet-stream');
+    res.setHeader('Content-Disposition', contentDisposition('attachment', f.fileName));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, no-store');
+    await audit(req, 'DOWNLOAD', 'DocFile', f.id, null, { docId: d.id, number: d.number, fileName: f.fileName });
+    const stream = await storage.getStream(f.objectKey);
+    stream.on('error', () => res.destroy());
+    stream.pipe(res);
+  });
+  app.delete('/api/vanthu/files/:fid', auth, async (req, res) => {
+    const s = await subject(req);
+    const { f, d } = await fileFor(req, s);
+    if (s.ai || !(s.director || s.clerk)) fail(403, 'Chỉ văn thư hoặc Ban GĐ gỡ tệp văn bản', 'FORBIDDEN');
+    await prisma.$transaction(async tx => {
+      await tx.docFile.delete({ where: { id: f.id } });
+      await tx.docEvent.create({ data: { docId: d.id, userId: req.user.id, action: 'FILE_DELETED', note: f.fileName.slice(0, 500) } });
+      await audit(req, 'DELETE', 'DocFile', f.id, { fileName: f.fileName, objectKey: f.objectKey }, null, tx);
+    });
+    // Tệp trên NAS chuyển vào _LuuTru của thư mục sổ, không xoá hẳn.
+    await storage.remove(f.objectKey).catch(error => audit(req, 'DELETE_STORAGE_ERROR', 'DocFile', f.id, null, { objectKey: f.objectKey, error: error.message }));
+    res.json({ ok: true });
   });
 
   // Thiết lập: pháp nhân (mã + tên), văn thư, Pháp chế — Ban GĐ chỉ định (không suy từ phòng ban, tránh tự nâng quyền).
