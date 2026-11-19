@@ -142,7 +142,7 @@ test('4. Kanban: tạo việc (form + thêm nhanh), kéo-thả giữa các cột
   await expect(column(page, 'Cần làm').getByTestId('card-SK-2')).toBeVisible();
 });
 
-test('5. Chi tiết việc: mô tả, checklist, việc con, đính kèm (chặn loại tệp lạ), tải xuống, bình luận @mention', async ({ page }) => {
+test('5. Chi tiết việc: mô tả, việc nhánh (thay checklist), đính kèm (chặn loại tệp lạ), tải xuống, bình luận @mention', async ({ page }) => {
   await login(page, 'nv.kinhdoanh2');
   await openProject(page, 'SK');
   await card(page, 'SK-1').click();
@@ -150,14 +150,8 @@ test('5. Chi tiết việc: mô tả, checklist, việc con, đính kèm (chặn
   await expect(panel.getByTestId('item-code')).toHaveText('SK-1');
   await expect(panel.getByTestId('item-description')).toContainText('Sức chứa 200 người');
 
-  await panel.getByTestId('checklist-input').fill('Xác nhận báo giá hội trường');
-  await panel.getByTestId('checklist-input').press('Enter');
-  await panel.getByTestId('checklist-input').fill('Ký hợp đồng thuê');
-  await panel.getByTestId('checklist-input').press('Enter');
-  await expect(panel.getByTestId('checklist')).toContainText('Ký hợp đồng thuê');
-  await panel.getByTestId('checklist').getByLabel('Xác nhận báo giá hội trường').check();
-  await expect(panel.locator('.section h4', { hasText: 'Checklist' })).toContainText('1/2');
-
+  // Checklist đã bỏ: chia bước nhỏ bằng việc nhánh (người chủ trì là người giao của việc nhánh).
+  await expect(panel.getByTestId('checklist-input')).toHaveCount(0);
   await panel.getByTestId('child-input').fill('Chuẩn bị âm thanh ánh sáng');
   await panel.getByTestId('child-input').press('Enter');
   await expect(panel).toContainText('SK-3');
@@ -188,7 +182,6 @@ test('5. Chi tiết việc: mô tả, checklist, việc con, đính kèm (chặn
   await expect(panel.getByTestId('activity')).toContainText('đã đính kèm bao-gia-hoi-truong.pdf');
   await expect(panel.getByTestId('activity')).toContainText('chuyển Cần làm → Đang làm');
   await panel.getByTestId('close-panel').click();
-  await expect(card(page, 'SK-1').locator('[data-meta="checklist"]')).toHaveText('1/2');
   await expect(card(page, 'SK-1').locator('[data-meta="attachments"]')).toHaveText('1');
 });
 
@@ -227,7 +220,9 @@ test('6. Duyệt nhiều cấp: gửi duyệt → trưởng phòng trả lại �
   await manager.getByTestId('reject-btn').click();
   await toast(manager, 'Đã trả lại');
   await expect(manager.getByTestId('approval-status')).toHaveText('Bị trả lại');
-  await expect(manager.getByTestId('item-state')).toHaveValue(await manager.getByTestId('item-state').locator('option', { hasText: 'Đang làm' }).getAttribute('value'));
+  // Trưởng phòng không phải người giao của SK-1 (nhân viên tự giao): trạng thái hiện dạng chữ, không có ô chọn.
+  await expect(manager.locator('#ipState')).toHaveCount(0);
+  await expect(manager.getByTestId('item-state')).toContainText('Đang làm');
 
   // Nhân viên thấy thông báo, gửi lại từ panel
   await staff.getByTestId('close-panel').click();

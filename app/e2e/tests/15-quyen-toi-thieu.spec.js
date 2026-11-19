@@ -1,0 +1,199 @@
+// Quyền tối thiểu theo vai trên MỘT việc (bảng chủ dự án chốt 20/11/2026) — dữ liệu GIẢ.
+// Tái hiện lỗi bản thật: việc do TGĐ giao, người chủ trì là tài khoản vai "Giám đốc" không thuộc Ban Giám đốc (mô phỏng PMO).
+// Vai: TGĐ = giamdoc (phòng "Ban Tổng Giám đốc"); PGĐ phụ trách Phòng Kinh doanh = tài khoản giả tạo trong kịch bản;
+// người chủ trì = tài khoản giả vai director (PMO); người phối hợp = nv.kinhdoanh2; lãnh đạo bộ phận chủ trì = tp.kinhdoanh;
+// thành viên dự án không liên quan = nv.kythuat.
+const { test, expect } = require('@playwright/test');
+const { login, apiAs } = require('./helpers');
+
+test.describe.configure({ mode: 'serial' });
+
+const PMO_DIR = 'pmo.giamdoc', PGD = 'pgd.kinhdoanh';
+let ctx = null; // { projectId, itemId, code, depts }
+
+async function as(browser, username) {
+  const page = await (await browser.newContext()).newPage();
+  await login(page, username);
+  return page;
+}
+const json = async res => { expect(res.status(), await res.text()).toBeLessThan(300); return res.json(); };
+const openItem = async (page, projectId, itemId) => {
+  await page.goto(`/#/projects/${projectId}?item=${itemId}`);
+  await expect(page.locator('#itemPanel [data-testid="item-code"]')).toBeVisible();
+  return page.locator('#itemPanel');
+};
+
+test('Q1. Chuẩn bị: TGĐ giao việc trong dự án MTL cho tài khoản vai Giám đốc không thuộc Ban Giám đốc', async ({ browser }) => {
+  const admin = await as(browser, 'admin');
+  const depts = await json(await apiAs(admin, '/api/departments'));
+  const D = code => depts.find(d => d.code === code);
+  expect(D('TGD').name).toBe('Ban Tổng Giám đốc');
+  // Tài khoản giả: PMO vai director (phòng "Ban Giám đốc", KHÔNG phải Ban Tổng Giám đốc) và PGĐ phụ trách Phòng Kinh doanh.
+  for (const [username, fullName, title] of [[PMO_DIR, 'Trợ lý PMO (giả)', 'Trợ lý – PMO (giả)'], [PGD, 'Phó GĐ Kinh doanh (giả)', 'Phó Tổng Giám đốc (giả)']]) {
+    const r = await apiAs(admin, '/api/admin/users', { method: 'POST', data: { username, fullName, displayTitle: title, role: 'director', departmentId: D('BGD').id } });
+    expect([201, 200, 409]).toContain(r.status());
+  }
+  const users = await json(await apiAs(admin, '/api/users/directory'));
+  const U = name => users.find(u => u.username === name);
+  await json(await apiAs(admin, `/api/departments/${D('KD').id}`, { method: 'PUT', data: { supervisorId: U(PGD).id } }));
+
+  const tgd = await as(browser, 'giamdoc');
+  const project = (await json(await apiAs(tgd, '/api/projects'))).find(p => p.key === 'DA');
+  const due = new Date(Date.now() + 20 * 86_400_000).toISOString();
+  const item = await json(await apiAs(tgd, `/api/projects/${project.id}/items`, { method: 'POST', data: {
+    title: 'Bảng phòng họp (giả)', leadDepartmentId: D('KD').id, assigneeIds: [U(PMO_DIR).id], supporterIds: [U('nv.kinhdoanh2').id], dueDate: due, source: 'Họp giao ban',
+  } }));
+  expect(item.assignedById).toBe(U('giamdoc').id); // người giao = TGĐ
+  ctx = { projectId: project.id, itemId: item.id, code: item.code, U, D };
+  const detail = await json(await apiAs(tgd, `/api/items/${item.id}`));
+  expect(detail.capabilities.roles).toEqual(expect.arrayContaining(['A', 'B']));
+  expect(detail.capabilities.plan).toBe(true);
+});
+
+test('Q2. Người chủ trì (vai Giám đốc, không thuộc BGĐ): không có ô sửa đường găng / mốc / hạn / người giao / đánh giá; API trả 403', async ({ browser }) => {
+  const lead = await as(browser, PMO_DIR);
+  const detail = await json(await apiAs(lead, `/api/items/${ctx.itemId}`));
+  expect(detail.capabilities.roles).toEqual(expect.arrayContaining(['L', 'O']));
+  expect(detail.capabilities.roles).not.toContain('B');
+  const panel = await openItem(lead, ctx.projectId, ctx.itemId);
+  await expect(panel.getByTestId('my-roles')).toContainText('Người chủ trì');
+  // Kế hoạch hiện dạng chữ: không ô nhập.
+  for (const sel of ['#ipDue', '#ipCritical', '#ipMilestone', '#ipAssigner', '#ipAssignedAt', '#ipSource', '#ipPriority', 'textarea#ipTitle', '[data-field="review"]', '[data-field="deliverable"]'])
+    await expect(panel.locator(sel)).toHaveCount(0);
+  await expect(panel.getByTestId('rebaseline-open')).toHaveCount(0);
+  await expect(panel.getByTestId('item-due')).not.toBeEmpty();
+  await expect(panel.getByTestId('item-assigner')).toContainText('Trần Minh Giám');
+  // Phần của người chủ trì: báo cáo tiến độ, dự báo hoàn thành, đổi trạng thái đang làm.
+  await expect(panel.getByTestId('item-forecast')).toHaveAttribute('type', 'date');
+  await expect(panel.getByTestId('item-state')).toBeEnabled();
+  await expect(panel.locator('#ipState option', { hasText: 'Huỷ' })).toBeDisabled();
+  // API: mọi trường kế hoạch → 403; ô đánh giá viết tay đã bỏ → 422.
+  const patch = data => apiAs(lead, `/api/items/${ctx.itemId}`, { method: 'PATCH', data });
+  expect((await patch({ dueDate: new Date(Date.now() + 40 * 86_400_000).toISOString() })).status()).toBe(403);
+  expect((await patch({ critical: true })).status()).toBe(403);
+  expect((await patch({ milestone: true })).status()).toBe(403);
+  expect((await patch({ title: 'Đổi tên (giả)' })).status()).toBe(403);
+  expect((await patch({ source: 'Văn bản cấp trên' })).status()).toBe(403);
+  expect((await patch({ assignedAt: new Date().toISOString() })).status()).toBe(403);
+  expect((await patch({ assignedById: ctx.U(PMO_DIR).id })).status()).toBe(403);
+  expect((await patch({ review: 'Tự đánh giá (giả)' })).status()).toBe(422);
+  expect((await apiAs(lead, `/api/items/${ctx.itemId}/rebaseline`, { method: 'POST', data: { reason: 'thử (giả)', baselineStart: new Date().toISOString(), baselineEnd: new Date(Date.now() + 86_400_000).toISOString() } })).status()).toBe(403);
+  expect((await patch({ stateId: (await json(await apiAs(lead, `/api/projects/${ctx.projectId}`))).states.find(s => s.category === 'CANCELLED').id })).status()).toBe(403);
+  // Được: chuyển Đang thực hiện, dự báo hoàn thành, tạo việc nhánh của việc mình (khi đó là người giao của việc nhánh), đề nghị gia hạn.
+  const states = (await json(await apiAs(lead, `/api/projects/${ctx.projectId}`))).states;
+  await json(await patch({ stateId: states.find(s => s.category === 'STARTED').id }));
+  await json(await patch({ forecastEnd: new Date(Date.now() + 25 * 86_400_000).toISOString() }));
+  const child = await json(await apiAs(lead, `/api/projects/${ctx.projectId}/items`, { method: 'POST', data: { title: 'Khảo sát phòng họp (giả)', parentId: ctx.itemId, assignedById: ctx.U('giamdoc').id } }));
+  expect(child.assignedById).toBe(ctx.U(PMO_DIR).id);
+  await json(await apiAs(lead, `/api/items/${ctx.itemId}/extensions`, { method: 'POST', data: { newDue: new Date(Date.now() + 30 * 86_400_000).toISOString(), reason: 'Chờ báo giá (giả)' } }));
+});
+
+test('Q3. Người phối hợp chỉ gửi tài liệu, bình luận; thành viên không liên quan chỉ thấy tóm tắt', async ({ browser }) => {
+  const sup = await as(browser, 'nv.kinhdoanh2');
+  const panel = await openItem(sup, ctx.projectId, ctx.itemId);
+  await expect(panel.getByTestId('report-open')).toHaveCount(0);
+  await expect(panel.getByTestId('bar-report')).toHaveCount(0);
+  await expect(panel.locator('#ipState')).toHaveCount(0);
+  await panel.getByTestId('ip-tab-results').click();
+  await panel.getByTestId('attach-input').setInputFiles({ name: 'ket-qua-gia.txt', mimeType: 'text/plain', buffer: Buffer.from('Kết quả phối hợp (giả)') });
+  await expect(panel.getByTestId('tw-back')).toContainText('ket-qua-gia.txt');
+  await panel.getByTestId('ip-tab-talk').click();
+  await panel.getByTestId('comment-input').fill('Đã gửi bản vẽ (giả)');
+  await panel.getByTestId('comment-submit').click();
+  await expect(panel.getByTestId('comments')).toContainText('Đã gửi bản vẽ (giả)');
+  for (const [data, code] of [[{ progress: 30 }, 403], [{ title: 'x' }, 403], [{ dueDate: new Date().toISOString() }, 403]])
+    expect((await apiAs(sup, `/api/items/${ctx.itemId}`, { method: 'PATCH', data })).status()).toBe(code);
+  expect((await apiAs(sup, `/api/items/${ctx.itemId}/progress-reports`, { method: 'POST', data: { content: 'phần phối hợp (giả)' } })).status()).toBe(403);
+  expect((await apiAs(sup, `/api/items/${ctx.itemId}/documents`, { method: 'POST', data: { kind: 'BASIS', number: '01/GIA', summary: 'Căn cứ (giả)' } })).status()).toBe(403);
+  expect((await apiAs(sup, `/api/items/${ctx.itemId}/documents`, { method: 'POST', data: { kind: 'OUTPUT', number: '02/GIA', summary: 'Sản phẩm (giả)' } })).status()).toBe(201);
+
+  const other = await as(browser, 'nv.kythuat');
+  const s = await json(await apiAs(other, `/api/items/${ctx.itemId}`));
+  expect(s.summary).toBe(true);
+  for (const k of ['comments', 'attachments', 'documents', 'progressReports', 'descriptionHtml', 'rating', 'review', 'assessment']) expect(s[k]).toBeUndefined();
+  expect(s.assignees.map(a => a.username)).toContain(PMO_DIR);
+  expect(typeof s.progress).toBe('number');
+  const p2 = await openItem(other, ctx.projectId, ctx.itemId);
+  await expect(p2.getByTestId('item-summary-only')).toBeVisible();
+  await expect(p2.getByTestId('comments')).toHaveCount(0);
+  const full = await json(await apiAs(sup, `/api/items/${ctx.itemId}`));
+  const att = full.attachments.find(a => a.fileName === 'ket-qua-gia.txt');
+  expect((await apiAs(other, `/api/attachments/${att.id}/download`)).status()).toBe(403);
+  expect((await apiAs(other, `/api/items/${ctx.itemId}/comments`, { method: 'POST', data: { body: 'xin chào' } })).status()).toBe(403);
+  // Danh sách: thẻ tóm tắt — không văn bản, mô tả, số bình luận / tệp.
+  const card = (await json(await apiAs(other, `/api/projects/${ctx.projectId}/items`))).find(i => i.id === ctx.itemId);
+  expect(card.my.view).toBe('SUMMARY');
+  expect(card.counts.comments).toBe(0);
+  ctx.attId = att.id;
+});
+
+test('Q4. Lãnh đạo bộ phận chủ trì chỉ xem (bình luận được); PGĐ phụ trách sửa kế hoạch, duyệt gia hạn; xoá tệp chỉ người gửi', async ({ browser }) => {
+  const head = await as(browser, 'tp.kinhdoanh');
+  const panel = await openItem(head, ctx.projectId, ctx.itemId);
+  await expect(panel.getByTestId('my-roles')).toContainText('Lãnh đạo bộ phận');
+  for (const sel of ['#ipDue', 'textarea#ipTitle', '#ipCritical', '#ipAssigner', '#ipState']) await expect(panel.locator(sel)).toHaveCount(0);
+  await panel.getByTestId('ip-tab-talk').click();
+  await expect(panel.getByTestId('comments')).toContainText('Đã gửi bản vẽ (giả)'); // xem toàn bộ
+  expect((await apiAs(head, `/api/items/${ctx.itemId}`, { method: 'PATCH', data: { dueDate: new Date().toISOString() } })).status()).toBe(403);
+  expect((await apiAs(head, `/api/items/${ctx.itemId}`, { method: 'PATCH', data: { assigneeIds: [ctx.U('nv.kinhdoanh1').id] } })).status()).toBe(403);
+  const ext = (await json(await apiAs(head, `/api/items/${ctx.itemId}`))).extensions.find(x => x.status === 'PENDING');
+  expect((await apiAs(head, `/api/extensions/${ext.id}/decide`, { method: 'POST', data: { decision: 'APPROVE' } })).status()).toBe(403);
+  expect((await apiAs(head, `/api/items/${ctx.itemId}/comments`, { method: 'POST', data: { body: 'Phòng nắm (giả)' } })).status()).toBe(201);
+
+  // PMO (chủ dự án / trưởng dự án MTL) không sửa kế hoạch việc người khác giao.
+  const pmo = await as(browser, 'pmo');
+  expect((await apiAs(pmo, `/api/items/${ctx.itemId}`, { method: 'PATCH', data: { critical: true } })).status()).toBe(403);
+
+  // PGĐ phụ trách bộ phận chủ trì = Ban Giám đốc của việc: sửa kế hoạch, duyệt gia hạn.
+  const pgd = await as(browser, PGD);
+  const p3 = await openItem(pgd, ctx.projectId, ctx.itemId);
+  await expect(p3.locator('#ipDue')).toHaveCount(1);
+  await expect(p3.locator('#ipCritical')).toHaveCount(1);
+  await expect(p3.getByTestId('extension-approve')).toBeVisible();
+  await json(await apiAs(pgd, `/api/items/${ctx.itemId}`, { method: 'PATCH', data: { critical: true, milestone: true } }));
+  await json(await apiAs(pgd, `/api/extensions/${ext.id}/decide`, { method: 'POST', data: { decision: 'APPROVE' } }));
+
+  // Xoá tệp: chỉ người đã gửi (TGĐ cũng không xoá được tệp của người phối hợp).
+  const tgd = await as(browser, 'giamdoc');
+  const p4 = await openItem(tgd, ctx.projectId, ctx.itemId);
+  await p4.getByTestId('ip-tab-results').click();
+  await expect(p4.getByTestId('tw-back')).toContainText('ket-qua-gia.txt');
+  await expect(p4.locator(`[data-del-att="${ctx.attId}"]`)).toHaveCount(0);
+  expect((await apiAs(tgd, `/api/attachments/${ctx.attId}`, { method: 'DELETE' })).status()).toBe(403);
+  const sup = await as(browser, 'nv.kinhdoanh2');
+  const p5 = await openItem(sup, ctx.projectId, ctx.itemId);
+  await p5.getByTestId('ip-tab-results').click();
+  await expect(p5.locator(`[data-del-att="${ctx.attId}"]`)).toHaveCount(1);
+  await json(await apiAs(sup, `/api/attachments/${ctx.attId}`, { method: 'DELETE' }));
+
+  // Không ai tự nhận làm người giao của việc chưa có người giao (kể cả TGĐ).
+  await json(await apiAs(tgd, `/api/items/${ctx.itemId}`, { method: 'PATCH', data: { assignedById: null } }));
+  expect((await apiAs(tgd, `/api/items/${ctx.itemId}`, { method: 'PATCH', data: { assignedById: ctx.U('giamdoc').id } })).status()).toBe(403);
+  await json(await apiAs(pgd, `/api/items/${ctx.itemId}`, { method: 'PATCH', data: { assignedById: ctx.U('giamdoc').id } }));
+});
+
+test('Q5. Duyệt: người chủ trì gửi duyệt, người giao chấm mức + nhận xét; đánh giá chỉ đọc, không ghi đè ô đánh giá cũ', async ({ browser }) => {
+  const lead = await as(browser, PMO_DIR);
+  const items = await json(await apiAs(lead, `/api/projects/${ctx.projectId}/items`));
+  // Việc nhánh do người chủ trì tạo: người chủ trì là người giao → người chủ trì việc nhánh (chính họ) không tự duyệt.
+  const child = items.find(i => i.parentId === ctx.itemId);
+  expect(child).toBeTruthy();
+  const tgd = await as(browser, 'giamdoc');
+  const detail = await json(await apiAs(tgd, `/api/items/${ctx.itemId}`));
+  const review = (await json(await apiAs(tgd, `/api/projects/${ctx.projectId}`))).states.find(s => s.category === 'REVIEW');
+  // Người giao đóng việc nhánh để việc cha gửi duyệt được.
+  await json(await apiAs(tgd, `/api/items/${child.id}`, { method: 'PATCH', data: { stateId: (await json(await apiAs(tgd, `/api/projects/${ctx.projectId}`))).states.find(s => s.category === 'CANCELLED').id } }));
+  await json(await apiAs(lead, `/api/items/${ctx.itemId}`, { method: 'PATCH', data: { stateId: review.id } }));
+  const pending = (await json(await apiAs(tgd, `/api/items/${ctx.itemId}`))).approvals.find(a => a.status === 'PENDING');
+  await json(await apiAs(tgd, `/api/approvals/${pending.id}/approve`, { method: 'POST', data: { rating: 'GOOD', comment: 'Làm tốt (giả)' } }));
+  const after = await json(await apiAs(lead, `/api/items/${ctx.itemId}`));
+  expect(after.assessment).toMatchObject({ rating: 'GOOD', comment: 'Làm tốt (giả)' });
+  expect(after.review).toBe(detail.review); // không ghi đè ô đánh giá cũ
+  const panel = await openItem(lead, ctx.projectId, ctx.itemId);
+  await expect(panel.getByTestId('item-rating').first()).toContainText('Tốt');
+  await expect(panel.locator('[data-field="review"]')).toHaveCount(0);
+  // Việc đã hoàn thành: người chủ trì không mở lại; người giao / BGĐ mở lại được.
+  const started = (await json(await apiAs(lead, `/api/projects/${ctx.projectId}`))).states.find(s => s.category === 'STARTED');
+  expect((await apiAs(lead, `/api/items/${ctx.itemId}`, { method: 'PATCH', data: { stateId: started.id } })).status()).toBe(403);
+  await json(await apiAs(tgd, `/api/items/${ctx.itemId}`, { method: 'PATCH', data: { stateId: started.id } }));
+});

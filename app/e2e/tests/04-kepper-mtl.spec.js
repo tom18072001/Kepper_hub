@@ -62,14 +62,17 @@ test('18. Dự án MTL: tạo, nhập MTL tổng / bộ phận, tiến độ, c�
   expect(step(1).status).toBe('OVERDUE');
   expect(step(4).status).toBe('NOT_DUE');
 
-  // 3) Nhập lại với thời gian đổi: mặc định giữ kế hoạch gốc; chọn "đặt lại" mới đổi (ghi nhật ký).
-  const moved = await xlsx('moved', MASTER.map(r => (r[0] === 4 ? [4, r[1], r[2], 9, 10, 2, '', ''] : r)));
+  // 3) Nhập lại (quyền tối thiểu 20/11/2026): CHỈ thêm bước mới — bước đã có giữ nguyên (kể cả khi tệp đổi thời gian / tên);
+  //    không còn tuỳ chọn đặt lại kế hoạch gốc khi nhập (điều chỉnh từng hạng mục bằng "Điều chỉnh kế hoạch gốc").
+  const moved = await xlsx('moved', [...MASTER.map(r => (r[0] === 4 ? [4, 'Đổi tên khi nhập lại (giả)', r[2], 9, 10, 2, '', ''] : r)), [5, 'Bước mới khi nhập lại (giả)', 'Pháp lý', 10, 11, 1, '', '']]);
   const send = async (rebaseline) => apiAs(pmo, `/api/projects/${project.id}/mtl-import`, { method: 'POST', multipart: { file: { name: 'mtl.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: require('node:fs').readFileSync(moved) }, kind: 'MASTER', planName: 'MTL — MTL overall', ...(rebaseline ? { rebaseline: '1' } : {}) } });
   const keep = await (await send(false)).json();
-  expect(keep.updated).toBe(4); expect(keep.baselineChanged).toBe(1); expect(keep.rebased).toBe(0);
+  expect(keep.created).toBe(1); expect(keep.kept).toBe(4); expect(keep.updated).toBe(0);
   const d2 = await (await apiAs(pmo, `/api/projects/${project.id}/mtl`)).json();
   expect(d2.items.find(i => i.planCode === '4').baselineStart).toBe(step(4).baselineStart);
-  expect((await (await send(true)).json()).rebased).toBe(1);
+  expect(d2.items.find(i => i.planCode === '4').title).toBe(step(4).title);
+  expect(d2.items.find(i => i.planCode === '5').title).toBe('Bước mới khi nhập lại (giả)');
+  expect((await send(true)).status()).toBe(422); // REBASELINE_REMOVED
 
   // 4) MTL bộ phận (Ban Pháp lý): gắn vào bước 2 qua cột "Thuộc bước", người phụ trách khớp tài khoản.
   const users = await (await apiAs(pmo, '/api/users/directory')).json();

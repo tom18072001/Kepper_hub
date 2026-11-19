@@ -1,4 +1,6 @@
-// Panel chi tiết công việc: sửa nhanh, duyệt nhiều cấp, checklist, việc con, tệp, bình luận, lịch sử.
+// Panel chi tiết công việc: sửa nhanh, duyệt nhiều cấp, việc nhánh, tệp, bình luận, lịch sử.
+// Mỗi ô nhập / nút / ô tick / menu chọn chỉ dựng khi máy chủ trả quyền tương ứng trong `capabilities` (services/task-access.js);
+// không có quyền thì hiện giá trị dạng chữ. Người không liên quan chỉ xem tóm tắt.
 import { api, download, openPreview, ApiError } from '../api.js';
 import { store, labelsFor, createProjectLabel, personLink } from '../store.js';
 import { $, $$, esc, avatar, labelChip, fmtDate, fmtDateTime, ago, PRIORITY, toast, multiSelect, bindMulti, dateInput, fromDateInput, confirmDialog, errorMessage, CATEGORY, draft, draftLater, uiPref } from '../util.js';
@@ -10,6 +12,7 @@ import { icon } from '../icons.js';
 import { dispatchParts, progressParts, documentForm, sourceOptions, ratingPick, RATINGS, handleDispatchClick, bindDispatchInputs, summaryBar, actionZone, stagePill, countdownPill, acceptDialog } from './dispatch-panel.js';
 import { sec, compact, bindSectionMemory, resetSectionMemory } from './sections.js';
 import { mtlPanelBlock, rebaselineDialog } from './mtl.js';
+import { canMove, capsOf, ROLE_LABEL } from '../task-caps.js';
 
 let openId = null, data = null, project = null;
 const panel = () => $('#itemPanel');
@@ -21,7 +24,7 @@ export function openItemId() { return openId; }
 function panelBusy() {
   const p = panel(), active = document.activeElement;
   if (active && p.contains(active) && active.matches('input:not([type=checkbox]), textarea, select, [contenteditable="true"]')) return true;
-  if ($('#newComment', p)?.value.trim() || $('#newCheck', p)?.value.trim() || $('#newChild', p)?.value.trim()) return true;
+  if ($('#newComment', p)?.value.trim() || $('#newChild', p)?.value.trim()) return true;
   if ($('#rpContent', p)?.value.trim() || $('#docNumber', p)?.value.trim() || p.querySelector('[data-answer-input]')?.value.trim()) return true;
   if (descPending()) return true;
   if (p.querySelector('.multi-list:not(.hidden)')) return true;
@@ -80,6 +83,8 @@ async function load({ soft = false } = {}) {
   if (id == null) return; // panel đã đóng trong lúc chờ
   const item = await api(`/api/items/${id}`);
   if (openId !== id) return;
+  // Thành viên dự án không liên quan: chỉ tóm tắt (tên, người chủ trì, hạn, trạng thái, %), chỉ đọc.
+  if (item.summary) { data = item; renderSummary(); lastRendered = id; return; }
   if (!project || project.id !== item.project.id) {
     // Trang dự án vừa tải đúng dự án này: dùng lại, không gọi lại /api/projects/:id và /cycles.
     const shared = loadedProject(item.project.id);
@@ -122,7 +127,7 @@ function levelControl(pending) {
   const extra = data.approvalSteps.filter(s => s.approverType !== 'ASSIGNER').length;
   const label = n => n === 0 ? 'Chỉ người giao duyệt' : n >= all.length ? `Người giao → đủ ${all.length} cấp (${all.map(s => s.name).join(' → ')})` : `Người giao → ${n} cấp: ${all.slice(0, n).map(s => s.name).join(' → ')}`;
   const source = { MANUAL: 'chọn tay', RULE: 'theo quy tắc tự động', DEFAULT: 'mặc định của dự án', CHILD: 'việc nhánh — lãnh đạo phòng duyệt' }[data.approvalSource] || '';
-  if (!data.rights.canManage || pending || data.archivedAt) return `<p class="muted sm" data-testid="approval-level-text">Mức duyệt: <b>${esc(label(extra))}</b>${source ? ` · ${source}` : ''}</p>`;
+  if (!capsOf(data).approvalLevels || pending || data.archivedAt) return `<p class="muted sm" data-testid="approval-level-text">Mức duyệt: <b>${esc(label(extra))}</b>${source ? ` · ${source}` : ''}</p>`;
   const opts = [['', data.approvalSource === 'MANUAL' ? 'Tự động (theo quy tắc / mặc định dự án)' : `Tự động — ${extra === 0 ? 'chỉ người giao' : extra >= all.length ? `người giao + đủ ${all.length} cấp` : `người giao + ${extra} cấp`}`], ...Array.from({ length: all.length + 1 }, (_, n) => [String(n), label(n)])];
   return `<label class="field level-pick">Mức duyệt của việc này<select id="ipLevels" data-testid="item-approval-levels">${opts.map(([v, t]) => `<option value="${v}"${String(data.approvalLevels ?? '') === v ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>
     <span class="muted xs">Hiện tại: ${esc(label(extra))} · ${source}</span></label>`;
@@ -148,10 +153,12 @@ function approvalBox() {
       <div class="row" style="margin-top:8px"><button class="btn btn-ok" data-act="approve" data-testid="approve-btn">${data.ratingRequired ? 'Duyệt hoàn thành' : 'Duyệt'}</button><button class="btn btn-danger" data-act="reject" data-testid="reject-btn">${data.ratingRequired ? 'Trả lại' : 'Không duyệt'}</button></div></div>`;
 }
 // Kết quả người giao duyệt: ai, lúc nào, mức nào, nhận xét gì.
+// Đánh giá = mức chấm + nhận xét lúc duyệt (cấp người giao). Người chủ trì thấy sau khi đã chấm; chỉ đọc.
 function ratingResult() {
   if (!data.rating) return '';
+  const a = data.assessment || {};
   return `<div class="rating-box" data-testid="item-rating" style="margin-top:10px">Mức hoàn thành: <b class="rating-${esc(data.rating)}">${esc(RATINGS[data.rating] || data.rating)}</b>${data.ratedByName ? ` · ${esc(data.ratedByName)}, ${fmtDate(data.ratedAt)}` : ''}
-    ${data.review ? `<div class="comment" style="margin-top:4px" data-testid="item-review">${esc(data.review)}</div>` : ''}</div>`;
+    ${a.comment ? `<div class="comment" style="margin-top:4px" data-testid="item-review">${esc(a.comment)}</div>` : ''}</div>`;
 }
 function approvalSection(open) {
   const latest = data.approvals[0];
@@ -166,7 +173,7 @@ function approvalSection(open) {
     return s.level < latest.currentLevel ? 'done' : s.level === latest.currentLevel ? 'current' : '';
   };
   const review = project.states.find(s => s.category === 'REVIEW');
-  const canSubmit = data.rights.canEdit && !pending && review && !['REVIEW', 'COMPLETED', 'CANCELLED'].includes(data.state.category) && data.dispatchStatus !== 'PENDING';
+  const canSubmit = capsOf(data).submit && !pending && review && !['REVIEW', 'COMPLETED', 'CANCELLED'].includes(data.state.category) && data.dispatchStatus !== 'PENDING';
   const history = data.approvals.flatMap(r => r.actions.map(a => ({ ...a, request: r }))).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   const word = { SUBMIT: 'gửi duyệt', APPROVE: 'duyệt', REJECT: 'trả lại', CANCEL: 'huỷ yêu cầu' };
   const statusText = latest ? { PENDING: 'Đang chờ duyệt', APPROVED: 'Đã duyệt', REJECTED: 'Bị trả lại', CANCELLED: 'Đã huỷ', REOPENED: 'Mở lại' }[latest.status] : '';
@@ -176,7 +183,7 @@ function approvalSection(open) {
   const lastReject = latest?.status === 'REJECTED' ? history.find(a => a.decision === 'REJECT' && a.request.id === latest.id) : null;
   const body = `${levelControl(pending)}
     <div class="steps">${data.approvalSteps.map(s => `<div class="step ${stepClass(s)}"><span class="n">${s.level}</span><span class="grow">${esc(s.name)}</span><span class="muted xs">${esc(approverNames(s.level))}</span></div>`).join('')}</div>
-    ${canSubmit && (!data.dispatchStatus || data.can?.work) ? (data.dispatchStatus ? `<button class="btn btn-ghost btn-sm" style="margin-top:10px" data-act="submit-product" data-testid="submit-product">${icon('send')}Nộp sản phẩm (phiếu trình)</button>` : `<button class="btn btn-primary btn-sm" style="margin-top:10px" data-act="submit-approval" data-testid="submit-approval">Gửi duyệt</button>`) : ''}
+    ${canSubmit ? (data.dispatchStatus ? `<button class="btn btn-ghost btn-sm" style="margin-top:10px" data-act="submit-product" data-testid="submit-product">${icon('send')}Nộp sản phẩm (phiếu trình)</button>` : `<button class="btn btn-primary btn-sm" style="margin-top:10px" data-act="submit-approval" data-testid="submit-approval">Gửi duyệt</button>`) : ''}
     ${data.childProgress?.open ? `<p class="muted sm" data-testid="children-block-note" style="margin-top:8px">Việc cha chỉ gửi duyệt được khi mọi việc con đã được duyệt hoàn thành (${data.childProgress.done}/${data.childProgress.total}).</p>` : ''}
     ${lastReject ? `<div class="timeline-list" style="margin-top:10px">${act(lastReject)}</div>` : ''}
     ${latest?.status === 'APPROVED' || data.state.category === 'COMPLETED' ? ratingResult() : ''}
@@ -188,7 +195,7 @@ function approvalSection(open) {
 const ACT_TEXT = {
   CREATED: d => 'đã tạo việc' + ({ INTAKE: ' từ yêu cầu tiếp nhận', RECURRING: ' (việc lặp lại)', EXCEL: ' (nhập Excel)', NOTE: ' từ ghi chú cá nhân', PLAN: ' từ kế hoạch năm', REGISTER: ' (nhập sổ giao việc)' }[d?.source] || ''), UPDATED: d => 'đã cập nhật ' + Object.keys(d || {}).map(k => ({ title: 'tiêu đề', descriptionHtml: 'mô tả', descriptionText: '', priority: 'ưu tiên', dueDate: 'hạn', startDate: 'ngày bắt đầu', estimate: 'ước lượng', labels: 'nhãn', parentId: 'việc cha', cycleId: 'chu kỳ', approvalLevels: 'mức duyệt', progress: 'tiến độ', internalDueDate: 'hạn nộp phòng', returnedAt: '', returnNote: '', deliverable: 'sản phẩm đầu ra', outputs: 'sản phẩm đã có', resultNote: 'kết quả / khó khăn', review: 'đánh giá', note: 'ghi chú', taskType: 'loại nhiệm vụ', leadDepartmentId: 'đơn vị chủ trì', supportDepartmentIds: 'đơn vị phối hợp', originalDueDate: '', dispatchStatus: '', dispatchedAt: '', acceptedAt: '', acceptedById: '', source: 'nguồn giao việc', assignedById: 'người giao', assignedAt: 'ngày giao', coordinatorText: 'đơn vị phối hợp', completedAt: 'ngày hoàn thành' }[k] ?? (k === 'cycle' ? 'chu kỳ: ' + esc(d.cycle) : k))).filter(Boolean).join(', '),  STATE: d => `chuyển <b>${esc(d.from)}</b> → <b>${esc(d.to)}</b>`, ASSIGNEES: () => 'đã thay đổi người nhận', COMMENT: () => 'đã bình luận',
   ATTACHMENT: d => 'đã đính kèm ' + esc((d.files || []).join(', ')), ATTACHMENT_DELETED: d => 'đã xoá tệp ' + esc(d.fileName || ''),
-  SUPPORTERS: () => 'đã thay đổi người phối hợp', TEMPLATE_APPLIED: d => `tạo ${d.count} việc nhánh từ mẫu "${esc(d.template)}"`, CHECKLIST_ADDED: d => 'thêm checklist: ' + esc(d.title), CHECKLIST_DONE: d => 'hoàn thành checklist: ' + esc(d.title), CHECKLIST_UNDONE: d => 'bỏ đánh dấu: ' + esc(d.title),
+  SUPPORTERS: () => 'đã thay đổi người phối hợp', TEMPLATE_APPLIED: d => `tạo ${d.count} việc nhánh từ mẫu "${esc(d.template)}"`, CHECKLIST_MIGRATED: d => `chuyển ${d?.count || 0} mục checklist thành việc nhánh`, CHECKLIST_ADDED: d => 'thêm checklist: ' + esc(d.title), CHECKLIST_DONE: d => 'hoàn thành checklist: ' + esc(d.title), CHECKLIST_UNDONE: d => 'bỏ đánh dấu: ' + esc(d.title),
   APPROVAL_SUBMITTED: d => 'gửi duyệt (' + esc(d.step || '') + ')', APPROVAL_APPROVED: d => `duyệt bước ${d.level}${d.next ? ', chuyển tiếp ' + esc(d.next) : ''}`,
   APPROVAL_COMPLETED: d => 'duyệt bước cuối — việc hoàn thành' + (d?.rating ? ` (mức hoàn thành: ${esc(RATINGS[d.rating] || d.rating)})` : ''),
   REOPENED_BY_CHILD: d => `mở lại ${esc(d?.from || '')} → ${esc(d?.to || '')}` + (d?.reason ? ': ' + esc(d.reason) : ''),
@@ -228,12 +235,13 @@ function registerParts(editable) {
   return { body, empty: !plan && !shown.length, filled: fields.filter(([, , v]) => v).length,
     summary: d.deliverable ? esc(String(d.deliverable).split('\n')[0].slice(0, 60)) : '' };
 }
-// Đánh giá của người giao (tab Kết quả & tài liệu): chỉ người giao / người quản lý ghi.
+// Đánh giá (tab Kết quả & tài liệu): mức chấm + nhận xét lúc duyệt, chỉ đọc. Ô "Đánh giá của người giao" viết tay đã bỏ —
+// nội dung cũ (nếu có) vẫn hiện, chỉ đọc.
 function reviewParts() {
-  const d = data;
-  const canReview = !d.archivedAt && (d.rights.canManage || d.assignedById === store.me.id);
-  if (!canReview && !d.review) return '';
-  return regArea(['review', 'Đánh giá của người giao', d.review, { canWrite: canReview, rows: 2, hint: d.reviewedByName ? `— ${esc(d.reviewedByName)}, ${fmtDateTime(d.reviewedAt)}` : '', hidden: false }]);
+  const d = data, a = d.assessment, legacy = d.legacyReview;
+  if (!a && !legacy) return '';
+  return `<div class="rating-box" data-testid="item-assessment">${a ? `Đánh giá: <b class="rating-${esc(a.rating)}">${esc(a.label)}</b>${a.by ? ` · ${esc(a.by)}, ${fmtDate(a.at)}` : ''}${a.comment ? `<div class="comment" style="margin-top:4px">${esc(a.comment)}</div>` : ''}` : ''}
+    ${legacy ? `<div class="legacy-note" data-testid="item-review-legacy"><span class="muted xs">Đánh giá của người giao — ghi trước đây${legacy.by ? ` (${esc(legacy.by)}, ${fmtDateTime(legacy.at)})` : ''}, chỉ đọc</span><div class="reg-readonly">${esc(legacy.text).replace(/\n/g, '<br>')}</div></div>` : ''}</div>`;
 }
 // "Kết quả / Khó khăn, kiến nghị" ghi tay trước đây (ô đã gộp vào Báo cáo tiến độ): hiện chỉ đọc nếu khác bản tóm tắt
 // máy chủ tự ghi từ báo cáo ("Khó khăn: …\nKiến nghị: …").
@@ -245,16 +253,17 @@ function legacyResult() {
   return `<div class="legacy-note" data-testid="item-result-legacy"><span class="muted xs">Kết quả / khó khăn, kiến nghị — ghi trước đây (nay ghi qua báo cáo tiến độ)</span><div class="reg-readonly">${esc(v).replace(/\n/g, '<br>')}</div></div>`;
 }
 
-function repeatBlock(editable) {
+// Lặp lại việc: người giao, Ban Giám đốc của việc.
+function repeatBlock(c) {
   const rule = data.recurring;
   if (rule) return `<div class="repeat-box" data-testid="item-repeat"><span class="muted xs">Lặp lại</span><b>${esc(rule.schedule)}</b>${rule.isActive ? '' : '<span class="pill">Đang tạm dừng</span>'}
-    ${project.rights.canManage ? '<button class="btn btn-ghost btn-sm" data-act="repeat" data-testid="repeat-edit">Sửa lịch</button>' : ''}</div>`;
-  if (!editable || !project.rights.canManage) return '';
+    ${c.recur || project.rights.canManage ? '<button class="btn btn-ghost btn-sm" data-act="repeat" data-testid="repeat-edit">Sửa lịch</button>' : ''}</div>`;
+  if (!c.recur) return '';
   return `<button class="btn btn-ghost btn-sm" data-act="repeat" data-testid="repeat-open">${icon('history')}Lặp lại việc này…</button>`;
 }
 
-// Chia việc nhánh: người quản lý, người giao, lãnh đạo phòng chủ trì, người chủ trì (giống máy chủ).
-const canSplit = d => d.rights.canManage || d.can?.isAssigner || d.can?.isLeadLeader || d.can?.myRole === 'LEAD' || !d.dispatchStatus;
+// Chia việc nhánh: người chủ trì (là người giao của việc nhánh), người giao, Ban Giám đốc (máy chủ trả capabilities.children).
+const canSplit = d => !!capsOf(d).children;
 // Bảng việc nhánh: ai làm, hạn, khâu, tiến độ — lãnh đạo phòng nắm được ngay.
 function childrenSection(d, editable, open) {
   const link = c => `${location.hash.split('?')[0]}?${new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(location.hash.split('?')[1] || '')), item: c.id })}`;
@@ -272,8 +281,6 @@ function childrenSection(d, editable, open) {
     body: `<div class="tbl-scroll"><table class="table compact children-table"><thead><tr><th>Mã</th><th>Việc</th><th>Cán bộ</th><th>Hạn</th><th>Khâu</th><th class="num">%</th></tr></thead><tbody>${rows}</tbody></table></div>${add}` });
 }
 
-// Hạn do người khác giao: người thực hiện không tự sửa (giống kiểm tra ở máy chủ).
-const dueEditable = d => !d.assignedById || d.assignedById === store.me.id || d.rights.canManage || (d.parent && d.can?.isLeadLeader);
 
 // Khối nào mở sẵn theo vai trò và khâu (SPEC GĐ3c 2.1a). Người dùng tự mở/đóng thì nhớ, thắng quy tắc này.
 function sectionPlan(d) {
@@ -281,20 +288,20 @@ function sectionPlan(d) {
   const dispatched = !!d.dispatchStatus || project.visibility === 'ASSIGNED';
   const closed = ['COMPLETED', 'CANCELLED'].includes(d.state.category);
   const approver = !!(d.approvals.find(a => a.status === 'PENDING') && d.canApprove);
-  const o = { desc: true, dispatch: false, register: false, approval: true, progress: dispatched, docs: dispatched, check: true, children: true, files: true, comments: true, history: false };
+  const o = { desc: true, dispatch: false, register: false, approval: true, progress: dispatched, docs: dispatched, children: true, files: true, comments: true, history: false };
   if (!dispatched) return { ...o, register: true };
-  if (approver) Object.assign(o, { desc: false, progress: true, docs: true, check: false, children: false, files: true, comments: false });
-  else if (role === 'LEADER' && st === 'PENDING_ACCEPT') Object.assign(o, { desc: true, dispatch: true, docs: true, children: true, progress: false, check: false });
-  else if (role === 'LEADER') Object.assign(o, { dispatch: true, children: true, progress: true, check: false });
-  else if (role === 'LEAD' && st === 'RETURNED') Object.assign(o, { files: true, docs: true, progress: false, check: false });
-  else if (role === 'LEAD' && ['WAIT_DEPT', 'WAIT_BGD', 'WAIT_APPROVAL'].includes(st)) Object.assign(o, { progress: false, files: true, check: false });
+  if (approver) Object.assign(o, { desc: false, progress: true, docs: true, children: false, files: true, comments: false });
+  else if (role === 'LEADER' && st === 'PENDING_ACCEPT') Object.assign(o, { desc: true, dispatch: true, docs: true, children: true, progress: false });
+  else if (role === 'LEADER') Object.assign(o, { dispatch: true, children: true, progress: true });
+  else if (role === 'LEAD' && st === 'RETURNED') Object.assign(o, { files: true, docs: true, progress: false });
+  else if (role === 'LEAD' && ['WAIT_DEPT', 'WAIT_BGD', 'WAIT_APPROVAL'].includes(st)) Object.assign(o, { progress: false, files: true });
   else if (role === 'LEAD') Object.assign(o, { dispatch: true }); // hạn nộp phòng, xin gia hạn
-  else if (role === 'SUPPORT') Object.assign(o, { approval: false, check: false, children: false, docs: false });
+  else if (role === 'SUPPORT') Object.assign(o, { approval: false, children: false, docs: false });
   else if (role === 'ASSIGNER') Object.assign(o, { children: true, progress: true });
-  if (closed) Object.assign(o, { progress: false, register: true, check: false });
+  if (closed) Object.assign(o, { progress: false, register: true });
   return o;
 }
-const SEC_KEYS = ['desc', 'dispatch', 'register', 'approval', 'progress', 'docs', 'check', 'children', 'files', 'comments', 'history', 'more'];
+const SEC_KEYS = ['desc', 'dispatch', 'register', 'approval', 'progress', 'docs', 'children', 'files', 'comments', 'history', 'more'];
 const X = '<svg class="i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
 const FILE = '<svg class="i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h6"/></svg>';
 
@@ -324,7 +331,7 @@ function restoreDrafts(p) {
   }
 }
 
-// Ba tab của panel: Tổng quan (mô tả, giao việc, điều hành, duyệt, báo cáo tiến độ, checklist, việc nhánh) ·
+// Ba tab của panel: Tổng quan (mô tả, giao việc, điều hành, duyệt, báo cáo tiến độ, việc nhánh) ·
 // Kết quả & tài liệu (tài liệu hai chiều, văn bản, sản phẩm, đánh giá) · Trao đổi (bình luận, lịch sử).
 // Vùng "Cần bạn xử lý", tiêu đề và thanh tóm tắt luôn ở trên các tab. Mở việc khác → về Tổng quan; vẽ lại cùng việc → giữ tab.
 const TABS = [['overview', 'Tổng quan'], ['results', 'Kết quả & tài liệu'], ['talk', 'Trao đổi']];
@@ -345,11 +352,12 @@ export function revealInPanel(el) {
 
 function render() {
   const d = data, r = d.rights, editable = r.canEdit && !d.archivedAt;
-  // Việc điều hành: người phối hợp / lãnh đạo phòng phối hợp chỉ báo cáo, bình luận, đính kèm — không sửa nội dung, trạng thái (máy chủ cũng chặn).
-  const full = (!d.dispatchStatus && project.visibility !== 'ASSIGNED') || r.canManage || d.can?.isAssigner || d.can?.work || d.reporterId === store.me.id;
-  const fe = editable && full;
+  // Quyền theo từng phần của việc (máy chủ): kế hoạch — người giao / Ban Giám đốc; tiến độ — người chủ trì; tài liệu theo bên.
+  const c = capsOf(d), fe = !!c.plan;
   const users = assignableUsers(project);
-  const done = d.checklist.filter(c => c.done).length;
+  // Lãnh đạo bộ phận chủ trì chọn người cho bước chưa có người: chỉ người trong phòng chủ trì.
+  const pickUsers = c.assign ? users : c.assignOwnDept ? store.users.filter(u => u.isActive !== false && u.role !== 'admin' && u.departmentId === d.leadDepartmentId) : [];
+  const canPick = c.assign || c.assignOwnDept;
   const states = project.states;
   // Việc cần duyệt: không kéo thẳng sang Hoàn thành (máy chủ cũng chặn) — đi qua "Gửi duyệt" / "Nộp sản phẩm".
   // Chọn "Hoàn thành" khi chưa được duyệt → máy chủ đưa vào "Chờ duyệt" (người giao duyệt + chấm mức).
@@ -366,7 +374,7 @@ function render() {
   const dispatchedView = d.dispatchStatus || d.leadDepartmentId || d.taskType === 'PLAN' || project.visibility === 'ASSIGNED';
   const disp = dispatchedView ? dispatchParts(d, editable && !r.delegated, project.visibility === 'ASSIGNED') : null;
   const prog = progressParts(d, editable);
-  const reg = registerParts(fe);
+  const reg = registerParts(c.plan);
   const legacy = legacyResult();
   const zone = approvalBox() + actionZone(d);
   // API chi tiết không trả descriptionText (chỉ excerpt): xét trống theo chính HTML mô tả, nếu không mô tả có sẵn bị giấu sau nút '+ Thêm mô tả'.
@@ -374,35 +382,34 @@ function render() {
   // Mô tả tự lưu như các trường khác (sau khi ngừng gõ / rời ô / Ctrl S), kèm chữ "Đã lưu" mờ.
   const descBody = `${fe ? `<div class="toolbar"><button type="button" data-cmd="bold" title="Đậm" aria-label="Đậm">B</button><button type="button" data-cmd="italic" title="Nghiêng" aria-label="Nghiêng"><i>I</i></button><button type="button" data-cmd="insertUnorderedList" title="Danh sách" aria-label="Danh sách">•</button><button type="button" data-cmd="insertOrderedList" title="Danh sách số" aria-label="Danh sách số">1.</button><span class="grow"></span><span class="muted xs save-state" id="descState" role="status" aria-live="polite" data-testid="description-state"></span></div>` : ''}
           <div class="editor rich" id="ipDesc" ${fe ? 'contenteditable="true" role="textbox" aria-multiline="true" aria-label="Mô tả"' : ''} data-placeholder="Thêm mô tả…" data-testid="item-description">${d.descriptionHtml}</div>`;
-  const checklistBody = `<div data-testid="checklist">${d.checklist.map(c => `<div class="checklist-row${c.done ? ' done' : ''}"><input type="checkbox" data-check="${c.id}" ${c.done ? 'checked' : ''} ${editable ? '' : 'disabled'} aria-label="${esc(c.title)}"><span class="grow">${esc(c.title)}</span>${editable ? `<button class="icon-btn" data-del-check="${c.id}" aria-label="Xoá mục checklist" title="Xoá mục này">${X}</button>` : ''}</div>`).join('')}</div>
-          ${editable ? '<input id="newCheck" placeholder="Thêm mục checklist, Enter để lưu" data-testid="checklist-input" maxlength="300" aria-label="Thêm mục checklist">' : ''}`;
   // Kết quả & tài liệu — MỘT khối hai chiều: bên giao gửi (căn cứ, tài liệu kèm khi giao) ↔ bên thực hiện gửi lại (sản phẩm tham mưu,
   // văn bản đã phát hành, tệp kết quả, sản phẩm đã ghi bằng chữ). Thay cho 3 chỗ cũ: "Sản phẩm đã có theo tiến độ", "Văn bản liên quan",
   // "Tài liệu". Tệp xếp theo người tải lên: người chủ trì / phối hợp → "Bên thực hiện"; còn lại (người giao, lãnh đạo) → "Bên giao".
   const doers = new Set([...d.assignees.map(a => a.id), ...(d.supporters || []).map(a => a.id)]);
   const attRow = a => `<div class="att">${FILE}<span class="name" title="${esc(a.fileName)}">${esc(a.fileName)}</span><span class="muted xs">${(a.sizeBytes / 1024).toFixed(0)} KB · ${esc(a.uploadedByName || '')} · <span title="${fmtDateTime(a.createdAt)}">${ago(a.createdAt)}</span>${a.storedIn === 'NAS' ? ` · <span class="pill ok" title="Bản gốc trong kho file dự án: ${esc(a.nasPath)}" data-testid="att-nas">Kho file${a.version ? ` · v${String(a.version).padStart(2, '0')}` : ''}</span>` : ''}</span>
-            ${/\.(pdf|png|jpe?g|gif|webp|docx?)$/i.test(a.fileName) ? `<button class="btn btn-ghost btn-sm" data-preview="${a.id}">Xem</button>` : ''}<button class="btn btn-ghost btn-sm" data-download="${a.id}" data-testid="download-${esc(a.fileName)}">Tải</button>${editable ? `<button class="icon-btn" data-del-att="${a.id}"${a.storedIn === 'NAS' ? ' data-nas="1"' : ''} aria-label="Xoá tệp ${esc(a.fileName)}" title="Xoá tệp">${X}</button>` : ''}</div>`;
+            ${/\.(pdf|png|jpe?g|gif|webp|docx?)$/i.test(a.fileName) ? `<button class="btn btn-ghost btn-sm" data-preview="${a.id}">Xem</button>` : ''}<button class="btn btn-ghost btn-sm" data-download="${a.id}" data-testid="download-${esc(a.fileName)}">Tải</button>${c.deleteOwnFiles && a.uploadedById === store.me.id ? `<button class="icon-btn" data-del-att="${a.id}"${a.storedIn === 'NAS' ? ' data-nas="1"' : ''} aria-label="Xoá tệp ${esc(a.fileName)}" title="Xoá tệp (bạn đã gửi)">${X}</button>` : ''}</div>`;
   const docRow = x => `<div class="att tw-doc" data-testid="tw-doc"><span class="pill">${x.kind === 'BASIS' ? 'Căn cứ' : x.kind === 'ISSUED' ? 'Đã phát hành' : 'Sản phẩm'}</span><b>${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.number)}</a>` : esc(x.number)}</b><span class="name" title="${esc(x.summary)}">${esc(x.summary)}${x.issuedOn ? ` <span class="muted xs">· ${fmtDate(x.issuedOn)}</span>` : ''}</span>
-            ${editable && (x.createdById === store.me.id || r.canManage) ? `<button class="icon-btn" data-del-doc="${x.id}" aria-label="Gỡ văn bản ${esc(x.number)}" title="Gỡ văn bản">${X}</button>` : ''}</div>`;
+            ${c.deleteOwnFiles && x.createdById === store.me.id ? `<button class="icon-btn" data-del-doc="${x.id}" aria-label="Gỡ văn bản ${esc(x.number)}" title="Gỡ văn bản (bạn đã thêm)">${X}</button>` : ''}</div>`;
   // Sản phẩm đã ghi bằng chữ (ô "Sản phẩm đã có theo tiến độ" cũ, cột của Sổ giao việc): mỗi dòng một mục ở cột bên thực hiện.
   const outLines = String(d.outputs || '').split('\n').map(x => x.trim()).filter(Boolean);
   const outRow = l => `<div class="att tw-doc tw-out" data-testid="tw-output"><span class="pill">Đã ghi</span><span class="name" title="${esc(l)}">${esc(l)}</span></div>`;
   const giveFiles = d.attachments.filter(a => !doers.has(a.uploadedById)), backFiles = d.attachments.filter(a => doers.has(a.uploadedById));
   const giveDocs = (d.documents || []).filter(x => x.kind === 'BASIS'), backDocs = (d.documents || []).filter(x => x.kind !== 'BASIS');
-  const iAmDoer = doers.has(store.me.id);
+  // Bên gửi theo quyền: người chủ trì / phối hợp gửi kết quả; người giao / Ban Giám đốc gửi tài liệu giao.
+  const iAmDoer = !!c.docsBack, canSend = !!(c.docsGive || c.docsBack);
   const twCol = (title, who, rows, testid) => `<div class="tw-col" data-testid="${testid}"><div class="tw-h">${title}${who ? ` <span class="muted xs">· ${who}</span>` : ''}</div>
       ${rows.join('') || '<div class="muted xs tw-empty">Chưa có</div>'}</div>`;
-  const outEdit = editable ? regArea(['outputs', 'Sản phẩm đã ghi bằng chữ', d.outputs, { canWrite: true, rows: 3, hint: 'mỗi dòng một văn bản (tờ trình, công văn, quyết định…) — cột "Sản phẩm đã có" của Sổ giao việc', hidden: true }]) : '';
+  const outEdit = c.docsBack ? regArea(['outputs', 'Sản phẩm đã ghi bằng chữ', d.outputs, { canWrite: true, rows: 3, hint: 'mỗi dòng một văn bản (tờ trình, công văn, quyết định…) — cột "Sản phẩm đã có" của Sổ giao việc', hidden: true }]) : '';
   const resultCount = d.attachments.length + (d.documents || []).length + outLines.length;
   const filesBody = `<div data-testid="attachments" class="two-way">
       ${twCol('Bên giao gửi', d.assignedByName ? esc(d.assignedByName) : '', [...giveDocs.map(docRow), ...giveFiles.map(attRow)], 'tw-give')}
       ${twCol('Bên thực hiện gửi lại', d.assignees.map(a => esc(a.fullName)).join(', '), [...backDocs.map(docRow), ...backFiles.map(attRow), ...outLines.map(outRow)], 'tw-back')}</div>
-    ${editable ? `<div class="row wrap tw-actions"><label class="btn ${iAmDoer ? 'btn-primary' : 'btn-ghost'} btn-sm">${icon('plus')}${iAmDoer ? 'Gửi kết quả (đính kèm tệp)' : 'Đính kèm tài liệu giao'}<input type="file" id="attInput" multiple hidden data-testid="attach-input"></label>
+    ${canSend ? `<div class="row wrap tw-actions"><label class="btn ${iAmDoer ? 'btn-primary' : 'btn-ghost'} btn-sm">${icon('plus')}${iAmDoer ? 'Gửi kết quả (đính kèm tệp)' : 'Đính kèm tài liệu giao'}<input type="file" id="attInput" multiple hidden data-testid="attach-input"></label>
       ${outEdit ? `<button type="button" class="link-btn" data-reveal="outputs" data-testid="outputs-edit">${outLines.length ? 'Sửa sản phẩm đã ghi' : '+ Ghi sản phẩm bằng chữ'}</button>` : ''}
       <span class="muted xs">PDF, Office, ảnh, ZIP, TXT/CSV · tối đa 25 MB</span></div>
-      ${documentForm(editable, { defaultKind: iAmDoer ? 'OUTPUT' : 'BASIS' })}${outEdit}` : ''}`;
+      ${documentForm(true, { defaultKind: iAmDoer ? 'OUTPUT' : 'BASIS', kinds: [...(c.docsGive ? ['BASIS'] : []), ...(c.docsBack ? ['OUTPUT', 'ISSUED'] : [])] })}${outEdit}` : ''}`;
   const commentsBody = `<div class="timeline-list" data-testid="comments">${d.comments.map(c => `<div class="comment"><div class="who">${esc(c.authorName || '')} <span>· ${ago(c.createdAt)}</span></div><div class="rich">${c.bodyHtml}</div></div>`).join('') || '<p class="muted sm">Chưa có bình luận.</p>'}</div>
-          ${editable ? '<textarea id="newComment" placeholder="Viết bình luận… dùng @tàikhoản để nhắc ai đó" rows="3" style="margin-top:8px" data-testid="comment-input" aria-label="Bình luận"></textarea><div class="row" style="margin-top:6px"><button class="btn btn-primary btn-sm" data-act="comment" data-testid="comment-submit" title="Gửi (Ctrl Enter)">Gửi bình luận</button></div>' : ''}`;
+          ${c.comment ? '<textarea id="newComment" placeholder="Viết bình luận… dùng @tàikhoản để nhắc ai đó" rows="3" style="margin-top:8px" data-testid="comment-input" aria-label="Bình luận"></textarea><div class="row" style="margin-top:6px"><button class="btn btn-primary btn-sm" data-act="comment" data-testid="comment-submit" title="Gửi (Ctrl Enter)">Gửi bình luận</button></div>' : ''}`;
   const lastAct = d.activities[0];
   const historyBody = `<div class="timeline-list" data-testid="activity">${d.activities.map(a => `<div class="act"><b>${esc(a.actorName)}</b> ${(ACT_TEXT[a.type] || (() => esc(a.type)))(a.data)} · <span title="${fmtDateTime(a.createdAt)}">${ago(a.createdAt)}</span></div>`).join('')}</div>`;
   // Cột tự do (nhóm OTHER) là thuật ngữ cấu hình bảng — không ghi ra cho người dùng.
@@ -413,22 +420,20 @@ function render() {
   const showLabels = project.visibility !== 'ASSIGNED' || d.labels.length;
   // % tiến độ chỉ hiển thị ở cột phải; cập nhật qua "Báo cáo tiến độ" (có lịch sử, gửi người giao). MTL: % thực tế (việc cha tự tính từ việc con).
   const pctNow = Math.round(project.kind === 'MTL' ? (d.mtl?.actual ?? d.progress) : d.progress) || 0;
-  const autoPct = !d.mtl ? '' : d.children.length ? 'tự tính từ việc con' : d.checklist.length ? 'tự tính theo checklist' : '';
+  const autoPct = d.children.length ? 'tự tính từ việc nhánh' : '';
   const tabCount = { results: resultCount, talk: d.comments.length };
   const tabBar = `<div class="ip-tabbar"><div class="ip-tabs" role="tablist" aria-label="Các phần của việc">${TABS.map(([k, label]) => `<button type="button" role="tab" id="ipTab-${k}" aria-controls="ipPane-${k}" data-tab="${k}" data-testid="ip-tab-${k}" aria-selected="${k === activeTab}" tabindex="${k === activeTab ? 0 : -1}" class="${k === activeTab ? 'active' : ''}">${label}${tabCount[k] ? ` <span class="ip-tab-n">${tabCount[k]}</span>` : ''}</button>`).join('')}</div>
       <button type="button" class="link-btn ip-mode" data-act="toggle-full" data-testid="panel-full-toggle" aria-pressed="${!lite}">${lite ? 'Mở tất cả các mục' : 'Thu gọn các mục'}</button></div>`;
   const pane = (k, html) => `<div class="ip-pane" role="tabpanel" id="ipPane-${k}" aria-labelledby="ipTab-${k}" data-pane="${k}"${k === activeTab ? '' : ' hidden'}>${html}</div>`;
-  const overview = `${mtlPanelBlock(d, project, fe)}
+  const overview = `${mtlPanelBlock(d, project, c)}
         ${descEmpty && fe ? `<div class="section sec-compact desc-add"><button type="button" class="link-btn" data-act="add-desc">+ Thêm mô tả</button><div class="hidden" id="descWrap">${descBody}</div></div>`
           : descEmpty ? '' : sec('desc', { title: 'Mô tả', open: plan.desc, body: descBody })}
         ${reg.empty ? '' : sec('register', { title: 'Giao việc', count: reg.filled ? `${reg.filled} mục` : '', summary: reg.summary, open: plan.register, testid: 'register-section', body: reg.body })}
         ${disp ? sec('dispatch', { title: 'Điều hành', summary: `${disp.status} ${disp.summary}`, open: plan.dispatch, testid: 'dispatch-section', cls: 'dispatch', body: disp.body }) : ''}
         ${approvalSection(plan.approval)}
         ${prog.empty && !legacy ? '' : sec('progress', { title: 'Báo cáo tiến độ', count: prog.count || '', summary: prog.summary, open: plan.progress || prog.formOpen, testid: 'progress-section', id: 'progress-section', body: legacy + prog.body })}
-        ${d.checklist.length ? sec('check', { title: `Checklist <span class="muted xs">${done}/${d.checklist.length}</span><span class="progress"><i style="width:${done / d.checklist.length * 100}%"></i></span>`, open: plan.check, body: checklistBody })
-          : editable ? compact('Checklist', checklistBody) : ''}
         ${childrenSection(d, editable, plan.children)}`;
-  const results = `${resultCount || editable ? sec('files', { title: 'Tài liệu, văn bản, sản phẩm', count: resultCount || '', summary: `bên giao ${giveFiles.length + giveDocs.length} · bên thực hiện ${backFiles.length + backDocs.length + outLines.length}`, open: plan.files, testid: 'files-section', body: filesBody })
+  const results = `${resultCount || canSend ? sec('files', { title: 'Tài liệu, văn bản, sản phẩm', count: resultCount || '', summary: `bên giao ${giveFiles.length + giveDocs.length} · bên thực hiện ${backFiles.length + backDocs.length + outLines.length}`, open: plan.files, testid: 'files-section', body: filesBody })
       : '<p class="muted sm">Chưa có tài liệu, văn bản hay sản phẩm.</p>'}
         ${reviewParts()}`;
   const talk = `${sec('comments', { title: 'Bình luận', count: d.comments.length || '', open: plan.comments, body: commentsBody })}
@@ -437,14 +442,15 @@ function render() {
   p.innerHTML = `
     <div class="ip-head" tabindex="-1"><span class="code" data-testid="item-code">${esc(d.code)}</span><span class="muted sm grow">${esc(d.project.name)}${(d.ancestors?.length ? d.ancestors : d.parent ? [d.parent] : []).length ? ` · thuộc <span data-testid="item-breadcrumb">${(d.ancestors?.length ? d.ancestors : [d.parent]).map(a => `<a href="#/projects/${d.project.id}?item=${a.id}"${a.title ? ` title="${esc(a.title)}"` : ''}>${esc(d.project.key)}-${a.number}</a>`).join(' › ')}</span>` : ''}</span>
       <details class="ip-menu"><summary class="icon-btn" aria-label="Thao tác khác" title="Thao tác khác">⋯</summary><div class="ip-menu-list" role="menu">
-        ${r.canDelete && !d.archivedAt ? `<button class="menu-item danger" role="menuitem" data-act="archive" data-testid="archive-item">${icon('trash')}Xoá (vào thùng rác)</button>` : ''}
-        ${fe && project.rights.canManage && !d.recurring ? `<button class="menu-item" role="menuitem" data-act="repeat">${icon('history')}Lặp lại việc này…</button>` : ''}
+        ${c.delete && !d.archivedAt ? `<button class="menu-item danger" role="menuitem" data-act="archive" data-testid="archive-item">${icon('trash')}Xoá (vào thùng rác)</button>` : ''}
+        ${c.recur && !d.recurring ? `<button class="menu-item" role="menuitem" data-act="repeat">${icon('history')}Lặp lại việc này…</button>` : ''}
         <button class="menu-item" role="menuitem" data-act="reset-layout">Về bố cục mặc định</button></div></details>
       <button class="icon-btn" data-act="close" aria-label="Đóng" title="Đóng (Esc)" data-testid="close-panel">${X}</button></div>
     <div class="ip-body">
       <div class="ip-main">
-        ${d.archivedAt ? `<div class="approval-box" data-testid="item-deleted">Việc đang ở trong thùng rác (xoá lúc ${fmtDateTime(d.archivedAt)}), sẽ bị xoá hẳn sau 7 ngày.${r.canDelete ? ' <button class="btn btn-ghost btn-sm" data-act="restore" data-testid="restore-item">Khôi phục</button>' : ''}</div>` : ''}
-        <textarea class="ip-title" id="ipTitle" rows="1" ${fe ? '' : 'readonly'} aria-label="Tiêu đề" data-testid="item-title" maxlength="300">${esc(d.title)}</textarea>
+        ${d.archivedAt ? `<div class="approval-box" data-testid="item-deleted">Việc đang ở trong thùng rác (xoá lúc ${fmtDateTime(d.archivedAt)}), sẽ bị xoá hẳn sau 7 ngày.${c.delete ? ' <button class="btn btn-ghost btn-sm" data-act="restore" data-testid="restore-item">Khôi phục</button>' : ''}</div>` : ''}
+        ${fe ? `<textarea class="ip-title" id="ipTitle" rows="1" aria-label="Tiêu đề" data-testid="item-title" maxlength="300">${esc(d.title)}</textarea>` : `<h2 class="ip-title ip-title-ro" data-testid="item-title">${esc(d.title)}</h2>`}
+        ${c.roles?.length ? `<div class="muted xs" data-testid="my-roles">Vai của bạn: ${c.roles.map(x => esc(ROLE_LABEL[x] || x)).join(', ')}</div>` : ''}
         ${summaryBar(d, { review: project.states.find(s => s.category === 'REVIEW'), editable })}
         ${zone ? `<div class="action-zone" data-testid="action-zone" aria-label="Cần bạn xử lý">${zone}</div>` : ''}
         ${tabBar}
@@ -454,29 +460,30 @@ function render() {
       </div>
       <div class="ip-side">
         <div class="ip-core">
-        <label class="${project.visibility === 'ASSIGNED' ? 'lite-hide' : ''}">Trạng thái<select id="ipState" ${fe ? '' : 'disabled'} data-testid="item-state" title="Trạng thái (S)">${states.map(s => { const done = s.category === 'COMPLETED' && s.id !== d.stateId && !approvedNow, doneLock = done && (d.state.category === 'REVIEW' || d.childProgress?.open > 0);
-          const locked = s.id !== d.stateId && (doneLock || (s.category === 'CANCELLED' && (d.dispatchStatus || project.visibility === 'ASSIGNED') && !(r.canManage || d.can?.isAssigner || d.reporterId === store.me.id))); return `<option value="${s.id}"${s.id === d.stateId ? ' selected' : ''}${locked ? ' disabled' : ''}>${stateLabel(s)}${locked ? (s.category === 'CANCELLED' ? ' (người giao)' : d.state.category === 'REVIEW' ? ' (đang chờ người giao duyệt)' : ' (còn việc con chưa duyệt)') : done ? ' → gửi người giao duyệt' : ''}</option>`; }).join('')}</select></label>
-        <label class="lite-hide">Ưu tiên<select id="ipPriority" ${fe ? '' : 'disabled'} data-testid="item-priority" title="Ưu tiên (P)">${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}"${k === d.priority ? ' selected' : ''}>${v.label}</option>`).join('')}</select></label>
+        <label class="${project.visibility === 'ASSIGNED' ? 'lite-hide' : ''}">Trạng thái${c.state ? `<select id="ipState" data-testid="item-state" title="Trạng thái (S)">${states.map(s => { const done = s.category === 'COMPLETED' && s.id !== d.stateId && !approvedNow, doneLock = done && (d.state.category === 'REVIEW' || d.childProgress?.open > 0);
+          const ruleLock = s.id !== d.stateId && !canMove(c.state, d.state.category, s.category);
+          const locked = s.id !== d.stateId && (doneLock || ruleLock); return `<option value="${s.id}"${s.id === d.stateId ? ' selected' : ''}${locked ? ' disabled' : ''}>${stateLabel(s)}${locked ? (ruleLock ? ' (người giao / Ban Giám đốc)' : d.state.category === 'REVIEW' ? ' (đang chờ người giao duyệt)' : ' (còn việc con chưa duyệt)') : done ? ' → gửi người giao duyệt' : ''}</option>`; }).join('')}</select>` : `<div class="side-text" data-testid="item-state">${stateLabel(d.state)}</div>`}</label>
+        <label class="lite-hide">Ưu tiên${fe ? `<select id="ipPriority" data-testid="item-priority" title="Ưu tiên (P)">${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}"${k === d.priority ? ' selected' : ''}>${v.label}</option>`).join('')}</select>` : `<div class="side-text" data-testid="item-priority">${esc(PRIORITY[d.priority]?.label || '—')}</div>`}</label>
         <div class="side-progress ${project.kind === 'MTL' || d.progress ? '' : 'lite-hide'}"><span class="side-h" id="ipProgLabel">Tiến độ</span>
           <div class="row progress-view" role="meter" aria-labelledby="ipProgLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pctNow}"><span class="progress"><i style="width:${pctNow}%"></i></span><b data-testid="item-progress">${pctNow}%</b></div>
-          ${autoPct ? `<span class="muted xs">${autoPct}</span>` : prog.canReport ? '<button type="button" class="link-btn" data-act="open-report" data-testid="side-report">Cập nhật qua Báo cáo tiến độ</button>' : editable && d.can?.progress === false ? '<span class="muted xs">Do người chủ trì cập nhật</span>' : ''}</div>
-        <div><span class="side-h">Người chủ trì</span>${fe ? multiSelect('assignees', users.map(u => ({ id: u.id, label: u.fullName })), d.assignees.map(a => a.id), 'Chưa giao') : `<div>${d.assignees.map(a => avatar(a) + ' ' + personLink(a)).join('<br>') || '—'}</div>`}</div>
-        <div class="${(d.supporters || []).length ? '' : 'lite-hide'}"><span class="side-h">Người phối hợp</span>${fe ? multiSelect('supporters', users.map(u => ({ id: u.id, label: u.fullName })), (d.supporters || []).map(a => a.id), 'Không') : `<div>${(d.supporters || []).map(a => personLink(a)).join(', ') || '—'}</div>`}</div>
-        <label>Hạn hoàn thành<input type="date" id="ipDue" value="${dateInput(d.dueDate)}" ${fe && dueEditable(d) ? '' : 'disabled'} data-testid="item-due" title="Hạn (D)">${d.dueDate ? `<span class="muted xs">${countdownPill(d)}</span>` : ''}${fe && !dueEditable(d) ? '<span class="muted xs">Hạn do người giao đặt — dùng "Xin gia hạn"</span>' : ''}</label>
-        ${d.state.category === 'COMPLETED' ? `<label>Ngày hoàn thành thực tế<input type="date" id="ipCompleted" value="${dateInput(d.completedAt)}" ${r.canManage ? '' : 'disabled'} data-testid="item-completed"></label>` : ''}
-        <label class="lite-hide">Người giao${fe && d.can?.assigner !== false ? `<select id="ipAssigner" data-testid="item-assigner"><option value="">—</option>${store.users.filter(u => u.role !== 'admin').map(u => `<option value="${u.id}"${u.id === d.assignedById ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select>` : `<div class="side-text" data-testid="item-assigner">${d.assignedById ? personLink({ id: d.assignedById, fullName: d.assignedByName }) : '—'}</div>`}</label>
-        <label class="lite-hide">Ngày giao<input type="date" id="ipAssignedAt" value="${dateInput(d.assignedAt)}" ${fe ? '' : 'disabled'} data-testid="item-assigned-at"></label>
+          ${autoPct ? `<span class="muted xs">${autoPct}</span>` : prog.canReport ? '<button type="button" class="link-btn" data-act="open-report" data-testid="side-report">Cập nhật qua Báo cáo tiến độ</button>' : '<span class="muted xs">Do người chủ trì cập nhật</span>'}</div>
+        <div><span class="side-h">Người chủ trì</span>${canPick ? multiSelect('assignees', pickUsers.map(u => ({ id: u.id, label: u.fullName })), d.assignees.map(a => a.id), 'Chưa giao') : `<div data-testid="item-assignees">${d.assignees.map(a => avatar(a) + ' ' + personLink(a)).join('<br>') || '—'}</div>`}${c.assignOwnDept ? '<span class="muted xs">Chọn người trong phòng chủ trì</span>' : ''}</div>
+        <div class="${(d.supporters || []).length ? '' : 'lite-hide'}"><span class="side-h">Người phối hợp</span>${canPick ? multiSelect('supporters', pickUsers.map(u => ({ id: u.id, label: u.fullName })), (d.supporters || []).map(a => a.id), 'Không') : `<div>${(d.supporters || []).map(a => personLink(a)).join(', ') || '—'}</div>`}</div>
+        <label>Hạn hoàn thành${fe ? `<input type="date" id="ipDue" value="${dateInput(d.dueDate)}" data-testid="item-due" title="Hạn (D)">` : `<div class="side-text" data-testid="item-due">${d.dueDate ? fmtDate(d.dueDate) : '—'}</div>`}${d.dueDate ? `<span class="muted xs">${countdownPill(d)}</span>` : ''}${!fe && c.extension ? '<span class="muted xs">Hạn do người giao đặt — dùng "Xin gia hạn"</span>' : ''}</label>
+        ${d.state.category === 'COMPLETED' ? `<label>Ngày hoàn thành thực tế${c.completedAt ? `<input type="date" id="ipCompleted" value="${dateInput(d.completedAt)}" data-testid="item-completed">` : `<div class="side-text" data-testid="item-completed">${d.completedAt ? fmtDate(d.completedAt) : '—'}</div>`}</label>` : ''}
+        <label class="lite-hide">Người giao${c.assigner ? `<select id="ipAssigner" data-testid="item-assigner">${d.assignedById ? '' : '<option value="">—</option>'}${store.users.filter(u => u.role !== 'admin' && (d.assignedById || u.id !== store.me.id)).map(u => `<option value="${u.id}"${u.id === d.assignedById ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select>` : `<div class="side-text" data-testid="item-assigner">${d.assignedById ? personLink({ id: d.assignedById, fullName: d.assignedByName }) : '—'}</div>`}</label>
+        <label class="lite-hide">Ngày giao${fe ? `<input type="date" id="ipAssignedAt" value="${dateInput(d.assignedAt)}" data-testid="item-assigned-at">` : `<div class="side-text" data-testid="item-assigned-at">${d.assignedAt ? fmtDate(d.assignedAt) : '—'}</div>`}</label>
         ${showLabels ? `<div class="lite-hide"><span class="side-h">Nhãn</span>${fe ? multiSelect('labels', labelsFor(d.project.id).map(l => ({ id: l.id, label: l.name, chip: labelChip(l) })), d.labels.map(l => l.id), 'Không có', { create: true }) : d.labels.map(labelChip).join(' ') || '—'}</div>` : ''}
         ${d.intake ? `<div class="pill" data-testid="item-intake" style="white-space:normal">Từ yêu cầu của ${esc(d.intake.requesterName || '')}</div>` : ''}
         </div>
         <details class="ip-more" data-sec="more"${plan.more || false ? ' open' : ''}><summary>Thêm thông tin${moreFilled ? ` <span class="muted xs">${moreFilled} mục đã có</span>` : ''}</summary>
         <div class="ip-more-body">
-        <label>Đơn vị / người phối hợp khác<input id="ipCoord" value="${esc(d.coordinatorText || '')}" ${fe ? '' : 'disabled'} placeholder="VD: Văn phòng; đơn vị thi công" data-testid="item-coordinator"></label>
-        <label>Nguồn giao việc<select id="ipSource" ${fe ? '' : 'disabled'} data-testid="item-source">${sourceOptions(sourceValue)}</select><span class="muted xs" data-testid="item-task-kind">${d.taskType === 'PLAN' ? 'Nhiệm vụ kế hoạch năm' : 'Nhiệm vụ đột xuất'}</span></label>
-        <label>Ngày bắt đầu<input type="date" id="ipStart" value="${dateInput(d.startDate)}" ${fe ? '' : 'disabled'}></label>
-        <label>Ước lượng (giờ)<input type="number" min="0" step="0.5" id="ipEstimate" value="${d.estimate ?? ''}" ${fe ? '' : 'disabled'}></label>
-        ${(project.cycles || []).length || d.cycleId ? `<label>Chu kỳ<select id="ipCycle" ${fe ? '' : 'disabled'} data-testid="item-cycle"><option value="">— Không —</option>${(project.cycles || []).map(c => `<option value="${c.id}"${c.id === d.cycleId ? ' selected' : ''}>${esc(c.name)}${c.status === 'COMPLETED' ? ' (đã kết thúc)' : ''}</option>`).join('')}${editable ? '<option value="__new">+ Tạo chu kỳ mới…</option>' : ''}</select></label>` : ''}
-        ${repeatBlock(fe)}
+        <label>Đơn vị / người phối hợp khác${fe ? `<input id="ipCoord" value="${esc(d.coordinatorText || '')}" placeholder="VD: Văn phòng; đơn vị thi công" data-testid="item-coordinator">` : `<div class="side-text" data-testid="item-coordinator">${esc(d.coordinatorText || '—')}</div>`}</label>
+        <label>Nguồn giao việc${fe ? `<select id="ipSource" data-testid="item-source">${sourceOptions(sourceValue)}</select>` : `<div class="side-text" data-testid="item-source">${esc(sourceValue || '—')}</div>`}<span class="muted xs" data-testid="item-task-kind">${d.taskType === 'PLAN' ? 'Nhiệm vụ kế hoạch năm' : 'Nhiệm vụ đột xuất'}</span></label>
+        <label>Ngày bắt đầu${fe ? `<input type="date" id="ipStart" value="${dateInput(d.startDate)}">` : `<div class="side-text">${d.startDate ? fmtDate(d.startDate) : '—'}</div>`}</label>
+        <label>Ước lượng (giờ)${fe ? `<input type="number" min="0" step="0.5" id="ipEstimate" value="${d.estimate ?? ''}">` : `<div class="side-text">${d.estimate ?? '—'}</div>`}</label>
+        ${(project.cycles || []).length || d.cycleId ? `<label>Chu kỳ${fe ? `<select id="ipCycle" data-testid="item-cycle"><option value="">— Không —</option>${(project.cycles || []).map(cy => `<option value="${cy.id}"${cy.id === d.cycleId ? ' selected' : ''}>${esc(cy.name)}${cy.status === 'COMPLETED' ? ' (đã kết thúc)' : ''}</option>`).join('')}<option value="__new">+ Tạo chu kỳ mới…</option></select>` : `<div class="side-text" data-testid="item-cycle">${esc((project.cycles || []).find(cy => cy.id === d.cycleId)?.name || '—')}</div>`}</label>` : ''}
+        ${repeatBlock(c)}
         <div class="muted xs">Người tạo: ${esc(d.reporterName || '—')}<br>Tạo lúc: ${fmtDateTime(d.createdAt)}${d.startedAt ? '<br>Bắt đầu: ' + fmtDateTime(d.startedAt) : ''}${d.completedAt ? '<br>Hoàn thành: ' + fmtDateTime(d.completedAt) : ''}</div>
         </div></details>
         <div class="side-facts">${[sourceValue && `Nguồn: ${esc(sourceValue)}`, d.coordinatorText && `Phối hợp khác: ${esc(d.coordinatorText)}`, d.recurring && `Lặp lại: ${esc(d.recurring.schedule)}`].filter(Boolean).map(x => `<div class="muted xs side-fact">${x}</div>`).join('')}</div>
@@ -490,9 +497,33 @@ function render() {
   }
   descSaved = $('#ipDesc', p)?.innerHTML ?? null; // bản trình duyệt đã chuẩn hoá — chỉ lưu khi người dùng thật sự sửa
   restoreDrafts(p);
-  const t = $('#ipTitle', p); if (t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
+  const t = $('textarea#ipTitle', p); if (t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
   bind(editable);
   if (!same && $('#ipCrm', p)) fillCrm(d.id);
+}
+
+// Tóm tắt, chỉ đọc — thành viên dự án không liên quan tới việc: tên, người chủ trì, hạn, trạng thái, %.
+// Không có tài liệu, báo cáo, đánh giá, bình luận (máy chủ cũng không trả).
+function renderSummary() {
+  const d = data, p = panel();
+  p.classList.remove('ip-lite');
+  p.innerHTML = `<div class="ip-head" tabindex="-1"><span class="code" data-testid="item-code">${esc(d.code)}</span><span class="muted sm grow">${esc(d.project.name)}</span>
+      <button class="icon-btn" data-act="close" aria-label="Đóng" title="Đóng (Esc)" data-testid="close-panel">${X}</button></div>
+    <div class="ip-body ip-summary-only" data-testid="item-summary-only">
+      <div class="ip-main">
+        <h2 class="ip-title ip-title-ro" data-testid="item-title">${esc(d.title)}</h2>
+        <p class="muted sm">Bạn xem được tóm tắt việc này. Nội dung, tài liệu, báo cáo, đánh giá và bình luận chỉ hiện với người liên quan (người giao, Ban Giám đốc, người chủ trì, người phối hợp, lãnh đạo bộ phận, chủ dự án / PMO).</p>
+        <dl class="summary-facts">
+          <dt>Người chủ trì</dt><dd data-testid="item-assignees">${d.assignees.map(a => personLink(a)).join(', ') || '—'}</dd>
+          <dt>Hạn hoàn thành</dt><dd data-testid="item-due">${d.dueDate ? fmtDate(d.dueDate) : '—'}</dd>
+          <dt>Trạng thái</dt><dd data-testid="item-state">${esc(d.state?.name || '—')}</dd>
+          <dt>Tiến độ</dt><dd><span class="progress"><i style="width:${d.progress}%"></i></span> <b data-testid="item-progress">${d.progress}%</b></dd>
+        </dl>
+      </div>
+    </div>`;
+  p.onclick = e => { if (e.target.closest('[data-act="close"]')) closeItem(true); };
+  p.oninput = null; p.onchange = null; p.onkeydown = null;
+  $('.ip-head', p)?.focus({ preventScroll: true });
 }
 
 // Playground CRM: nhật ký làm việc với đối tác gắn việc này (ghi ở trang Đối tác, chọn "Việc liên quan").
@@ -589,15 +620,6 @@ function bind(editable) {
     // Tệp trong kho file dự án (bản gốc): xoá trên Hub chỉ chuyển tệp vào thư mục lưu trữ của dự án trên kho.
     const delMsg = da?.dataset.nas ? 'Gỡ tệp này khỏi việc? Bản gốc trong kho file được chuyển vào thư mục lưu trữ của dự án (vd. 99.LuuTru), IT lấy lại được khi cần.' : 'Xoá tệp đính kèm này? Tệp bị xoá hẳn, không khôi phục được.';
     if (da && await confirmDialog(delMsg, { danger: true, okText: 'Xoá tệp' })) { await api(`/api/attachments/${da.dataset.delAtt}`, { method: 'DELETE' }).catch(err => toast(errorMessage(err), 'err')); return refresh(); }
-    const dc = e.target.closest('[data-del-check]');
-    if (dc) {
-      const c = data.checklist.find(x => String(x.id) === dc.dataset.delCheck), itemId = data.id;
-      try {
-        await api(`/api/checklist/${dc.dataset.delCheck}`, { method: 'DELETE' }); await refresh();
-        if (c) toast(`Đã xoá "${c.title}"`, 'ok', { action: { label: 'Hoàn tác', run: async () => { const n = await api(`/api/items/${itemId}/checklist`, { method: 'POST', body: { title: c.title } }); if (c.done && n?.id) await api(`/api/checklist/${n.id}`, { method: 'PATCH', body: { done: true } }); refresh(); } } });
-      } catch (err) { toast(errorMessage(err), 'err'); }
-      return;
-    }
   };
   // Thanh tab: mũi tên trái / phải, Home / End (mẫu tablist của WAI-ARIA).
   p.onkeydown = e => {
@@ -608,9 +630,11 @@ function bind(editable) {
     showTab(keys[next], { focus: true });
   };
   if (!editable) return;
-  const title = $('#ipTitle', p);
-  title.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); title.blur(); } };
-  title.onchange = () => { const v = title.value.replace(/\s*\n\s*/g, ' ').trim(); if (v && v !== data.title) patch({ title: v }); };
+  const title = $('textarea#ipTitle', p);
+  if (title) {
+    title.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); title.blur(); } };
+    title.onchange = () => { const v = title.value.replace(/\s*\n\s*/g, ' ').trim(); if (v && v !== data.title) patch({ title: v }); };
+  }
   const desc = $('#ipDesc', p);
   if (desc && desc.isContentEditable) {
     // Mô tả tự lưu: 1,2 giây sau khi ngừng gõ, khi rời ô, hoặc Ctrl/⌘ S (không mở hộp "Lưu trang" của trình duyệt).
@@ -654,10 +678,6 @@ function bind(editable) {
     creators: { labels: async name => { const l = await createProjectLabel(data.project.id, name); return { id: l.id, label: l.name, chip: labelChip(l) }; } },
   });
   p.onchange = async e => {
-    if (e.target.dataset.check) {
-      await api(`/api/checklist/${e.target.dataset.check}`, { method: 'PATCH', body: { done: e.target.checked } }).catch(err => toast(errorMessage(err), 'err'));
-      return refresh();
-    }
     if (e.target.id === 'attInput' && e.target.files.length) {
       const form = new FormData();
       for (const f of e.target.files) form.append('files', f);
@@ -667,7 +687,6 @@ function bind(editable) {
     }
   };
   for (const [sel, handler] of [
-    ['#newCheck', v => api(`/api/items/${data.id}/checklist`, { method: 'POST', body: { title: v } })],
     ['#newChild', v => api(`/api/projects/${data.project.id}/items`, { method: 'POST', body: { title: v, parentId: data.id } })],
   ]) {
     const input = $(sel, p); if (!input) continue;

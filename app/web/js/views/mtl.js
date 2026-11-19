@@ -282,9 +282,9 @@ export async function drawMtlPlan(body, project, params) {
 }
 
 // ---------- Khối MTL trong chi tiết hạng mục ----------
-export function mtlPanelBlock(d, project, editable) {
+// c = capabilities của việc: dự báo hoàn thành — người chủ trì; đường găng, mốc, kế hoạch gốc — người giao / Ban Giám đốc.
+export function mtlPanelBlock(d, project, c = {}) {
   if (project.kind !== 'MTL') return '';
-  const canManage = project.rights?.canManage;
   const st = d.mtl || {};
   return `<div class="mtl-box" data-testid="mtl-box">
     <div class="row wrap">${d.planCode ? `<span class="code">Bước ${esc(d.planCode)}</span>` : ''}${d.critical ? '<span class="pill danger">Đường găng</span>' : ''}${d.milestone ? '<span class="pill"><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> Mốc</span>' : ''}${st.statusLabel ? `<span class="pill mtl-st ${TONE[st.status] || ''}">${esc(st.statusLabel)}</span>` : ''}</div>
@@ -293,10 +293,11 @@ export function mtlPanelBlock(d, project, editable) {
       <div><span class="muted xs">Kế hoạch / thực tế</span><b>${pct(st.planned)} / ${pct(st.actual ?? d.progress)}</b>${st.variance != null ? `<span class="muted xs"> (${st.variance > 0 ? '+' : ''}${num(st.variance)} điểm)</span>` : ''}</div>
       ${d.ownerText ? `<div><span class="muted xs">Đầu mối</span>${esc(d.ownerText)}</div>` : ''}
       ${d.externalParty ? `<div><span class="muted xs">Cơ quan / đơn vị ngoài</span>${esc(d.externalParty)}</div>` : ''}
-      <label><span class="muted xs">Dự báo hoàn thành</span><input type="date" id="ipForecast" value="${d.forecastEnd ? new Date(new Date(d.forecastEnd).getTime() + 7 * 3_600_000).toISOString().slice(0, 10) : ''}" ${editable ? '' : 'disabled'} data-testid="item-forecast"></label>
+      ${c.fields?.forecastEnd ? `<label><span class="muted xs">Dự báo hoàn thành</span><input type="date" id="ipForecast" value="${d.forecastEnd ? new Date(new Date(d.forecastEnd).getTime() + 7 * 3_600_000).toISOString().slice(0, 10) : ''}" data-testid="item-forecast"></label>`
+        : `<div><span class="muted xs">Dự báo hoàn thành</span><b data-testid="item-forecast">${d.forecastEnd ? fmtDate(d.forecastEnd) : '—'}</b></div>`}
     </div>
-    ${canManage ? `<div class="row wrap"><label class="check sm"><input type="checkbox" id="ipCritical" ${d.critical ? 'checked' : ''}> Đường găng</label><label class="check sm"><input type="checkbox" id="ipMilestone" ${d.milestone ? 'checked' : ''}> Mốc</label>
-      <button type="button" class="link-btn" data-act="rebaseline" data-testid="rebaseline-open">Điều chỉnh kế hoạch gốc…</button></div>` : ''}
+    ${c.plan ? `<div class="row wrap"><label class="check sm"><input type="checkbox" id="ipCritical" ${d.critical ? 'checked' : ''} data-testid="item-critical"> Đường găng</label><label class="check sm"><input type="checkbox" id="ipMilestone" ${d.milestone ? 'checked' : ''} data-testid="item-milestone"> Mốc</label>
+      ${c.rebaseline ? '<button type="button" class="link-btn" data-act="rebaseline" data-testid="rebaseline-open">Điều chỉnh kế hoạch gốc…</button>' : ''}</div>` : ''}
   </div>`;
 }
 export function rebaselineDialog(d, project, done) {
@@ -324,10 +325,10 @@ function importDialog(project, done) {
   const pmo = project.rights.canManage;
   const depts = store.departments.filter(d => d.isActive !== false && (pmo || d.id === store.me.departmentId));
   const modal = openModal(`<h2>${pmo ? 'Nhập Master Timeline từ Excel' : 'Nhập MTL bộ phận'}</h2><form>
-    ${pmo ? '' : '<p class="sm"><b>Cách nhanh nhất:</b> tải MTL bộ phận (Excel) đã điền sẵn → sửa / thêm dòng → chọn tệp ở đây → Xem trước → Nhập. Nhập lại cập nhật theo Bước, giữ tiến độ đã cập nhật; kế hoạch gốc chỉ PMO đặt lại.</p>'}
+    ${pmo ? '' : '<p class="sm"><b>Cách nhanh nhất:</b> tải MTL bộ phận (Excel) đã điền sẵn → thêm dòng → chọn tệp ở đây → Xem trước → Nhập. Nhập lại chỉ thêm bước mới; bước đã có giữ nguyên. Chỉ gắn được dòng vào bước mình chủ trì.</p>'}
     <p class="muted sm">Bảng cần dòng tiêu đề <b>Bước | Hạng mục công việc | Đầu mối | Bắt đầu (T) | Kết thúc (T) | Thời lượng | Đường găng | Mốc</b>.
       Thời gian ghi theo <b>tháng T</b> (tính từ T0) hoặc ngày cụ thể. MTL bộ phận thêm cột <b>Thuộc bước</b> để gắn vào hạng mục của MTL tổng.
-      Nhập lại cùng kế hoạch sẽ <b>cập nhật theo Bước</b> (giữ tiến độ đã cập nhật). Tệp chỉ đọc rồi xoá, không lưu.</p>
+      Nhập lại cùng kế hoạch <b>chỉ thêm bước mới; bước đã có giữ nguyên</b> (sửa kế hoạch một bước: người giao / Ban Giám đốc trên chi tiết bước; kế hoạch gốc: "Điều chỉnh kế hoạch gốc"). Tệp chỉ đọc rồi xoá, không lưu.</p>
     <div class="grid2">
       <label class="field">Tệp .xlsx<input type="file" name="file" accept=".xlsx" required data-testid="mtl-import-file"></label>
       <label class="field"${pmo ? '' : ' hidden'}>Loại<select name="kind" data-testid="mtl-import-kind">${pmo ? '<option value="MASTER">MTL tổng (dự án)</option>' : ''}<option value="DEPARTMENT">MTL bộ phận</option></select></label>
@@ -335,7 +336,6 @@ function importDialog(project, done) {
       ${pmo ? '<label class="field">Tên kế hoạch <span class="muted xs">(để trống: theo tên sheet; MTL bộ phận: kế hoạch đang có của bộ phận)</span><input name="planName" maxlength="160" placeholder="VD: MTL overall"></label>' : ''}
       <label class="field" hidden>Sheet<select name="sheet" data-testid="mtl-import-sheet"></select></label>
     </div>
-    ${pmo ? '<label class="check sm"><input type="checkbox" name="rebaseline" value="1"> Đặt lại kế hoạch gốc theo tệp này (khi nhập lại; ghi nhật ký)</label>' : ''}
     <div id="mtlPreview"></div><p class="error" id="mtlErr"></p>
     <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Huỷ</button><button type="button" class="btn" data-dry data-testid="mtl-import-preview">Xem trước</button><button class="btn btn-primary" data-testid="mtl-import-go" disabled>Nhập</button></div></form>`, { wide: true });
   const form = modal.querySelector('form'), go = $('[data-testid="mtl-import-go"]', modal);
@@ -344,7 +344,7 @@ function importDialog(project, done) {
   form.file.onchange = () => { form.sheet.innerHTML = ''; form.sheet.closest('label').hidden = true; reset(); };
   form.sheet.onchange = () => modal.querySelector('[data-dry]').click();
   modal.querySelector('[data-tpl]').onclick = () => downloadTemplate(project, form.departmentId.value);
-  const send = dry => { const fd = new FormData(form); if (!fd.get('sheet')) fd.delete('sheet'); if (dry) fd.set('dryRun', '1'); if (!form.rebaseline?.checked) fd.delete('rebaseline'); if (form.kind.value !== 'DEPARTMENT') fd.delete('departmentId'); return api(`/api/projects/${project.id}/mtl-import`, { method: 'POST', form: fd }); };
+  const send = dry => { const fd = new FormData(form); if (!fd.get('sheet')) fd.delete('sheet'); if (dry) fd.set('dryRun', '1'); if (form.kind.value !== 'DEPARTMENT') fd.delete('departmentId'); return api(`/api/projects/${project.id}/mtl-import`, { method: 'POST', form: fd }); };
   modal.querySelector('[data-close]').onclick = () => closeModal();
   modal.querySelector('[data-dry]').onclick = async () => {
     if (!form.file.files.length) { $('#mtlErr', modal).textContent = 'Chọn tệp Excel'; return; }
@@ -353,7 +353,7 @@ function importDialog(project, done) {
       const p = await send(true);
       if (p.sheets.length > 1) { form.sheet.innerHTML = p.sheets.map(s => `<option value="${esc(s.name)}"${s.name === p.sheet ? ' selected' : ''}>${esc(s.name)} (${s.items} hạng mục)</option>`).join(''); form.sheet.closest('label').hidden = false; }
       $('#mtlPreview', modal).innerHTML = `<div class="card mtl-preview" data-testid="mtl-import-summary">
-        <p><b>${p.items}</b> hạng mục từ sheet <b>${esc(p.sheet)}</b> → kế hoạch <b>${esc(p.planName)}</b>: tạo mới ${p.create}, cập nhật ${p.update}${p.baselineChanged ? ` (${p.baselineChanged} hạng mục đổi thời gian${form.rebaseline?.checked ? ' — sẽ đặt lại kế hoạch gốc' : ' — giữ kế hoạch gốc'})` : ''}. Đường găng ${p.critical}, mốc ${p.milestones}.</p>
+        <p><b>${p.items}</b> hạng mục từ sheet <b>${esc(p.sheet)}</b> → kế hoạch <b>${esc(p.planName)}</b>: tạo mới ${p.create}, giữ nguyên ${p.keep ?? 0} bước đã có. Đường găng ${p.critical}, mốc ${p.milestones}.</p>
         ${p.unmatchedOwners.length ? `<p class="muted sm">Đầu mối không khớp bộ phận (giao cho bộ phận sở hữu dự án, ghi ở "cơ quan / đơn vị ngoài"): ${p.unmatchedOwners.map(o => `${esc(o.text)} (${o.count})`).join(', ')}</p>` : ''}
         ${p.unmatchedParents.length ? `<p class="muted sm">Không tìm thấy bước MTL tổng: ${p.unmatchedParents.map(esc).join(', ')} — hạng mục sẽ không gắn vào hạng mục cha.</p>` : ''}
         ${p.warnings.length ? `<details><summary class="muted sm">${p.warnings.length} cảnh báo khi đọc tệp</summary><p class="muted sm">${p.warnings.map(esc).join('<br>')}</p></details>` : ''}
@@ -367,7 +367,7 @@ function importDialog(project, done) {
   };
   form.onsubmit = async e => {
     e.preventDefault();
-    try { const r = await send(false); closeModal(); toast(`Đã nhập MTL: tạo ${r.created}, cập nhật ${r.updated} hạng mục`, 'ok'); done(); }
+    try { const r = await send(false); closeModal(); toast(`Đã nhập MTL: tạo ${r.created} hạng mục, giữ nguyên ${r.kept ?? 0} bước đã có`, 'ok'); done(); }
     catch (error) { $('#mtlErr', modal).textContent = errorMessage(error); }
   };
 }

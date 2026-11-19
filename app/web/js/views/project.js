@@ -1,5 +1,6 @@
 // Trang dự án: Bảng Kanban, Sổ giao việc, Danh sách, Lịch, Tiến độ kế hoạch + một hệ lọc dùng chung cho mọi kiểu xem:
 // ô tìm, chip nhanh, "Thêm bộ lọc", chip đang áp, đếm kết quả, lưu trên URL, nhớ bộ lọc cuối theo người, bộ lọc đã lưu.
+import { canMove } from '../task-caps.js';
 import { api, download, ApiError } from '../api.js';
 import { store, can, labelsFor, createProjectLabel, deptName, userById } from '../store.js';
 import { scheduleFields, bindSchedule, readSchedule } from './recurring-form.js';
@@ -746,7 +747,8 @@ function stageBits(i) {
 // ---------- Bảng Kanban ----------
 function cardHtml(i) {
   const c = i.counts, dc = dueClass(i);
-  return `<article class="kcard" draggable="${current.project.rights.canEdit}" data-id="${i.id}" data-testid="card-${esc(i.code)}" tabindex="0" aria-label="${esc(i.code + ' ' + i.title)}">
+  // Kéo thẻ chỉ khi được đổi trạng thái việc này (người chủ trì: đang làm → gửi duyệt; người giao / BGĐ: mọi trạng thái).
+  return `<article class="kcard" draggable="${!!i.my?.state}" data-id="${i.id}" data-testid="card-${esc(i.code)}" tabindex="0" aria-label="${esc(i.code + ' ' + i.title)}">
     <div class="top"><span class="code">${esc(i.code)}</span>${prioChip(i.priority)}</div>
     ${subMode() === 'flat' || !nestedOnBoard.has(i.parentId) ? parentChip(i) : ''}
     <div class="title">${esc(i.title)}</div>
@@ -755,7 +757,6 @@ function cardHtml(i) {
       ${stageBits(i)}${kidsChip(i, { toggle: subMode() === 'nest' && boardKids.has(i.id) })}
       ${i.dueDate ? `<span class="due ${dc}" title="Hạn">${icon('clock')}${fmtDate(i.dueDate)}</span>` : ''}
       ${i.progress && i.progress < 100 ? `<span title="Tiến độ" class="card-progress"><span class="bar-mini"><i style="width:${i.progress}%"></i></span>${i.progress}%</span>` : ''}
-      ${c.checklistTotal ? `<span title="Checklist" data-meta="checklist">${icon('checklist')}${c.checklistDone}/${c.checklistTotal}</span>` : ''}
       ${c.comments ? `<span title="Bình luận" data-meta="comments">${icon('comment')}${c.comments}</span>` : ''}${c.attachments ? `<span title="Tệp đính kèm" data-meta="attachments">${icon('clip')}${c.attachments}</span>` : ''}
       <span class="push card-who">${whoHtml(i)}</span>
     </div>${subMode() === 'nest' && openKids.has(i.id) && boardKids.has(i.id) ? kidList(i) : ''}</article>`;
@@ -848,6 +849,7 @@ function bindBoard(body) {
   if (!marker) { marker = document.createElement('div'); marker.className = 'drop-marker'; }
   body.ondragstart = e => {
     const card = e.target.closest('.kcard'); if (!card) return;
+    if (card.getAttribute('draggable') !== 'true') { e.preventDefault(); return; }
     dragId = Number(card.dataset.id); card.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(dragId));
   };
@@ -865,6 +867,7 @@ function bindBoard(body) {
       if (e.clientX > rect.right - 70) board.scrollLeft += 24; else if (e.clientX < rect.left + 70) board.scrollLeft -= 24;
     }
     const col = e.target.closest('.col-body'); if (!col || !dragId) return;
+    if (!dropAllowed(dragId, Number(col.dataset.state))) { col.closest('.column').classList.remove('drop-target'); return; }
     e.preventDefault();
     $$('.column.drop-target', body).forEach(c => c.classList.remove('drop-target'));
     col.closest('.column').classList.add('drop-target');
@@ -876,12 +879,19 @@ function bindBoard(body) {
     dragId ||= Number(e.dataTransfer.getData('text/plain')) || null;
     if (!dragId) return;
     e.preventDefault();
+    if (!dropAllowed(dragId, Number(col.dataset.state))) { dragId = null; marker.remove(); toast('Bạn không chuyển việc này sang cột đó — người chủ trì: Chưa bắt đầu → Đang thực hiện → Gửi duyệt; người giao / Ban Giám đốc: duyệt, tạm dừng, huỷ, mở lại', 'err'); return; }
     const isCard = n => n && n.classList.contains('kcard') && !n.classList.contains('dragging');
     let prev = marker.parentElement ? marker.previousElementSibling : null; while (prev && !isCard(prev)) prev = prev.previousElementSibling;
     let next = marker.parentElement ? marker.nextElementSibling : null; while (next && !isCard(next)) next = next.nextElementSibling;
     const id = dragId; dragId = null; marker.remove();
     await moveItem(id, Number(col.dataset.state), prev?.dataset.id, next?.dataset.id);
   };
+}
+// Cột thả được: cùng luật với máy chủ (services/task-access.js canMove).
+function dropAllowed(id, stateId) {
+  const it = current.items.find(x => x.id === id), states = current.project.states;
+  const from = states.find(s => s.id === it?.stateId)?.category, to = states.find(s => s.id === stateId)?.category;
+  return !!it && canMove(it.my?.state, from, to);
 }
 export async function moveItem(id, stateId, afterId, beforeId, overrideWip = false) {
   try {
@@ -1036,7 +1046,8 @@ function peopleByDept(users) {
 function parentChoices(phase) {
   const states = Object.fromEntries(current.project.states.map(s => [s.id, s]));
   const allow = current.createScope?.parents ? new Set(current.createScope.parents) : null;
-  return current.items.filter(i => !['COMPLETED', 'CANCELLED'].includes(states[i.stateId]?.category) && (!allow || allow.has(i.id))
+  // Việc nhánh: người chủ trì, người giao, Ban Giám đốc của việc cha (máy chủ trả `my.children` cho từng thẻ).
+  return current.items.filter(i => !['COMPLETED', 'CANCELLED'].includes(states[i.stateId]?.category) && (allow ? allow.has(i.id) : i.my?.children !== false)
     && (phase === '' || phase == null || !isMtl() || String(phaseOf(i) ?? 'none') === String(phase)))
     .sort((a, b) => a.number - b.number);
 }

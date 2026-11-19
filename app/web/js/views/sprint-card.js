@@ -44,7 +44,7 @@ function quickControls(i) {
 }
 
 // Một thẻ. opts: { t (tháng T), goal ('month' | 'today'), href(i) → liên kết mở hạng mục, canEdit, showDept, showSprint }.
-// Việc có checklist: tiến độ tự tính theo số mục đã xong — vẫn bấm được "Xong" / % khi không dùng checklist.
+// Việc có việc nhánh: tiến độ tự tính từ việc nhánh. Chỉ người chủ trì cập nhật %.
 export function sprintCard(i, { t, goal = 'month', href, canEdit = false, showDept = true, showSprint = false, compactDone = false } = {}) {
   // Đang chờ duyệt: thẻ hiện "Chờ duyệt" (không ghi tình trạng tiến độ như "Vượt tiến độ" khi đã 100%), không còn nút cập nhật.
   const tone = i.done ? 'ok' : i.inReview ? 'review' : TONE[i.status] || '';
@@ -66,7 +66,7 @@ export function sprintCard(i, { t, goal = 'month', href, canEdit = false, showDe
     ${i.inReview ? `<div class="muted xs" data-testid="sc-review-note">Đã gửi người giao duyệt${i.progressAt ? ` ${ago(i.progressAt)}` : ''} · thành Hoàn thành khi được duyệt</div>`
       : !i.done && i.progressAt ? `<div class="muted xs">cập nhật ${ago(i.progressAt)}</div>` : !i.done && !i.actual ? '<div class="muted xs">chưa cập nhật tiến độ</div>' : ''}
     ${canEdit && !i.done && !i.inReview && i.canProgress !== false ? quickControls(i) : ''}
-    ${canEdit && !i.done && !i.inReview && i.canProgress === false ? '<div class="muted xs">Người được giao hoặc lãnh đạo ban cập nhật % (việc có checklist thì tích checklist)</div>' : ''}
+    ${canEdit && !i.done && !i.inReview && i.canProgress === false ? '<div class="muted xs">Người chủ trì cập nhật % (việc có việc nhánh: tự tính từ việc nhánh)</div>' : ''}
   </article>`;
 }
 

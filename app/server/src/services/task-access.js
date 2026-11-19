@@ -268,7 +268,7 @@ async function loadTask(db, user, itemId, { need = 'view', org = null } = {}) {
 function listCaps(user, org, { project, rights, member }, row) {
   const task = taskOf(row);
   const caps = taskCapabilities(user, task, itemContext(org, { project, rights, member, item: task }));
-  return { view: caps.view, state: caps.state, roles: caps.roles };
+  return { view: caps.view, state: caps.state, progress: caps.progress, children: caps.children, roles: caps.roles };
 }
 
 module.exports = {

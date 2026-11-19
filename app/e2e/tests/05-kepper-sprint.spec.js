@@ -1,5 +1,5 @@
 // Kepper GĐ2a — sprint = giai đoạn gồm nhóm bước MTL (dữ liệu GIẢ của dự án mẫu DA, T0 = 10 tháng trước → tháng hiện tại luôn là T10):
-// tab Sprint (lộ trình, thiết lập sprint, tiến độ theo đầu việc con, checklist), Kế hoạch & Gantt gom theo sprint, Theo tháng,
+// tab Sprint (lộ trình, thiết lập sprint, tiến độ theo đầu việc con, việc nhánh), Kế hoạch & Gantt gom theo sprint, Theo tháng,
 // "Cập nhật nhanh" một chạm + ghi chú, mẫu MTL bộ phận điền sẵn do lãnh đạo ban tự tải / nhập lại (giữ tiến độ, không đặt lại kế hoạch gốc).
 const path = require('node:path');
 const os = require('node:os');
@@ -49,9 +49,16 @@ test('19. Sprint theo giai đoạn: lộ trình, thiết lập sprint, tiến đ
   await expect(pmo.getByTestId('sp-kids-8')).toContainText('1/4 việc con đã xong');
   const step8 = async () => (await (await apiAs(pmo, `/api/projects/${project.id}/mtl`)).json()).items.find(i => i.planCode === '8');
   const b8 = await step8();
-  // "✓ Xong" chỉ gửi duyệt: DA-21 do tb.phaply tự giao cho mình → trưởng dự án (pmo) duyệt + chấm mức thì mới tính là xong.
-  await pmo.getByTestId('qk-DA-21-100').click();
-  await toast(pmo, 'DA-21: đã gửi duyệt');
+  // "✓ Xong" chỉ gửi duyệt và chỉ người chủ trì bấm được (PMO không cập nhật % thay người chủ trì — quyền tối thiểu theo vai).
+  // DA-21 do tb.phaply tự giao cho mình → trưởng dự án (pmo) duyệt + chấm mức thì mới tính là xong.
+  await expect(pmo.getByTestId('qk-DA-21-100')).toHaveCount(0);
+  const pl = await (await browser.newContext()).newPage();
+  await login(pl, 'tb.phaply');
+  await pl.goto(`/#/projects/${project.id}?view=sprint&s=1`);
+  await pl.getByTestId('qk-DA-21-100').click();
+  await toast(pl, 'DA-21: đã gửi duyệt');
+  await pmo.reload();
+  await pmo.getByTestId('sp-road-1').click();
   await expect(pmo.getByTestId('sp-kids-8')).toContainText('1/4 việc con đã xong');
   const approve = async code => {
     const id = (await (await apiAs(pmo, `/api/projects/${project.id}/mtl`)).json()).items.find(i => i.code === code).id;
@@ -65,18 +72,33 @@ test('19. Sprint theo giai đoạn: lộ trình, thiết lập sprint, tiến đ
   await pmo.getByTestId('sp-road-1').click();
   await expect(pmo.getByTestId('sp-kids-8')).toContainText('2/4 việc con đã xong');
   expect((await step8()).actual).toBe(b8.actual + 25);
-  // Checklist: việc lá có checklist → % = số mục đã xong / tổng (không phải tự khai); đủ mục → Hoàn thành.
+  // Việc nhánh (thay Checklist): người chủ trì DA-22 (tb.phaply) chia 2 việc nhánh cho nv.phaply — khi đó tb.phaply là người giao
+  // của việc nhánh; % DA-22 tự tính từ việc nhánh; đủ việc nhánh đã duyệt → người chủ trì gửi duyệt DA-22, trưởng dự án duyệt.
   const id22 = (await (await apiAs(pmo, `/api/projects/${project.id}/mtl`)).json()).items.find(i => i.code === 'DA-22').id;
-  const c1 = await (await apiAs(pmo, `/api/items/${id22}/checklist`, { method: 'POST', data: { title: 'Soạn tờ trình (giả)' } })).json();
-  const c2 = await (await apiAs(pmo, `/api/items/${id22}/checklist`, { method: 'POST', data: { title: 'Trình ký (giả)' } })).json();
-  await apiAs(pmo, `/api/checklist/${c1.id}`, { method: 'PATCH', data: { done: true } });
-  expect((await (await apiAs(pmo, `/api/items/${id22}`)).json()).progress).toBe(50);
-  await apiAs(pmo, `/api/checklist/${c2.id}`, { method: 'PATCH', data: { done: true } });
-  const i22 = await (await apiAs(pmo, `/api/items/${id22}`)).json();
-  expect(i22.progress).toBe(100); expect(i22.state.category).toBe('REVIEW'); // đủ mục → gửi người giao duyệt
+  expect((await apiAs(pmo, `/api/projects/${project.id}/items`, { method: 'POST', data: { title: 'PMO chen việc nhánh (giả)', parentId: id22 } })).status()).toBe(403);
+  const plStaff = await (await browser.newContext()).newPage();
+  await login(plStaff, 'nv.phaply');
+  const leadId = (await (await apiAs(pl, '/api/me')).json()).id, staffId = (await (await apiAs(plStaff, '/api/me')).json()).id;
+  const kids = [];
+  for (const title of ['Soạn tờ trình (giả)', 'Trình ký (giả)']) {
+    const k = await (await apiAs(pl, `/api/projects/${project.id}/items`, { method: 'POST', data: { title, parentId: id22, assigneeIds: [staffId] } })).json();
+    expect(k.assignedById).toBe(leadId);
+    kids.push(k);
+  }
+  const finish = async k => {
+    expect((await apiAs(plStaff, `/api/items/${k.id}`, { method: 'PATCH', data: { progress: 100 } })).status()).toBe(200); // → Chờ duyệt
+    const d = await (await apiAs(pl, `/api/items/${k.id}`)).json();
+    expect(d.state.category).toBe('REVIEW');
+    expect((await apiAs(pl, `/api/approvals/${d.approvals.find(a => a.status === 'PENDING').id}/approve`, { method: 'POST', data: { rating: 'GOOD' } })).status()).toBe(200);
+  };
+  await finish(kids[0]);
+  expect((await (await apiAs(pmo, `/api/projects/${project.id}/mtl`)).json()).items.find(i => i.id === id22).actual).toBe(50);
+  await finish(kids[1]);
+  const review = (await (await apiAs(pl, `/api/projects/${project.id}`)).json()).states.find(st => st.category === 'REVIEW');
+  expect((await apiAs(pl, `/api/items/${id22}`, { method: 'PATCH', data: { stateId: review.id } })).status()).toBe(200);
   await approve('DA-22');
   expect((await (await apiAs(pmo, `/api/items/${id22}`)).json()).state.category).toBe('COMPLETED');
-  expect((await step8()).actual).toBe(b8.actual + 50); // 8.3 xong (+25) và 8.4 xong qua checklist (+25)
+  expect((await step8()).actual).toBe(b8.actual + 50); // 8.3 xong (+25) và 8.4 xong qua việc nhánh (+25)
 
   // 4) Kế hoạch & Gantt: hàng gom theo sprint, thu gọn / mở; lọc theo sprint; khung 12 tháng; đầu cột mở "Theo tháng".
   await pmo.goto(`/#/projects/${project.id}?view=plan`);

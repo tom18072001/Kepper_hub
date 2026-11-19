@@ -27,7 +27,7 @@ export async function renderClaude(root, setCrumbs, params = new URLSearchParams
         ${req.sameMachine ? '' : '<p class="warn-text sm">Yêu cầu này đến từ <b>máy khác</b> với máy bạn đang mở Kepler Hub — chỉ bấm "Cho phép" trên chính máy chạy Claude Desktop.</p>'}
         <p class="sm">Claude sẽ xem được những gì bạn xem được; không nộp báo cáo, phê duyệt, xoá, xuất tệp. Kết nối có hiệu lực 30 ngày, thu hồi được bất cứ lúc nào ở danh sách bên dưới.</p>
         <div class="row cl-req-act">
-          <label class="check sm"><input type="radio" name="clScope" value="write" checked> Xem và cập nhật (%, checklist, bình luận, nháp báo cáo)</label>
+          <label class="check sm"><input type="radio" name="clScope" value="write" checked> Xem và cập nhật (%, bình luận, nháp báo cáo)</label>
           <label class="check sm"><input type="radio" name="clScope" value="read"> Chỉ xem</label>
         </div>
         <div class="row cl-req-act"><button class="btn btn-primary" data-connect="approve" data-testid="claude-connect-approve">Cho phép</button>
