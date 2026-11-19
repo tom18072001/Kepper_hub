@@ -33,9 +33,9 @@ export async function renderCrm(root, id, params, setCrumbs) {
     <section class="card pg-section" data-testid="crm-followups">
       <div class="row"><h3 class="grow" style="margin:0">Việc cần theo dõi</h3>
         ${m.me.leader || m.me.director ? `<div class="seg"><button data-fu="mine" class="${scope === 'mine' ? 'on' : ''}">Của tôi</button><button data-fu="dept" class="${scope === 'dept' ? 'on' : ''}">${m.me.director ? 'Tất cả' : 'Bộ phận tôi'}</button></div>` : ''}</div>
-      ${fus.length ? `<table class="table"><thead><tr><th>Hạn</th><th>Đối tác</th><th>Việc tiếp theo</th><th>Người theo dõi</th><th></th></tr></thead><tbody>
+      ${fus.length ? `<div class="pg-scroll"><table class="table"><thead><tr><th>Hạn</th><th>Đối tác</th><th>Việc tiếp theo</th><th>Người theo dõi</th><th></th></tr></thead><tbody>
         ${fus.map(f => `<tr><td>${f.overdue ? '<span class="pill danger">Quá hạn</span> ' : vnDay(f.nextDue) === vnToday() ? '<span class="pill warn">Hôm nay</span> ' : ''}${fmtDate(f.nextDue)}</td><td><a href="#/crm/${f.partner.id}">${esc(f.partner.name)}</a></td>
-          <td>${esc(f.nextStep || f.summary)}</td><td>${esc(f.nextOwner?.fullName || '')}</td><td class="actions"><button class="btn btn-ghost btn-sm" data-done="${f.id}" data-testid="crm-fu-done">Xong</button></td></tr>`).join('')}</tbody></table>`
+          <td>${esc(f.nextStep || f.summary)}</td><td>${esc(f.nextOwner?.fullName || '')}</td><td class="actions"><button class="btn btn-ghost btn-sm" data-done="${f.id}" data-testid="crm-fu-done">Xong</button></td></tr>`).join('')}</tbody></table></div>`
         : '<div class="empty">Không có việc cần theo dõi.</div>'}
     </section>
     <form class="row pg-filters" id="crmFilter" role="search" aria-label="Lọc đối tác">
@@ -45,7 +45,7 @@ export async function renderCrm(root, id, params, setCrumbs) {
       <label class="check"><input type="checkbox" name="mine" value="1"${mine ? ' checked' : ''} data-testid="crm-mine"> Bộ phận tôi phụ trách</label>
       <label class="check"><input type="checkbox" name="archived" value="1"${archived ? ' checked' : ''}> Gồm đối tác đã ngừng theo dõi</label>
       <span class="muted sm" aria-live="polite" data-testid="crm-count">${rows.length} đối tác</span></form>
-    <div class="card" style="padding:0"><table class="table" data-testid="crm-partners"><thead><tr><th>Đối tác</th><th>Loại</th><th>Bộ phận phụ trách</th><th>Người phụ trách</th><th>Trạng thái</th><th>Đánh giá</th><th class="num">Theo dõi</th></tr></thead>
+    <div class="card pg-scroll" style="padding:0"><table class="table" data-testid="crm-partners"><thead><tr><th>Đối tác</th><th>Loại</th><th>Bộ phận phụ trách</th><th>Người phụ trách</th><th>Trạng thái</th><th>Đánh giá</th><th class="num">Theo dõi</th></tr></thead>
       <tbody id="crmRows">${partnerRows(rows)}</tbody></table></div>`;
   // Lọc ngay: gõ tên / MST (chờ 300 ms sau phím cuối), đổi ô chọn / ô đánh dấu. Chỉ vẽ lại bảng (ô tìm giữ nguyên con trỏ);
   // bộ lọc ghi lên URL bằng replaceState (quay lại / chia sẻ link vẫn đúng bộ lọc, không thêm lịch sử mỗi phím).
