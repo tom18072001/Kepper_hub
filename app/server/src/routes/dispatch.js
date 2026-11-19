@@ -134,7 +134,8 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
       if (['COMPLETED', 'CANCELLED'].includes(item.state.category)) fail(409, 'Việc đã kết thúc', 'CLOSED');
       // Người phối hợp báo phần đóng góp của mình — không đổi tiến độ chung của việc.
       const asSupporter = !(await canWorkOn(tx, req.user, rights, item));
-      const progress = Number(body.progress);
+      // Không gửi % (việc MTL có checklist / việc con: % do máy chủ tự tính) → báo cáo giữ % hiện tại, chỉ ghi nội dung.
+      const progress = body.progress == null || body.progress === '' ? (asSupporter ? 0 : item.progress) : Number(body.progress);
       if (!Number.isInteger(progress) || progress < 0 || progress > 100) fail(422, 'Tiến độ phải là số nguyên từ 0 đến 100%');
       const content = text(body.content, 'Nội dung đã làm', { required: true, max: 3000 });
       const difficulties = text(body.difficulties, 'Khó khăn', { max: 2000 }) || '';

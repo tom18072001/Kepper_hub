@@ -272,6 +272,41 @@ test('B3 + B4 + B5 + N2. Dự án MTL: tab mặc định, Lịch trong "Khác", 
   await toast(lead, 'Đã tạo DA-');
 });
 
+test('N9. Dự án MTL: việc có checklist — ô % trong "Báo cáo tiến độ" chỉ hiển thị, gửi báo cáo không bị từ chối', async ({ browser }) => {
+  const pmo = await (await browser.newContext()).newPage();
+  await login(pmo, 'pmo');
+  const project = await projectDA(pmo);
+  const staff = await (await browser.newContext()).newPage();
+  await login(staff, 'nv.phaply');
+  const me = await (await apiAs(staff, '/api/me')).json();
+  // Một việc lá đang làm của nv.phaply, chưa có checklist: PMO thêm checklist 2 mục, đánh dấu xong 1 → % = 50 (tự tính).
+  const items = await (await apiAs(pmo, `/api/projects/${project.id}/items`)).json();
+  const states = Object.fromEntries((await (await apiAs(pmo, `/api/projects/${project.id}`)).json()).states.map(s => [s.id, s.category]));
+  const it = items.find(i => i.assignees.some(a => a.id === me.id) && !i.counts.children && !i.counts.checklistTotal && ['UNSTARTED', 'STARTED'].includes(states[i.stateId]));
+  expect(it, 'nv.phaply cần một việc lá đang mở (dữ liệu mẫu)').toBeTruthy();
+  const c1 = await (await apiAs(pmo, `/api/items/${it.id}/checklist`, { method: 'POST', data: { title: 'Soạn hồ sơ (giả)' } })).json();
+  await apiAs(pmo, `/api/items/${it.id}/checklist`, { method: 'POST', data: { title: 'Nộp hồ sơ (giả)' } });
+  expect((await apiAs(pmo, `/api/checklist/${c1.id}`, { method: 'PATCH', data: { done: true } })).status()).toBe(200);
+  expect((await itemOf(pmo, it.id)).progress).toBe(50);
+
+  await staff.goto(`/#/projects/${project.id}?view=list&item=${it.id}`);
+  const panel = staff.getByTestId('item-panel');
+  await expect(panel.getByTestId('item-code')).toHaveText(it.code);
+  await panel.getByTestId('report-open').click();
+  const pct = panel.getByTestId('report-progress');
+  await expect(pct).toHaveValue('50');
+  await expect(pct).toHaveAttribute('readonly', '');
+  await expect(panel.getByTestId('report-progress-auto')).toContainText('tính theo checklist 1/2');
+  await expect(panel.getByTestId('side-report')).toHaveCount(0); // cột phải ghi "tự tính theo checklist"
+  await panel.getByTestId('report-content').fill('Đã soạn xong hồ sơ, chờ nộp (giả)');
+  await panel.getByTestId('report-submit').click();
+  await toast(staff, 'Đã gửi báo cáo tiến độ');
+  const after = await itemOf(staff, it.id);
+  expect(after.progress).toBe(50);
+  expect(after.progressReports[0].content).toBe('Đã soạn xong hồ sơ, chờ nộp (giả)');
+  expect(after.progressReports[0].progress).toBe(50);
+});
+
 test('B7 + N1 + N3 + N4. Việc của tôi: "Ghi chú của tôi" ngoài dãy tab lọc; thông báo xuống dòng, không tràn ở khổ 375 px', async ({ browser }) => {
   const page = await (await browser.newContext({ viewport: { width: 375, height: 760 } })).newPage();
   await login(page, 'tb.phaply');

@@ -411,7 +411,7 @@ function render() {
   const showLabels = project.visibility !== 'ASSIGNED' || d.labels.length;
   // % tiến độ chỉ hiển thị ở cột phải; cập nhật qua "Báo cáo tiến độ" (có lịch sử, gửi người giao). MTL: % thực tế (việc cha tự tính từ việc con).
   const pctNow = Math.round(project.kind === 'MTL' ? (d.mtl?.actual ?? d.progress) : d.progress) || 0;
-  const autoPct = d.children.length ? 'tự tính từ việc con' : d.checklist.length ? 'tự tính theo checklist' : '';
+  const autoPct = !d.mtl ? '' : d.children.length ? 'tự tính từ việc con' : d.checklist.length ? 'tự tính theo checklist' : '';
   const tabCount = { results: resultCount, talk: d.comments.length };
   const tabBar = `<div class="ip-tabbar"><div class="ip-tabs" role="tablist" aria-label="Các phần của việc">${TABS.map(([k, label]) => `<button type="button" role="tab" id="ipTab-${k}" aria-controls="ipPane-${k}" data-tab="${k}" data-testid="ip-tab-${k}" aria-selected="${k === activeTab}" tabindex="${k === activeTab ? 0 : -1}" class="${k === activeTab ? 'active' : ''}">${label}${tabCount[k] ? ` <span class="ip-tab-n">${tabCount[k]}</span>` : ''}</button>`).join('')}</div>
       <button type="button" class="link-btn ip-mode" data-act="toggle-full" data-testid="panel-full-toggle" aria-pressed="${!lite}">${lite ? 'Mở tất cả các mục' : 'Thu gọn các mục'}</button></div>`;

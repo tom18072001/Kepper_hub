@@ -112,6 +112,11 @@ export function progressParts(d, editable) {
   const last = reports[0];
   const stale = !last || Date.now() - new Date(last.createdAt) > 7 * 86_400_000;
   const formOpen = d.dispatchStatus === 'ACCEPTED' && mineLead && (!reports.length || stale) && !['WAIT_DEPT', 'WAIT_BGD', 'WAIT_APPROVAL'].includes(d.stage?.code);
+  // Dự án MTL: việc có việc con / checklist thì % do máy chủ tự tính (services/mtl-guard.js) — ô % chỉ hiển thị, báo cáo không gửi %.
+  const kids = (d.children || []).length, checks = (d.checklist || []).length;
+  const auto = !sup && d.mtl && (kids || checks)
+    ? (kids ? `tính theo việc con (${d.childProgress?.done ?? 0}/${d.childProgress?.total ?? kids} đã duyệt)` : `tính theo checklist ${(d.checklist || []).filter(c => c.done).length}/${checks}`) : '';
+  const pctNow = auto ? Math.round(d.mtl?.actual ?? d.progress) : d.progress;
   const row = r => `<div class="report" data-testid="progress-report">
       <div class="who"><b>${esc(r.authorName || '')}</b>${r.asSupporter ? ' <span class="pill">phối hợp</span>' : ''} · ${r.progress}% · <span title="${fmtDateTime(r.createdAt)}">${ago(r.createdAt)}</span></div>
       <div>${esc(r.content).replace(/\n/g, '<br>')}</div>
@@ -121,7 +126,7 @@ export function progressParts(d, editable) {
   const form = isOpen(d) && editable && (d.can?.work || sup || !d.dispatchStatus) && d.dispatchStatus !== 'PENDING' ? `<details class="report-form" id="reportForm" data-sub="reportForm"${formOpen ? ' open' : ''}><summary class="btn btn-ghost btn-sm" data-testid="report-open" title="Báo cáo tiến độ (R)">${icon('send')}${sup ? 'Báo cáo phần phối hợp' : 'Báo cáo tiến độ'}</summary>
       ${sup ? '<p class="muted xs">Báo cáo phần việc phối hợp của bạn; tiến độ chung của việc do người chủ trì cập nhật.</p>' : ''}
       <div class="report-grid">
-        <label>${sup ? 'Phần phối hợp đã xong (%)' : 'Tiến độ (%)'}<input type="number" min="0" max="100" step="5" id="rpProgress" value="${sup ? 0 : d.progress}" data-testid="report-progress"></label>
+        <label>${sup ? 'Phần phối hợp đã xong (%)' : 'Tiến độ (%)'}<input type="number" min="0" max="100" step="5" id="rpProgress" value="${sup ? 0 : pctNow}" data-testid="report-progress"${auto ? ' readonly aria-readonly="true" data-auto="1" aria-describedby="rpAutoHint"' : ''}>${auto ? `<span class="muted xs" id="rpAutoHint" data-testid="report-progress-auto">${esc(auto)} — không nhập tay</span>` : ''}</label>
         <label class="wide">Đã làm được<textarea id="rpContent" rows="2" data-testid="report-content" placeholder="Nội dung đã thực hiện trong kỳ"></textarea></label>
         <label class="wide">Khó khăn, vướng mắc<textarea id="rpDiff" rows="2" data-testid="report-difficulties"></textarea></label>
         <label class="wide">Kiến nghị, đề xuất <span class="muted xs">${d.can?.isLeadLeader || !d.dispatchStatus ? '(gửi thẳng người giao / BGĐ cho ý kiến)' : '(lãnh đạo phòng cho ý kiến; vượt thẩm quyền thì phòng trình BGĐ)'}</span><textarea id="rpProp" rows="2" data-testid="report-proposals"></textarea></label>
@@ -359,7 +364,9 @@ export async function handleDispatchClick(e, p, d, refresh, patch) {
   const go = e.target.closest('[data-goto]');
   if (go) { const el = p.querySelector('#' + go.dataset.goto) || p.querySelector(`[data-testid="${go.dataset.goto}"]`); el?.closest('details')?.setAttribute('open', ''); el?.scrollIntoView({ block: 'start', behavior: 'smooth' }); el?.querySelector('textarea, input')?.focus({ preventScroll: true }); return true; }
   if (act === 'report') {
-    const body = { progress: Number($('#rpProgress', p).value), content: $('#rpContent', p).value.trim(), difficulties: $('#rpDiff', p).value.trim(), proposals: $('#rpProp', p).value.trim() };
+    const pctInput = $('#rpProgress', p);
+    // % tự tính (checklist / việc con): không gửi — máy chủ giữ % hiện tại.
+    const body = { ...(pctInput.dataset.auto ? {} : { progress: Number(pctInput.value) }), content: $('#rpContent', p).value.trim(), difficulties: $('#rpDiff', p).value.trim(), proposals: $('#rpProp', p).value.trim() };
     if (!body.content) { toast('Nhập nội dung đã làm', 'err'); $('#rpContent', p).focus(); return true; }
     try { await api(`/api/items/${d.id}/progress-reports`, { method: 'POST', body }); for (const k of ['rpContent', 'rpDiff', 'rpProp']) draft(`${d.id}:${k}`, ''); toast('Đã gửi báo cáo tiến độ', 'ok'); refresh(); } catch (error) { toast(errorMessage(error), 'err'); }
     return true;
