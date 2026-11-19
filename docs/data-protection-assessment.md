@@ -885,7 +885,8 @@ chỉ thấy và sửa phần đó). Lỗi gốc trên bản thật: người ch
 người giao và tự viết "Đánh giá của người giao" của việc do TGĐ giao. Thay đổi:
 
 - **Một nguồn quyền** `server/src/services/task-access.js` → `taskCapabilities(user, item, ctx)`: vai A (người giao), B (Ban Giám đốc của việc
-  = TGĐ thuộc phòng cấu hình `TOP_DEPARTMENT` + PGĐ phụ trách bộ phận chủ trì), L, S, D, O, U và quyền theo **từng trường / hành động**.
+  = "Ban Giám đốc toàn quyền" do quản trị đánh dấu riêng từng người (`User.boardAll`, KHÔNG theo phòng; mặc định không ai) + PGĐ phụ trách
+  bộ phận chủ trì — chỉ với việc bộ phận mình phụ trách), L, S, D, O, U và quyền theo **từng trường / hành động**.
   Vai hệ thống `director` không còn tự động là Ban Giám đốc (vẫn xem toàn bộ). Mọi route ghi vào việc kiểm qua hàm này; giao diện chỉ dựng ô nhập khi có quyền.
 - **Xem theo vai:** thành viên dự án không liên quan (U) chỉ nhận tóm tắt (tên, người chủ trì, hạn, trạng thái, %); API chi tiết không trả tài liệu,
   báo cáo tiến độ, đánh giá, bình luận; tải / xem trước tệp bị chặn; thẻ trên Bảng bỏ mô tả, số văn bản, số bình luận / tệp.
@@ -909,7 +910,7 @@ Kèm 3 khuyến nghị cho chủ dự án (mục 4).
 | Báo cáo tiến độ, khó khăn, kiến nghị, tài liệu, bình luận | Bảo mật / Nội bộ | DLCN cơ bản (họ tên, nội dung trao đổi) | U không còn xem được |
 | Đánh giá (mức chấm + nhận xét lúc duyệt; ô đánh giá cũ chỉ đọc) | Nội bộ | DLCN cơ bản (đánh giá kết quả công việc của một người) | Chỉ người liên quan (A, B, L, S, D, O, người duyệt) xem |
 | Việc nhánh chuyển từ mục checklist cũ | Theo việc cha | Theo việc cha | Lịch sử ghi nguồn `CHECKLIST` và mã mục cũ |
-| Cấu hình phòng TGĐ (`TOP_DEPARTMENT`) | Nội bộ | Không phải DLCN | Chỉ ghi mã / tên phòng trong `.env`, không ghi tên người |
+| Danh sách "Ban Giám đốc toàn quyền" (`User.boardAll`) | Nội bộ | DLCN cơ bản (gắn với tài khoản) | Quản trị chọn trong hộp Phân quyền (cần quyền Phân quyền); mỗi lần đổi ghi AuditLog `BOARD_ALL_UPDATE`, bật thì báo Ban giám đốc; không chọn được tài khoản quản trị IT, không tự chọn mình |
 
 ### 2. Dòng dữ liệu
 
@@ -922,9 +923,9 @@ Kèm 3 khuyến nghị cho chủ dự án (mục 4).
 | Mã | Trạng thái | Ghi chú | Ưu tiên |
 |---|---|---|---|
 | GOV-01 | Một phần → tốt hơn | Bảng quyền theo vai thành mã (`task-access.js`) + test ma trận vai × trường (`task-access.test.js`) + e2e theo vai (`15-quyen-toi-thieu.spec.js`); văn bản quy chế do phiên khác soạn | Bắt buộc |
-| GOV-02 | Một phần | "Ban Giám đốc của việc" xác định bằng phòng TGĐ + thiết lập PGĐ phụ trách có sẵn — cần giữ đúng thiết lập PGĐ phụ trách từng bộ phận | Bắt buộc |
+| GOV-02 | Một phần | "Ban Giám đốc của việc" = danh sách Ban Giám đốc toàn quyền (quản trị chọn, có nhật ký) + thiết lập PGĐ phụ trách có sẵn — cần giữ đúng hai thiết lập này; không suy theo phòng, không theo vai director | Bắt buộc |
 | PRE-01 | Đầy đủ | Kiểm quyền ở máy chủ theo từng trường thực sự đổi; giao diện không còn ô cho sửa mà máy chủ trả 403. Người không liên quan không tải được tệp | Bắt buộc |
-| PRE-02 | Đầy đủ | Tách nhiệm: người chủ trì không sửa kế hoạch, không tự đánh giá, không tự gia hạn; không ai tự nhận làm người giao việc chưa có người giao | Bắt buộc |
+| PRE-02 | Đầy đủ | Tách nhiệm: người chủ trì không sửa kế hoạch, không tự đánh giá, không tự gia hạn; không ai tự nhận làm người giao việc chưa có người giao; quản trị không tự đánh dấu mình là Ban Giám đốc toàn quyền | Bắt buộc |
 | DET-01 | Đầy đủ | Mọi thay đổi vẫn ghi hoạt động việc + AuditLog như cũ; migration ghi lịch sử cho việc nhánh và việc cha | Bắt buộc |
 | PRI-01 | Đầy đủ | Tối thiểu hoá: U chỉ nhận 5 trường tóm tắt; thẻ danh sách bỏ mô tả / văn bản / số bình luận | Bắt buộc |
 | PRI-02 | Một phần → tốt hơn | Đánh giá cá nhân không còn hiện cho thành viên dự án không liên quan (khuyến nghị đợt "việc con duyệt" nay đã áp dụng một phần) | Bắt buộc |
@@ -932,8 +933,9 @@ Kèm 3 khuyến nghị cho chủ dự án (mục 4).
 
 ### 4. Khuyến nghị và rủi ro còn lại
 
-- **Khuyến nghị 1 — kiểm thiết lập trước khi deploy:** xác nhận phòng của TGĐ trên bản thật có tên "Ban Tổng Giám đốc" (hoặc đặt `TOP_DEPARTMENT`
-  theo mã phòng) và chỉ gồm TGĐ; mọi người đang hoạt động trong phòng này đều là Ban Giám đốc của mọi việc. Kiểm thiết lập PGĐ phụ trách từng bộ phận.
+- **Khuyến nghị 1 — thiết lập sau khi deploy:** quản trị đánh dấu "Ban Giám đốc toàn quyền" đúng người chủ dự án đã chốt (Quản trị → Tài khoản →
+  Phân quyền → ô "Ban Giám đốc toàn quyền"); chưa đánh dấu ai thì không ai là Ban Giám đốc của mọi việc. Kiểm thiết lập PGĐ phụ trách từng bộ phận
+  (Quản trị → Phòng ban) — PGĐ phụ trách chỉ là Ban Giám đốc của việc bộ phận mình phụ trách chủ trì, việc bộ phận khác chỉ xem.
 - **Khuyến nghị 2 — các API danh sách khác:** xuất Excel dự án, tìm kiếm, báo cáo tuần, "Việc của tôi" vẫn dùng quyền xem theo dự án như cũ
   (không chứa tài liệu / bình luận, nhưng xuất Excel có cột mô tả, sản phẩm). Nên soát và áp cùng mức tóm tắt cho người không liên quan ở đợt sau.
 - **Khuyến nghị 3 — người nhập thay (Văn phòng):** người nhập việc thay lãnh đạo vẫn xem đầy đủ việc mình nhập nhưng không còn sửa được

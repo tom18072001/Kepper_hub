@@ -162,7 +162,7 @@ Ba rà soát độc lập (nghiệp vụ theo quy chế, bảo mật / phân quy
 |---|---|
 | Quy định phân quyền | `lib/policy.js` — ma trận vai trò × tập dữ liệu × hành động (xem / sửa / xuất / AI / gửi ra ngoài); `policy.test.js` kiểm từng ô |
 | Một nguồn % | Việc cha theo việc con; nhập tay vào việc cha bị từ chối. Báo cáo tuần chỉ ghi % khi MTL chưa đổi từ lúc điền sẵn; nhập thay không ghi % |
-| Quyền sửa MTL | Theo `services/task-access.js` (20/11/2026): `%`: người chủ trì. Tên, găng, mốc, hạn, kế hoạch gốc: người giao + Ban Giám đốc của việc (TGĐ, PGĐ phụ trách). Tạo bước tổng, nhập MTL: người quản lý dự án; nhập lại chỉ thêm bước mới. Thẻ sprint ẩn nút cập nhật khi không có quyền |
+| Quyền sửa MTL | Theo `services/task-access.js` (20/11/2026): `%`: người chủ trì. Tên, găng, mốc, hạn, kế hoạch gốc: người giao + Ban Giám đốc của việc (Ban Giám đốc toàn quyền do quản trị đánh dấu; PGĐ phụ trách — việc bộ phận mình). Tạo bước tổng, nhập MTL: người quản lý dự án; nhập lại chỉ thêm bước mới. Thẻ sprint ẩn nút cập nhật khi không có quyền |
 | Báo cáo tuần | Hạng mục bắt buộc (MTL, Action Log, việc chưa xong tuần trước) không bỏ được; tình trạng dòng liên kết do máy chủ tính, chỉ được nâng lên "Vướng"; bắt buộc người phụ trách, "cần trước ngày" khi đề nghị hỗ trợ, sản phẩm đầu ra Phần III. Hai người sửa cùng nháp → báo xung đột. Khoá nộp lại sau giờ họp |
 | Bằng chứng | Mỗi lần nộp một phiên bản bất biến kèm SHA-256 (`WeeklyReportVersion`); `AuditLog` chỉ ghi thêm (trigger CSDL) |
 | Giao ban | Tuần nghỉ; danh sách bộ phận phải nộp chụp theo tuần; phát hành chỉ khi mọi yêu cầu hỗ trợ đã có kết luận; Action Log bắt buộc người phụ trách, rà mọi việc mở 12 tuần |

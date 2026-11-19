@@ -162,13 +162,18 @@ test('việc trong thùng rác / dự án lưu trữ: chỉ xem (khôi phục: n
   assert.equal(ro.plan || ro.comment || ro.delete, false);
 });
 
-test('cấu hình phòng TGĐ: theo mã hoặc tên, nhiều giá trị', () => {
-  assert.deepEqual(TA.topDepartmentKeys({}), ['tgd', 'ban tổng giám đốc']);
-  assert.equal(TA.isTopDepartment({ code: 'X1', name: 'Ban Tổng Giám đốc' }, TA.topDepartmentKeys({})), true);
-  assert.equal(TA.isTopDepartment({ code: 'tgd', name: 'Khác' }, TA.topDepartmentKeys({})), true);
-  assert.equal(TA.isTopDepartment({ code: 'BGD', name: 'Ban Giám đốc' }, TA.topDepartmentKeys({})), false);
-  assert.equal(TA.isTopDepartment({ code: 'BGD', name: 'Ban Giám đốc' }, TA.topDepartmentKeys({ TOP_DEPARTMENT: 'BGD, HĐQT' })), true);
-  assert.equal(TA.isTopDepartment({ code: 'TGD', name: 'Ban Tổng Giám đốc', isActive: false }, TA.topDepartmentKeys({})), false);
+test('Ban Giám đốc toàn quyền (đánh dấu riêng) — mọi việc; PGĐ phụ trách — chỉ việc bộ phận mình phụ trách chủ trì', () => {
+  // Người 2 là PGĐ phụ trách phòng 50; việc của phòng 60 (PGĐ phụ trách khác) → người 2 chỉ là O (vai director), không sửa kế hoạch.
+  const other = { supervisorId: 99, leadDeptId: 60, leadLeaderIds: [], staffLeaderIds: [] };
+  assert.equal(capsOf(U.pgd, item(), other).plan, false);
+  assert.equal(capsOf(U.pgd, item(), other).view, 'FULL'); // vai director: xem toàn bộ
+  assert.equal(capsOf(U.pgd, item(), other).decideExtension, false);
+  // Ban Giám đốc toàn quyền (topIds) sửa được việc ở mọi bộ phận.
+  assert.equal(capsOf(U.tgd, item(), other).plan, true);
+  assert.equal(capsOf(U.tgd, item(), other).decideExtension, true);
+  // Cùng phòng với người được đánh dấu không có nghĩa là Ban Giám đốc: chỉ ai có trong danh sách.
+  assert.equal(capsOf(U.pgd, item(), { ...other, topIds: [1] }).plan, false);
+  assert.equal(capsOf(U.pgd, item(), { ...other, topIds: [1, 2] }).plan, true);
 });
 
 test('quyền cho từng khoá PATCH', () => {

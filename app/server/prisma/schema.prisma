@@ -38,6 +38,7 @@ model User {
   department     Department?           @relation(fields: [departmentId], references: [id])
   isRootAdmin    Boolean               @default(false)
   isActive       Boolean               @default(true)
+  boardAll       Boolean               @default(false) // "Ban Giám đốc toàn quyền": Ban Giám đốc của MỌI việc (quản trị chọn trong Phân quyền; mặc định không ai)
   deactivatedAt  DateTime? // thời điểm khoá tài khoản; ghi chú cá nhân bị xoá sau 30 ngày kể từ mốc này
   mustChangePw   Boolean               @default(true)
   sessionVersion Int                   @default(0)

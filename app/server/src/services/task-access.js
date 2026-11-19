@@ -3,8 +3,9 @@
 //
 // Vai của người dùng trên MỘT việc:
 //   A  người giao (assignedById)
-//   B  Ban Giám đốc của việc = TGĐ (người đang hoạt động thuộc phòng cấu hình ở TOP_DEPARTMENT, mặc định "Ban Tổng Giám đốc")
-//      + PGĐ phụ trách bộ phận chủ trì của việc (Department.supervisorId). Vai hệ thống "director" KHÔNG tự động là B.
+//   B  Ban Giám đốc của việc = "Ban Giám đốc toàn quyền" (người dùng quản trị đánh dấu riêng — User.boardAll, KHÔNG theo phòng;
+//      mặc định không ai) — Ban Giám đốc của MỌI việc; + PGĐ phụ trách bộ phận chủ trì của việc (Department.supervisorId) —
+//      chỉ với việc do bộ phận mình phụ trách chủ trì. Vai hệ thống "director" KHÔNG tự động là B.
 //   L  người chủ trì · S  người phối hợp
 //   D  lãnh đạo bộ phận chủ trì (Dl) hoặc lãnh đạo phòng của người chủ trì — xem toàn bộ, không sửa kế hoạch
 //   O  chủ dự án / PMO: người quản lý dự án, thành viên vai OWNER, trưởng dự án, tài khoản vai director không thuộc B
@@ -46,7 +47,7 @@ const MESSAGES = {
   progress: 'Tiến độ, khó khăn, kiến nghị, dự báo hoàn thành do người chủ trì cập nhật',
   submit: 'Chỉ người chủ trì gửi duyệt / nộp sản phẩm',
   extension: 'Chỉ người chủ trì đề nghị gia hạn',
-  decideExtension: 'Chỉ Ban Giám đốc (TGĐ, PGĐ phụ trách bộ phận chủ trì) duyệt đề nghị gia hạn',
+  decideExtension: 'Chỉ Ban Giám đốc của việc (Ban Giám đốc toàn quyền, PGĐ phụ trách bộ phận chủ trì) duyệt đề nghị gia hạn',
   children: 'Chỉ người chủ trì, người giao hoặc Ban Giám đốc tạo việc nhánh',
   comment: 'Chỉ người liên quan đến việc (người giao, Ban Giám đốc, chủ trì, phối hợp, lãnh đạo bộ phận, chủ dự án / PMO) bình luận',
   docsGive: 'Văn bản "Căn cứ giao việc" và tài liệu bên giao do người giao hoặc Ban Giám đốc gửi',
@@ -63,15 +64,6 @@ const MESSAGES = {
 
 const has = (list, id) => id != null && (list || []).some(x => Number(x) === Number(id));
 const uniq = list => [...new Set(list.filter(x => x != null).map(Number))];
-
-// ---------- Cấu hình phòng TGĐ ----------
-// TOP_DEPARTMENT: mã hoặc tên phòng, nhiều giá trị cách nhau dấu phẩy. Mặc định "TGD,Ban Tổng Giám đốc".
-const norm = s => String(s ?? '').normalize('NFC').trim().toLowerCase();
-function topDepartmentKeys(env = process.env) {
-  const raw = env.TOP_DEPARTMENT != null && String(env.TOP_DEPARTMENT).trim() !== '' ? String(env.TOP_DEPARTMENT) : 'TGD,Ban Tổng Giám đốc';
-  return raw.split(',').map(norm).filter(Boolean);
-}
-const isTopDepartment = (dept, keys = topDepartmentKeys()) => !!dept && dept.isActive !== false && (keys.includes(norm(dept.code)) || keys.includes(norm(dept.name)));
 
 // ---------- Hàm quyền thuần ----------
 // user: { id, role, isRootAdmin }
@@ -185,16 +177,15 @@ function assertMove(caps, fromCategory, toCategory) {
 }
 
 // ---------- Nạp ngữ cảnh từ CSDL ----------
-// Ngữ cảnh tổ chức (nạp một lần cho cả danh sách): TGĐ, PGĐ phụ trách từng phòng, lãnh đạo từng phòng (kể cả uỷ quyền), phòng của từng người.
-async function orgContext(db, now = new Date(), env = process.env) {
+// Ngữ cảnh tổ chức (nạp một lần cho cả danh sách): Ban Giám đốc toàn quyền, PGĐ phụ trách từng phòng, lãnh đạo từng phòng
+// (kể cả uỷ quyền), phòng của từng người.
+async function orgContext(db, now = new Date()) {
   const [depts, approvers, delegations, active] = await Promise.all([
-    db.department.findMany({ select: { id: true, code: true, name: true, isActive: true, supervisorId: true } }),
+    db.department.findMany({ select: { id: true, supervisorId: true } }),
     db.user.findMany({ where: { isActive: true, permissions: { some: { permissionKey: 'work.approve' } } }, include: { permissions: true } }),
     db.delegation.findMany({ where: { revokedAt: null, startsAt: { lte: now }, endsAt: { gte: now } }, select: { fromUserId: true, toUserId: true } }),
-    db.user.findMany({ where: { isActive: true, isRootAdmin: false, role: { not: 'admin' } }, select: { id: true, departmentId: true } }),
+    db.user.findMany({ where: { isActive: true, isRootAdmin: false, role: { not: 'admin' } }, select: { id: true, departmentId: true, boardAll: true } }),
   ]);
-  const keys = topDepartmentKeys(env);
-  const topDepts = new Set(depts.filter(d => isTopDepartment(d, keys)).map(d => d.id));
   const activeIds = new Set(active.map(u => u.id));
   const deptOf = new Map(active.map(u => [u.id, u.departmentId]));
   const supervisor = new Map(depts.filter(d => d.supervisorId != null && activeIds.has(d.supervisorId)).map(d => [d.id, d.supervisorId]));
@@ -213,7 +204,8 @@ async function orgContext(db, now = new Date(), env = process.env) {
     }
     return leaderCache.get(deptId);
   };
-  return { topIds: active.filter(u => topDepts.has(u.departmentId)).map(u => u.id), topDepartmentIds: [...topDepts], supervisor, leaders, deptOf };
+  // Ban Giám đốc toàn quyền: chỉ tài khoản đang hoạt động, không phải quản trị IT.
+  return { topIds: active.filter(u => u.boardAll).map(u => u.id), supervisor, leaders, deptOf };
 }
 
 // Ngữ cảnh của MỘT việc (đồng bộ, dùng lại orgContext). chain = tổ tiên [cha, ông, …] (để lấy phòng chủ trì kế thừa).
@@ -274,6 +266,6 @@ function listCaps(user, org, { project, rights, member }, row) {
 
 module.exports = {
   PLAN_FIELDS, PROGRESS_FIELDS, BACK_FIELDS, ASSIGN_FIELDS, REMOVED_FIELDS, WORK_FROM, WORK_TO, MESSAGES, TASK_SELECT,
-  topDepartmentKeys, isTopDepartment, rolesOf, taskCapabilities, canMove, capForField, assertCap, assertMove,
+  rolesOf, taskCapabilities, canMove, capForField, assertCap, assertMove,
   orgContext, itemContext, taskOf, isApprover, loadTask, listCaps,
 };

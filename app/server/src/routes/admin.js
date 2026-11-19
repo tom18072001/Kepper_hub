@@ -8,7 +8,7 @@ const approval = require('../services/approval');
 const bus = require('../services/bus');
 
 const USER_SELECT = { id: true, username: true, fullName: true, displayTitle: true, email: true, phone: true, role: true, departmentId: true,
-  isRootAdmin: true, isActive: true, mustChangePw: true, lastLoginAt: true, createdAt: true, department: { select: { id: true, name: true } } };
+  isRootAdmin: true, isActive: true, boardAll: true, mustChangePw: true, lastLoginAt: true, createdAt: true, department: { select: { id: true, name: true } } };
 const DAY = 86_400_000;
 
 // ---------- Hàm thuần (unit test trong admin.test.js) ----------
@@ -425,6 +425,27 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
       return next;
     });
     res.json({ ok: true, grants });
+  });
+
+  // "Ban Giám đốc toàn quyền" (quyền tối thiểu theo vai, services/task-access.js): Ban Giám đốc của MỌI việc — sửa kế hoạch, người giao,
+  // duyệt gia hạn ở mọi bộ phận. Đánh dấu riêng từng người (không theo phòng), cần quyền Phân quyền; mặc định không ai.
+  // Ghi nhật ký; bật thì báo Ban giám đốc như khi cấp quyền toàn tổ chức.
+  app.put('/api/admin/users/:id/board', auth, requirePermission('admin.permissions', 'OPERATE', 'SYSTEM'), async (req, res) => {
+    const id = intParam(req.params.id);
+    const user = await prisma.user.findUnique({ where: { id }, select: USER_SELECT });
+    if (!user) fail(404, 'Không tìm thấy tài khoản', 'NOT_FOUND');
+    if (typeof req.body?.boardAll !== 'boolean') fail(422, 'Thiếu giá trị Ban Giám đốc toàn quyền', 'INVALID_VALUE');
+    const boardAll = req.body.boardAll;
+    if (boardAll && (user.isRootAdmin || user.role === 'admin')) fail(422, 'Tài khoản quản trị hệ thống không là Ban Giám đốc của công việc', 'IT_ADMIN_NO_BUSINESS');
+    if (boardAll && !user.isActive) fail(422, 'Tài khoản đã khoá', 'INACTIVE');
+    if (id === req.user.id) fail(403, 'Không tự đánh dấu chính mình — nhờ một quản trị khác', 'SELF_ROLE_CHANGE');
+    if (user.boardAll === boardAll) return res.json({ ok: true, boardAll });
+    await prisma.$transaction(async tx => {
+      await tx.user.update({ where: { id }, data: { boardAll } });
+      await audit(req, 'BOARD_ALL_UPDATE', 'User', id, { boardAll: user.boardAll }, { boardAll }, tx);
+      if (boardAll) await notifyDirectors(tx, req.user, `Quản trị hệ thống vừa đánh dấu ${user.username} là Ban Giám đốc toàn quyền`, 'Sửa kế hoạch, người giao, duyệt gia hạn mọi việc ở mọi bộ phận');
+    });
+    res.json({ ok: true, boardAll });
   });
 
   // ---------- Tình trạng vận hành (sao lưu, job lịch chạy) — chỉ thông tin hệ thống ----------
