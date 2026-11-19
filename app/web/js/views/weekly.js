@@ -1,5 +1,6 @@
 // Kepper GĐ2b — "Tuần này": Báo cáo tuần bộ phận theo QC-TH-01 / QT-TH-01 / BM-TH-01, một trang, vài tab:
-//   Nộp báo cáo · Báo muộn / vắng · Tổng hợp (TGĐ, thư ký, trưởng bộ phận) · Chấm điểm (thư ký / TGĐ) · Tiến độ dự án.
+//   Tổng hợp (TGĐ, thư ký, trưởng bộ phận) · Nộp báo cáo · Chấm điểm (thư ký / TGĐ) · Báo muộn / vắng.
+//   Tiến độ các dự án xem ở trang "Tiến độ dự án" (#/home); link cũ #/tuan/tien-do chuyển sang đó.
 // Báo cáo tự điền sẵn từ MTL + kế hoạch tuần trước + Action Log giao ban; tự lưu nháp; gửi một lần — % ghi ngược vào MTL.
 import { api } from '../api.js';
 import { store } from '../store.js';
@@ -21,17 +22,34 @@ const needsIssue = (r, f) => r.status === 'Chậm' || r.status === 'Vướng' ||
 const issueLabel = (r, f) => [r.status === 'Chậm' || r.status === 'Vướng' ? r.status : null, isOverdue(r, f) ? 'Quá hạn' : null].filter(Boolean).join(' · ');
 const opts = (list, sel) => list.map(o => (Array.isArray(o) ? o : [o, o])).map(([v, l]) => `<option value="${esc(v)}"${String(v) === String(sel ?? '') ? ' selected' : ''}>${esc(l)}</option>`).join('');
 const toneOf = t => ({ good: 'c-good', warn: 'c-warn', bad: 'c-bad' }[t] || 'c-idle');
+const todayVN = () => new Date(Date.now() + H7).toISOString().slice(0, 10);
+// Điểm danh và phát hành kết luận chỉ mở từ giờ giao ban (máy chủ cũng chặn): tránh bấm nhầm từ thứ Năm, thứ Sáu.
+const meetingOpen = S => Date.now() >= Date.parse(S.meetingAt);
+// Ghi chú thao tác dễ đọc hơn chữ phụ mặc định (≥ 13 px, tông xám đậm có sẵn trong bộ màu) — không đổi theme.
+const NOTE_CSS = 'font-size:.9rem;color:var(--text-2)';
+// "Đã lưu ✓" hiện mờ ~1,5 giây sau mỗi lần chọn-là-lưu; chỗ dành sẵn (rỗng khi ẩn) nên không xô lệch bố cục.
+const savedMark = (attrs = '') => `<span class="wk-saved" role="status" aria-live="polite" ${attrs} style="font-size:.85rem;font-weight:600;color:var(--good);opacity:0;transition:opacity .4s"></span>`;
+function flashSaved(el) {
+  if (!el) return;
+  clearTimeout(el._hide); clearTimeout(el._clear);
+  el.textContent = 'Đã lưu ✓'; el.style.opacity = '1';
+  el._hide = setTimeout(() => { el.style.opacity = '0'; el._clear = setTimeout(() => { el.textContent = ''; }, 400); }, 1500);
+}
 const statusChip = (r, f) => `<span class="wk-chip ${r.status === DONE ? 'c-good' : needsIssue(r, f) ? 'c-bad' : 'c-idle'}">${esc(r.status)}${isOverdue(r, f) ? ' · Quá hạn' : ''}</span>`;
 let keySeq = 0;
 const newKey = () => `f${Date.now().toString(36)}${(keySeq++).toString(36)}`;
 const blankIssue = () => ({ cause: '', solution: '', helpFrom: '', helpWhat: '', helpBy: '' });
 
-const TABS = [['', 'Nộp báo cáo'], ['bao', 'Báo muộn / vắng'], ['tong-hop', 'Tổng hợp'], ['diem', 'Chấm điểm'], ['tien-do', 'Tiến độ dự án']];
+// Thứ tự theo tần suất dùng; tab nào hiện còn tuỳ vai trò (nhân viên: Nộp báo cáo · Báo muộn / vắng).
+const TABS = [['tong-hop', 'Tổng hợp'], ['', 'Nộp báo cáo'], ['diem', 'Chấm điểm'], ['bao', 'Báo muộn / vắng']];
 let ctx = null; // danh mục + quyền, nạp một lần mỗi phiên
-const st = { tab: '', week: null, dept: null, rep: null, form: null, dirty: false, saveTimer: null, sum: null, schedule: null };
+const st = { tab: '', week: null, dept: null, rep: null, form: null, dirty: false, saveTimer: null, sum: null, schedule: null, lockTimer: null };
 
 export async function renderWeekly(root, tab, params, setCrumbs) {
   if (st.saveTimer && st.pending) { clearTimeout(st.saveTimer); st.saveTimer = null; saveDraft(); } // rời trang khi nháp chưa kịp lưu
+  clearTimeout(st.lockTimer); st.lockTimer = null;
+  // Tab "Tiến độ dự án" cũ trùng trang Tiến độ dự án → giữ link cũ, chuyển sang trang đó (không để lại mục lịch sử).
+  if (tab === 'tien-do') { location.replace('#/home'); return; }
   ctx = ctx && ctx.userId === store.me.id ? ctx : { ...(await api('/api/weekly/context')), userId: store.me.id };
   st.tab = TABS.some(t => t[0] === tab) ? tab : '';
   // Bộ phận / vai trò lấy theo tài khoản — không phải chọn. Ban GĐ không nộp; thư ký mở báo cáo bộ phận khác chỉ để nhập thay (?d=).
@@ -40,13 +58,15 @@ export async function renderWeekly(root, tab, params, setCrumbs) {
   if ((st.tab === 'tong-hop' && !ctx.me.canSummary) || (st.tab === 'diem' && !ctx.me.canCompliance)) st.tab = '';
   // Trang mở đầu theo vai trò: Ban GĐ, thư ký, PMO không thuộc bộ phận phải nộp → Tổng hợp.
   if (!tab && !params.get('d') && !params.has('nop') && ctx.me.canSummary && (!ctx.me.mustReport || ctx.me.secretary || !ctx.required.includes(ctx.me.departmentId))) st.tab = 'tong-hop';
-  if (st.tab === '' && !st.showNop) st.tab = ctx.me.canSummary ? 'tong-hop' : 'tien-do';
+  if (st.tab === '' && !st.showNop) st.tab = ctx.me.canSummary ? 'tong-hop' : 'bao';
   st.week = ctx.weeks.includes(params.get('w')) ? params.get('w') : ctx.week;
   setCrumbs(`Tuần này · ${TABS.find(t => t[0] === st.tab)[1]}`);
+  // Tuần hiện tại lên đầu, các tuần đã qua tiếp theo, tuần sau xuống cuối (tránh chọn nhầm tuần chưa tới).
+  const weeks = [...ctx.weeks.filter(f => f <= ctx.week).sort().reverse(), ...ctx.weeks.filter(f => f > ctx.week).sort()];
   root.innerHTML = `<div class="wk" data-testid="weekly">
     <header class="wk-top"><div class="wk-bar">
       <div class="wk-brand"><b>BÁO CÁO TUẦN</b><span>BM-TH-01 · giao ban thứ Hai</span></div>
-      <label class="wk-week">Tuần báo cáo (thứ Sáu)<select id="wkWeek" data-testid="wk-week">${ctx.weeks.map(f => `<option value="${f}"${f === st.week ? ' selected' : ''}>${fmtD(addDays(f, -4))} – ${fmtDY(f)}${f === ctx.week ? ' · tuần này' : ''}</option>`).join('')}</select></label>
+      <label class="wk-week">Tuần báo cáo (thứ Sáu)<select id="wkWeek" data-testid="wk-week">${weeks.map(f => `<option value="${f}"${f === st.week ? ' selected' : ''}>${fmtD(addDays(f, -4))} – ${fmtDY(f)}${f === ctx.week ? ' · tuần này' : f > ctx.week ? ' · tuần sau' : ''}</option>`).join('')}</select></label>
       <span class="wk-chip c-idle" id="wkDeadline" data-testid="wk-deadline">—</span></div>
       <nav class="wk-tabs" role="tablist">${TABS.filter(([k]) => (k !== '' || st.showNop) && (k !== 'tong-hop' || ctx.me.canSummary) && (k !== 'diem' || ctx.me.canCompliance)).map(([k, l]) => `<a role="tab" href="${hrefOf(k)}" aria-selected="${k === st.tab}" data-testid="wk-tab-${k || 'nop'}">${l}</a>`).join('')}</nav>
     </header>
@@ -56,8 +76,7 @@ export async function renderWeekly(root, tab, params, setCrumbs) {
   if (st.tab === '') await drawReport(body);
   else if (st.tab === 'bao') await drawNotices(body);
   else if (st.tab === 'tong-hop') await drawSummary(body);
-  else if (st.tab === 'diem') await drawCompliance(body, params);
-  else await drawProgress(body);
+  else await drawCompliance(body, params);
   drawDeadline();
 }
 function hrefOf(tab, { w = st.week, d = null } = {}) {
@@ -376,6 +395,7 @@ async function drawNotices(body) {
 // Tab 3 — Tổng hợp giao ban (bước 4–7 QT-TH-01)
 // =====================================================================
 async function drawSummary(body) {
+  clearTimeout(st.lockTimer); st.lockTimer = null;
   const s = await api(`/api/weekly/summary?week=${st.week}`);
   st.sum = s; st.schedule = s.schedule;
   const S = s.schedule, f = st.week, M = s.canManage, md = s.meeting || {};
@@ -383,43 +403,59 @@ async function drawSummary(body) {
   const k = s.kpis;
   const actions = structuredClone(md.actions || []);
   st.actions = actions;
+  const open = meetingOpen(S), at = fmtTime(S.meetingAt);
+  // Sáng thứ Hai "tuần này" đã sang tuần mới, còn buổi giao ban xét tuần TRƯỚC: chỉ đường khi tuần đó chưa phát hành.
+  const P = ctx.prev, prevHint = M && st.week === ctx.week && P && !P.publishedAt && !P.schedule.skip && todayVN() >= P.schedule.meetingDay;
   body.innerHTML = `
     <div><h1>Tổng hợp giao ban <span class="wk-accent">08:30 ${wday(S.meetingDay)} ${fmtDY(S.meetingDay)}</span> <span class="wk-secret">BẢO MẬT</span></h1>
       <p class="wk-lead">Tuần ${fmtD(S.from)} – ${fmtDY(S.to)}. Thư ký gửi bản tổng hợp trước 08:00. Trưởng ban đọc trước và chuẩn bị trả lời yêu cầu gửi tới ban mình.</p></div>
+    ${prevHint ? `<div class="wk-banner c-warn" data-testid="wk-prev-meeting">Buổi giao ban ${fmtTime(P.schedule.meetingAt)} xét tuần <b>${fmtD(P.schedule.from)} – ${fmtDY(P.schedule.to)}</b>, kết luận và Action Log chưa phát hành. <a href="${hrefOf('tong-hop', { w: P.week })}" data-testid="wk-prev-meeting-link">Mở bản tổng hợp tuần đó</a></div>` : ''}
     <div class="wk-kpis" data-testid="wk-kpis">${[[`${k.submitted}/${k.total}`, 'Bộ phận đã nộp'], [k.overdue, 'Hạng mục quá hạn'], [k.stuck, 'Chậm / vướng'], [k.helps, 'Yêu cầu hỗ trợ']].map(([v, l]) => `<div class="wk-kpi"><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join('')}</div>
-    <section class="wk-card"><h2>Tình trạng nộp ${M ? '<small>chọn là lưu ngay</small>' : ''}</h2>
+    <section class="wk-card"><h2>Tình trạng nộp ${M ? `<small id="attNote" style="${NOTE_CSS}" data-testid="wk-att-note">${open ? 'chọn là lưu ngay' : `điểm danh mở từ ${at} (giờ giao ban) · cột “Không đạt” chọn là lưu ngay`}</small>${savedMark('id="attSaved" data-testid="wk-att-saved"')}` : ''}</h2>
       <div class="wk-table"><table><thead><tr><th>Bộ phận</th><th>Trạng thái</th><th>Giờ nộp</th><th>Hạng mục</th><th>Chậm/Vướng</th><th>Quá hạn</th><th>Vắng</th>${M ? '<th>Điểm danh</th><th>Không đạt</th>' : ''}</tr></thead><tbody data-testid="wk-status-table">
       ${s.rows.map(r => `<tr data-testid="wk-srow-${r.id}"><td><b>${esc(r.name)}</b>${r.submittedBy ? `<br><span class="wk-note">${esc(r.submittedBy)}</span>` : ''}</td>
         <td><span class="wk-chip ${toneOf(r.status.tone)}">${esc(r.status.label)}</span>${r.draft ? '<br><span class="wk-note">đang có bản nháp</span>' : ''}${ctx.me.canOnBehalf && !r.submittedAt ? `<br><a class="wk-note" href="${hrefOf('', { d: r.id })}" data-testid="wk-onbehalf-${r.id}">Nhập thay</a>` : ''}</td>
         <td>${r.submittedAt ? fmtTime(r.submittedAt) : '—'}${r.resubmits ? `<br><span class="wk-note">gửi lại ${r.resubmits} lần</span>` : ''}</td>
         <td>${r.items ?? '—'}</td><td>${r.stuck ?? '—'}</td><td>${r.overdue ?? '—'}</td>
         <td>${r.absent ? `Vắng${r.absent.substitute ? ` · thay: ${esc(r.absent.substitute)}` : r.absent.hasSubstitute ? ' · có người dự thay' : ''}${r.absent.noticed ? '' : ' <span class="wk-chip c-bad">báo muộn</span>'}` : r.late.length ? `<span class="wk-note">báo muộn${r.late[0].reason ? ': ' + esc(r.late[0].reason) : ''}</span>` : ''}</td>
-        ${M ? `<td><select data-att="${r.id}" data-testid="wk-att-${r.id}">${opts([['', '—'], ...Object.entries(ctx.attendance)], r.attendance || '')}</select></td><td><input type="checkbox" data-failed="${r.id}" ${r.failed ? 'checked' : ''} aria-label="Báo cáo không đạt"></td>` : ''}</tr>`).join('')}
+        ${M ? `<td><select data-att="${r.id}" data-testid="wk-att-${r.id}" aria-label="Điểm danh ${esc(r.name)}" aria-describedby="attNote" ${open ? '' : 'disabled'}>${opts([['', '—'], ...Object.entries(ctx.attendance)], r.attendance || '')}</select></td><td><input type="checkbox" data-failed="${r.id}" ${r.failed ? 'checked' : ''} aria-label="Báo cáo không đạt"></td>` : ''}</tr>`).join('')}
       </tbody></table></div></section>
     ${s.actionReview.length ? `<section class="wk-card"><h2>Rà Action Log tuần trước <small>08:30 – 08:35</small></h2>
       <div class="wk-table"><table><thead><tr><th>Việc</th><th>Bộ phận</th><th>Phụ trách</th><th>Hạn</th><th>Kết quả</th></tr></thead><tbody data-testid="wk-action-review">
       ${s.actionReview.map(a => `<tr><td>${esc(a.task)}</td><td>${esc(a.department)}</td><td>${esc(a.owner || '')}</td><td>${fmtD(a.due)}</td><td>${a.status ? `<span class="wk-chip ${a.status === DONE ? 'c-good' : a.overdue || ['Chậm', 'Vướng'].includes(a.status) ? 'c-bad' : 'c-idle'}">${esc(a.status)}${a.pct !== '' && a.pct != null ? ` · ${a.pct}%` : ''}</span>` : `<span class="wk-chip ${a.overdue ? 'c-bad' : 'c-idle'}">chưa báo cáo</span>`}</td></tr>`).join('')}</tbody></table></div></section>` : ''}
-    <section class="wk-card"><h2>Yêu cầu hỗ trợ, phối hợp <small>09:15 – 09:25 · TGĐ kết luận từng việc</small></h2>
+    <section class="wk-card"><h2>Yêu cầu hỗ trợ, phối hợp <small>09:15 – 09:25 · TGĐ kết luận từng việc${M && s.helps.length ? ' · chọn là lưu ngay' : ''}</small></h2>
       <div class="wk-help" data-testid="wk-helps">${s.helps.length ? s.helps.map(g => `<div><h3>Gửi ${esc(g.to)} · ${g.list.length}</h3><div class="wk-help">${g.list.map(h => helpHtml(h, M)).join('')}</div></div>`).join('')
         : '<div class="wk-empty">Chưa có yêu cầu hỗ trợ nào trong các báo cáo đã nộp.</div>'}</div></section>
     <section class="wk-card" id="wkActions"><h2>Kết luận giao ban & Action Log <small>${s.publishedAt ? `đã phát hành ${fmtTime(s.publishedAt)}` : 'phát hành trước 14:00 ngày họp'} · việc tự chuyển sang báo cáo tuần sau</small></h2>
       <div id="wkActList"></div>
       ${M ? `<div class="wk-actions"><button class="btn ghost" type="button" id="actAdd" data-testid="wk-act-add">+ Thêm việc</button>
         <button class="btn" type="button" id="actSave" data-testid="wk-act-save">Lưu Action Log</button>
-        <button class="btn btn-primary" type="button" id="actPublish" ${s.publishedAt ? 'disabled' : ''} data-testid="wk-act-publish">${s.publishedAt ? 'Đã phát hành' : 'Phát hành kết luận + Action Log'}</button></div>` : ''}</section>
+        <button class="btn btn-primary" type="button" id="actPublish" ${s.publishedAt || !open ? 'disabled' : ''} aria-describedby="pubLock" data-testid="wk-act-publish">${s.publishedAt ? 'Đã phát hành' : 'Phát hành kết luận + Action Log'}</button>
+        ${s.publishedAt ? '' : `<span id="pubLock" style="${NOTE_CSS}" data-testid="wk-publish-lock" ${open ? 'hidden' : ''}>Chưa tới giờ giao ban: nút mở lúc ${at}. Action Log vẫn soạn và lưu trước được.</span>`}</div>
+        <div id="pubConfirm"></div>` : ''}</section>
     ${s.canDetail ? `<section class="wk-card"><h2>Chi tiết từng bộ phận</h2><div style="display:grid;gap:10px">${s.rows.map(r => deptDetail(r, f, names)).join('')}</div></section>`
       : `<section class="wk-card"><h2>Báo cáo bộ phận mình</h2><p class="wk-note">Trưởng / phó bộ phận nhận bản tổng hợp mức tóm tắt (QC-TH-01 Điều 5); chi tiết các bộ phận khác do thư ký giao ban và Ban giám đốc xem.</p>${s.rows.filter(r => r.id === ctx.me.departmentId).map(r => deptDetail(r, f, names)).join('')}</section>`}
     <section class="wk-card"><div class="wk-actions"><button class="btn btn-primary" type="button" id="copySum" data-testid="wk-copy">Sao chép bản tổng hợp</button>
-      <span class="wk-note" id="copyMsg">Dán vào email công ty hoặc nhóm chat đã được phê duyệt gửi TGĐ và các trưởng bộ phận. Văn bản không chứa họ tên người phụ trách.</span></div>
+      <span class="wk-note" id="copyMsg" role="status" aria-live="polite">Dán vào email công ty hoặc nhóm chat đã được phê duyệt gửi TGĐ và các trưởng bộ phận. Văn bản không chứa họ tên người phụ trách.</span></div>
       <textarea id="copyFallback" rows="8" hidden readonly></textarea></section>
     ${M ? setupHtml(s) : ''}`;
   drawActions();
   bindSummary(body, s);
+  // Trang mở sẵn trước giờ họp (vd. thư ký mở từ 08:00): tới giờ thì tự mở khoá điểm danh / phát hành, không cần tải lại.
+  const wait = Date.parse(S.meetingAt) - Date.now();
+  if (M && !open && wait < 12 * 3_600_000) st.lockTimer = setTimeout(() => unlockMeeting(body, s), wait + 500);
+}
+function unlockMeeting(body, s) {
+  if (!body.isConnected || !meetingOpen(s.schedule)) return;
+  for (const el of $$('[data-att]', body)) el.disabled = false;
+  const note = $('#attNote', body); if (note) note.textContent = 'chọn là lưu ngay';
+  const pub = $('#actPublish', body); if (pub && !s.publishedAt) pub.disabled = false;
+  const lock = $('#pubLock', body); if (lock) lock.hidden = true;
 }
 function helpHtml(h, M) {
   const c = h.conclusion || {};
   return `<div class="wk-help-item" data-help="${esc(h.key)}" data-testid="wk-helpitem">
-    <div><b>${esc(h.from)}</b>: ${esc(h.what)} <span class="wk-note">— cho việc “${esc(h.task)}”${h.ref ? ` (${esc(h.ref)})` : ''} · ${esc(h.status)}${h.by ? ` · cần trước ${fmtD(h.by)}` : ''}</span></div>
+    <div><b>${esc(h.from)}</b>: ${esc(h.what)} <span class="wk-note">— cho việc “${esc(h.task)}”${h.ref ? ` (${esc(h.ref)})` : ''} · ${esc(h.status)}${h.by ? ` · cần trước ${fmtD(h.by)}` : ''}</span>${M ? ` ${savedMark('data-testid="wk-help-saved"')}` : ''}</div>
     ${M ? `<div class="r-meta"><label class="wk-f">Kết luận của TGĐ<select data-hk="decision">${opts([['', '— Chưa kết luận —'], ...Object.entries(ctx.decisions)], c.decision || '')}</select></label>
       <label class="wk-f">Bộ phận phối hợp<select data-hk="departmentId" ${c.decision === 'ASSIGN' ? '' : 'disabled'}>${opts([['', '—'], ...ctx.departments.map(d => [d.id, d.name])], c.departmentId || '')}</select></label>
       <label class="wk-f">Ghi chú kết luận<input data-hk="note" value="${esc(c.note || '')}" maxlength="500"></label>
@@ -493,10 +529,40 @@ function bindSummary(body, s) {
     dirty.clear();
     return c;
   };
-  const saveConclusions = debounce(() => saveMeeting({ conclusions: conclusions() }, 'Đã lưu kết luận'), 700);
+  const saveConclusions = debounce(async () => {
+    const c = conclusions();
+    try { await saveMeeting({ conclusions: c }, null); } catch { return; }
+    for (const el of $$('[data-help]', body)) if (el.dataset.help in c) flashSaved($('.wk-saved', el));
+  }, 700);
+  // Bước xác nhận phát hành vẽ ngay dưới nút (không dùng confirm() của trình duyệt): nói rõ hệ quả trước khi gửi thông báo.
+  const closeConfirm = refocus => {
+    const box = $('#pubConfirm', body); if (box) box.innerHTML = '';
+    const pub = $('#actPublish', body); pub?.setAttribute('aria-expanded', 'false'); if (refocus) pub?.focus();
+  };
+  const confirmPublish = () => {
+    const box = $('#pubConfirm', body), S = s.schedule;
+    const n = st.actions.filter(a => String(a.task || '').trim()).length;
+    const missing = $$('[data-help]', body).filter(el => !$('[data-hk="decision"]', el)?.value).length;
+    box.innerHTML = `<div class="wk-banner c-warn" role="group" aria-labelledby="pubQ" data-testid="wk-publish-confirm" style="display:grid;gap:10px;margin-top:4px">
+      <b id="pubQ">Phát hành kết luận giao ban và Action Log tuần ${fmtD(S.from)} – ${fmtDY(S.to)}?</b>
+      <span>${n ? `${n} việc trong Action Log` : 'Action Log chưa có việc nào'} — thông báo gửi ngay tới trưởng các bộ phận và người phụ trách, việc tự vào Phần I báo cáo tuần sau. Thông báo đã gửi thì không thu hồi được.</span>
+      ${missing ? `<span data-testid="wk-publish-missing"><b>Còn ${missing} yêu cầu hỗ trợ chưa có kết luận của TGĐ</b> — cần kết luận đủ mới phát hành được.</span>` : ''}
+      <div class="wk-actions"><button class="btn btn-primary" type="button" id="pubYes" data-testid="wk-publish-yes">Phát hành</button><button class="btn" type="button" id="pubNo" data-testid="wk-publish-no">Huỷ</button></div></div>`;
+    $('#actPublish', body).setAttribute('aria-expanded', 'true');
+    $('#pubNo', box).focus();
+  };
+  body.addEventListener('keydown', e => { if (e.key === 'Escape' && e.target.closest('#pubConfirm')) closeConfirm(true); });
   body.addEventListener('change', async e => {
     if (!M) return;
-    if (e.target.matches('[data-att],[data-failed]')) { const { att, failed } = collect(); await saveMeeting({ attendance: att, failed }, 'Đã ghi điểm danh'); return; }
+    if (e.target.matches('[data-att],[data-failed]')) {
+      // Điểm danh và "Không đạt" lưu riêng: trước giờ họp vẫn đánh dấu được báo cáo không đạt, điểm danh thì chưa.
+      const { att, failed } = collect(), isAtt = e.target.matches('[data-att]');
+      try { await saveMeeting(isAtt ? { attendance: att } : { failed }, null); }
+      catch { if (isAtt) e.target.value = s.rows.find(r => String(r.id) === e.target.dataset.att)?.attendance || ''; else e.target.checked = !e.target.checked; return; }
+      for (const r of s.rows) { r.attendance = att[r.id] || null; r.failed = !!failed[r.id]; }
+      flashSaved($('#attSaved', body));
+      return;
+    }
     if (e.target.matches('[data-hk]')) {
       const item = e.target.closest('[data-help]');
       dirty.add(item.dataset.help);
@@ -512,10 +578,18 @@ function bindSummary(body, s) {
     if (row && e.target.dataset.ak === 'task') st.actions[Number(row.dataset.ai)].task = e.target.value;
   });
   body.addEventListener('click', async e => {
-    if (e.target.closest('#copySum')) {
-      const text = st.sum.text;
-      const ok = () => { $('#copyMsg').textContent = 'Đã sao chép. Dán vào email công ty hoặc nhóm chat đã được phê duyệt.'; api('/api/weekly/summary/copied', { method: 'POST', body: { week: st.week } }).catch(() => {}); };
-      const fb = () => { const t = $('#copyFallback'); t.hidden = false; t.value = text; t.focus(); t.select(); $('#copyMsg').textContent = 'Bôi đen sẵn, nhấn Ctrl+C để sao chép.'; api('/api/weekly/summary/copied', { method: 'POST', body: { week: st.week } }).catch(() => {}); };
+    const copy = e.target.closest('#copySum');
+    if (copy) {
+      const text = st.sum.text, msg = $('#copyMsg', body);
+      const logCopy = () => api('/api/weekly/summary/copied', { method: 'POST', body: { week: st.week } }).catch(() => {});
+      const ok = () => {
+        copy.style.minWidth = `${copy.offsetWidth}px`; // giữ bề rộng nút khi đổi chữ — không xô dòng ghi chú bên cạnh
+        copy.textContent = 'Đã sao chép ✓';
+        msg.textContent = 'Đã sao chép ✓ — dán vào email công ty hoặc nhóm chat đã được phê duyệt.';
+        clearTimeout(copy._t); copy._t = setTimeout(() => { copy.textContent = 'Sao chép bản tổng hợp'; }, 2500);
+        logCopy();
+      };
+      const fb = () => { const t = $('#copyFallback', body); t.hidden = false; t.value = text; t.focus(); t.select(); msg.textContent = 'Bôi đen sẵn, nhấn Ctrl+C để sao chép.'; logCopy(); };
       try { navigator.clipboard.writeText(text).then(ok, fb); } catch { fb(); }
       return;
     }
@@ -530,16 +604,20 @@ function bindSummary(body, s) {
       st.actions.push({ task: h.what || h.task, departmentId: assign || (h.toKey?.startsWith('D') ? Number(h.toKey.slice(1)) : h.fromId), ownerId: null, due: h.by || addDays(S0(), 4), helpKey: h.key });
       drawActions(); $('#wkActions').scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
     }
-    if (e.target.closest('#actSave') || e.target.closest('#actPublish')) {
-      const publish = !!e.target.closest('#actPublish');
+    if (e.target.closest('#actPublish')) { confirmPublish(); return; }
+    if (e.target.closest('#pubNo')) { closeConfirm(true); return; }
+    if (e.target.closest('#actSave') || e.target.closest('#pubYes')) {
+      const publish = !!e.target.closest('#pubYes');
+      if (publish) $('#pubYes', body).disabled = true;
       try {
         // Kết luận lưu riêng (gộp theo yêu cầu) trước; Action Log gửi kèm phiên bản lúc tải — người khác vừa sửa thì máy chủ báo tải lại.
         const pending = conclusions();
         if (Object.keys(pending).length) await saveMeeting({ conclusions: pending }, null);
         const r = await saveMeeting({ actions: st.actions, baseActions: st.sum.actionsVersion, ...(publish ? { publish: true } : {}) }, publish ? 'Đã phát hành kết luận và Action Log' : 'Đã lưu Action Log');
         st.sum.actionsVersion = r.actionsVersion;
+        if (publish && ctx.prev?.week === st.week) ctx.prev.publishedAt = r.publishedAt;
         await drawSummary(freshBody());
-      } catch { /* đã báo lỗi */ }
+      } catch { if (publish) closeConfirm(true); /* đã báo lỗi */ }
       return;
     }
     const up = e.target.closest('[data-up],[data-down]');
@@ -568,16 +646,19 @@ async function drawCompliance(body, params) {
   const month = /^\d{4}-\d{2}$/.test(params.get('m') || '') ? params.get('m') : st.week.slice(0, 7);
   const d = await api(`/api/weekly/compliance?month=${month}`);
   const months = Array.from({ length: 6 }, (_, k) => { const x = new Date(Date.UTC(Number(ctx.week.slice(0, 4)), Number(ctx.week.slice(5, 7)) - 1 - k, 1)); return x.toISOString().slice(0, 7); });
+  // Bộ phận chưa có trưởng bộ phận (người có quyền "Duyệt công việc" của bộ phận): điểm vẫn tính nhưng không gắn được người chịu trách nhiệm.
+  const noLeader = d.rows.filter(r => !r.leaders?.length);
   body.innerHTML = `
     <div><h1>Chấm điểm tuân thủ giao ban <span class="wk-accent">tháng ${month.slice(5)}/${month.slice(0, 4)}</span></h1>
       <p class="wk-lead">Mỗi trưởng ban có 100 điểm đầu tháng, trừ theo Phụ lục 1 (TGĐ chốt mức trừ). Điểm cuối tháng × trọng số (đề xuất 5%) tính vào KPI. Lập vào ngày làm việc thứ 3 tháng sau, trình TGĐ duyệt.</p></div>
+    ${noLeader.length ? `<div class="wk-banner c-warn" data-testid="wk-no-leader">${noLeader.length} bộ phận chưa có trưởng bộ phận: <b>${noLeader.map(r => esc(r.name)).join(', ')}</b>. Điểm vẫn tính cho bộ phận nhưng chưa gắn được người chịu trách nhiệm — nhờ quản trị hệ thống cấp quyền “Duyệt công việc” cho trưởng bộ phận.</div>` : ''}
     <section class="wk-card"><div class="wk-actions"><label class="wk-week">Tháng<select id="cMonth">${opts(months.map(m => [m, `${m.slice(5)}/${m.slice(0, 4)}`]), month)}</select></label>
-      <span class="wk-note">${d.weeks.length ? `Tính ${d.weeks.length} tuần: ${d.weeks.map(fmtD).join(', ')}` : 'Chưa có tuần nào trong tháng được tính'}${d.startWeek ? ` · bắt đầu chấm từ ${fmtDY(d.startWeek)}` : ''}</span>
+      <span class="wk-note">${d.weeks.length ? `Tính ${d.weeks.length} tuần: ${d.weeks.map(fmtD).join(', ')}` : 'Chưa có tuần nào trong tháng được tính'}${d.startWeek ? ` · bắt đầu chấm từ ${fmtDY(d.startWeek)}` : ` · <b>chưa đặt tuần bắt đầu chấm điểm</b>${ctx.me.canManage ? ' (Tổng hợp → Thiết lập)' : ''}: đang tính cả các tuần trước khi dùng chính thức`}</span>
       <span class="wk-chip ${d.state.status === 'APPROVED' ? 'c-good' : d.state.status === 'SUBMITTED' ? 'c-warn' : 'c-idle'}" data-testid="wk-score-state">${d.state.status === 'APPROVED' ? `Đã duyệt — ${esc(d.state.approvedBy)} ${fmtTime(d.state.approvedAt)} · đã khoá` : d.state.status === 'SUBMITTED' ? `Đã trình TGĐ — ${esc(d.state.submittedBy)} ${fmtTime(d.state.submittedAt)}` : 'Bản nháp (tính theo số liệu hiện tại)'}</span>
       ${d.closed ? '' : '<span class="wk-note" data-testid="wk-score-open">Tháng chưa khép — lập, trình và duyệt từ đầu tháng sau (sau buổi giao ban cuối tháng).</span>'}
       ${d.canSubmit ? '<button class="btn" type="button" id="cSubmit" data-testid="wk-score-submit">Trình TGĐ</button>' : ''}${d.canApprove ? '<button class="btn btn-primary" type="button" id="cApprove" data-testid="wk-score-approve">Duyệt và khoá</button>' : ''}</div>
       <div class="wk-table"><table><thead><tr><th>Bộ phận</th><th>Trưởng bộ phận</th><th>Điểm</th><th>Vi phạm</th><th>Chi tiết</th></tr></thead><tbody data-testid="wk-score">
-      ${d.rows.map(r => `<tr><td><b>${esc(r.name)}</b></td><td>${esc(r.leaders.join(', '))}</td><td><b style="font-size:1.1rem;color:${r.score >= 95 ? 'var(--good)' : r.score >= 80 ? 'var(--wk-warn)' : 'var(--bad)'}">${r.score}</b></td><td>${r.violations}</td>
+      ${d.rows.map(r => `<tr><td><b>${esc(r.name)}</b></td><td>${r.leaders?.length ? esc(r.leaders.join(', ')) : `<span class="wk-chip c-warn" data-testid="wk-no-leader-${r.id}">Chưa có trưởng bộ phận</span>`}</td><td><b style="font-size:1.1rem;color:${r.score >= 95 ? 'var(--good)' : r.score >= 80 ? 'var(--wk-warn)' : 'var(--bad)'}">${r.score}</b></td><td>${r.violations}</td>
         <td>${r.events.length ? r.events.map(e => `<div class="wk-note">${fmtD(e.week)}: ${esc(e.label)} ${e.points ? `<b>−${e.points}</b>` : '(không trừ)'}</div>`).join('') : '<span class="wk-note">Không vi phạm</span>'}</td></tr>`).join('') || '<tr><td colspan="5" class="wk-note">Chưa thiết lập bộ phận phải nộp</td></tr>'}
       </tbody></table></div>
       <p class="wk-note">Mức trừ: ${Object.entries(d.points).map(([k, v]) => `${esc(ctx.pointLabels[k])} ${v}`).join(' · ')}. Vi phạm do nhân viên được giao gửi báo cáo tính cho trưởng bộ phận. Từ 03 lần vi phạm trong một quý: nhắc nhở bằng văn bản.</p></section>`;
@@ -585,26 +666,4 @@ async function drawCompliance(body, params) {
   for (const [id, action, msg] of [['#cSubmit', 'submit', 'Đã trình TGĐ bảng điểm'], ['#cApprove', 'approve', 'Đã duyệt và khoá bảng điểm']]) $(id, body)?.addEventListener('click', async () => {
     try { await api(`/api/weekly/compliance/${action}`, { method: 'POST', body: { month, ...(action === 'approve' ? { sha256: d.state.sha256 } : {}) } }); toast(msg, 'ok'); await drawCompliance(freshBody(), params); } catch (error) { toast(errorMessage(error), 'err'); }
   });
-}
-
-// =====================================================================
-// Tab 5 — Tiến độ dự án (gọn; Dashboard đầy đủ ở "Tiến độ dự án" trên menu)
-// =====================================================================
-async function drawProgress(body) {
-  const d = await api('/api/mtl/portfolio');
-  st.schedule = st.week === ctx.week ? ctx.schedule : null;
-  const pct = v => (v == null ? '—' : `${Number(v).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`);
-  const tone = s => (s == null ? '' : s >= 0.95 ? 'good' : s >= 0.8 ? 'warn' : 'bad');
-  body.innerHTML = `<div><h1>Tiến độ dự án</h1><p class="wk-lead">Thanh xanh: đã làm · vạch vàng: kế hoạch hôm nay. Bấm vào số để xem danh sách.</p></div>
-    <div class="wk-proj">${d.projects.map(p => { const s = p.summary, link = `#/projects/${p.id}`; return `<section class="wk-card" data-testid="wk-proj-${esc(p.key)}">
-      <div class="wk-actions" style="justify-content:space-between"><h2><a href="${link}">${esc(p.name)}</a> <small>${esc(p.key)}${p.currentT == null ? '' : ` · tháng T${p.currentT}/${p.totalT}`}</small></h2><a class="btn btn-sm" href="${link}">Mở dự án</a></div>
-      <div class="bar" title="Thực tế ${pct(s.actualPct)} · kế hoạch ${pct(s.plannedPct)}"><i style="width:${Math.max(0, Math.min(100, s.actualPct || 0))}%"></i><b style="left:${Math.max(0, Math.min(100, s.plannedPct || 0))}%"></b></div>
-      <p class="wk-note">Thực tế <b>${pct(s.actualPct)}</b> · kế hoạch ${pct(s.plannedPct)}</p>
-      <div class="kp"><a href="${link}?view=plan" class="${tone(s.spi)}"><b>${s.spi == null ? '—' : Number(s.spi).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}</b><span>SPI</span></a>
-        <a href="${link}?view=plan&st=attn" class="${s.behind ? 'warn' : ''}"><b>${s.behind}</b><span>Chậm</span></a>
-        <a href="${link}?view=plan&st=OVERDUE" class="${s.overdue ? 'bad' : ''}"><b>${s.overdue}</b><span>Trễ hạn</span></a>
-        <a href="${link}?view=plan&st=critical" class="${s.criticalLate ? 'bad' : ''}"><b>${s.criticalLate}</b><span>Găng trễ</span></a></div>
-      ${p.currentSprint ? `<p class="wk-note"><b>Đang làm:</b> <a href="${link}?view=sprint&s=${p.currentSprint.index}">${esc(p.currentSprint.name)}</a> · ${p.currentSprint.stepsDone}/${p.currentSprint.steps} bước xong · TT ${pct(p.currentSprint.actualPct)} / KH ${pct(p.currentSprint.plannedPct)}</p>` : ''}
-      ${p.nextMilestone ? `<p class="wk-note"><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> <b>Mốc kế tiếp:</b> ${esc(p.nextMilestone.title)} · ${esc(new Date(p.nextMilestone.baselineEnd).toLocaleDateString('vi-VN'))}</p>` : ''}
-    </section>`; }).join('') || '<div class="wk-empty">Chưa có dự án theo Master Timeline.</div>'}</div>`;
 }
