@@ -278,3 +278,8 @@ tr.sub-row td{background:color-mix(in srgb,var(--border) 25%,transparent)}
 .rating-opt.rating-NEEDS_IMPROVEMENT:has(input:checked){background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
 .rating-opt.rating-POOR:has(input:checked){background:var(--danger-soft);border-color:var(--danger);color:var(--danger)}
 b.rating-NEEDS_IMPROVEMENT{color:var(--warn)} b.rating-POOR{color:var(--danger)}
+
+/* Văn thư: tệp văn bản */
+.vt-files { list-style: none; margin: 0 0 10px; padding: 0; }
+.vt-files li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.vt-files li > span:first-child { font-weight: 500; overflow-wrap: anywhere; }

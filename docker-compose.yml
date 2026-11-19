@@ -56,6 +56,11 @@ services:
       NAS_ROOT: ${NAS_ROOT:-}
       # Thư mục mảng theo phòng chủ trì hạng mục (mã phòng=tên thư mục trong thư mục dự án); phòng không có trong bảng → thư mục dự án.
       NAS_DEPT_FOLDERS: ${NAS_DEPT_FOLDERS:-BTGD=00.MTL-KeHoach,PC=01.PhapLy,TCKT=02.TaiChinh,TKKT=03.ThietKe,KTXD=04.XayDung}
+      # Kho văn thư (lib/vanthu-files.js): VANTHU_NAS_PATH = share DATA đã mount trên máy chạy (vd. /mnt/kho-data),
+      # VANTHU_NAS_ROOT=/data/vanthu để bật. Tệp vào <phòng>/<NN.VanBanDen|Di|NoiBo>/<năm>/. Trống = tắt, tệp lưu trong Hub.
+      VANTHU_NAS_ROOT: ${VANTHU_NAS_ROOT:-}
+      VANTHU_DEPT_FOLDERS: ${VANTHU_DEPT_FOLDERS:-}
+      VANTHU_DEFAULT_DEPT: ${VANTHU_DEFAULT_DEPT:-HCNS}
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
       MINIO_USE_SSL: "false"
@@ -73,6 +78,7 @@ services:
       - ${LOG_PATH:-./logs}:/data/logs
       - ${BRANDING_PATH:-./branding}:/data/branding:ro
       - ${NAS_PATH:-./nas-off}:/data/nas
+      - ${VANTHU_NAS_PATH:-./vanthu-off}:/data/vanthu
     ports:
       # Mặc định chỉ máy này vào được. Có reverse proxy HTTPS trên cùng máy (DSM / QNAP): giữ 127.0.0.1.
       # Không có proxy, cho laptop trong mạng vào thẳng: APP_BIND=0.0.0.0 (HTTP không mã hoá — chỉ để thử).
