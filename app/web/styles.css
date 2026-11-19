@@ -126,6 +126,10 @@ kbd{font:600 .73rem/1 var(--font);background:var(--surface);border:1px solid var
 .notif-item{display:block;padding:12px 16px;border-bottom:1px solid var(--border);color:var(--text);cursor:pointer;text-decoration:none}
 .notif-item:hover{background:var(--surface-2);text-decoration:none}
 .notif-item.unread{background:var(--brand-050)}
+/* Nội dung gộp nhiều dòng (vd. cảnh báo "[Chậm tiến độ · Sắp đến hạn]"): giữ xuống dòng. */
+.notif-body{white-space:pre-line;overflow-wrap:anywhere}
+/* Màn hẹp: bảng thông báo bám mép phải màn hình, không tràn mép trái. */
+@media (max-width:600px){#notifPanel.popover{position:fixed;right:8px;left:auto;top:calc(var(--appbar,60px) + 6px);width:calc(100vw - 16px);max-width:420px;max-height:calc(100vh - var(--appbar,60px) - 16px)}}
 .view{padding:24px 28px 32px;flex:1;min-width:0;outline:none}
 
 /* ---------- Khối dùng chung ---------- */

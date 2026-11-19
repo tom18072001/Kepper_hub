@@ -14,11 +14,7 @@ async function createItem(page, title, { level, assignee } = {}) {
   await page.getByTestId('new-item').click();
   await page.getByTestId('create-title').fill(title);
   if (level !== undefined) { await page.getByTestId('create-more').locator('summary').click(); await page.getByTestId('create-approval-levels').selectOption(String(level)); }
-  if (assignee) {
-    await page.getByTestId('multi-assignees').click();
-    await page.locator('#modal [data-multi="assignees"] label', { hasText: assignee }).locator('input').check();
-    await page.getByTestId('create-title').click();
-  }
+  if (assignee) await page.getByTestId('create-lead').selectOption({ label: assignee });
   await page.getByTestId('create-submit').click();
   await toast(page, 'Đã tạo KD-');
   const c = page.locator('.kcard', { hasText: title });

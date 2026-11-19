@@ -335,11 +335,39 @@ details.ph-more-menu>summary::-webkit-details-marker{display:none}
 .ph-menu .menu-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border:none;background:none;border-radius:6px;font:inherit;font-size:.9rem;color:var(--text);text-align:left;cursor:pointer;text-decoration:none}
 .ph-menu .menu-item:hover,.ph-menu .menu-item:focus-visible{background:var(--brand-050);color:var(--brand)}
 
-/* Panel việc dạng gọn (mặc định): chỉ phần cần làm ngay; "Xem đầy đủ" mở mọi mục */
-.ip-lite [data-sec="dispatch"],.ip-lite [data-sec="register"],.ip-lite [data-sec="approval"],.ip-lite [data-sec="history"],.ip-lite [data-sec="check"],.ip-lite [data-sec="children"],
-.ip-lite .sec-compact,.ip-lite .desc-add,.ip-lite .ip-more,.ip-lite .lite-hide,.ip-lite .side-fact{display:none!important}
+/* Panel việc dạng gọn (mặc định): khối mở / đóng theo vai trò, ẩn ô thêm mới còn trống và trường ít dùng ở cột phải.
+   "Mở tất cả các mục" (cạnh thanh tab) hiện đủ và mở mọi khối. */
+.ip-lite .sec-compact,.ip-lite .desc-add,.ip-lite .lite-hide{display:none!important}
 .ip-lite .level-pick{display:none}
-.ip-mode{display:block;margin:18px 0 6px;font-size:.84rem;color:var(--brand);text-align:left}
+.ip-mode{font-size:.84rem;color:var(--brand);text-align:right;white-space:nowrap}
+
+/* Panel việc: 3 tab Tổng quan · Kết quả & tài liệu · Trao đổi */
+.ip-tabbar{display:flex;align-items:flex-end;gap:12px;border-bottom:1px solid var(--border);margin:14px 0 12px}
+.ip-tabs{display:flex;gap:2px;flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.ip-tabs::-webkit-scrollbar{display:none}
+.ip-tabs [role=tab]{border:none;background:none;font:inherit;font-size:.9rem;font-weight:600;color:var(--muted);padding:8px 12px;cursor:pointer;white-space:nowrap;border-radius:6px 6px 0 0}
+.ip-tabs [role=tab]:hover{color:var(--text);background:var(--surface-2)}
+.ip-tabs [role=tab].active,.ip-tabs [role=tab][aria-selected="true"]{color:var(--brand);box-shadow:inset 0 -2px 0 var(--brand)}
+.ip-tabs [role=tab]:focus-visible{outline:2px solid var(--gold,#c9a227);outline-offset:-2px}
+.ip-tab-n{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:999px;background:var(--surface-2);color:var(--text-2,var(--muted));font-size:.72rem;font-weight:700;line-height:18px;text-align:center}
+.ip-tabbar .ip-mode{padding:8px 0}
+.ip-pane[hidden]{display:none!important}
+/* Cột phải: tiêu đề nhóm (không phải nhãn ô nhập), tiến độ chỉ hiển thị */
+.ip-side .side-h{font-size:.8rem;font-weight:600;color:var(--muted);display:block;margin-bottom:6px}
+.progress-view{gap:8px;flex-wrap:nowrap;align-items:center}
+.progress-view .progress{flex:1;height:8px}
+.progress-view b{font-size:.95rem;min-width:44px;text-align:right}
+.side-progress .link-btn{font-size:.8rem;margin-top:4px}
+/* Tóm tắt "Thêm thông tin" chỉ hiện khi nhóm đó đang thu gọn (tránh hiện hai lần) */
+.ip-more[open]~.side-facts{display:none}
+.side-facts:empty{display:none}
+/* Kết quả & tài liệu */
+.tw-actions{gap:8px 14px;align-items:center;margin-top:8px}
+.doc-form{margin-top:8px}
+.tw-out .pill{background:var(--surface-2)}
+.legacy-note{border:1px dashed var(--border);border-radius:var(--radius-sm,8px);padding:8px 10px;margin-bottom:10px;background:var(--surface-2)}
+.legacy-note .reg-readonly{margin-top:4px}
+.save-state{font-size:.75rem}
 
 /* GĐ3h — Tổng thể công việc theo người / phòng; tên người / phòng bấm được */
 .plink{color:var(--primary,#1d4ed8);cursor:pointer;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:2px;border-radius:3px}
@@ -381,3 +409,32 @@ details.ph-more-menu>summary::-webkit-details-marker{display:none}
 .wk-fx-main{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .wk-fx-main .lf-search{flex:1 1 260px;max-width:420px}
 .wk-fx .fx-applied{border-top:0;padding-top:0}
+
+/* ---------- Đợt B review UX ---------- */
+/* Kanban: cột dài không cuộn lồng trong cột hẹp — cột cao theo nội dung, trang cuộn; dự án MTL chia làn theo giai đoạn. */
+.column{max-height:none}
+.col-body{overflow:visible}
+/* Thẻ Kanban: người chủ trì (ảnh / chữ viết tắt + tên gọi), chưa giao thì ghi bộ phận chủ trì */
+.card-who{display:inline-flex;align-items:center;gap:5px;min-width:0}
+.card-who .who-name{font-size:.78rem;font-weight:600;color:var(--text-2,var(--text));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
+.card-who .who-none{font-size:.75rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
+/* Danh sách: nhóm theo giai đoạn, ghi chú cột trống đang ẩn */
+.table tr.grp-row th{background:var(--surface-2);text-align:left;font-size:.85rem;font-weight:700;padding:8px 10px;border-top:1px solid var(--border)}
+.list-hidden{margin-top:6px}
+/* Lịch: ô ngày bấm được để tạo việc, nút "+" hiện khi rê chuột / có tiêu điểm */
+.day.addable{cursor:copy;position:relative}
+.cal-add{position:absolute;top:4px;right:4px;width:22px;height:22px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--brand);font-weight:700;line-height:1;cursor:pointer;opacity:0}
+.day.addable:hover .cal-add,.cal-add:focus-visible{opacity:1}
+@media (hover:none){.cal-add{opacity:.8}}
+/* Form trong hộp thoại: phần trên cuộn bên trong, nút Huỷ / Tạo việc luôn ở đáy */
+.modal.modal-form{display:flex;flex-direction:column;max-height:calc(100vh - 8vh - 24px)}
+.modal.modal-form>form{display:flex;flex-direction:column;min-height:0;flex:1}
+.modal-form .mf-body{overflow:auto;min-height:0;flex:1;margin:0 -6px;padding:0 6px 4px}
+.modal-form .modal-actions{flex:none;align-items:center;border-top:1px solid var(--border);padding-top:14px;margin-top:12px}
+.cf-lead{gap:8px}
+.cf-lead select{min-width:0}
+.cf-scope{background:var(--brand-050);border-radius:var(--radius-sm,8px);padding:8px 10px}
+[aria-invalid="true"]{border-color:var(--danger)!important}
+/* Việc của tôi: "Ghi chú của tôi" là lối riêng, không nằm trong dãy tab lọc */
+.mw-head .tabs{margin:0}
+.mw-notes-link{white-space:nowrap}

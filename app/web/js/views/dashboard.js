@@ -142,6 +142,8 @@ const NO_DATA = '<div class="empty" data-testid="dash-nodata">Chưa có dữ li�
 // Phạm vi số liệu, viết đúng cách máy chủ đếm (routes/dashboard.js + services/stats.js): việc thuộc phòng = phòng chủ trì,
 // việc không có phòng chủ trì thì theo phòng sở hữu dự án / sổ; chỉ việc người xem thấy được, dự án / sổ chưa lưu trữ.
 export function scopeText(d, deptName = '') {
+  // Máy chủ ghi phạm vi (services/stats.js scopeNote), kèm số việc người trong phòng làm nhưng phòng khác chủ trì.
+  if (d.scopeNote) return d.scopeNote;
   const tail = 'chỉ việc bạn được xem, trong dự án / sổ chưa lưu trữ.';
   if (d.scope === 'UNIT') return `Phạm vi: việc ${deptName || 'phòng của bạn'} chủ trì (việc không có phòng chủ trì thì tính theo phòng sở hữu dự án / sổ). Không gồm việc phòng khác chủ trì mà bạn chỉ phụ trách hoặc phối hợp; ${tail}`;
   if (d.departmentId) return `Phạm vi: việc ${deptName || 'phòng đã chọn'} chủ trì (việc không có phòng chủ trì thì tính theo phòng sở hữu dự án / sổ); ${tail}`;

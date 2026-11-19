@@ -2,6 +2,11 @@
 const { intParam, text, fail } = require('../lib/http');
 const { permissionScope } = require('../lib/permissions');
 const approval = require('../services/approval');
+const rules = require('../services/task-rules');
+const W = require('../services/workitems');
+const MG = require('../services/mtl-guard');
+const { loadItem } = require('../services/access');
+const { activity } = require('../services/events');
 const bus = require('../services/bus');
 
 const DAY = 86_400_000;
@@ -98,6 +103,82 @@ module.exports = function mountApprovals(app, { prisma, auth, audit }) {
       prisma.progressReport.count({ where: { proposals: { not: '' }, answer: null, authorId: { not: req.user.id }, workItem: { archivedAt: null, project: { deletedAt: null } }, AND: [proposalScope(s)] } }),
     ]);
     res.json({ queue, extensions, proposals, total: queue + extensions + proposals });
+  });
+
+  // "Tôi đã gửi": phiếu tôi gửi duyệt — đang chờ (ở bước nào, ai duyệt) và kết quả 30 ngày gần đây.
+  app.get('/api/approvals/sent', auth, async (req, res) => {
+    const since = new Date(Date.now() - 30 * DAY);
+    const all = await prisma.approvalRequest.findMany({
+      where: { requestedById: req.user.id, workItem: { archivedAt: null, project: { deletedAt: null } }, OR: [{ status: 'PENDING' }, { closedAt: { gte: since } }] },
+      include: { workItem: { include: { project: true, state: { select: { name: true, category: true } }, assignees: { include: { user: { select: { id: true, fullName: true } } } } } }, actions: { orderBy: { id: 'asc' } } },
+      orderBy: { createdAt: 'desc' }, take: 100,
+    });
+    // Mỗi việc một dòng: phiếu gần nhất (gửi lại sau khi bị trả / rút lại thì thay dòng cũ).
+    const seen = new Set();
+    const rows = all.filter(r => !seen.has(r.workItemId) && seen.add(r.workItemId));
+    const ctx = await approval.approvalContext(prisma, [...new Set(rows.map(r => r.workItem.projectId))]);
+    const n = await names(rows.flatMap(r => [r.workItem.assignedById, ...r.actions.map(a => a.actorId)]));
+    const d = await deptNames();
+    const extra = new Set();
+    const out = rows.map(r => {
+      const item = r.workItem, project = item.project;
+      const chain = rules.chainOf(ctx.steps.get(project.id) || [], !!r.withAssigner);
+      const step = r.status === 'PENDING' ? rules.stepAt(chain, r.currentLevel) : null;
+      const waitingOn = step ? approval.approverIdsSync(ctx, project, step, approval.withDoers(item, r.requestedById), { delegates: false }) : [];
+      waitingOn.forEach(id => extra.add(id));
+      const last = [...r.actions].reverse().find(a => a.decision !== 'SUBMIT') || null;
+      return { id: r.id, status: r.status, currentLevel: r.currentLevel, totalLevels: r.totalLevels, stepName: step?.name || null, createdAt: r.createdAt, closedAt: r.closedAt, waitingOn,
+        // Rút lại được khi phiếu còn chờ và chưa cấp nào xử lý (hoàn tác "Gửi duyệt" bấm nhầm).
+        canWithdraw: r.status === 'PENDING' && r.actions.every(a => a.decision === 'SUBMIT'),
+        last: last ? { decision: last.decision, actorName: n[last.actorId] || null, comment: last.comment || null, rating: last.rating || null, level: last.level, at: last.createdAt } : null,
+        item: { id: item.id, code: `${project.key}-${item.number}`, title: item.title, priority: item.priority, dueDate: item.dueDate, state: item.state.name, taskType: item.taskType,
+          assignees: item.assignees.map(a => a.user), assignedByName: n[item.assignedById] || null, departmentName: d[deptOf(item)] || null },
+        project: { id: project.id, key: project.key, name: project.name } };
+    });
+    const who = await names([...extra]);
+    for (const r of out) r.waitingOn = r.waitingOn.map(id => who[id]).filter(Boolean);
+    res.json(out);
+  });
+
+  // Người gửi rút lại phiếu chưa cấp nào xử lý (vd. bấm nhầm "Gửi duyệt" rồi bấm "Hoàn tác"): việc về trạng thái trước khi gửi,
+  // tiến độ về mức cũ nếu gửi kèm (progress), thông báo "Cần duyệt" người duyệt chưa đọc của phiếu này được gỡ.
+  app.post('/api/approvals/:id/withdraw', auth, async (req, res) => {
+    const id = intParam(req.params.id);
+    const head = await prisma.approvalRequest.findUnique({ where: { id }, select: { workItemId: true, requestedById: true } });
+    if (!head) fail(404, 'Không tìm thấy yêu cầu duyệt', 'NOT_FOUND');
+    if (head.requestedById !== req.user.id) fail(403, 'Chỉ người gửi duyệt được rút lại yêu cầu này', 'FORBIDDEN');
+    const { project, rights } = await loadItem(prisma, req.user, head.workItemId, 'edit');
+    const want = req.body?.progress;
+    const result = await prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'item:' + head.workItemId}))`;
+      const request = await tx.approvalRequest.findUnique({ where: { id }, include: { actions: true } });
+      if (request.status !== 'PENDING') fail(409, 'Yêu cầu duyệt đã được xử lý — không rút lại được', 'NOT_PENDING');
+      if (request.actions.some(a => a.decision !== 'SUBMIT')) fail(409, 'Đã có cấp duyệt xử lý — không rút lại được', 'ALREADY_DECIDED');
+      const item = await tx.workItem.findUnique({ where: { id: head.workItemId }, include: { state: true, assignees: true, labels: true } });
+      if (item.state.category !== 'REVIEW') fail(409, 'Việc không còn ở "Chờ duyệt"', 'NOT_IN_REVIEW');
+      const from = request.fromStateId ? await tx.workflowState.findFirst({ where: { id: request.fromStateId, projectId: project.id } }) : null;
+      const toState = from && !['REVIEW', 'COMPLETED'].includes(from.category) ? from
+        : await tx.workflowState.findFirst({ where: { projectId: project.id, category: 'STARTED' }, orderBy: { position: 'asc' } });
+      if (!toState) fail(409, 'Dự án chưa có cột "Đang thực hiện"', 'INVALID_STATE');
+      await MG.mtlGuard(tx, req.user, project, rights, item.id, { progress: true, toState, fromCategory: 'REVIEW' });
+      // % chỉ trả về mức cũ với việc nhập % tay (không có việc con, không theo checklist) — giống quy định một nguồn %.
+      const kids = await tx.workItem.count({ where: { parentId: item.id, archivedAt: null } }) + await tx.checklistItem.count({ where: { workItemId: item.id } });
+      const pct = Number(want);
+      const restore = want != null && Number.isInteger(pct) && pct >= 0 && pct < 100 && pct !== item.progress && !kids;
+      await approval.cancelPending(tx, { item, actor: req.user, reason: 'Người gửi rút lại' });
+      const t = await W.transition(tx, { project, rights, item, toState, overrideWip: 'bulk' });
+      const updated = await tx.workItem.update({ where: { id: item.id }, data: { ...t.data, position: await W.endPosition(tx, t.toState.id), ...(restore ? { progress: pct, progressAt: new Date() } : {}) } });
+      if (restore) await activity(tx, item.id, req.user.id, 'UPDATED', { progress: pct });
+      await W.afterTransition(tx, { user: req.user, project, item: updated, fromState: item.state, toState: t.toState });
+      // Thông báo "Cần duyệt" người duyệt chưa mở: gỡ (đã đọc thì giữ — lịch sử duyệt vẫn ghi gửi rồi rút).
+      const stale = await tx.notification.findMany({ where: { type: 'APPROVAL_REQUESTED', readAt: null, link: W.link(project, item), createdAt: { gte: request.createdAt } }, select: { id: true, userId: true } });
+      if (stale.length) await tx.notification.deleteMany({ where: { id: { in: stale.map(x => x.id) } } });
+      return { item: updated, state: t.toState, notified: [...new Set(stale.map(x => x.userId))] };
+    });
+    await audit(req, 'APPROVAL_WITHDRAW', 'ApprovalRequest', id, null, { workItemId: head.workItemId, toStateId: result.state.id });
+    bus.item(project.id, head.workItemId, req.user.id);
+    if (result.notified.length) bus.notified(result.notified);
+    res.json({ ok: true, stateId: result.state.id, state: result.state.name, progress: result.item.progress });
   });
 
   // Gửi duyệt = chuyển việc vào cột thuộc nhóm REVIEW (PATCH /api/items/:id hoặc kéo-thả).

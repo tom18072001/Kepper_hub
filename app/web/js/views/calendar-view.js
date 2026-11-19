@@ -27,8 +27,9 @@ export function shiftAt({ mode, at }, delta) {
   return keyOf(new Date(utc(at).getTime() + delta * 7 * DAY));
 }
 
-// opts: items, state {mode, at}, dateOf(i) → ngày hạn hiển thị, startOf(i), hrefOf(i), colorOf(i), doneOf(i), labelOf(i), metaOf(i), testid
-export function calendarHtml({ items, state, dateOf = i => i.dueDate, startOf = i => i.startDate, hrefOf, colorOf = () => '', doneOf = () => false, labelOf = i => `${i.code} ${i.title}`, metaOf = () => '', testid = 'calendar', itemTestid = i => `cal-${i.code}` }) {
+// opts: items, state {mode, at}, dateOf(i) → ngày hạn hiển thị, startOf(i), hrefOf(i), colorOf(i), doneOf(i), labelOf(i), metaOf(i), testid,
+//       addable: mỗi ô ngày có nút "+" (trang tự bắt [data-cal-new] / bấm vào ô để mở form tạo việc với hạn là ngày đó).
+export function calendarHtml({ items, state, dateOf = i => i.dueDate, startOf = i => i.startDate, hrefOf, colorOf = () => '', doneOf = () => false, labelOf = i => `${i.code} ${i.title}`, metaOf = () => '', testid = 'calendar', itemTestid = i => `cal-${i.code}`, addable = false }) {
   const { mode, at } = state;
   const today = dateInput(new Date());
   let days, title;
@@ -68,7 +69,8 @@ export function calendarHtml({ items, state, dateOf = i => i.dueDate, startOf = 
     <div class="cal cal-${mode}" data-testid="${testid}">${DOW.map(d => `<div class="dow">${d}</div>`).join('')}
     ${days.map(d => { const k = keyOf(d); const list = byDay.get(k) || [];
       const more = list.length > MAX ? list.length - (MAX - 1) : 0;
-      return `<div class="day${days.other(d) ? ' other' : ''}${k === today ? ' today' : ''}" data-day="${k}"><span class="num">${mode === 'week' ? `${DOW[(d.getUTCDay() + 6) % 7]} ` : ''}${d.getUTCDate()}${mode === 'week' ? '/' + (d.getUTCMonth() + 1) : ''}</span>
+      const dm = `${d.getUTCDate()}/${d.getUTCMonth() + 1}`;
+      return `<div class="day${days.other(d) ? ' other' : ''}${k === today ? ' today' : ''}${addable ? ' addable' : ''}" data-day="${k}"${addable ? ` title="Bấm để tạo việc hạn ${dm}"` : ''}><span class="num">${mode === 'week' ? `${DOW[(d.getUTCDay() + 6) % 7]} ` : ''}${d.getUTCDate()}${mode === 'week' ? '/' + (d.getUTCMonth() + 1) : ''}</span>${addable ? `<button type="button" class="cal-add" data-cal-new="${k}" aria-label="Tạo việc hạn ${dm}" data-testid="${testid}-add-${k}">+</button>` : ''}
         ${(more ? list.slice(0, MAX - 1) : list).map(chip).join('')}${more ? `<button type="button" class="cal-more" data-cal-day="${k}">+${more} việc</button>` : ''}</div>`; }).join('')}</div>`;
 }
 

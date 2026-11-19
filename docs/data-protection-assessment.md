@@ -760,3 +760,39 @@ Luật nằm ở `server/src/services/task-rules.js` (có test `task-rules.test.
 - **Khuyến nghị (chờ chủ dự án chốt):** chỉ hiện mức hoàn thành + nhận xét cho người chủ trì, người giao / người duyệt, lãnh đạo bộ phận chủ trì,
   người quản lý dự án và Ban GĐ — người khác (vd. thành viên dự án dùng chung) chỉ thấy "Đã duyệt". Hiện chưa áp dụng để không đổi cách xem đang có.
 - Dữ liệu cũ: không việc nào đổi trạng thái; việc cha đã Hoàn thành mà còn con mở (nếu có trên máy chạy thật) giữ nguyên tới khi có thao tác trên cây việc đó.
+
+## Review UX đợt B: rút lại phiếu duyệt, "Tôi đã gửi", phạm vi Thống kê phòng ban, gộp ô nhập trong panel việc (19/11/2026)
+
+Thay đổi chạm dữ liệu: (1) người gửi rút lại phiếu duyệt chưa cấp nào xử lý (`POST /api/approvals/:id/withdraw` — hoàn tác 5 giây ở
+Cập nhật nhanh, nút "Rút lại" ở tab "Tôi đã gửi"); (2) `GET /api/approvals/sent` liệt kê phiếu của chính người xem; (3) Thống kê phòng ban
+báo thêm **số** việc người trong phòng làm nhưng phòng khác chủ trì (không cộng vào số liệu, không kèm danh sách); (4) `GET /api/projects/:id/create-scope`
+trả việc người xem được thêm việc con (N2); (5) panel việc bỏ ô nhập trùng — dữ liệu cũ (`resultNote`, `outputs`) giữ nguyên, chỉ hiện ở chỗ mới.
+
+**Kết luận cổng:** ĐẠT. Không thêm tập dữ liệu mới, không gửi ra ngoài, không đổi quyền xem.
+
+### 1. Phân loại
+
+| Tập dữ liệu | Nhãn nội bộ | Phân loại pháp lý | Ghi chú |
+|---|---|---|---|
+| Phiếu tôi đã gửi (trạng thái, bước, tên người đang phải duyệt, nhận xét / mức khi đã xử lý) | Nội bộ | DLCN cơ bản (họ tên, đánh giá công việc) | Chỉ phiếu `requestedById = người xem`; người gửi vốn đã thấy các thông tin này trong panel việc |
+| Số việc ngoài phạm vi phòng | Nội bộ | Không phải DLCN (chỉ một con số) | Theo `itemVisibleWhere` của người xem; không lộ tên việc / tên người |
+| Danh sách id việc được thêm việc con | Nội bộ | Không phải DLCN | Chỉ id việc người xem đã thấy được |
+
+### 2. Dòng dữ liệu
+
+- Rút lại: khoá việc → huỷ phiếu (`ApprovalAction` CANCEL, lý do "Người gửi rút lại") → việc về trạng thái trước khi gửi, % về mức cũ (chỉ việc nhập % tay)
+  → gỡ thông báo "Cần duyệt" **chưa đọc** của đúng phiếu đó (đã đọc thì giữ) → AuditLog `APPROVAL_WITHDRAW`. Lịch sử việc vẫn ghi "gửi duyệt" rồi "huỷ yêu cầu duyệt".
+- Không có dữ liệu nào rời máy chủ nội bộ.
+
+### 3. Rà năng lực (thay đổi)
+
+| Mã | Trạng thái | Ghi chú | Ưu tiên |
+|---|---|---|---|
+| PRE-01 | Đầy đủ | Chỉ người gửi rút lại được, và chỉ khi chưa cấp nào duyệt / trả lại; máy chủ kiểm lại quyền sửa việc + quy định MTL (`mtl.progress`) | Bắt buộc |
+| DET-01 | Đầy đủ | Rút lại ghi `ApprovalAction`, hoạt động việc và AuditLog; xoá thông báo chưa đọc không xoá dấu vết nghiệp vụ (thông báo không phải nhật ký chứng cứ) | Bắt buộc |
+| PRI-02 | Đầy đủ | "Tôi đã gửi" và phạm vi Thống kê không mở rộng ai thấy gì | Bắt buộc |
+
+### 4. Rủi ro còn lại
+
+- Thống kê phòng ban **giữ** cách đếm theo phòng chủ trì (cùng quy tắc với KPI, báo cáo Word, chấm điểm); đổi sang đếm theo phòng của người làm
+  sẽ tính một việc cho nhiều phòng và làm lệch KPI đã chốt — nếu chủ dự án muốn đổi, cần quyết định riêng và soát lại KPI.

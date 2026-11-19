@@ -1,6 +1,6 @@
-// Kepper — tab Sprint của dự án Master Timeline.
-// Sprint = một giai đoạn gồm một nhóm bước MTL tổng (vd. "Chuyển nhượng dự án (B1–9)", "Đề xuất NƠXH → CTĐT"), PMO thiết lập.
-// - Theo sprint (mặc định): lộ trình các sprint trên trục tháng T (tiến độ theo đầu việc, tình trạng, mốc ◆), chi tiết sprint chọn:
+// Kepper — tab "Giai đoạn" của dự án Master Timeline (trong mã gọi là sprint; trên giao diện luôn gọi là "giai đoạn").
+// Giai đoạn = một nhóm bước MTL tổng (vd. "Chuyển nhượng dự án (B1–9)", "Đề xuất NƠXH → CTĐT"), PMO thiết lập.
+// - Theo giai đoạn (mặc định): lộ trình các giai đoạn trên trục tháng T (tiến độ theo đầu việc, tình trạng, mốc ◆), chi tiết giai đoạn chọn:
 //   các bước theo thứ tự, mỗi bước kèm việc con (MTL bộ phận) — xong 1 trong 5 việc con = bước được 20%; cập nhật một chạm.
 // - Theo tháng: trong tháng T phải xong gì / đang chạy / chuẩn bị tháng sau, tổng kết theo ban.
 import { api } from '../api.js';
@@ -8,6 +8,7 @@ import { $, esc, fmtDate, uiPref, replaceHashParams, openModal, closeModal, toas
 import { icon } from '../icons.js';
 import { sprintCard, bindQuick, SPRINT_TONE as TONE } from './sprint-card.js';
 import { invalidateMtl } from './mtl.js';
+import { noteHashWritten } from './project.js';
 
 const num = (v, d = 2) => (v == null ? '—' : Number(v).toLocaleString('vi-VN', { maximumFractionDigits: d }));
 const pct = v => (v == null ? '—' : `${num(v, 1)}%`);
@@ -24,15 +25,15 @@ export async function drawMtlSprint(body, project, params) {
   }
   const mode = params.get('mode') === 'month' ? 'month' : 'sprint';
   const modes = `<div class="sp-modes"><div class="chips" role="group" aria-label="Cách xem">
-      <a class="chip${mode === 'sprint' ? ' on' : ''}" href="${hrefWith({}, ['mode', 't', 's'])}" data-testid="sp-mode-sprint">Theo sprint (giai đoạn)</a>
+      <a class="chip${mode === 'sprint' ? ' on' : ''}" href="${hrefWith({}, ['mode', 't', 's'])}" data-testid="sp-mode-sprint">Theo giai đoạn</a>
       <a class="chip${mode === 'month' ? ' on' : ''}" href="${hrefWith({ mode: 'month' }, ['s'])}" data-testid="sp-mode-month">Kỳ cập nhật tháng</a></div>
-    ${project.rights.canManage ? `<button type="button" class="btn btn-sm" data-sp-setup data-testid="sp-setup">${icon('settings')}Thiết lập sprint</button>` : ''}</div>`;
+    ${project.rights.canManage ? `<button type="button" class="btn btn-sm" data-sp-setup data-testid="sp-setup">${icon('settings')}Thiết lập giai đoạn</button>` : ''}</div>`;
   if (mode === 'month') return drawMonth(body, project, params, modes);
   return drawPhases(body, project, params, modes);
 }
 
-// ---------- Theo sprint (giai đoạn) ----------
-async function drawPhases(body, project, params, modes) {
+// ---------- Theo giai đoạn ----------
+async function drawPhases(body, project, params, modes, { scroll = false } = {}) {
   const asked = params.get('s');
   const d = await api(`/api/projects/${project.id}/mtl-sprints${asked != null && asked !== '' ? `?s=${encodeURIComponent(asked)}` : ''}`);
   if (!d.sprints.length) {
@@ -51,7 +52,7 @@ async function drawPhases(body, project, params, modes) {
   const road = d.sprints.map(s => {
     const has = s.start && s.end, l = has ? x(dayT(s.start)) : 0, r = has ? x(dayT(s.end)) : 0, w = Math.max(0.8, r - l);
     const tone = isDone(s.status) ? 'ok' : TONE[s.status] || '';
-    return `<a class="rd-row${s.index === k ? ' sel' : ''}" href="${hrefWith({ s: s.index })}" data-testid="sp-road-${s.index}">
+    return `<a class="rd-row${s.index === k ? ' sel' : ''}" href="${hrefWith({ s: s.index })}" data-sp-go="${s.index}" data-testid="sp-road-${s.index}"${s.index === k ? ' aria-current="true"' : ''}>
       <span class="rd-name"><b>${s.index + 1}. ${esc(s.name)}</b><span class="muted xs">${esc(s.stepsLabel || '')}${has ? ` · T${s.startT}–T${s.endT}` : ''}</span></span>
       <span class="rd-track">${has ? `<i class="rd-bar ${tone}" style="left:${l}%;width:${w}%"><i class="rd-fill" style="width:${Math.min(100, s.actualPct || 0)}%"></i>${s.plannedPct != null && !isDone(s.status) ? `<b class="rd-goal" style="left:${Math.min(100, s.plannedPct)}%"></b>` : ''}</i>` : ''}
         ${s.milestones.map(m => `<span class="rd-ms${m.done ? ' done' : ''}" style="left:${x(dayT(m.baselineEnd))}%" title="${esc(`◆ ${m.planCode ? 'Bước ' + m.planCode + ' · ' : ''}${m.title}`)}"><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg></span>`).join('')}
@@ -97,50 +98,58 @@ async function drawPhases(body, project, params, modes) {
   const shown = groups.filter(passG);
   body.innerHTML = `<div class="mtl sp" data-testid="sprint-view">
     ${modes}
-    ${!d.configured ? `<div class="card sp-note" data-testid="sp-suggested">${icon('bell')}<span>Đây là <b>sprint gợi ý</b> (cắt theo mốc <svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> trên đường găng). ${project.rights.canManage ? 'Bấm <b>Thiết lập sprint</b> để đặt tên và gộp bước, ví dụ <code>Chuyển nhượng DA | 1-9</code>.' : 'PMO sẽ đặt tên và gộp bước cho đúng các giai đoạn của dự án.'}</span></div>` : ''}
-    ${d.unassigned.length && d.configured ? `<div class="card sp-note warn">Bước chưa thuộc sprint nào: ${d.unassigned.map(esc).join(', ')}</div>` : ''}
-    <section class="card sp-road" data-testid="sp-road"><div class="mtl-h"><h3>Lộ trình ${d.sprints.length} sprint</h3><span class="muted xs">Thanh: thời gian kế hoạch · phần tô: đã làm · vạch: kế hoạch hôm nay · <svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> mốc · vạch đỏ: hôm nay</span></div>
+    ${!d.configured && uiPref(GUIDE_KEY) !== true ? `<div class="card sp-note" data-testid="sp-suggested">${icon('bell')}<span class="grow">Đây là <b>các giai đoạn gợi ý</b> (cắt theo mốc <svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> trên đường găng). ${project.rights.canManage ? 'Bấm <b>Thiết lập giai đoạn</b> để đặt tên và gộp bước, ví dụ <code>Chuyển nhượng DA | 1-9</code>.' : 'PMO sẽ đặt tên và gộp bước cho đúng các giai đoạn của dự án.'}</span>
+      <button type="button" class="btn btn-ghost btn-sm" data-sp-guide-ok data-testid="sp-guide-ok">Đã hiểu</button></div>` : ''}
+    ${d.unassigned.length && d.configured ? `<div class="card sp-note warn">Bước chưa thuộc giai đoạn nào: ${d.unassigned.map(esc).join(', ')}</div>` : ''}
+    <section class="card sp-road" data-testid="sp-road"><div class="mtl-h"><h3>Lộ trình ${d.sprints.length} giai đoạn</h3><span class="muted xs">Bấm một giai đoạn để xem chi tiết bên dưới · Thanh: thời gian kế hoạch · phần tô: đã làm · vạch: kế hoạch hôm nay · <svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> mốc · vạch đỏ: hôm nay</span></div>
       <div class="rd"><div class="rd-row rd-head"><span class="rd-name"></span><span class="rd-track rd-axis">${axis}</span><span class="rd-num"></span></div>${road}</div></section>
     <section class="card sp-head">
       <div class="sp-nav">
-        ${k > 0 ? `<a class="btn btn-ghost btn-sm" href="${hrefWith({ s: k - 1 })}" aria-label="Sprint trước" data-testid="sp-prev">${icon('left')}</a>` : '<span class="sp-navgap"></span>'}
-        <div class="sp-title"><h2 data-testid="sp-title">Sprint ${k + 1} · ${esc(sp.name)}</h2>
+        ${k > 0 ? `<a class="btn btn-ghost btn-sm" href="${hrefWith({ s: k - 1 })}" data-sp-go="${k - 1}" aria-label="Giai đoạn trước" title="Giai đoạn trước" data-testid="sp-prev">${icon('left')}</a>` : '<span class="sp-navgap"></span>'}
+        <div class="sp-title"><h2 data-testid="sp-title" tabindex="-1">Giai đoạn ${k + 1} · ${esc(sp.name)}</h2>
           <span class="muted sm">${esc(sp.stepsLabel || '')}${sp.start ? ` · ${fmtDate(sp.start)} – ${fmtDate(sp.end)} (T${sp.startT}–T${sp.endT})` : ''}${when ? ` · ${when}` : ''}${k === d.current ? ' · <b>đang làm</b>' : ''}</span></div>
-        ${k < d.sprints.length - 1 ? `<a class="btn btn-ghost btn-sm" href="${hrefWith({ s: k + 1 })}" aria-label="Sprint sau" data-testid="sp-next">${icon('right')}</a>` : '<span class="sp-navgap"></span>'}
-        ${k !== d.current && d.current != null ? `<a class="btn btn-sm" href="${hrefWith({}, ['s'])}" data-testid="sp-now">Về sprint đang làm</a>` : ''}
+        ${k < d.sprints.length - 1 ? `<a class="btn btn-ghost btn-sm" href="${hrefWith({ s: k + 1 })}" data-sp-go="${k + 1}" aria-label="Giai đoạn sau" title="Giai đoạn sau" data-testid="sp-next">${icon('right')}</a>` : '<span class="sp-navgap"></span>'}
+        ${k !== d.current && d.current != null ? `<a class="btn btn-sm" href="${hrefWith({}, ['s'])}" data-sp-go="${d.current}" data-testid="sp-now">Về giai đoạn đang làm</a>` : ''}
       </div>
       ${sp.goal ? `<p class="sp-goal"><b>Mục tiêu:</b> ${esc(sp.goal)}</p>` : ''}
       <div class="sp-kpis">
-        <div class="${tone}"><span class="muted xs">Tiến độ sprint</span><b data-testid="sp-actual">${pct(sp.actualPct)}</b><small class="muted">kế hoạch hôm nay ${pct(sp.plannedPct)} · ${esc(sp.statusLabel || '')}</small></div>
-        <div class="${spiTone(sp.spi)}"><span class="muted xs">SPI</span><b>${num(sp.spi)}</b><small class="muted">thực tế / kế hoạch</small></div>
+        <div class="${tone}"><span class="muted xs">Tiến độ giai đoạn</span><b data-testid="sp-actual">${pct(sp.actualPct)}</b><small class="muted">kế hoạch hôm nay ${pct(sp.plannedPct)} · ${esc(sp.statusLabel || '')}</small></div>
+        <div class="${spiTone(sp.spi)}"><span class="muted xs">SPI giai đoạn</span><b>${num(sp.spi)}</b><small class="muted">thực tế / kế hoạch</small></div>
         <div><span class="muted xs">Bước đã xong</span><b data-testid="sp-steps">${sp.stepsDone ?? 0}/${sp.steps ?? 0}</b><small class="muted">${sp.done ?? 0}/${sp.leaves ?? 0} đầu việc</small></div>
         <div class="${sp.overdue ? 'danger' : sp.behind ? 'warn' : ''}"><span class="muted xs">Chậm / trễ</span><b>${sp.behind ?? 0} / ${sp.overdue ?? 0}</b><small class="muted">${sp.criticalLate ? `${sp.criticalLate} trên đường găng` : 'đầu việc'}</small></div>
       </div>
-      ${ms ? `<div class="sp-ms" data-testid="sp-milestones"><b>Mốc của sprint:</b> ${ms}</div>` : ''}
+      ${ms ? `<div class="sp-ms" data-testid="sp-milestones"><b>Mốc của giai đoạn:</b> ${ms}</div>` : ''}
     </section>
     <div class="chips sp-depts" role="group" aria-label="Lọc theo ban" data-testid="sp-depts">
       <button type="button" class="chip${!dept ? ' on' : ''}" data-dept="" aria-pressed="${!dept}">Tất cả ban<b>${d.rows.length}</b></button>
       ${[...deptCounts].sort((a, b) => a[1].name.localeCompare(b[1].name, 'vi')).map(([id, v]) => `<button type="button" class="chip${String(id) === String(dept) ? ' on' : ''}" data-dept="${id}" aria-pressed="${String(id) === String(dept)}" data-testid="sp-dept-${id}">${esc(v.name)}<b>${v.n}</b></button>`).join('')}
     </div>
-    <section class="sp-steps" data-testid="sp-steps-list"><div class="sp-lh"><h3>Các bước của sprint</h3><span class="pill">${shown.length}</span><span class="muted xs">bấm <b><svg class="gl gl-ck" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>Xong</b> khi xong một việc · đang làm dở thì chọn %</span></div>
-      ${shown.map(stepCard).join('') || '<p class="muted sm">Không có bước nào của ban này trong sprint.</p>'}</section>
-    <section class="card"><div class="mtl-h"><h3>Sprint ${k + 1} theo ban</h3><span class="muted xs">tiến độ theo đầu việc của ban chủ trì</span></div>
+    <section class="sp-steps" data-testid="sp-steps-list"><div class="sp-lh"><h3>Các bước của giai đoạn</h3><span class="pill">${shown.length}</span><span class="muted xs">bấm <b><svg class="gl gl-ck" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>Gửi duyệt</b> khi xong một việc (người giao duyệt mới thành Hoàn thành) · đang làm dở thì chọn %</span></div>
+      ${shown.map(stepCard).join('') || '<p class="muted sm">Không có bước nào của ban này trong giai đoạn.</p>'}</section>
+    <section class="card"><div class="mtl-h"><h3>Giai đoạn ${k + 1} theo ban</h3><span class="muted xs">tiến độ theo đầu việc của ban chủ trì</span></div>
       <div class="tbl-scroll"><table class="table" data-testid="sp-summary"><thead><tr><th>Ban</th><th class="num">Đầu việc</th><th class="num">Đã xong</th><th class="num">% KH</th><th class="num">% TT</th><th class="num">SPI</th><th class="num">Chậm</th><th class="num">Trễ</th></tr></thead>
       <tbody>${deptRows || '<tr><td colspan="8" class="muted">—</td></tr>'}</tbody></table></div></section>
   </div>`;
   bindDept(body, project, prefKey);
   bindSetup(body, project, d);
+  // Chọn giai đoạn (lộ trình, ‹ ›, "Về giai đoạn đang làm"): vẽ lại tại chỗ rồi cuộn mượt tới phần chi tiết, không tải lại cả trang.
+  if (scroll) {
+    const head = $('.sp-head', body);
+    head?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    $('[data-testid="sp-title"]', body)?.focus({ preventScroll: true });
+  }
 }
+const GUIDE_KEY = 'sp:guideOk'; // "Đã hiểu" ở banner giai đoạn gợi ý — nhớ theo người dùng
 
-// ---------- Thiết lập sprint (PMO) ----------
+// ---------- Thiết lập giai đoạn (PMO) ----------
 function bindSetup(body, project, d) {
   const btn = $('[data-sp-setup]', body);
   if (!btn) return;
   btn.onclick = async () => {
     if (!d) { try { d = await api(`/api/projects/${project.id}/mtl-sprints`); } catch (error) { toast(errorMessage(error), 'err'); return; } }
-    const modal = openModal(`<h2>Thiết lập sprint — ${esc(project.name)}</h2><form>
-      <p class="muted sm">Mỗi dòng một sprint, theo thứ tự: <b>Tên sprint | các bước | mục tiêu (không bắt buộc)</b>. Các bước ghi khoảng hoặc danh sách: <code>1-9</code>, <code>10-12</code>, <code>II.1-II.8</code>, <code>13, 14, 16</code>. Cũng có thể ghi <code>Chuyển nhượng DA (B1–9)</code>.
-        Việc con của MTL bộ phận tự thuộc sprint của bước tổng. Để trống rồi lưu = dùng sprint gợi ý theo mốc.</p>
+    const modal = openModal(`<h2>Thiết lập giai đoạn — ${esc(project.name)}</h2><form>
+      <p class="muted sm">Mỗi dòng một giai đoạn, theo thứ tự: <b>Tên giai đoạn | các bước | mục tiêu (không bắt buộc)</b>. Các bước ghi khoảng hoặc danh sách: <code>1-9</code>, <code>10-12</code>, <code>II.1-II.8</code>, <code>13, 14, 16</code>. Cũng có thể ghi <code>Chuyển nhượng DA (B1–9)</code>.
+        Việc con của MTL bộ phận tự thuộc giai đoạn của bước tổng. Để trống rồi lưu = dùng giai đoạn gợi ý theo mốc.</p>
       <textarea name="text" rows="10" class="sp-text" spellcheck="false" data-testid="sp-setup-text" placeholder="Chuyển nhượng DA | 1-9 | SPV kế thừa CĐT, có QSDĐ&#10;Đề xuất NƠXH → CTĐT | 10-12 | Có QĐ chấp thuận CTĐT + giao CĐT&#10;Phân kỳ 2 | II.1-II.8">${esc(d.configured ? d.text : '')}</textarea>
       ${!d.configured && d.text ? `<p class="muted xs">Gợi ý hiện tại (theo mốc <svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> đường găng) — <button type="button" class="link-btn" data-fill>chép vào ô để sửa</button></p>` : ''}
       <p class="error" id="spErr"></p>
@@ -152,7 +161,7 @@ function bindSetup(body, project, d) {
       e.preventDefault();
       try {
         const r = await api(`/api/projects/${project.id}/mtl-sprints`, { method: 'PUT', body: { text: form.text.value } });
-        closeModal(); toast(r.sprints ? `Đã lưu ${r.sprints} sprint${r.unassigned.length ? ` — còn ${r.unassigned.length} bước chưa xếp` : ''}` : 'Đã bỏ thiết lập — dùng sprint gợi ý', 'ok');
+        closeModal(); toast(r.sprints ? `Đã lưu ${r.sprints} giai đoạn${r.unassigned.length ? ` — còn ${r.unassigned.length} bước chưa xếp` : ''}` : 'Đã bỏ thiết lập — dùng giai đoạn gợi ý', 'ok');
         invalidateMtl(); replaceHashParams({ s: null }); await drawMtlSprint(body, project, paramsNow());
       } catch (error) { $('#spErr', modal).textContent = errorMessage(error); }
     };
@@ -161,7 +170,14 @@ function bindSetup(body, project, d) {
 function bindDept(body, project, prefKey) {
   body.onclick = e => {
     const c = e.target.closest('[data-dept]');
-    if (c) { const v = c.dataset.dept; uiPref(prefKey, v || null); replaceHashParams({ dept: v || null }); drawMtlSprint(body, project, paramsNow()); }
+    if (c) { const v = c.dataset.dept; uiPref(prefKey, v || null); replaceHashParams({ dept: v || null }); noteHashWritten(); drawMtlSprint(body, project, paramsNow()); return; }
+    if (e.target.closest('[data-sp-guide-ok]')) { uiPref(GUIDE_KEY, true); e.target.closest('.sp-note')?.remove(); return; }
+    const go = e.target.closest('[data-sp-go]');
+    if (go && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
+      e.preventDefault();
+      replaceHashParams({ s: go.dataset.spGo, item: null }); noteHashWritten();
+      drawPhases(body, project, paramsNow(), body.querySelector('.sp-modes')?.outerHTML || '', { scroll: true }).catch(error => toast(errorMessage(error), 'err'));
+    }
   };
 }
 

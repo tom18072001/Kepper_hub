@@ -3,7 +3,7 @@
 const { fail, optionalInt } = require('../lib/http');
 const { visibleProjectsWhere, itemVisibleWhere, dashboardScope } = require('../services/access');
 const { permissionScope } = require('../lib/permissions');
-const { departmentOf, departmentWhere, isOpen, isOverdue, vnDay } = require('../services/stats');
+const { departmentOf, departmentWhere, isOpen, isOverdue, vnDay, outsideScope, scopeNote } = require('../services/stats');
 
 const DAY = 86_400_000;
 function weekStart(date) {
@@ -89,10 +89,25 @@ module.exports = function mountDashboard(app, { prisma, auth }) {
     const departments = await prisma.department.findMany({ where: { id: { in: deptIds } }, select: { id: true, name: true } });
     const pendingApprovals = items.length ? await prisma.approvalRequest.count({ where: { status: 'PENDING', workItemId: { in: items.map(i => i.id) } } }) : 0;
     const summary = summarize(items, { departments, projects });
+    // Việc đang mở người trong phòng chủ trì / phối hợp nhưng phòng khác chủ trì: không tính vào số liệu phòng (services/stats.js), chỉ báo số.
+    let outside = 0;
+    if (unit != null) {
+      const people = { where: { user: { departmentId: unit } } };
+      const other = await prisma.workItem.findMany({
+        where: { archivedAt: null, projectId: { in: projects.map(p => p.id) }, state: { category: { notIn: ['COMPLETED', 'CANCELLED'] } },
+          AND: [itemVisibleWhere(req.user), { NOT: departmentWhere(unit) }, { OR: [{ assignees: { some: people.where } }, { supporters: { some: people.where } }] }] },
+        select: { leadDepartmentId: true, project: { select: { departmentId: true } }, state: { select: { category: true } },
+          assignees: { select: { user: { select: { departmentId: true } } } }, supporters: { select: { user: { select: { departmentId: true } } } } },
+        take: 2000,
+      });
+      outside = outsideScope(other, unit);
+    }
+    const unitName = unit != null ? (await prisma.department.findUnique({ where: { id: unit }, select: { name: true } }))?.name || '' : '';
     // Khối lượng việc theo TÊN từng người là dữ liệu cá nhân: chỉ người có quyền duyệt (trưởng phòng trở lên) mới xem.
     const peopleVisible = !!permissionScope(req.user, 'work.approve', 'OPERATE');
     if (!peopleVisible) summary.workload = [];
-    res.json({ scope, departmentId: scope === 'UNIT' ? req.user.departmentId ?? null : departmentId, generatedAt: new Date(), pendingApprovals, peopleVisible, ...summary });
+    res.json({ scope, departmentId: scope === 'UNIT' ? req.user.departmentId ?? null : departmentId, generatedAt: new Date(), pendingApprovals, peopleVisible, ...summary,
+      outsideScope: outside, scopeNote: scopeNote({ scope, departmentId: unit, deptName: unitName, outside }) });
   });
 };
 module.exports.summarize = summarize;

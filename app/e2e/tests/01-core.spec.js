@@ -105,8 +105,9 @@ test('4. Kanban: tạo việc (form + thêm nhanh), kéo-thả giữa các cột
   await page.getByTestId('create-priority').selectOption('HIGH');
   await page.getByTestId('create-start').fill(vnDate(0));
   await page.getByTestId('create-due').fill(vnDate(2));
-  await page.getByTestId('multi-assignees').click();
-  await page.locator('[data-multi="assignees"] label', { hasText: 'Đỗ Thị Bình' }).locator('input').check();
+  // Chủ trì: một người, chọn theo phòng ban; người tạo tự nhận bằng "Giao cho tôi" (đợt B review UX).
+  await page.getByTestId('create-assign-me').click();
+  await expect(page.getByTestId('create-lead').locator('option:checked')).toHaveText('Đỗ Thị Bình (tôi)');
   await page.getByTestId('create-submit').click();
   await toast(page, 'Đã tạo SK-1');
   await expect(card(page, 'SK-1')).toContainText('CAO');
@@ -173,11 +174,14 @@ test('5. Chi tiết việc: mô tả, checklist, việc con, đính kèm (chặn
   await toast(page, 'Nội dung tệp không khớp');
   await expect(panel.getByTestId('attachments')).not.toContainText('gia-mao.pdf');
 
+  // Tệp, văn bản, sản phẩm nằm ở tab "Kết quả & tài liệu"; bình luận, lịch sử ở tab "Trao đổi".
+  await panel.getByTestId('ip-tab-results').click();
   const downloadPromise = page.waitForEvent('download');
   await panel.getByTestId('download-bao-gia-hoi-truong.pdf').click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe('bao-gia-hoi-truong.pdf');
 
+  await panel.getByTestId('ip-tab-talk').click();
   await panel.getByTestId('comment-input').fill('@tp.kinhdoanh nhờ anh/chị xem báo giá giúp em');
   await panel.getByTestId('comment-submit').click();
   await expect(panel.getByTestId('comments')).toContainText('nhờ anh/chị xem báo giá');

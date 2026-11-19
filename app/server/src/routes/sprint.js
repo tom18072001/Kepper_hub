@@ -23,8 +23,13 @@ const rank = i => [i.done ? 1 : 0, ATTN.includes(i.status) ? 0 : 1, i.critical |
 const byRank = (a, b) => { const x = rank(a), y = rank(b); for (let k = 0; k < x.length; k++) if (x[k] !== y[k]) return x[k] - y[k]; return a.id - b.id; };
 const vnDate = d => { if (!d) return null; const x = new Date(new Date(d).getTime() + 7 * 3_600_000); return `${String(x.getUTCDate()).padStart(2, '0')}/${String(x.getUTCMonth() + 1).padStart(2, '0')}/${x.getUTCFullYear()}`; };
 
+// Luồng duyệt trên thẻ: hoàn thành luôn qua "Chờ duyệt" (người giao duyệt, services/task-rules.js), trừ khi dự án thiếu cột nhóm REVIEW.
+// inReview: việc đang chờ duyệt — thẻ hiện "Chờ duyệt" thay cho tình trạng tiến độ (vd. "Vượt tiến độ" khi đã 100%).
+const reviewBits = (i, hasReview) => ({ stateId: i.stateId, inReview: i.state?.category === 'REVIEW', needsApproval: !!hasReview && !M.isDone(i) });
+const hasReviewState = (prisma, projectId) => prisma.workflowState.count({ where: { projectId, category: 'REVIEW' } }).then(n => n > 0);
+
 // Một hạng mục trên thẻ sprint: chỉ trường cần hiển thị.
-function card(i, { sprint, project, deptName, byId, sprintNameOf, canProgress }) {
+function card(i, { sprint, project, deptName, byId, sprintNameOf, canProgress, hasReview = true }) {
   const parent = i.parentId ? byId.get(i.parentId) : null;
   const target = M.sprintTarget(i, sprint);
   const done = M.isDone(i);
@@ -35,15 +40,15 @@ function card(i, { sprint, project, deptName, byId, sprintNameOf, canProgress })
     progressAt: i.progressAt, completedAt: i.completedAt, done, targetFrom: target.from, targetTo: target.to,
     carriedFrom: !done && i.baselineEnd < sprint.start ? M.currentT(project.t0Date, i.baselineEnd) : null,
     parentCode: parent?.planCode || null, parentTitle: parent?.title || null, sprintName: sprintNameOf ? sprintNameOf(i) : null,
-    canProgress: canProgress ? canProgress(i) : false,
+    canProgress: canProgress ? canProgress(i) : false, ...reviewBits(i, hasReview),
   };
 }
 // Một dòng trong chi tiết sprint (bước tổng và dòng con MTL bộ phận).
-const row = (i, depth, deptName, canProgress) => ({ canProgress: canProgress ? canProgress(i) : false,
+const row = (i, depth, deptName, canProgress, hasReview = true) => ({ canProgress: canProgress ? canProgress(i) : false,
   id: i.id, code: i.code, planCode: i.planCode, title: i.title, depth, children: i.children, parentId: i.parentId,
   leadDepartmentId: i.leadDepartmentId, leadDepartmentName: deptName[i.leadDepartmentId] || '', assignees: i.assignees, critical: i.critical, milestone: i.milestone,
   startT: i.startT, endT: i.endT, baselineStart: i.baselineStart, baselineEnd: i.baselineEnd, actual: i.actual, planned: i.planned, status: i.status, statusLabel: i.statusLabel,
-  variance: i.variance, lateDays: i.lateDays, daysLeft: i.daysLeft, progressAt: i.progressAt, completedAt: i.completedAt, done: M.isDone(i),
+  variance: i.variance, lateDays: i.lateDays, daysLeft: i.daysLeft, progressAt: i.progressAt, completedAt: i.completedAt, done: M.isDone(i), ...reviewBits(i, hasReview),
 });
 
 // Ai được bấm cập nhật % trên thẻ (lib/policy.js mtl.progress): việc lá không dùng checklist; người được giao,
@@ -87,7 +92,8 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
       for (const i of members) if (i.parentId && ids.has(i.parentId)) { if (!kids.has(i.parentId)) kids.set(i.parentId, []); kids.get(i.parentId).push(i); }
       const order = (a, b) => S.compareSteps(a.planCode || '', b.planCode || '') || a.id - b.id;
       const canProgress = await progressRule(prisma, req.user, rights, items);
-      const walk = (list, depth) => { for (const i of [...list].sort(order)) { rows.push(row(i, depth, dept.name, canProgress)); walk(kids.get(i.id) || [], depth + 1); } };
+      const hasReview = await hasReviewState(prisma, project.id);
+      const walk = (list, depth) => { for (const i of [...list].sort(order)) { rows.push(row(i, depth, dept.name, canProgress, hasReview)); walk(kids.get(i.id) || [], depth + 1); } };
       walk(members.filter(i => !(i.parentId && ids.has(i.parentId))), 0);
       byDepartment = dept.rows.map(d => {
         const mine = members.filter(i => i.leadDepartmentId === d.id);
@@ -98,6 +104,8 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
       project: { id: project.id, key: project.key, name: project.name, t0Date: project.t0Date, currentT: curT, totalT: lastT },
       configured: sp.configured, text: S.sprintText(sp.plan), unassigned: sp.unassigned, errors: sp.configured ? sp.errors : [],
       sprints: sp.list, current: sp.current, selected: k, rows, byDepartment, canEdit: rights.canEdit, canManage: rights.canManage, generatedAt: now,
+      // Giai đoạn của từng hạng mục người xem thấy được (id → chỉ số): Bảng / Danh sách gom theo giai đoạn, form tạo việc chọn giai đoạn.
+      membership: Object.fromEntries([...items].filter(i => sp.indexOf.get(i.id) != null).map(i => [i.id, sp.indexOf.get(i.id)])),
     });
   });
 
@@ -106,7 +114,7 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
     const { project } = await loadProject(prisma, req.user, intParam(req.params.id), 'manage');
     if (project.kind !== 'MTL') fail(422, 'Dự án này không theo Master Timeline', 'NOT_MTL');
     const raw = String(req.body?.text ?? '');
-    if (raw.length > 10_000) fail(422, 'Thiết lập sprint quá dài', 'TOO_LONG');
+    if (raw.length > 10_000) fail(422, 'Thiết lập giai đoạn quá dài', 'TOO_LONG');
     const { sprints, errors } = S.parseSprintText(raw);
     if (errors.length) fail(422, errors.slice(0, 5).join(' · '), 'SPRINT_INVALID');
     const all = await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null }, select: { id: true, planCode: true, parentId: true } });
@@ -139,7 +147,7 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
     const dept = await departmentsMap();
     const byId = new Map(items.map(i => [i.id, i]));
     const leaves = M.leavesOf(items).filter(i => i.status !== 'CANCELLED');
-    const ctx = { sprint, project, deptName: dept.name, byId, sprintNameOf, canProgress: await progressRule(prisma, req.user, rights, items) };
+    const ctx = { sprint, project, deptName: dept.name, byId, sprintNameOf, canProgress: await progressRule(prisma, req.user, rights, items), hasReview: await hasReviewState(prisma, project.id) };
     const lanes = { due: [], running: [], next: [] };
     for (const i of leaves) {
       const lane = M.sprintLane(i, sprint, next, { current: state === 'CURRENT' });
@@ -197,7 +205,7 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
       const t = Math.max(0, M.currentT(p.t0Date, now));
       const sprint = M.sprintOf(p.t0Date, t), next = M.sprintOf(p.t0Date, t + 1);
       const byId = new Map(items.map(i => [i.id, i]));
-      const ctx = { sprint, project: p, deptName: dept.name, byId, sprintNameOf: S.buildSprints(p, items, actualOf, now, cfg).nameOf, canProgress: await progressRule(prisma, req.user, rights, items) };
+      const ctx = { sprint, project: p, deptName: dept.name, byId, sprintNameOf: S.buildSprints(p, items, actualOf, now, cfg).nameOf, canProgress: await progressRule(prisma, req.user, rights, items), hasReview: await hasReviewState(prisma, p.id) };
       const rows = [];
       for (const i of M.leavesOf(items)) {
         if (i.status === 'CANCELLED') continue;

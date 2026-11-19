@@ -4,20 +4,22 @@ import { api, download, ApiError } from '../api.js';
 import { store, can, labelsFor, createProjectLabel, deptName, userById } from '../store.js';
 import { scheduleFields, bindSchedule, readSchedule } from './recurring-form.js';
 import { drawRegister, openPlanImport, openRegisterImport, exportRegister, REG_DL, registerFull, setRegisterFull } from './register.js';
-import { $, $$, esc, avatars, labelChip, prioChip, stateChip, fmtDate, dueClass, PRIORITY, toast, openModal, closeModal, multiSelect, readMulti, bindMulti, formData, fromDateInput, confirmDialog, errorMessage, dateInput, deadlineStatus, uiPref, replaceHashParams, debounce } from '../util.js';
+import { $, $$, esc, avatars, labelChip, prioChip, stateChip, fmtDate, dueClass, PRIORITY, toast, openModal, closeModal, requestCloseModal, multiSelect, readMulti, bindMulti, formData, fromDateInput, confirmDialog, errorMessage, dateInput, deadlineStatus, uiPref, replaceHashParams, debounce } from '../util.js';
 import { icon } from '../icons.js';
 import { refreshCounters } from '../main.js';
 import { drawCycles, drawIntake, currentCycle } from './project-extra.js';
 import { isLive } from '../realtime.js';
 import { drawGantt } from './gantt.js';
-import { stagePill } from './dispatch-panel.js';
+import { stagePill, sourceOptions, taskTypeOfSource } from './dispatch-panel.js';
 import { calendarHtml, calState, bindCalendar } from './calendar-view.js';
 import { drawMtlOverview, drawMtlPlan, mtlActions, bindMtlActions, invalidateMtl } from './mtl.js';
 import { drawMtlSprint } from './sprint.js';
 
 const VIEWS = [['board', 'Bảng'], ['register', 'Sổ giao việc'], ['list', 'Danh sách'], ['calendar', 'Lịch'], ['timeline', 'Tiến độ kế hoạch'], ['cycles', 'Chu kỳ'], ['intake', 'Tiếp nhận']];
-// Dự án theo Master Timeline: Tổng quan (Dashboard) + Kế hoạch & Gantt đứng đầu; Kanban / danh sách / lịch để cowork theo hạng mục.
-const MTL_VIEWS = [['sprint', 'Sprint'], ['mtl', 'Tổng quan dự án'], ['plan', 'Kế hoạch & Gantt'], ['board', 'Bảng'], ['list', 'Danh sách'], ['calendar', 'Lịch']];
+// Dự án theo Master Timeline: Tổng quan dự án đứng đầu và là tab mặc định (lãnh đạo xem tổng quan trước), rồi Giai đoạn, Kế hoạch & Gantt;
+// Kanban / danh sách để cowork theo hạng mục. Lịch ít giá trị với dự án nhiều năm → nằm trong menu "Khác" (link ?view=calendar vẫn mở được).
+const MTL_VIEWS = [['mtl', 'Tổng quan dự án'], ['sprint', 'Giai đoạn'], ['plan', 'Kế hoạch & Gantt'], ['board', 'Bảng'], ['list', 'Danh sách']];
+const MTL_MORE_VIEWS = [['calendar', 'Lịch']];
 const VIEW_LABEL = Object.fromEntries(VIEWS);
 const ITEM_VIEWS = ['board', 'register', 'list', 'calendar', 'timeline'];
 // Khoá bộ lọc → tham số URL. Chỉ id và mã (riêng q là từ khoá tìm); không chứa nội dung việc.
@@ -26,7 +28,7 @@ const KEYS = Object.keys(PARAMS);
 const KEY_OF = Object.fromEntries(Object.entries(PARAMS).map(([k, p]) => [p, k]));
 const FACETS = ['assignee', 'dept', 'type', 'stage', 'priority', 'label', 'cycle', 'source', 'plan', 'assigner']; // nằm trong "Thêm bộ lọc"
 const EMPTY_FILTERS = () => Object.fromEntries(KEYS.map(k => [k, '']));
-const LANES = ['none', 'assignee', 'priority'];
+const LANES = ['none', 'assignee', 'priority', 'sprint']; // sprint = theo giai đoạn (chỉ dự án MTL)
 const STAGES = { PENDING_ACCEPT: 'Chờ phòng tiếp nhận', TODO: 'Chưa bắt đầu', DOING: 'Đang thực hiện', RETURNED: 'Bị trả lại', WAIT_DEPT: 'Chờ phòng duyệt', WAIT_BGD: 'Chờ BGĐ cho ý kiến', WAIT_APPROVAL: 'Chờ duyệt', DONE: 'Hoàn thành', CANCELLED: 'Huỷ' };
 const ATTENTION = ['PENDING_ACCEPT', 'RETURNED', 'WAIT_DEPT', 'WAIT_BGD']; // khâu cần chú ý: hiện trên thẻ và danh sách
 const DL_LABEL = Object.fromEntries(REG_DL.filter(([k]) => k));
@@ -57,6 +59,12 @@ function setParam(key, value) {
 const hashKey = () => { const [path, query = ''] = location.hash.split('?'); const p = new URLSearchParams(query); p.delete('item'); p.delete('focus'); return path + '?' + p.toString(); };
 let writtenKey = '';
 const isAssigned = () => current.project?.visibility === 'ASSIGNED';
+const isMtl = () => current.project?.kind === 'MTL';
+// Bảng dự án MTL mặc định chia làn theo giai đoạn (cột dài 44 thẻ không phải cuộn trong một cột hẹp).
+const defaultLanes = () => (isMtl() ? 'sprint' : 'none');
+const laneOk = v => LANES.includes(v) && (v !== 'sprint' || isMtl());
+// Bộ lọc ghi URL bằng replaceState (router không biết): trang con (tab Giai đoạn) đổi tham số thì báo để lần mở việc kế tiếp không vẽ lại cả trang.
+export function noteHashWritten() { writtenKey = hashKey(); }
 const personWord = () => (isAssigned() ? 'Người chủ trì' : 'Người nhận');
 const prefKey = what => `proj:${current.project.id}:${what}`;
 const viewOf = () => $('#viewBody', current.root)?.dataset.view || 'board';
@@ -66,9 +74,14 @@ export async function renderProject(root, id, params, setCrumbs, stillCurrent) {
   const [project, itemsRes, cycles, views, plans] = await Promise.all([api(`/api/projects/${id}`), api(`/api/projects/${id}/items`, { raw: true }), api(`/api/projects/${id}/cycles`), api(`/api/projects/${id}/views`), api(`/api/projects/${id}/plans`)]);
   const items = await itemsRes.json();
   current.totalCount = Number(itemsRes.headers.get('x-total-count')) || null;
+  // MTL: phạm vi tạo việc (N2 — nhân viên không thấy "Tạo việc" rồi mới bị từ chối) và giai đoạn của từng hạng mục (Bảng / Danh sách gom theo giai đoạn).
+  const [createScope, phases] = project.kind === 'MTL'
+    ? await Promise.all([api(`/api/projects/${id}/create-scope`).catch(() => null), api(`/api/projects/${id}/mtl-sprints`).catch(() => null)]) : [null, null];
   if (!stillCurrent()) return;
   closePop(false);
-  Object.assign(current, { project, items, cycles, views, plans, root, params });
+  // Vẽ lại cả trang (vào dự án, đổi tab, liên kết): số liệu MTL luôn mới — bộ nhớ đệm ngắn chỉ để mở / đóng panel việc.
+  invalidateMtl();
+  Object.assign(current, { project, items, cycles, views, plans, root, params, createScope, phases });
   const fromUrl = readFilters(params);
   if (fromUrl) persist(); // mở từ liên kết cũng là "bộ lọc cuối" của tôi trong dự án này
   const showIntake = false; // "Gửi yêu cầu / Tiếp nhận" đã bỏ khỏi giao diện (GĐ3f)
@@ -76,25 +89,27 @@ export async function renderProject(root, id, params, setCrumbs, stillCurrent) {
   const freeBoard = project.visibility !== 'ASSIGNED' && project.states.every(s => s.category === 'OTHER');
   const mtl = project.kind === 'MTL';
   const tabs = mtl ? MTL_VIEWS : VIEWS.filter(([k]) => (k !== 'intake' || showIntake) && k !== 'register' && !(freeBoard && ['timeline', 'cycles'].includes(k)));
-  const view = tabs.some(([k]) => k === params.get('view')) ? params.get('view') : mtl ? 'sprint' : 'board';
+  const view = [...tabs, ...(mtl ? MTL_MORE_VIEWS : [])].some(([k]) => k === params.get('view')) ? params.get('view') : mtl ? 'mtl' : 'board';
+  // Đang xem Lịch (mở từ menu "Khác"): hiện thêm tab Lịch để người dùng biết mình đang ở đâu.
+  const shownTabs = mtl && MTL_MORE_VIEWS.some(([k]) => k === view) ? [...tabs, ...MTL_MORE_VIEWS.filter(([k]) => k === view)] : tabs;
   const itemView = ITEM_VIEWS.includes(view);
   setCrumbs(`<span class="muted">${esc(project.department.name)} /</span> ${esc(project.name)} <span class="code">${esc(project.key)}</span>`);
   const r = project.rights;
-  const canCreate = r.canEdit && (project.visibility !== 'ASSIGNED' || r.canManage || r.memberRole);
+  const canCreate = r.canEdit && (project.visibility !== 'ASSIGNED' || r.canManage || r.memberRole) && (!mtl || canCreateMtl());
   const steps = project.approvalSteps.map(s => s.name).join(' → ');
   root.innerHTML = `<div class="proj">
     <div class="page-head">
       <div class="ph-title"><h1>${esc(project.name)}</h1><span class="live hidden" id="liveDot" title="Đang cập nhật trực tiếp">Trực tiếp</span></div>
       <div class="ph-actions">
         ${(() => { const items = `${r.canManage ? `<a class="menu-item" href="#/projects/${id}/settings" data-testid="project-settings" title="Cài đặt dự án">${icon('settings')}<span>Cài đặt</span></a>` : ''}
-        ${mtl ? mtlActions(project) : ''}
+        ${mtl ? `${MTL_MORE_VIEWS.map(([k, label]) => `<a class="menu-item" role="menuitem" href="${tabHref(k)}" data-view-tab="${k}" data-testid="more-view-${k}">${icon('calendar')}<span>${label}</span></a>`).join('')}${mtlActions(project)}` : ''}
         ${canCreate && !mtl ? `<button class="menu-item" id="importBtn" data-testid="import-excel" title="Nhập danh sách việc từ Excel">${icon('upload')}<span>Nhập</span></button>` : ''}`.trim(); return items ? `<details class="ph-more-menu"><summary class="btn btn-ghost" data-testid="ph-more" aria-label="Thao tác khác" title="Giao nhiều việc, nhập / xuất Excel, cài đặt">${icon('menu')}<span class="t">Khác</span></summary><div class="ph-menu" role="menu">${items}</div></details>` : ''; })()}
         ${canCreate ? `<button class="btn btn-primary" id="newItemBtn" data-testid="new-item" title="Tạo việc (C)" aria-keyshortcuts="C">${icon('plus')}Tạo việc</button>` : ''}
       </div>
     </div>
     ${project.description ? `<div class="ph-desc-wrap"><p class="ph-desc clamp1" id="phDesc">${esc(project.description)}</p><button type="button" class="fx-link ph-more hidden" data-fx="desc" aria-expanded="false" aria-controls="phDesc">Xem thêm</button></div>` : ''}
     <div class="viewbar">
-      <div class="tabs" role="tablist" aria-label="Kiểu xem">${tabs.map(([k, label]) => `<a href="${tabHref(k)}" class="${k === view ? 'active' : ''}" role="tab" aria-selected="${k === view}" data-view-tab="${k}" data-testid="view-${k}">${label}</a>`).join('')}</div>
+      <div class="tabs" role="tablist" aria-label="Kiểu xem">${shownTabs.map(([k, label]) => `<a href="${tabHref(k)}" class="${k === view ? 'active' : ''}" role="tab" aria-selected="${k === view}" data-view-tab="${k}" data-testid="view-${k}">${label}</a>`).join('')}</div>
       ${steps ? `<span class="flow" title="Quy trình duyệt: ${esc(steps)}">${icon('approve')}<b>Duyệt ${project.approvalSteps.length} cấp</b> <span class="flow-steps">${esc(steps)}</span></span>` : ''}
     </div>
     ${itemView ? filterBar(view) : ''}
@@ -132,14 +147,14 @@ function readFilters(params) {
   }
   try { const q = sessionStorage.getItem('workhub_search'); if (q) { f.q = q.slice(0, 100); if (!order.includes('q')) order.push('q'); sessionStorage.removeItem('workhub_search'); } } catch { /* bỏ qua */ }
   if (saved && !current.views.some(v => v.id === saved)) saved = null; // bộ lọc riêng của người khác, hoặc đã xoá
-  const lanes = [params.get('lanes'), linked?.filters?.lanes, uiPref(prefKey('lanes'))].find(v => LANES.includes(v)) || 'none';
+  const lanes = [params.get('lanes'), linked?.filters?.lanes, uiPref(prefKey('lanes'))].find(laneOk) || defaultLanes();
   Object.assign(current, { filters: f, order, saved, restored, lanes });
   return fromUrl;
 }
 function filterParams(view) {
   const out = { view };
   for (const k of KEYS) if (current.filters[k]) out[PARAMS[k]] = current.filters[k];
-  if (current.lanes !== 'none') out.lanes = current.lanes;
+  if (current.lanes !== defaultLanes()) out.lanes = current.lanes;
   if (current.saved) out.saved = current.saved;
   return out;
 }
@@ -150,7 +165,7 @@ function writeUrl() {
   // Hẹn giờ ghi URL có thể chạy sau khi người dùng đã sang trang khác: chỉ ghi khi vẫn đang ở đúng dự án.
   if (!current.root?.isConnected || !new RegExp(`^#/projects/${current.project.id}(\\?|$)`).test(location.hash)) return;
   const upd = {}; for (const k of KEYS) upd[PARAMS[k]] = current.filters[k] || null;
-  Object.assign(upd, { lanes: current.lanes !== 'none' ? current.lanes : null, saved: current.saved || null });
+  Object.assign(upd, { lanes: current.lanes !== defaultLanes() ? current.lanes : null, saved: current.saved || null });
   replaceHashParams(upd);
   writtenKey = hashKey();
   syncTabs();
@@ -162,7 +177,7 @@ function persist() {
   for (const k of KEYS) if (k !== 'q' && current.filters[k]) keep[k] = current.filters[k];
   if (current.saved && Object.keys(keep).length) keep.saved = current.saved;
   uiPref(prefKey('filters'), Object.keys(keep).length ? keep : null);
-  uiPref(prefKey('lanes'), current.lanes !== 'none' ? current.lanes : null);
+  uiPref(prefKey('lanes'), current.lanes !== defaultLanes() ? current.lanes : null);
 }
 function changed({ url = true } = {}) {
   current.restored = false;
@@ -192,8 +207,9 @@ function dlOf(i) {
   if (!s) { s = deadlineStatus({ ...i, state: current.project.states.find(x => x.id === i.stateId) }, soonDays()); dlCache.set(i, s); }
   return s;
 }
-// "Của tôi": việc tôi chủ trì, phối hợp hoặc là người giao.
-const isMine = i => i.assignees.some(a => a.id === store.me.id) || (i.supporters || []).some(a => a.id === store.me.id) || i.assignedById === store.me.id;
+// "Của tôi": việc tôi chủ trì hoặc phối hợp. KHÔNG tính việc tôi là người giao (PMO nhập MTL đứng tên người giao gần như mọi việc
+// → "Của tôi 45/46"); việc tôi giao có chip riêng "Tôi giao", việc chưa có người chủ trì có chip "Chưa giao".
+export const isMine = (i, me = store.me.id) => i.assignees.some(a => a.id === me) || (i.supporters || []).some(a => a.id === me);
 // Trong một lượt vẽ (drawBody), thanh lọc, bộ đếm và bảng cùng gọi filtered() nhiều lần: tính một lần cho mỗi bộ "skip".
 let passCache = null;
 function filtered(skip = []) {
@@ -268,7 +284,9 @@ const activeKeys = () => [...current.order.filter(k => current.filters[k]), ...K
 // Bộ lọc không có nút riêng ngoài thanh (chip nhanh, ô tìm) thì hiện thành chip đang áp.
 function appliedKeys(view) {
   const quickDl = view === 'register' || ['OVERDUE', 'DUE_SOON'].includes(current.filters.dl);
-  return activeKeys().filter(k => FACETS.includes(k) || (k === 'dl' && !quickDl));
+  // "Tôi giao" / "Chưa giao" đã có chip nhanh trên thanh: không hiện lại thành chip đang áp.
+  const quick = k => (k === 'assigner' && current.filters.assigner === 'me') || (k === 'assignee' && current.filters.assignee === 'none');
+  return activeKeys().filter(k => (FACETS.includes(k) && !quick(k)) || (k === 'dl' && !quickDl));
 }
 
 // ---------- Thanh lọc ----------
@@ -278,19 +296,19 @@ function filterBar(view) {
       <label class="search-field">${icon('search')}<input type="search" id="fQ" placeholder="Tìm tiêu đề, mã…" aria-label="Tìm trong dự án" aria-keyshortcuts="F" value="${esc(current.filters.q)}" autocomplete="off" data-testid="filter-q"></label>
       <div class="chips fx-quick${view === 'register' ? ' wide' : ''}" id="fxQuick" role="group" aria-label="Lọc nhanh"></div>
       <div class="fx-pop-wrap fx-desk">
-        <button type="button" class="btn btn-ghost btn-sm fx-btn" id="fxMoreBtn" data-pop="fxMore" aria-expanded="false" aria-controls="fxMore" data-testid="filter-more">${I_FILTER}<span id="fxMoreLabel">Thêm bộ lọc</span></button>
+        <button type="button" class="btn btn-ghost btn-sm fx-btn" id="fxMoreBtn" data-pop="fxMore" aria-expanded="false" aria-controls="fxMore" aria-label="Thêm bộ lọc" data-testid="filter-more">${I_FILTER}<span id="fxMoreLabel">Thêm bộ lọc</span></button>
         <div class="fx-pop" id="fxMore" role="dialog" aria-label="Thêm bộ lọc" hidden></div>
       </div>
       <span class="fx-count fx-desk" id="fxCount" role="status" data-testid="filter-count"></span>
       <div class="fx-pop-wrap fx-desk">
-        <button type="button" class="btn btn-ghost btn-sm fx-btn" id="fxSavedBtn" data-pop="fxSaved" aria-haspopup="menu" aria-expanded="false" aria-controls="fxSaved" data-testid="saved-views"></button>
+        <button type="button" class="btn btn-ghost btn-sm fx-btn" id="fxSavedBtn" data-pop="fxSaved" aria-haspopup="menu" aria-expanded="false" aria-controls="fxSaved" aria-label="Bộ lọc đã lưu" data-testid="saved-views"></button>
         <div class="fx-pop fx-right fx-menu" id="fxSaved" role="menu" aria-label="Bộ lọc đã lưu" hidden></div>
       </div>
       ${['board', 'register', 'list'].includes(view) ? `<div class="fx-pop-wrap fx-desk">
-        <button type="button" class="btn btn-ghost btn-sm fx-btn" id="fxDisplayBtn" data-pop="fxDisplay" aria-expanded="false" aria-controls="fxDisplay" data-testid="display-menu">${I_VIEW}Hiển thị</button>
+        <button type="button" class="btn btn-ghost btn-sm fx-btn" id="fxDisplayBtn" data-pop="fxDisplay" aria-expanded="false" aria-controls="fxDisplay" aria-label="Hiển thị: chia làn, việc con, sắp xếp" data-testid="display-menu">${I_VIEW}Hiển thị</button>
         <div class="fx-pop fx-right" id="fxDisplay" role="dialog" aria-label="Hiển thị" hidden>${displayHtml(view, true)}</div>
       </div>` : ''}
-      <button type="button" class="btn btn-ghost btn-sm fx-btn fx-mob" id="fxSheetBtn" data-fx="sheet" aria-haspopup="dialog" data-testid="filter-sheet">${I_FILTER}<span id="fxSheetLabel">Lọc</span></button>
+      <button type="button" class="btn btn-ghost btn-sm fx-btn fx-mob" id="fxSheetBtn" data-fx="sheet" aria-haspopup="dialog" aria-label="Bộ lọc" data-testid="filter-sheet">${I_FILTER}<span id="fxSheetLabel">Lọc</span></button>
     </div>
     <div class="fx-applied" id="fxApplied" hidden></div>
   </div>`;
@@ -299,9 +317,14 @@ function quickHtml(view) {
   const f = current.filters, base = filtered(['dl']);
   const n = Object.fromEntries(REG_DL.map(([k]) => [k, k ? 0 : base.length]));
   for (const i of base) { const c = dlOf(i).code; if (c in n) n[c]++; }
-  const mine = filtered(['mine']).filter(isMine).length;
-  const chip = (attr, on, label, count, cls, testid) => `<button type="button" class="chip${on ? ' on' : ''}${cls}" data-quick-f="${attr}" aria-pressed="${on}" data-testid="${testid}">${esc(label)} <b${count ? '' : ' class="zero"'}>${count}</b></button>`;
-  const head = chip('mine', !!f.mine, 'Của tôi', mine, '', 'filter-mine');
+  const mine = filtered(['mine']).filter(i => isMine(i)).length;
+  const byMe = filtered(['assigner']).filter(i => i.assignedById === store.me.id).length;
+  const none = filtered(['assignee']).filter(i => !i.assignees.length).length;
+  const chip = (attr, on, label, count, cls, testid, title = '') => `<button type="button" class="chip${on ? ' on' : ''}${cls}" data-quick-f="${attr}" aria-pressed="${on}" data-testid="${testid}"${title ? ` title="${esc(title)}"` : ''}>${esc(label)} <b${count ? '' : ' class="zero"'}>${count}</b></button>`;
+  const byOn = f.assigner === 'me', noneOn = f.assignee === 'none';
+  const head = chip('mine', !!f.mine, 'Của tôi', mine, '', 'filter-mine', 'Việc tôi chủ trì hoặc phối hợp')
+    + (byMe || byOn ? chip('by', byOn, 'Tôi giao', byMe, '', 'filter-by-me', 'Việc tôi là người giao') : '')
+    + (none || noneOn ? chip('none', noneOn, 'Chưa giao', none, '', 'filter-unassigned', `Việc chưa có ${personWord().toLowerCase()}`) : '');
   if (view === 'register') return head + '<span class="fx-sep" aria-hidden="true"></span>' + REG_DL.map(([k, label]) => chip('dl:' + k, f.dl === k, label, n[k], ` chip-${k || 'ALL'}`, `reg-filter-${k || 'ALL'}`)).join('');
   return head + ['OVERDUE', 'DUE_SOON'].map(k => chip('dl:' + k, f.dl === k, DL_LABEL[k], n[k], ` chip-${k}`, `filter-dl-${k}`)).join('');
 }
@@ -357,9 +380,9 @@ function nestRows(rows) {
   return out;
 }
 function displayHtml(view, withIds) {
-  if (view === 'board') return `${subsHtml(withIds)}<label class="field fx-field">Chia làn<select data-display="lanes"${withIds ? ' id="fLanes" data-testid="filter-lanes"' : ''}>${[['none', 'Không chia làn'], ['assignee', 'Theo ' + personWord().toLowerCase()], ['priority', 'Theo ưu tiên']].map(([k, l]) => `<option value="${k}"${current.lanes === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
+  if (view === 'board') return `${subsHtml(withIds)}<label class="field fx-field">Chia làn<select data-display="lanes"${withIds ? ' id="fLanes" data-testid="filter-lanes"' : ''}>${[['none', 'Không chia làn'], ...(isMtl() ? [['sprint', 'Theo giai đoạn']] : []), ['assignee', 'Theo ' + personWord().toLowerCase()], ['priority', 'Theo ưu tiên']].map(([k, l]) => `<option value="${k}"${current.lanes === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
   if (view === 'register') return `<label class="check sm fx-check"><input type="checkbox" data-display="full"${withIds ? ' id="regFull" data-testid="reg-full"' : ''}${registerFull() ? ' checked' : ''}> Hiện đủ cột</label><p class="muted xs fx-hint">Thêm Sản phẩm đã có, Kết quả / khó khăn, Đánh giá, Ghi chú.</p>`;
-  if (view === 'list') return `${subsHtml(withIds)}<label class="field fx-field">Sắp xếp<select data-display="sort"${withIds ? ' id="fSort"' : ''}>${SORT_OPTS().map(([k, l]) => `<option value="${k}"${current.sort.key === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
+  if (view === 'list') return `${subsHtml(withIds)}${isMtl() && current.phases?.sprints?.length ? `<label class="check sm fx-check"><input type="checkbox" data-display="group"${withIds ? ' id="fGroup" data-testid="filter-group-phase"' : ''}${listGrouped() ? ' checked' : ''}> Gom theo giai đoạn</label>` : ''}<label class="field fx-field">Sắp xếp<select data-display="sort"${withIds ? ' id="fSort"' : ''}>${SORT_OPTS().map(([k, l]) => `<option value="${k}"${current.sort.key === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
     <label class="check sm fx-check"><input type="checkbox" data-display="desc"${current.sort.dir < 0 ? ' checked' : ''}> Giảm dần</label>`;
   return '';
 }
@@ -367,7 +390,7 @@ const savedView = () => current.views.find(v => v.id === current.saved) || null;
 // Bộ lọc đang khác bộ lọc đã lưu (so với những gì máy chủ đã lưu).
 function savedDirty(v) {
   const vf = v.filters || {};
-  return KEYS.some(k => (current.filters[k] || '') !== String(vf[k] ?? '')) || current.lanes !== (vf.lanes || 'none');
+  return KEYS.some(k => (current.filters[k] || '') !== String(vf[k] ?? '')) || current.lanes !== (laneOk(vf.lanes) ? vf.lanes : defaultLanes());
 }
 function savedBtnHtml() {
   const v = savedView();
@@ -405,6 +428,8 @@ function syncControls() {
   $('#fxSheetBtn', bar).classList.toggle('on', hidden > 0);
   $('#fxCount', bar).textContent = isActive() ? `${filtered().length}/${current.items.length} việc` : `${current.items.length} việc`;
   $('#fxSavedBtn', bar).innerHTML = savedBtnHtml();
+  $('#fxSavedBtn', bar).setAttribute('aria-label', savedView() ? `Bộ lọc đã lưu: ${savedView().name}` : 'Bộ lọc đã lưu');
+  $('#fxMoreBtn', bar).setAttribute('aria-label', n ? `Thêm bộ lọc, đang áp ${n}` : 'Thêm bộ lọc');
   for (const sel of $$('[data-facet]', bar)) { sel.value = current.filters[sel.dataset.facet]; sel.classList.toggle('set', !!sel.value); }
   if (had && !bar.contains(document.activeElement)) [$(had, bar), $('#fxMoreBtn', bar), $('#fxSheetBtn', bar), $('#fQ', bar)].find(el => el?.getClientRects().length)?.focus();
 }
@@ -460,6 +485,8 @@ function bindPage(page) {
     if (t.dataset.quickF) {
       const [k, v = ''] = t.dataset.quickF.split(':');
       if (k === 'mine') return setFilter('mine', current.filters.mine ? '' : '1');
+      if (k === 'by') return setFilter('assigner', current.filters.assigner === 'me' ? '' : 'me');
+      if (k === 'none') return setFilter('assignee', current.filters.assignee === 'none' ? '' : 'none');
       return setFilter('dl', viewOf() === 'register' ? v : current.filters.dl === v ? '' : v);
     }
     if (t.dataset.fxClear) { const inBody = t.closest('#viewBody'); setFilter(t.dataset.fxClear, ''); if (inBody) focusAfterEmpty(); return; }
@@ -492,7 +519,8 @@ function bindPage(page) {
 function focusAfterEmpty() { ($('#viewBody .kcard, #viewBody tr[data-id], #viewBody .cal-item', current.root) || $('#fQ', current.root))?.focus(); }
 function setDisplay(what, value) {
   if (what === 'subs') { uiPref('subtasks', value === 'flat' ? 'flat' : null); return drawBody(); }
-  if (what === 'lanes') { current.lanes = LANES.includes(value) ? value : 'none'; persist(); writeUrl(); return drawBody(); }
+  if (what === 'lanes') { current.lanes = laneOk(value) ? value : 'none'; persist(); writeUrl(); return drawBody(); }
+  if (what === 'group') { uiPref(prefKey('listGroup'), value ? null : 'off'); return drawBody(); }
   if (what === 'full') { setRegisterFull(!!value); return drawBody(); }
   if (what === 'sort') { current.sort = { key: value, dir: current.sort.dir }; return drawBody(); }
   if (what === 'desc') { current.sort = { key: current.sort.key, dir: value ? -1 : 1 }; return drawBody(); }
@@ -546,7 +574,7 @@ function applySavedView(id) {
   closePop(false);
   const f = EMPTY_FILTERS(), order = [];
   for (const k of KEYS) if (v.filters?.[k] != null && v.filters[k] !== '') { f[k] = String(v.filters[k]); order.push(k); }
-  Object.assign(current, { filters: f, order, saved: v.id, restored: false, lanes: LANES.includes(v.filters?.lanes) ? v.filters.lanes : 'none' });
+  Object.assign(current, { filters: f, order, saved: v.id, restored: false, lanes: laneOk(v.filters?.lanes) ? v.filters.lanes : defaultLanes() });
   persist();
   if (ITEM_VIEWS.includes(v.view) && v.view !== viewOf()) location.hash = tabHref(v.view); // kiểu xem của bộ lọc: vẽ lại trang
   else { writeUrl(); drawBody(); }
@@ -630,10 +658,12 @@ export async function reloadProject({ realtime = false, ids = null } = {}) {
     if (current.project?.id !== id) return;
     current.items = [...current.items.filter(i => !ids.includes(i.id)), ...rows].sort((a, b) => a.position - b.position || a.id - b.id);
   } else {
-    const [res, cycles, plans] = await Promise.all([api(`/api/projects/${id}/items`, { raw: true }), api(`/api/projects/${id}/cycles`), api(`/api/projects/${id}/plans`)]);
+    const [res, cycles, plans, phases] = await Promise.all([api(`/api/projects/${id}/items`, { raw: true }), api(`/api/projects/${id}/cycles`), api(`/api/projects/${id}/plans`),
+      // Giai đoạn của từng hạng mục: chỉ Bảng / Danh sách cần (chia làn, gom nhóm) — các tab khác giữ bản đã tải.
+      isMtl() && ['board', 'list'].includes(viewOf()) ? api(`/api/projects/${id}/mtl-sprints`).catch(() => current.phases) : current.phases]);
     const items = await res.json();
     if (current.project?.id !== id) return;
-    Object.assign(current, { items, cycles, plans, totalCount: Number(res.headers.get('x-total-count')) || null });
+    Object.assign(current, { items, cycles, plans, phases, totalCount: Number(res.headers.get('x-total-count')) || null });
   }
   // Người dùng bắt đầu thao tác trong lúc đang tải: giữ dữ liệu mới, vẽ lại khi họ xong.
   if (userBusy()) { deferredReload = true; return; }
@@ -693,7 +723,7 @@ function cardHtml(i) {
       ${i.progress && i.progress < 100 ? `<span title="Tiến độ" class="card-progress"><span class="bar-mini"><i style="width:${i.progress}%"></i></span>${i.progress}%</span>` : ''}
       ${c.checklistTotal ? `<span title="Checklist" data-meta="checklist">${icon('checklist')}${c.checklistDone}/${c.checklistTotal}</span>` : ''}
       ${c.comments ? `<span title="Bình luận" data-meta="comments">${icon('comment')}${c.comments}</span>` : ''}${c.attachments ? `<span title="Tệp đính kèm" data-meta="attachments">${icon('clip')}${c.attachments}</span>` : ''}
-      <span class="push">${avatars(i.assignees)}</span>
+      <span class="push card-who">${whoHtml(i)}</span>
     </div>${subMode() === 'nest' && openKids.has(i.id) && boardKids.has(i.id) ? kidList(i) : ''}</article>`;
 }
 // Bảng, chế độ lồng: việc con có việc cha cùng hiện trên bảng thì nằm trong thẻ việc cha (mở bằng nút x/y việc con).
@@ -702,7 +732,32 @@ function kidList(i) {
   const states = Object.fromEntries(current.project.states.map(s => [s.id, s]));
   return `<ul class="kid-list" data-testid="kid-list-${esc(i.code)}">${boardKids.get(i.id).map(k => `<li><a href="${openItemHrefFor(k.id)}" data-kid="${k.id}" data-testid="kid-${esc(k.code)}"><span class="state-dot" style="background:${esc(states[k.stateId]?.color || '#64748b')}" title="${esc(states[k.stateId]?.name || '')}"></span><span class="code">${esc(k.code)}</span> <span class="grow">${esc(k.title)}</span></a>${kidsChip(k)}</li>`).join('')}</ul>`;
 }
+// Người chủ trì trên thẻ: ảnh / chữ viết tắt + tên gọi; chưa có người thì ghi bộ phận chủ trì (MTL) hoặc "Chưa giao".
+const givenName = u => String(u?.fullName || '').trim().split(/\s+/).pop() || '';
+function whoHtml(i) {
+  if (i.assignees.length) return `${avatars(i.assignees)}<span class="who-name" title="${esc(i.assignees.map(a => a.fullName).join(', '))}">${esc(givenName(i.assignees[0]))}${i.assignees.length > 1 ? ` +${i.assignees.length - 1}` : ''}</span>`;
+  return `<span class="who-none" title="Chưa có ${esc(personWord().toLowerCase())}">${esc(i.leadDepartmentId && isMtl() ? deptName(i.leadDepartmentId) : 'Chưa giao')}</span>`;
+}
+// Giai đoạn của hạng mục MTL (theo lộ trình giai đoạn; việc con theo bước tổng).
+// Việc vừa tạo (chưa có trong bảng thành viên lần tải trước) theo giai đoạn của việc cha gần nhất.
+function phaseOf(i) {
+  const m = current.phases?.membership;
+  if (!m) return null;
+  for (let x = i, n = 0; x && n < 20; n++) {
+    if (m[x.id] != null) return m[x.id];
+    x = x.parentId ? current.items.find(j => j.id === x.parentId) : null;
+  }
+  return null;
+}
+const phaseTitle = k => { const s = current.phases?.sprints?.[k]; return s ? `Giai đoạn ${k + 1} · ${s.name}${current.phases.current === k ? ' (đang làm)' : ''}` : 'Chưa xếp giai đoạn'; };
+const listGrouped = () => isMtl() && !!current.phases?.sprints?.length && uiPref(prefKey('listGroup')) !== 'off';
 function lanesOf(items) {
+  if (current.lanes === 'sprint' && current.phases?.sprints?.length) {
+    const lanes = current.phases.sprints.map((s, k) => ({ key: 's' + k, title: phaseTitle(k), items: [] }));
+    const none = { key: 's-none', title: phaseTitle(null), items: [] };
+    for (const i of items) { const k = phaseOf(i); (k != null && lanes[k] ? lanes[k] : none).items.push(i); }
+    return [...lanes, none].filter(l => l.items.length);
+  }
   if (current.lanes === 'assignee') {
     const map = new Map([[0, { key: 0, title: 'Chưa giao', items: [] }]]);
     for (const i of items) for (const a of (i.assignees.length ? i.assignees : [{ id: 0 }])) {
@@ -713,6 +768,14 @@ function lanesOf(items) {
   }
   if (current.lanes === 'priority') return Object.entries(PRIORITY).map(([k, v]) => ({ key: k, title: v.label, items: items.filter(i => i.priority === k) })).filter(l => l.items.length);
   return [{ key: 'all', title: '', items }];
+}
+// "+ Thêm việc" chỉ ở cột việc mới / đang làm: không ở Chờ duyệt, Hoàn thành, Huỷ, cột tự do kiểu "Tạm dừng" (trừ bảng toàn cột tự do).
+// MTL: chỉ người được tạo việc gốc (người quản lý dự án) — người khác thêm việc con trong hạng mục của bộ phận mình.
+function quickAddOk(s, lane) {
+  const { project } = current;
+  if (!project.rights.canEdit || lane.key !== 'all' || ['REVIEW', 'COMPLETED', 'CANCELLED'].includes(s.category)) return false;
+  if (s.category === 'OTHER' && !project.states.every(x => x.category === 'OTHER')) return false;
+  return !isMtl() || !!current.createScope?.root;
 }
 function drawBoard(body) {
   const { project } = current, all = filtered(), ids = new Set(all.map(i => i.id));
@@ -729,7 +792,7 @@ function drawBoard(body) {
         <div class="col-head"><span class="state-dot" style="background:${esc(s.color)}"></span>${esc(s.name)} <span class="count" data-testid="count-${esc(s.name)}">${list.length}</span>
           ${s.wipLimit ? `<span class="wip" title="Giới hạn WIP">${totals[s.id]}/${s.wipLimit}</span>` : ''}</div>
         <div class="col-body" data-state="${s.id}">${list.map(cardHtml).join('')}</div>
-        ${project.rights.canEdit && lane.key === 'all' && !['REVIEW', 'COMPLETED'].includes(s.category) ? `<div class="quick-add"><button data-quick="${s.id}" data-testid="quick-add-${esc(s.name)}">${icon('plus')}Thêm việc</button></div>` : ''}
+        ${quickAddOk(s, lane) ? `<div class="quick-add"><button data-quick="${s.id}" data-testid="quick-add-${esc(s.name)}">${icon('plus')}Thêm việc</button></div>` : ''}
       </section>`;
     }).join('')}</div>`).join('') || '<div class="card empty">Dự án chưa có việc nào.</div>';
   bindBoard(body);
@@ -802,7 +865,7 @@ export async function moveItem(id, stateId, afterId, beforeId, overrideWip = fal
 }
 function showQuickAdd(btn) {
   const wrap = btn.parentElement, stateId = Number(btn.dataset.quick);
-  wrap.innerHTML = `<input placeholder="Tiêu đề việc, Enter để lưu" data-testid="quick-input" maxlength="300">`;
+  wrap.innerHTML = `<input placeholder="Tiêu đề việc, Enter để lưu" data-testid="quick-input" maxlength="300" aria-label="Tiêu đề việc mới">`;
   const input = wrap.querySelector('input');
   input.focus();
   input.addEventListener('keydown', async e => {
@@ -828,17 +891,29 @@ function drawList(body) {
   const { key, dir } = current.sort, states = Object.fromEntries(current.project.states.map(s => [s.id, s]));
   const sorted = filtered().sort((a, b) => { const x = SORTERS[key](a), y = SORTERS[key](b); return (x > y ? 1 : x < y ? -1 : 0) * dir; });
   const nest = subMode() === 'nest';
-  const rows = nest ? nestRows(sorted) : sorted.map(item => ({ item, depth: 0, has: false, orphan: !!item.parentId }));
+  const toRows = list => (nest ? nestRows(list) : list.map(item => ({ item, depth: 0, has: false, orphan: !!item.parentId })));
+  // Gom theo giai đoạn (MTL): mỗi giai đoạn một nhóm, theo thứ tự lộ trình; trong nhóm giữ cách sắp xếp đang chọn.
+  const groups = listGrouped() ? [...current.phases.sprints.map((_, k) => k), null].map(k => ({ k, list: sorted.filter(i => phaseOf(i) === k) })).filter(g => g.list.length) : null;
+  const rows = groups ? groups.flatMap(g => [{ group: g.k, n: g.list.length }, ...toRows(g.list)]) : toRows(sorted);
+  const items = rows.filter(r => r.item).map(r => r.item);
   const fold = r => (r.has ? `<button type="button" class="twisty" data-fold="${r.item.id}" aria-expanded="${!folded.has(r.item.id)}" aria-label="${folded.has(r.item.id) ? 'Mở' : 'Thu gọn'} việc con của ${esc(r.item.code)}" data-testid="fold-${esc(r.item.code)}">${folded.has(r.item.id) ? '▸' : '▾'}</button>` : nest && r.depth ? '<span class="twisty-sp"></span>' : '');
   const th = (k, label) => `<th data-sort="${k}" aria-sort="${key === k ? (dir > 0 ? 'ascending' : 'descending') : 'none'}">${label}${key === k ? icon(dir > 0 ? 'up' : 'down', 'sort') : ''}</th>`;
   // Sổ giao việc: cột Khâu (chờ phòng tiếp nhận, chờ phòng duyệt, chờ BGĐ…). Dự án thường: khâu cần chú ý hiện cạnh tiêu đề.
-  const reg = isAssigned(), cols = reg ? 8 : 7;
+  const reg = isAssigned();
   const stageCell = i => (i.dispatchStatus || i.stage?.code === 'RETURNED' || i.stage?.code?.startsWith('WAIT') ? stagePill(i.stage) : '');
-  body.innerHTML = `<div class="tbl-scroll"><table class="table" data-testid="list-table"><thead><tr>${th('code', 'Mã')}${th('title', 'Tiêu đề')}${th('state', 'Trạng thái')}${reg ? '<th>Khâu</th>' : ''}${th('priority', 'Ưu tiên')}${th('assignee', personWord())}${th('due', 'Hạn')}<th>Nhãn</th></tr></thead>
-    <tbody>${rows.map(r => { const i = r.item; return `<tr class="clickable${r.depth ? ' sub-row' : ''}" data-id="${i.id}" data-depth="${r.depth}" data-testid="row-${esc(i.code)}"><td class="code">${esc(i.code)}</td><td><div class="tree-cell" style="padding-left:${r.depth * 20}px">${fold(r)}<div class="grow">${r.orphan ? parentChip(i) : ''}${esc(i.title)} ${kidsChip(i)}${reg ? '' : ' ' + stageBits(i)}</div></div></td>
-      <td>${stateChip(states[i.stateId])}</td>${reg ? `<td class="nowrap">${stageCell(i)}</td>` : ''}<td class="nowrap">${i.priority === 'NONE' ? '' : `<span class="prio prio-${i.priority}">${PRIORITY[i.priority].label}</span>`}</td>
-      <td>${i.assignees.map(a => esc(a.fullName)).join(', ')}</td><td class="due ${dueClass({ ...i, state: states[i.stateId] })}">${fmtDate(i.dueDate)}</td><td>${i.labels.map(labelChip).join(' ')}</td></tr>`; }).join('')
-      || `<tr><td colspan="${cols}" class="empty">Dự án chưa có việc nào.</td></tr>`}</tbody></table></div>`;
+  // Cột trống ở mọi dòng đang hiện (Khâu, Ưu tiên, người, Hạn, Nhãn) tự ẩn, nhường chỗ cho tiêu đề. Cột đang dùng để sắp xếp thì giữ.
+  const has = { stage: reg && items.some(i => stageCell(i)), priority: items.some(i => i.priority !== 'NONE'), assignee: items.some(i => i.assignees.length), due: items.some(i => i.dueDate), labels: items.some(i => i.labels.length) };
+  const show = k => has[k] || key === k;
+  const cols = 3 + ['stage', 'priority', 'assignee', 'due', 'labels'].filter(show).length;
+  const hidden = [['priority', 'Ưu tiên'], ['assignee', personWord()], ['due', 'Hạn'], ['labels', 'Nhãn']].filter(([k]) => !show(k)).map(([, l]) => l);
+  const row = r => { if (r.item == null) return `<tr class="grp-row" data-testid="list-group-${r.group ?? 'none'}"><th colspan="${cols}" scope="colgroup">${esc(phaseTitle(r.group))} <span class="muted xs">${r.n} việc</span></th></tr>`;
+    const i = r.item; return `<tr class="clickable${r.depth ? ' sub-row' : ''}" data-id="${i.id}" data-depth="${r.depth}" data-testid="row-${esc(i.code)}"><td class="code">${esc(i.code)}</td><td><div class="tree-cell" style="padding-left:${r.depth * 20}px">${fold(r)}<div class="grow">${r.orphan ? parentChip(i) : ''}${esc(i.title)} ${kidsChip(i)}${reg ? '' : ' ' + stageBits(i)}</div></div></td>
+      <td>${stateChip(states[i.stateId])}</td>${show('stage') ? `<td class="nowrap">${stageCell(i)}</td>` : ''}${show('priority') ? `<td class="nowrap">${i.priority === 'NONE' ? '' : `<span class="prio prio-${i.priority}">${PRIORITY[i.priority].label}</span>`}</td>` : ''}
+      ${show('assignee') ? `<td>${i.assignees.map(a => esc(a.fullName)).join(', ')}</td>` : ''}${show('due') ? `<td class="due ${dueClass({ ...i, state: states[i.stateId] })}">${fmtDate(i.dueDate)}</td>` : ''}${show('labels') ? `<td>${i.labels.map(labelChip).join(' ')}</td>` : ''}</tr>`; };
+  body.innerHTML = `<div class="tbl-scroll"><table class="table" data-testid="list-table"><thead><tr>${th('code', 'Mã')}${th('title', 'Tiêu đề')}${th('state', 'Trạng thái')}${show('stage') ? '<th>Khâu</th>' : ''}${show('priority') ? th('priority', 'Ưu tiên') : ''}${show('assignee') ? th('assignee', personWord()) : ''}${show('due') ? th('due', 'Hạn') : ''}${show('labels') ? '<th>Nhãn</th>' : ''}</tr></thead>
+    <tbody>${rows.map(row).join('')
+      || `<tr><td colspan="${cols}" class="empty">Dự án chưa có việc nào.</td></tr>`}</tbody></table></div>
+    ${items.length && hidden.length ? `<p class="muted xs list-hidden" data-testid="list-hidden-cols">Đang ẩn cột trống: ${esc(hidden.join(', '))}.</p>` : ''}`;
   const sortSel = $('#fSort', current.root); if (sortSel) sortSel.value = key;
   body.onclick = e => {
     const sort = e.target.closest('[data-sort]');
@@ -854,7 +929,7 @@ function vnDay(value) { return dateInput(value); }
 function drawCalendar(body) {
   const state = calState(current.params, uiPref('cal:mode'));
   const states = Object.fromEntries(current.project.states.map(s => [s.id, s]));
-  body.innerHTML = calendarHtml({ items: filtered(), state, hrefOf: i => openItemHrefFor(i.id), colorOf: i => states[i.stateId]?.color,
+  body.innerHTML = calendarHtml({ items: filtered(), state, hrefOf: i => openItemHrefFor(i.id), colorOf: i => states[i.stateId]?.color, addable: !!$('#newItemBtn', current.root),
     doneOf: i => ['COMPLETED', 'CANCELLED'].includes(states[i.stateId]?.category), metaOf: i => [i.parentRef ? `↳ ${i.parentRef.code}` : '', i.counts?.childrenTotal ? `${i.counts.childrenDone}/${i.counts.childrenTotal} con` : '', i.assignees?.[0]?.fullName?.split(' ').pop() || ''].filter(Boolean).join(' · '),
     labelOf: i => `${i.code} ${i.title}${i.parentRef ? ` (việc con của ${i.parentRef.code})` : ''}` });
   if (!body._calBound) {
@@ -865,25 +940,33 @@ function drawCalendar(body) {
       replaceHashParams({ cal: mode, at: at || null });
       drawCalendar(body);
     });
-    body.addEventListener('click', e => { const it = e.target.closest('.cal-item'); if (it && !e.ctrlKey && !e.metaKey) { e.preventDefault(); openItemHash(it.dataset.id); } });
+    body.addEventListener('click', e => {
+      const it = e.target.closest('.cal-item'); if (it && !e.ctrlKey && !e.metaKey) { e.preventDefault(); openItemHash(it.dataset.id); return; }
+      // Bấm vào ô ngày (chỗ trống hoặc nút "+") → form Tạo việc với hạn là ngày đó.
+      if (e.target.closest('.cal-more, [data-cal-at], [data-cal-mode]') || !$('#newItemBtn', current.root)) return;
+      const day = e.target.closest('[data-cal-new]')?.dataset.calNew || e.target.closest('.day[data-day]')?.dataset.day;
+      if (day) openCreateItem({ dueDate: day });
+    });
   }
 }
 
 // ---------- Tạo việc ----------
-// Sổ giao việc của đơn vị: loại nhiệm vụ, giao về phòng chủ trì / phối hợp, văn bản căn cứ.
+// Dự án MTL: người quản lý dự án tạo được việc gốc; người khác chỉ thêm việc con dưới hạng mục bộ phận mình chủ trì
+// (máy chủ trả danh sách ở /create-scope). Không có chỗ nào được thêm → không hiện nút "Tạo việc" (không để điền xong form rồi mới báo lỗi).
+function canCreateMtl() {
+  const s = current.createScope;
+  return !!s && (s.root || (Array.isArray(s.parents) && s.parents.length > 0));
+}
+// Sổ giao việc của đơn vị: giao về phòng chủ trì / phối hợp, văn bản căn cứ (chỉ việc gốc).
 function dispatchFields(project, defaults) {
-  if (defaults.parentId) return { main: '', extra: '' };
-  const types = `<label class="field">Loại nhiệm vụ<select name="taskType" data-testid="create-task-type"><option value="ADHOC">Đột xuất (theo chỉ đạo)</option><option value="PLAN">Kế hoạch năm</option></select></label>`;
-  if (project.visibility !== 'ASSIGNED') return { main: '', extra: types };
+  if (defaults.parentId || project.visibility !== 'ASSIGNED') return { main: '', extra: '' };
   const depts = store.departments.filter(d => d.isActive !== false && d.id !== project.departmentId);
   // Một ô "Giao cho": về phòng (phòng tự phân công) hoặc giao thẳng một người (đại diện phòng, vd. trưởng phòng).
   return {
     main: `<div class="grid2">
       <label class="field">Giao cho<select name="leadDepartmentId" required data-testid="create-lead-dept"><option value="">— Chọn phòng hoặc người —</option>${giaoChoOptions(depts)}</select></label>
       <label class="field">Người giao<select name="assignedById" data-testid="create-assigner">${assignerOptions()}</select></label></div>`,
-    extra: `<div class="grid2">${types}
-      <label class="field">Nguồn giao việc<select name="source" data-testid="create-source"><option value="">—</option>${(store.settings?.sources || []).map(x => `<option>${esc(x)}</option>`).join('')}</select></label></div>
-    <div class="field">Đơn vị phối hợp${multiSelect('createSupportDepts', depts.map(d => ({ id: d.id, label: d.name })), [], 'Không')}</div>
+    extra: `<div class="field" id="cfSupDeptLbl">Đơn vị phối hợp${multiSelect('createSupportDepts', depts.map(d => ({ id: d.id, label: d.name })), [], 'Không', { label: 'Đơn vị phối hợp' })}</div>
     <label class="field">Sản phẩm đầu ra<input name="deliverable" maxlength="500" placeholder="VD: Báo cáo trình BGĐ; Kế hoạch tổ chức" data-testid="create-deliverable"></label>
     <div class="grid2"><label class="field">Văn bản căn cứ — số, ký hiệu<input name="docNumber" maxlength="80" placeholder="VD: 123/TB-TTPT" data-testid="create-doc-number"></label><label class="field">Ngày văn bản<input type="date" name="docDate"></label></div>
     <label class="field">Trích yếu văn bản<input name="docSummary" maxlength="500" data-testid="create-doc-summary"></label>
@@ -907,47 +990,108 @@ function assignerOptions(selected) {
   const pick = selected ?? (meDefault ? store.me.id : leaders[0].id);
   return [{ id: store.me.id, fullName: store.me.fullName + ' (tôi)' }, ...leaders].map(u => `<option value="${u.id}"${u.id === pick ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('');
 }
+// Người theo phòng ban: phòng của dự án lên trước, tên phòng làm nhóm (optgroup) — chọn đúng người khi danh sách dài.
+function peopleByDept(users) {
+  const groups = new Map();
+  for (const u of users) { const k = u.departmentId ?? 0; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(u); }
+  const own = current.project.departmentId;
+  return [...groups.entries()].sort(([a], [b]) => (a === own ? -1 : b === own ? 1 : deptName(a).localeCompare(deptName(b), 'vi')))
+    .map(([k, list]) => ({ dept: k ? deptName(k) : 'Chưa có phòng', list: list.sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi')) }));
+}
+// Việc cha được chọn: MTL theo giai đoạn đang chọn và phạm vi tạo việc; dự án khác: việc chưa kết thúc.
+function parentChoices(phase) {
+  const states = Object.fromEntries(current.project.states.map(s => [s.id, s]));
+  const allow = current.createScope?.parents ? new Set(current.createScope.parents) : null;
+  return current.items.filter(i => !['COMPLETED', 'CANCELLED'].includes(states[i.stateId]?.category) && (!allow || allow.has(i.id))
+    && (phase === '' || phase == null || !isMtl() || String(phaseOf(i) ?? 'none') === String(phase)))
+    .sort((a, b) => a.number - b.number);
+}
+const parentLabel = i => `${i.code}${i.planCode ? ` · B${i.planCode}` : ''} · ${i.title.length > 70 ? i.title.slice(0, 70) + '…' : i.title}`;
+function parentOptionsHtml(phase, selected) {
+  const root = !isMtl() || !!current.createScope?.root;
+  const list = parentChoices(phase);
+  if (selected && !list.some(i => i.id === Number(selected))) { const it = current.items.find(i => i.id === Number(selected)); if (it) list.unshift(it); }
+  return `<option value="">${root ? (isMtl() ? '— Không (bước MTL tổng mới) —' : '— Không —') : '— Chọn việc cha —'}</option>${list.map(i => `<option value="${i.id}"${String(i.id) === String(selected ?? '') ? ' selected' : ''}>${esc(parentLabel(i))}</option>`).join('')}`;
+}
+
 export function openCreateItem(defaults = {}) {
   const { project } = current;
   const users = assignableUsers(project);
   const states = project.states.filter(s => !['REVIEW', 'COMPLETED'].includes(s.category) || !project.approvalSteps.length);
   // Sổ giao việc của đơn vị: việc giao về phòng bắt đầu ở "Chưa bắt đầu", phòng tiếp nhận mới chuyển; ưu tiên mặc định Cao.
   const reg = project.visibility === 'ASSIGNED' && !defaults.parentId;
+  const mtl = isMtl(), root = !mtl || !!current.createScope?.root;
   const dispatch = dispatchFields(project, defaults);
-  // Gọn: chỉ để ngoài những gì cần để giao việc (tiêu đề, giao cho / người nhận, hạn, ưu tiên); còn lại trong "Thêm thông tin".
-  const modal = openModal(`<h2>Tạo việc trong ${esc(project.name)}</h2><form id="createItemForm">
+  // Giai đoạn (MTL): mặc định giai đoạn đang xem ở tab Giai đoạn, không thì giai đoạn đang làm; chọn giai đoạn để lọc ô "Việc cha".
+  const phases = mtl ? current.phases?.sprints || [] : [];
+  const viewing = new URLSearchParams(location.hash.split('?')[1] || '').get('s');
+  const parentPhase = defaults.parentId != null ? phaseOf(current.items.find(i => i.id === Number(defaults.parentId)) || {}) : null;
+  const phase0 = defaults.parentId != null ? (parentPhase ?? '') : !phases.length ? '' : viewing != null && phases[Number(viewing)] ? String(Number(viewing)) : String(current.phases.current ?? '');
+  const phaseField = phases.length ? `<label class="field">Giai đoạn<select name="phase" data-testid="create-phase"><option value="">Mọi giai đoạn</option>${phases.map((s, k) => `<option value="${k}"${String(k) === String(phase0) ? ' selected' : ''}>${k + 1}. ${esc(s.name)}${current.phases.current === k ? ' (đang làm)' : ''}</option>`).join('')}<option value="none"${phase0 === 'none' ? ' selected' : ''}>Chưa xếp giai đoạn</option></select></label>` : '';
+  const curCycle = currentCycle(current.cycles);
+  // Dự án không theo MTL: "giai đoạn" là chu kỳ của dự án (tab Chu kỳ) — mặc định chu kỳ hiện tại.
+  const cycleField = !mtl && current.cycles.some(c => c.status !== 'COMPLETED') ? `<label class="field">Chu kỳ (giai đoạn)<select name="cycleId" data-testid="create-cycle"><option value="">— Không —</option>${current.cycles.filter(c => c.status !== 'COMPLETED').map(c => `<option value="${c.id}"${curCycle?.id === c.id ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` : '';
+  const parentField = `<label class="field">Việc cha${root ? '' : ' <span class="muted xs">(bắt buộc — phần bộ phận bạn chủ trì)</span>'}<select name="parentId" data-testid="create-parent"${root ? '' : ' required'}>${parentOptionsHtml(phase0, defaults.parentId)}</select></label>`;
+  // Chủ trì (1 người) — chọn theo phòng ban, có "Giao cho tôi"; Phối hợp nhiều người (kèm tên phòng).
+  const leadSel = defaults.assigneeIds?.[0] ?? '';
+  const people = reg ? '' : `<div class="grid2">
+      <div class="field"><label for="cfLead">Chủ trì <span class="muted xs">(1 người)</span></label><div class="row nowrap cf-lead"><select id="cfLead" name="leadId" class="grow" data-testid="create-lead"><option value="">— Chưa giao —</option>${peopleByDept(users).map(g => `<optgroup label="${esc(g.dept)}">${g.list.map(u => `<option value="${u.id}"${String(u.id) === String(leadSel) ? ' selected' : ''}>${esc(u.fullName)}${u.id === store.me.id ? ' (tôi)' : ''}</option>`).join('')}</optgroup>`).join('')}</select>
+        ${users.some(u => u.id === store.me.id) ? '<button type="button" class="btn btn-ghost btn-sm" data-assign-me data-testid="create-assign-me">Giao cho tôi</button>' : ''}</div></div>
+      <div class="field"><span id="cfSupLbl">Phối hợp</span>${multiSelect('supporters', users.map(u => ({ id: u.id, label: `${u.fullName} — ${deptName(u.departmentId) || 'chưa có phòng'}` })), [], 'Không', { label: 'Người phối hợp' })}</div></div>`;
+  // Gọn: ngoài form chỉ những gì cần để giao việc (tiêu đề, giai đoạn / việc cha, người, hạn, ưu tiên); còn lại trong "Thêm thông tin".
+  const modal = openModal(`<h2>Tạo việc trong ${esc(project.name)}</h2><form id="createItemForm" class="mf" novalidate>
+    <div class="mf-body">
+    ${!root ? `<p class="muted sm cf-scope" data-testid="create-scope-note">Kế hoạch MTL do người quản lý dự án lập. Bạn thêm việc con trong hạng mục bộ phận mình chủ trì.</p>` : ''}
     <label class="field">Tiêu đề<input name="title" required maxlength="300" autofocus data-testid="create-title"></label>
     ${dispatch.main}
-    ${reg ? '' : `<div class="field">Người nhận${multiSelect('assignees', users.map(u => ({ id: u.id, label: u.fullName + '' })), defaults.assigneeIds || [])}</div>`}
+    <div class="grid2">${phaseField}${cycleField}${parentField}</div>
+    ${people}
     <div class="grid2">
-      <label class="field">Hạn<input type="date" name="dueDate" data-testid="create-due"></label>
-      <label class="field">Ưu tiên<select name="priority" data-testid="create-priority">${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}"${k === (reg ? 'HIGH' : 'NONE') ? ' selected' : ''}>${v.label}</option>`).join('')}</select></label>
-      ${reg ? `<input type="hidden" name="stateId" value="${(states.find(s => s.category === 'UNSTARTED') || states[0]).id}">` : `<label class="field">Trạng thái<select name="stateId" data-testid="create-state">${states.map(s => `<option value="${s.id}"${s.category === 'UNSTARTED' ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>`}
+      <label class="field">Hạn<input type="date" name="dueDate" value="${esc(defaults.dueDate || '')}" data-testid="create-due"></label>
+      <label class="field">Ưu tiên<select name="priority" data-testid="create-priority">${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}"${k === (reg ? 'HIGH' : 'MEDIUM') ? ' selected' : ''}>${v.label}</option>`).join('')}</select></label>
     </div>
-    <details class="more-fields" data-testid="create-more"><summary>Thêm thông tin: mô tả, ngày bắt đầu, nhãn${project.visibility === 'ASSIGNED' && !defaults.parentId ? ', phối hợp, văn bản căn cứ, sản phẩm' : ''}${project.rights.canManage && project.approvalSteps.length ? ', mức duyệt' : ''}${project.rights.canManage && !defaults.parentId ? ', lặp lại' : ''}</summary>
+    <details class="more-fields" data-testid="create-more"><summary>Thêm thông tin: trạng thái, mô tả, ngày bắt đầu, nguồn giao việc, nhãn${reg ? ', phối hợp, văn bản căn cứ, sản phẩm' : ''}${project.rights.canManage && project.approvalSteps.length ? ', mức duyệt' : ''}${project.rights.canManage && !defaults.parentId ? ', lặp lại' : ''}</summary>
+    ${reg ? `<input type="hidden" name="stateId" value="${(states.find(s => s.category === 'UNSTARTED') || states[0]).id}">` : `<label class="field">Trạng thái<select name="stateId" data-testid="create-state">${states.map(s => `<option value="${s.id}"${s.category === 'UNSTARTED' ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>`}
     <label class="field">Mô tả<textarea name="description" rows="3" data-testid="create-description"></textarea></label>
     <div class="grid2"><label class="field">Bắt đầu<input type="date" name="startDate" data-testid="create-start"></label>
-      ${current.cycles.length ? `<label class="field">Chu kỳ<select name="cycleId" data-testid="create-cycle"><option value="">— Không —</option>${current.cycles.filter(c => c.status !== 'COMPLETED').map(c => `<option value="${c.id}"${currentCycle(current.cycles)?.id === c.id && current.filters.cycle ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` : ''}</div>
+      <label class="field">Nguồn giao việc<select name="source" data-testid="create-source">${sourceOptions('', { empty: '— Đột xuất, chưa ghi nguồn —' })}</select></label></div>
     ${dispatch.extra}
-    <div class="field">Nhãn${multiSelect('labels', labelsFor(project.id).map(l => ({ id: l.id, label: l.name, chip: labelChip(l) })), [], 'Chọn hoặc gõ nhãn mới…', { create: true })}</div>
+    <div class="field"><span id="cfLabelLbl">Nhãn</span>${multiSelect('labels', labelsFor(project.id).map(l => ({ id: l.id, label: l.name, chip: labelChip(l) })), [], 'Chọn hoặc gõ nhãn mới…', { create: true, label: 'Nhãn' })}</div>
     ${project.rights.canManage && project.approvalSteps.length ? `<label class="field">Mức duyệt<select name="approvalLevels" data-testid="create-approval-levels"><option value="">Tự động (theo quy tắc / mặc định dự án)</option>${Array.from({ length: project.approvalSteps.length + 1 }, (_, n) => `<option value="${n}">${n === 0 ? 'Không cần duyệt' : n === project.approvalSteps.length ? `Đủ ${n} cấp` : `${n} cấp: ${project.approvalSteps.slice(0, n).map(x => esc(x.name)).join(' → ')}`}</option>`).join('')}</select></label>` : ''}
     ${project.rights.canManage && !defaults.parentId ? scheduleFields({}, { allowNone: true, prefix: 'create' }) : ''}
     </details>
-    ${defaults.parentId ? `<input type="hidden" name="parentId" value="${defaults.parentId}">` : ''}
-    <p class="error" id="createItemError"></p>
-    <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Huỷ</button><button class="btn btn-primary" data-testid="create-submit">Tạo việc</button></div></form>`);
+    <p class="error" id="createItemError" role="alert"></p>
+    </div>
+    <div class="modal-actions"><span class="muted xs grow">Esc để đóng</span><button type="button" class="btn btn-ghost" data-close>Huỷ</button><button class="btn btn-primary" data-testid="create-submit">Tạo việc</button></div></form>`);
+  // Nút Huỷ / Tạo việc luôn ở đáy hộp thoại; phần trên cuộn bên trong khi mở "Thêm thông tin".
+  modal.classList.add('modal-form');
   bindMulti(modal, null, { creators: { labels: async name => { const l = await createProjectLabel(project.id, name); return { id: l.id, label: l.name, chip: labelChip(l) }; } } });
   bindSchedule(modal);
-  modal.querySelector('[data-close]').onclick = () => closeModal();
-  modal.querySelector('form').onsubmit = async e => {
+  const form = modal.querySelector('form');
+  // Huỷ: đã nhập gì thì hỏi "Bỏ nội dung đã nhập?" (giống Esc / bấm ra nền).
+  modal.querySelector('[data-close]').onclick = () => requestCloseModal();
+  modal.querySelector('[data-assign-me]')?.addEventListener('click', () => { form.leadId.value = String(store.me.id); modal.dataset.dirty = '1'; form.leadId.focus(); });
+  // Chọn giai đoạn → lọc lại "Việc cha"; chọn việc cha → giai đoạn theo việc cha.
+  form.phase?.addEventListener('change', () => { const keep = form.parentId.value; form.parentId.innerHTML = parentOptionsHtml(form.phase.value, keep && parentChoices(form.phase.value).some(i => String(i.id) === keep) ? keep : ''); });
+  form.parentId?.addEventListener('change', () => { if (!form.phase || !form.parentId.value) return; const k = phaseOf(current.items.find(i => i.id === Number(form.parentId.value)) || {}); form.phase.value = k == null ? 'none' : String(k); });
+  form.onsubmit = async e => {
     e.preventDefault();
+    const err = $('#createItemError', modal);
+    // Kiểm tra ngay trên form (không chờ máy chủ), đưa con trỏ tới ô cần sửa.
+    const bad = !form.title.value.trim() ? [form.title, 'Nhập tiêu đề việc'] : form.leadDepartmentId && !form.leadDepartmentId.value ? [form.leadDepartmentId, 'Chọn phòng hoặc người được giao']
+      : !root && !form.parentId.value ? [form.parentId, 'Chọn việc cha thuộc phần bộ phận bạn chủ trì'] : null;
+    if (bad) { err.textContent = bad[1]; bad[0].setAttribute('aria-invalid', 'true'); bad[0].focus(); return; }
     const f = formData(e.target);
-    const body = { title: f.title, descriptionHtml: f.description ? f.description.split(/\n+/).map(p => `<p>${esc(p)}</p>`).join('') : '', stateId: Number(f.stateId), priority: f.priority,
-      startDate: fromDateInput(f.startDate), dueDate: fromDateInput(f.dueDate), assigneeIds: reg ? [] : readMulti(modal, 'assignees'), labelIds: readMulti(modal, 'labels'), parentId: f.parentId ? Number(f.parentId) : null, cycleId: f.cycleId ? Number(f.cycleId) : null,
+    const lead = f.leadId ? Number(f.leadId) : null;
+    const type = taskTypeOfSource(f.source);
+    const body = { title: f.title, descriptionHtml: f.description ? f.description.split(/\n+/).map(x => `<p>${esc(x)}</p>`).join('') : '', stateId: Number(f.stateId), priority: f.priority,
+      startDate: fromDateInput(f.startDate), dueDate: fromDateInput(f.dueDate), assigneeIds: reg ? [] : lead ? [lead] : [], supporterIds: reg ? [] : readMulti(modal, 'supporters').filter(x => x !== lead),
+      labelIds: readMulti(modal, 'labels'), parentId: f.parentId ? Number(f.parentId) : defaults.parentId ? Number(defaults.parentId) : null, cycleId: f.cycleId ? Number(f.cycleId) : null,
       ...(f.approvalLevels !== undefined && f.approvalLevels !== '' ? { approvalLevels: Number(f.approvalLevels) } : {}),
-      ...(f.taskType ? { taskType: f.taskType } : {}), ...(f.leadDepartmentId ? { ...giaoChoValue(f.leadDepartmentId), supportDepartmentIds: readMulti(modal, 'createSupportDepts') } : {}),
+      ...(type ? { taskType: type } : {}), ...(f.leadDepartmentId ? { ...giaoChoValue(f.leadDepartmentId), supportDepartmentIds: readMulti(modal, 'createSupportDepts') } : {}),
       ...(f.assignedById ? { assignedById: Number(f.assignedById) } : {}), ...(f.source ? { source: f.source } : {}), ...(f.deliverable ? { deliverable: f.deliverable } : {}) };
     const repeat = readSchedule(modal);
+    const submit = modal.querySelector('[data-testid="create-submit"]'); submit.disabled = true;
     try {
       const item = await api(`/api/projects/${project.id}/items`, { method: 'POST', body });
       if (f.docNumber && f.docSummary) await api(`/api/items/${item.id}/documents`, { method: 'POST', body: { kind: 'BASIS', number: f.docNumber, summary: f.docSummary, issuedOn: fromDateInput(f.docDate) } }).catch(error => toast('Đã tạo việc nhưng chưa lưu được văn bản căn cứ: ' + errorMessage(error), 'err'));
@@ -956,7 +1100,7 @@ export function openCreateItem(defaults = {}) {
       closeModal(); toast(`Đã tạo ${item.code}${repeat ? ' (có lặp lại)' : ''}`, 'ok');
       await reloadProject();
       defaults.onCreated?.(item);
-    } catch (error) { $('#createItemError', modal).textContent = errorMessage(error); }
+    } catch (error) { submit.disabled = false; err.textContent = errorMessage(error); }
   };
 }
 
@@ -973,8 +1117,7 @@ function openBulkDispatch() {
     <td><input data-col="deliverable" maxlength="500" value="${esc(r.deliverable || '')}" aria-label="Sản phẩm"></td><td><button class="icon-btn" type="button" data-del-row aria-label="Bỏ dòng">${icon('x')}</button></td></tr>`;
   const modal = openModal(`<h2>Giao nhiều việc</h2><p class="muted sm">Mỗi dòng một nhiệm vụ, giao về phòng chủ trì — phòng sẽ tiếp nhận và phân công. Dán được nhiều dòng từ Excel vào ô đầu tiên.</p>
     <div class="grid2"><label class="field">Người giao<select id="bdAssigner" data-testid="bulk-assigner">${assignerOptions()}</select></label>
-      <label class="field">Nguồn giao việc<select id="bdSource"><option value="">—</option>${(store.settings?.sources || []).map(x => `<option>${esc(x)}</option>`).join('')}</select></label>
-      <label class="field">Loại nhiệm vụ<select id="bdType"><option value="ADHOC">Đột xuất (theo chỉ đạo)</option><option value="PLAN">Kế hoạch năm</option></select></label>
+      <label class="field">Nguồn giao việc <span class="muted xs">("Kế hoạch năm" = nhiệm vụ kế hoạch năm, còn lại = đột xuất)</span><select id="bdSource" data-testid="bulk-source">${sourceOptions('', { empty: '— Đột xuất, chưa ghi nguồn —' })}</select></label>
       <label class="field">Ngày văn bản căn cứ <span class="muted xs">(chung cho các dòng có số VB)</span><input type="date" id="bdDocDate"></label></div>
     <div class="tbl-scroll"><table class="table grid-input" data-testid="bulk-dispatch-grid"><thead><tr><th>Nội dung nhiệm vụ</th><th>Giao cho</th><th>Hạn</th><th>Số VB căn cứ</th><th>Sản phẩm</th><th></th></tr></thead><tbody>${row()}${row()}${row()}</tbody></table></div>
     <div class="row" style="margin-top:8px"><button class="btn btn-ghost btn-sm" type="button" data-add-row>${icon('plus')}Thêm dòng</button><span class="muted xs" id="bdCount"></span></div>
@@ -990,7 +1133,7 @@ function openBulkDispatch() {
     const ok = e.target.closest('[data-act="ok"]'); if (!ok) return;
     const docDate = fromDateInput($('#bdDocDate', modal).value);
     const rows = [...body().rows].map(tr => ({ title: $('[data-col=title]', tr).value.trim(), ...giaoChoValue($('[data-col=dept]', tr).value), dueDate: fromDateInput($('[data-col=due]', tr).value),
-      docNumber: $('[data-col=doc]', tr).value.trim() || undefined, docDate, deliverable: $('[data-col=deliverable]', tr).value.trim(), taskType: $('#bdType', modal).value })).filter(r => r.title);
+      docNumber: $('[data-col=doc]', tr).value.trim() || undefined, docDate, deliverable: $('[data-col=deliverable]', tr).value.trim(), taskType: taskTypeOfSource($('#bdSource', modal).value) || 'ADHOC' })).filter(r => r.title);
     if (!rows.length) { $('#bdError', modal).textContent = 'Nhập ít nhất một nhiệm vụ'; return; }
     const miss = rows.findIndex(r => !r.leadDepartmentId && !(r.assigneeIds || []).length);
     if (miss >= 0) { $('#bdError', modal).textContent = `Dòng ${miss + 1}: chọn phòng hoặc người được giao`; return; }
