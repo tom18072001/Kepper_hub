@@ -802,7 +802,8 @@ trả việc người xem được thêm việc con (N2); (5) panel việc bỏ 
 Thay đổi chạm dữ liệu: (1) trang Văn thư lọc ngay khi gõ / chọn, ghi bộ lọc lên URL (`replaceState`) — chỉ là từ khoá người dùng tự gõ, không thêm
 dữ liệu; (2) `GET /api/vanthu/pick?q=` trả tối đa 20 văn bản để **chép số, ngày, nơi ban hành, trích yếu, liên kết sang "Văn bản liên quan" của việc**
 (`WorkItemDocument`). Đây là dòng dữ liệu mới từ sổ văn thư sang việc: ai xem được việc đều thấy các trường đã chép, nên phạm vi người thấy có thể
-**rộng hơn** phạm vi xem văn bản trong sổ.
+**rộng hơn** phạm vi xem văn bản trong sổ; (3) ô tìm của sổ và của ô chọn tìm không phân biệt dấu (`unaccent`, như Tìm nhanh): bước 1 lấy id
+bằng SQL có tham số trong cùng phạm vi sổ / năm / pháp nhân, bước 2 lọc quyền bằng `visible` như cũ — phạm vi xem không đổi.
 
 **Kết luận cổng:** ĐẠT, với điều kiện đã cài: chỉ văn bản Công khai / Nội bộ (mức mọi cán bộ vốn đã xem được trong sổ), chưa hủy số, và người chọn
 xem được trong sổ (`V.canLink` = `canView` + mức bảo mật + chưa hủy). Không đổi quyền xem sổ (`canView`, `canRegister`, `canStatus` giữ nguyên).

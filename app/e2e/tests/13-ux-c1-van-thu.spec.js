@@ -1,5 +1,5 @@
 // Review UX đợt C1 — Văn thư (dữ liệu mẫu GIẢ, MODULES có vanthu): trang trống mời "Vào sổ văn bản đầu tiên" (chỉ người được vào sổ),
-// lọc ngay khi gõ / chọn (không còn nút "Lọc", gõ thì chờ ~300 ms, bộ lọc giữ trên URL), và panel chi tiết việc → "Thêm văn bản"
+// lọc ngay khi gõ / chọn (không còn nút "Lọc", gõ thì chờ ~300 ms, bộ lọc giữ trên URL, gõ không dấu vẫn ra), và panel chi tiết việc → "Thêm văn bản"
 // → "Chọn từ sổ Văn thư": tìm theo số / trích yếu (không dấu), điền sẵn số, ngày, nơi ban hành, trích yếu, liên kết;
 // chỉ văn bản Công khai / Nội bộ chưa hủy người dùng xem được — văn bản Hạn chế, Bảo mật cao không hiện kể cả với người xem được trong sổ.
 const { test, expect } = require('@playwright/test');
@@ -46,7 +46,7 @@ test('C1.2 Văn thư trống: "Chưa có văn bản trong sổ năm này" kèm n
   await expect(dir.locator('#view h1')).toContainText(`/${thisYear}/`);
 });
 
-test('C1.1 Văn thư lọc ngay khi gõ / chọn, không còn nút "Lọc"; gõ thì chờ ~300 ms; bộ lọc giữ trên URL', async ({ page }) => {
+test('C1.1 Văn thư lọc ngay khi gõ / chọn, không còn nút "Lọc"; gõ thì chờ ~300 ms; gõ không dấu vẫn ra; bộ lọc giữ trên URL', async ({ page }) => {
   await login(page, 'giamdoc');
   expect((await apiAs(page, '/api/vanthu/config', { method: 'PUT', data: { entities: [{ code: 'HLD', name: 'Công ty mẹ (mẫu)' }, { code: 'DXA', name: 'Công ty dự án (mẫu)' }] } })).status()).toBe(200);
   await reg(page, { title: 'Công văn mẫu về phòng cháy chữa cháy', counterpart: 'Sở Mẫu A' });
@@ -80,6 +80,18 @@ test('C1.1 Văn thư lọc ngay khi gõ / chọn, không còn nút "Lọc"; gõ 
   await q.press('Enter');
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText('phòng cháy chữa cháy');
+  await q.fill('');
+  await expect(rows).toHaveCount(4);
+  // Gõ không dấu vẫn ra (như Tìm nhanh): theo trích yếu, nơi gửi, số ("D" thay "Đ").
+  await q.fill('phong chay');
+  await expect(rows.first()).toContainText('Công văn mẫu về phòng cháy chữa cháy');
+  await expect(rows).toHaveCount(1);
+  await q.fill('don vi gia b');
+  await expect(rows.first()).toContainText('Thông báo mẫu lịch họp quý');
+  await expect(rows).toHaveCount(1);
+  await q.fill('d-dxa');
+  await expect(rows.first()).toContainText('Công văn mẫu của công ty dự án');
+  await expect(rows).toHaveCount(1);
   await q.fill('');
   await expect(rows).toHaveCount(4);
 

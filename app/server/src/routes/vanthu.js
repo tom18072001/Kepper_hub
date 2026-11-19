@@ -24,6 +24,13 @@ const ACTIVE_USER = { isActive: true, isRootAdmin: false, role: { not: 'admin' }
 const day = v => (v == null || v === '' ? null : WK.isDay(v) ? v : fail(422, 'Ngày không hợp lệ (YYYY-MM-DD)', 'INVALID_DATE'));
 const hash32 = s => { let h = 0; for (const c of s) h = (h * 31 + c.codePointAt(0)) | 0; return h; };
 const out = (map, v) => (v ? { code: v, label: map[v] || v } : null);
+// Tìm theo số, trích yếu, nơi gửi / nhận, số của bên gửi — không phân biệt hoa thường và dấu, như Tìm nhanh (routes/search.js):
+// unaccent(lower(cột)) LIKE unaccent(lower(từ khoá)) (extension unaccent, migration 20261119200000_search_unaccent). % _ \ trong từ khoá hiểu nghĩa đen.
+const TEXT_COLS = ['number', 'title', 'counterpart', 'externalNumber'];
+function textMatch(q) {
+  const pat = '%' + q.replace(/[\\%_]/g, c => '\\' + c) + '%';
+  return Prisma.sql`(${Prisma.join(TEXT_COLS.map(c => Prisma.sql`unaccent(lower(coalesce(${Prisma.raw(`"${c}"`)}, ''))) LIKE unaccent(lower(${pat}))`), ' OR ')})`;
+}
 
 module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
   if (!(config.modules || []).includes('vanthu')) return;
@@ -96,7 +103,19 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
     if (q.entity) where.entity = String(q.entity).slice(0, 6);
     if (q.status) where.status = String(q.status).slice(0, 20);
     if (q.mine === '1') where.handlerId = req.user.id;
-    if (q.q) { const t = String(q.q).slice(0, 100); where.OR = [{ title: { contains: t, mode: 'insensitive' } }, { number: { contains: t, mode: 'insensitive' } }, { counterpart: { contains: t, mode: 'insensitive' } }, { externalNumber: { contains: t, mode: 'insensitive' } }]; }
+    const t = String(q.q || '').trim().slice(0, 100);
+    if (t) {
+      // Từ khoá không phân biệt dấu: bước 1 lấy id khớp bằng SQL có tham số trong cùng phạm vi sổ / năm / pháp nhân / trạng thái / người xử lý,
+      // bước 2 đọc và lọc quyền bằng Prisma như cũ (visible) — phạm vi xem không đổi.
+      const cond = [textMatch(t)];
+      if (where.book) cond.push(Prisma.sql`"book" = ${where.book}`);
+      if (where.year) cond.push(Prisma.sql`"year" = ${where.year}`);
+      if (where.entity) cond.push(Prisma.sql`"entity" = ${where.entity}`);
+      if (where.status) cond.push(Prisma.sql`"status" = ${where.status}`);
+      if (where.handlerId) cond.push(Prisma.sql`"handlerId" = ${where.handlerId}`);
+      const ids = await prisma.$queryRaw`SELECT "id" FROM "DocRecord" WHERE ${Prisma.join(cond, ' AND ')} ORDER BY "year" DESC, "registeredAt" DESC, "seq" DESC LIMIT 500`;
+      where.id = { in: ids.map(r => Number(r.id)) };
+    }
     const rows = (await prisma.docRecord.findMany({ where, orderBy: [{ year: 'desc' }, { registeredAt: 'desc' }, { seq: 'desc' }], take: 500 })).filter(d => visible(d, s));
     const today = WK.dayOf(new Date());
     const list = q.overdue === '1' ? rows.filter(d => V.isOverdue(d, today)) : rows;
@@ -112,9 +131,7 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
     const s = await subject(req);
     if (s.it) fail(403, 'Quản trị hệ thống không xem nội dung văn bản', 'FORBIDDEN');
     const q = String(req.query.q || '').trim().slice(0, 100);
-    const pat = '%' + q.replace(/[\\%_]/g, c => '\\' + c) + '%';
-    const match = q ? Prisma.sql`AND (unaccent(lower("number")) LIKE unaccent(lower(${pat})) OR unaccent(lower("title")) LIKE unaccent(lower(${pat}))
-      OR unaccent(lower(coalesce("counterpart", ''))) LIKE unaccent(lower(${pat})) OR unaccent(lower(coalesce("externalNumber", ''))) LIKE unaccent(lower(${pat})))` : Prisma.empty;
+    const match = q ? Prisma.sql`AND ${textMatch(q)}` : Prisma.empty;
     const ids = (await prisma.$queryRaw`SELECT "id" FROM "DocRecord" WHERE "cancelledAt" IS NULL AND "security" IN (${Prisma.join(V.LINKABLE_SECURITY)}) ${match}
       ORDER BY "registeredAt" DESC, "id" DESC LIMIT 20`).map(r => Number(r.id));
     const rows = ids.length ? (await prisma.docRecord.findMany({ where: { id: { in: ids } }, orderBy: [{ registeredAt: 'desc' }, { id: 'desc' }] })).filter(d => V.canLink(d, s) && visible(d, s)) : [];
@@ -379,3 +396,5 @@ module.exports.runVanthuReminders = async function runVanthuReminders(prisma, no
   }
   return { sent, open: open.length };
 };
+
+module.exports.textMatch = textMatch;
