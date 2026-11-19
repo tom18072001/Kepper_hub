@@ -97,14 +97,14 @@ test('19. Sprint theo giai đoạn: lộ trình, thiết lập sprint, tiến đ
   await expect(pmo.getByTestId('gz-range')).toHaveCount(0);
   await pmo.getByTestId('gz-near').click();
   await pmo.getByTestId('g-head-10').click();
-  await expect(pmo.getByTestId('mo-title')).toHaveText('Tháng T10');
+  await expect(pmo.getByTestId('mo-title')).toHaveText(/^Kỳ cập nhật tháng \d{2}\/\d{4} · T10$/);
   // Theo tháng: bước 5 kết thúc T7, chưa xong → "Phải xong" của tháng hiện tại, ghi "trễ từ T7"; thẻ ghi tên sprint.
   const sc5 = pmo.getByTestId('sp-lane-due').getByTestId('sc-DA-5');
   await expect(sc5).toContainText('trễ từ T7'); await expect(sc5).toContainText('Chuyển nhượng dự án (mẫu)');
   await pmo.getByTestId('mo-prev').click();
-  await expect(pmo.getByTestId('mo-title')).toHaveText('Tháng T9');
+  await expect(pmo.getByTestId('mo-title')).toHaveText(/^Kỳ cập nhật tháng \d{2}\/\d{4} · T9$/);
   await pmo.getByTestId('mo-now').click();
-  await expect(pmo.getByTestId('mo-title')).toHaveText('Tháng T10');
+  await expect(pmo.getByTestId('mo-title')).toHaveText(/^Kỳ cập nhật tháng \d{2}\/\d{4} · T10$/);
   const t2 = await (await apiAs(pmo, `/api/projects/${project.id}/mtl-month?t=2`)).json();
   expect(t2.sprint.state).toBe('PAST'); expect(t2.sprint.due).toBe(2); expect(t2.sprint.done).toBe(2);
   // Tổng quan có bảng theo sprint.
