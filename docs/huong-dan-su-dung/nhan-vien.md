@@ -138,7 +138,7 @@ Bấm tên của bạn góc trên phải → **Kết nối Claude** (1).
 
 4. Bấm vào **Kepler Hub** để xem cấu hình:
    - công tắc **Enabled** phải bật;
-   - **Địa chỉ Kepler Hub:** đã điền sẵn đúng địa chỉ bạn mở Kepler Hub. Giữ nguyên;
+   - **Địa chỉ Kepler Hub:** phải là `https://hub.keplerholdings.vn` (tiện ích từ phiên bản 0.5.1 điền sẵn). Thấy địa chỉ khác, ví dụ `https://kepler-hub.kepler.com` như ảnh dưới, thì sửa thành `https://hub.keplerholdings.vn` → **Save**: nhiều máy không tìm được địa chỉ cũ;
    - **Token Kepler Hub (không bắt buộc): để trống**;
    - có sửa gì thì bấm **Save**.
 
@@ -478,7 +478,7 @@ Quy chế quản lý dự án (RACI) **sắp ban hành**. Khi có, tài liệu v
 | "Chưa kết nối Kepler Hub… bấm Cho phép (mã …)" | Lần đầu dùng, hoặc kết nối cũ đã hết hạn / bị thu hồi | Bấm **Cho phép** đúng mã trên trang vừa mở, rồi hỏi lại Claude |
 | "Chưa xác thực: …" | Token hết hạn, bị thu hồi, hoặc bạn vừa đổi mật khẩu | Hỏi lại Claude để mở trang Cho phép. Dùng token thủ công: tạo token mới (mục 3.4) |
 | "Tài khoản phải đổi mật khẩu trên giao diện trước" | Tài khoản đang bị buộc đổi mật khẩu | Đăng nhập Kepler Hub trên trình duyệt, đổi mật khẩu, rồi kết nối lại |
-| "Không kết nối được Kepler Hub tại …" | Máy không vào được mạng công ty | Bật VPN; mở thử Kepler Hub trên trình duyệt |
+| "Không kết nối được Kepler Hub tại …" | Máy không vào được mạng công ty, hoặc tiện ích dùng địa chỉ cũ `kepler-hub.kepler.com` | Bật VPN; mở thử Kepler Hub trên trình duyệt; sửa ô Địa chỉ trong tiện ích thành `https://hub.keplerholdings.vn` (mục 3.2) |
 | "Không đủ quyền: …" | Tài khoản của bạn không có quyền làm việc đó (vd. sửa hạn việc người khác giao) | Đúng như thiết kế. Làm đúng đường: xin gia hạn, bình luận cho người giao, hỏi lãnh đạo |
 | "… (mở Kepler Hub trên trình duyệt để làm bước này)" — mã `NOT_VIA_AI` | Việc này chỉ làm trên giao diện (duyệt, nộp, xoá, xuất tệp, xem số định danh / lương, sửa hồ sơ nhân sự…) | Mở Kepler Hub làm trực tiếp |
 | "Token chỉ đọc…" | Lúc Cho phép bạn chọn **Chỉ xem** | Thu hồi kết nối cũ, kết nối lại và chọn **Xem và cập nhật** |
