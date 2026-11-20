@@ -132,14 +132,17 @@ Bấm tên của bạn góc trên phải → **Kết nối Claude** (1).
 
 2. Mở Claude desktop. Kéo thả tệp `kepper-claude.mcpb` vừa tải vào cửa sổ Claude desktop (hoặc nhấn đúp tệp). Hộp cài đặt hiện ra → bấm **Install**.
 
-> 📷 **Ảnh cần chụp** (`anh/claude-01-cai-tien-ich.png`): hộp cài tiện ích "Kepler Hub" của Claude desktop, có nút Install.
+3. Kiểm tra đã cài: Claude desktop → **Settings → Customize → Connectors**. Dòng **Kepler Hub**, loại *Desktop*, có dấu ✓ ở cột Status.
 
-3. Hộp cấu hình hiện ra:
-   - **Địa chỉ Kepler Hub:** đã điền sẵn đúng địa chỉ bạn đang mở. Giữ nguyên.
-   - **Token Kepler Hub (không bắt buộc): để trống.**
-   - Bấm **Save** / bật tiện ích.
+![Settings → Customize → Connectors: tiện ích Kepler Hub đã cài](anh/claude-01-tien-ich-da-cai.png)
 
-> 📷 **Ảnh cần chụp** (`anh/claude-02-cau-hinh.png`): hộp cấu hình tiện ích, ô "Địa chỉ Kepler Hub" đã điền, ô Token để trống.
+4. Bấm vào **Kepler Hub** để xem cấu hình:
+   - công tắc **Enabled** phải bật;
+   - **Địa chỉ Kepler Hub:** đã điền sẵn đúng địa chỉ bạn mở Kepler Hub. Giữ nguyên;
+   - **Token Kepler Hub (không bắt buộc): để trống**;
+   - có sửa gì thì bấm **Save**.
+
+![Cấu hình tiện ích Kepler Hub: địa chỉ đã điền, ô Token để trống](anh/claude-02-cau-hinh.png)
 
 ### 3.3 Kết nối nhanh: bấm "Cho phép" (không cần token)
 
@@ -183,10 +186,13 @@ Skill giúp Claude biết cách làm việc với Kepler Hub đúng quy tắc c�
 | `kepler-hub` | Việc, dự án, báo cáo tuần, nhân sự, đối tác, nhắc việc, thông báo |
 | `kepler-luu-tai-lieu` | Lưu tài liệu đúng thư mục phòng trên NAS `\\192.168.130.2\DATA`, đặt tên tệp đúng quy ước |
 
-1. Trong Claude desktop: **Settings → Capabilities → Skills**. Nếu hai skill đã có trong danh sách (quản trị bật cho cả công ty): bật lên là xong.
-2. Chưa có: xin IT tệp `.zip` của skill → **Upload skill** → chọn tệp.
+1. Trong Claude desktop: **Settings → Customize → Skills**. Nếu hai skill đã có trong danh sách (quản trị bật cho cả công ty): bật lên là xong, **không tải lên thêm**.
+2. Chưa có: xin IT tệp `.zip` của skill → **+ Add** → tải tệp lên.
+3. Kiểm tra: trong ô chat gõ `/kep`. Danh sách phải có **đúng một** `kepler-hub` và một `kepler-luu-tai-lieu`.
 
-> 📷 **Ảnh cần chụp** (`anh/claude-04-skills.png`): màn Settings → Capabilities → Skills có `kepler-hub` và `kepler-luu-tai-lieu` đang bật.
+**Thấy hai `kepler-hub` giống nhau** (như ảnh dưới) là đang có hai bản cùng tên: thường là một bản công ty cấp và một bản bạn tự tải lên, hoặc bản cũ và bản mới. Claude có thể dùng nhầm bản cũ. Cách sửa: **Settings → Customize → Skills**, giữ bản mới nhất (hoặc bản công ty cấp), tắt hoặc xoá bản còn lại, rồi gõ lại `/kep` để kiểm tra.
+
+![Gõ /kep thấy hai skill kepler-hub: cần xoá một bản](anh/claude-04-skill-bi-trung.png)
 
 Tuỳ chọn: tiện ích **Kepler NAS** (`kepler-nas.mcpb`, IT cấp) cho Claude **đọc** thư mục NAS bằng chính quyền Windows của bạn, để skill `kepler-luu-tai-lieu` chỉ đúng thư mục có thật. Tiện ích chỉ đọc, không ghi, không xoá.
 
@@ -453,7 +459,8 @@ Quy chế quản lý dự án (RACI) **sắp ban hành**. Khi có, tài liệu v
 
 | Thấy | Nghĩa là | Làm gì |
 |---|---|---|
-| Claude không có công cụ Kepler Hub, không biết Kepler Hub là gì | Chưa cài hoặc chưa bật tiện ích | Làm lại mục 3.2; kiểm tra tiện ích "Kepler Hub" đang bật trong Settings → Extensions |
+| Claude không có công cụ Kepler Hub, không biết Kepler Hub là gì | Chưa cài hoặc chưa bật tiện ích | Làm lại mục 3.2; kiểm tra **Settings → Customize → Connectors → Kepler Hub** đang **Enabled** |
+| Gõ `/kep` thấy hai `kepler-hub` | Cài trùng skill (bản công ty + bản tự tải, hoặc bản cũ + bản mới) | Settings → Customize → Skills: giữ một bản, xoá bản kia (mục 3.5) |
 | "Chưa kết nối Kepler Hub… bấm Cho phép (mã …)" | Lần đầu dùng, hoặc kết nối cũ đã hết hạn / bị thu hồi | Bấm **Cho phép** đúng mã trên trang vừa mở, rồi hỏi lại Claude |
 | "Chưa xác thực: …" | Token hết hạn, bị thu hồi, hoặc bạn vừa đổi mật khẩu | Hỏi lại Claude để mở trang Cho phép. Dùng token thủ công: tạo token mới (mục 3.4) |
 | "Tài khoản phải đổi mật khẩu trên giao diện trước" | Tài khoản đang bị buộc đổi mật khẩu | Đăng nhập Kepler Hub trên trình duyệt, đổi mật khẩu, rồi kết nối lại |

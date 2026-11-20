@@ -63,12 +63,12 @@ rồi làm lại bước 1–2. Xong việc thì `down -v` để xoá hẳn bả
 
 ## Ảnh Claude desktop (chụp tay)
 
-| Tệp | Nội dung |
-|---|---|
-| `anh/claude-01-cai-tien-ich.png` | Hộp cài tiện ích Kepler Hub, nút Install |
-| `anh/claude-02-cau-hinh.png` | Cấu hình tiện ích: Địa chỉ Kepler Hub đã điền, ô Token trống |
-| `anh/claude-03-chua-ket-noi.png` | Claude báo "Chưa kết nối Kepler Hub… bấm Cho phép (mã …)" |
-| `anh/claude-04-skills.png` | Settings → Capabilities → Skills có `kepler-hub`, `kepler-luu-tai-lieu` |
-| `anh/claude-05-toi-la-ai.png` | Claude trả lời "Tôi là ai trong Kepler Hub?" |
+| Tệp | Nội dung | Tình trạng |
+|---|---|---|
+| `anh/claude-01-tien-ich-da-cai.png` | Settings → Customize → Connectors, dòng Kepler Hub có ✓ | Có (chụp máy thật, 20/11/2026) |
+| `anh/claude-02-cau-hinh.png` | Cấu hình tiện ích: Địa chỉ Kepler Hub đã điền, ô Token trống | Có (chụp máy thật, 20/11/2026) |
+| `anh/claude-04-skill-bi-trung.png` | Gõ `/kep` thấy hai `kepler-hub` (minh hoạ lỗi cài trùng) | Có (chụp máy thật, 20/11/2026) |
+| `anh/claude-03-chua-ket-noi.png` | Claude báo "Chưa kết nối Kepler Hub… bấm Cho phép (mã …)" | Còn thiếu |
+| `anh/claude-05-toi-la-ai.png` | Claude trả lời "Tôi là ai trong Kepler Hub?" | Còn thiếu |
 
-Chụp bằng tài khoản thử hoặc che họ tên, email, token. Kết nối Claude tới bản thử 4530 (Địa chỉ Kepler Hub = `http://localhost:4530`, tài khoản mẫu) để ảnh chỉ có dữ liệu giả.
+Chụp bằng tài khoản thử hoặc che họ tên, email, token. **Không** đưa ảnh có token đầy đủ vào repo; token đã lộ trong ảnh phải thu hồi ngay. Kết nối Claude tới bản thử 4530 (Địa chỉ Kepler Hub = `http://localhost:4530`, tài khoản mẫu) để ảnh chỉ có dữ liệu giả.
