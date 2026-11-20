@@ -149,7 +149,7 @@ Bấm tên của bạn góc trên phải → **Kết nối Claude** (1).
 1. Trong Claude desktop, hỏi một câu bất kỳ về Kepler Hub, ví dụ: **"Tôi là ai trong Kepler Hub?"**
 2. Lần đầu, Claude báo *"Chưa kết nối Kepler Hub… bấm Cho phép (mã XXXX-XXXX)"*, đồng thời trình duyệt tự mở trang Kepler Hub.
 
-> 📷 **Ảnh cần chụp** (`anh/claude-03-chua-ket-noi.png`): cửa sổ chat Claude hiện thông báo "Chưa kết nối Kepler Hub" kèm mã.
+   Ghi lại **mã** Claude báo (dạng `ABCD-1234`) để so với mã trên trang Kepler Hub ở bước sau. Trình duyệt không tự mở thì bấm vào đường dẫn Claude đưa trong câu trả lời.
 
 3. Trên trang vừa mở (đăng nhập Kepler Hub nếu được hỏi):
    - kiểm tra **mã** trên trang trùng với mã Claude báo, và **tên máy** đúng là máy của bạn;
@@ -218,7 +218,7 @@ Gõ cho Claude:
 
 Claude gọi `kepper_whoami` và trả lời: họ tên, tài khoản, bộ phận, vai trò giao ban, hạn nộp báo cáo tuần. Kiểm tra đúng tài khoản của bạn trước khi nhờ Claude làm gì khác.
 
-> 📷 **Ảnh cần chụp** (`anh/claude-05-toi-la-ai.png`): Claude trả lời câu "Tôi là ai trong Kepler Hub?".
+Tên hoặc bộ phận không đúng của bạn: dừng lại, vào **Kết nối Claude → Máy đã kết nối** thu hồi kết nối đó, rồi kết nối lại bằng tài khoản của chính bạn.
 
 Thử tiếp: **"Hôm nay tôi có gì?"** — Claude gom thông báo, việc của bạn, nhắc việc thành danh sách: quá hạn → hôm nay → sắp tới.
 
