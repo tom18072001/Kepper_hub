@@ -203,7 +203,7 @@ export function buildServer({ call = createSession() } = {}) {
   server.registerTool('kepper_add_comment', { title: 'Bình luận', description: 'Thêm bình luận vào một việc (có thể @nhắc tên người trong dự án).', inputSchema: { itemId: z.number().int().positive(), text: z.string().min(1).max(5000) }, annotations: W },
     run(async ({ itemId, text }) => call(`/api/items/${itemId}/comments`, { method: 'POST', body: { body: text } }).then(c => pick(c, ['id', 'createdAt']))));
 
-  server.registerTool('kepper_create_task', { title: 'Giao việc / tạo việc', description: 'Tạo việc trong một dự án và giao người phụ trách. Dự án MTL: chỉ người quản lý dự án tạo hạng mục; lãnh đạo bộ phận thêm việc con dưới hạng mục bộ phận mình chủ trì (parentId).',
+  server.registerTool('kepper_create_task', { title: 'Giao việc / tạo việc', description: 'Tạo việc trong một dự án và giao người phụ trách. Dự án MTL: chỉ người quản lý dự án tạo hạng mục. Việc nhánh (parentId = việc cha): chỉ người chủ trì, người giao hoặc Ban Giám đốc của việc cha tạo.',
     inputSchema: { projectId: z.number().int().positive(), title: z.string().min(1).max(300), parentId: z.number().int().positive().optional(), assigneeIds: z.array(z.number().int().positive()).max(10).optional(),
       dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), description: z.string().max(5000).optional() }, annotations: W },
     run(async ({ projectId, title, parentId, assigneeIds, dueDate, description }) => {
