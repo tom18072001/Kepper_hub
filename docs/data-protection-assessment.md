@@ -5,7 +5,7 @@ Kepler Hub kế thừa mã nguồn và các biện pháp đã đánh giá của 
 ## Đánh giá bảo vệ dữ liệu — Kepler Hub GĐ1 (MTL, cảnh báo tiến độ, KPI, Viber) — 20/10/2026
 
 **Giả định** (chưa được xác nhận, nên áp mức nhạy cảm cao hơn):
-- Triển khai on-prem: một máy chủ / PC của công ty chạy Docker, chỉ truy cập trong mạng nội bộ hoặc qua VPN.
+- Triển khai on-prem: một máy chủ / PC của công ty chạy Docker, chỉ truy cập trong mạng nội bộ hoặc qua Tailscale (chỉ quảng bá IP của Hub, ACL giới hạn thành viên ở cổng 443/80).
 - Dưới 500 nhân viên.
 - Không xử lý dữ liệu khách hàng mua / thuê nhà ở xã hội. Bước "bán hàng" trong MTL chỉ là hạng mục công việc, không có danh sách khách hàng.
 - Không có bí mật nhà nước.
