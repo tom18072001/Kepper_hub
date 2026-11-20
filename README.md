@@ -2,6 +2,8 @@
 
 Kế hoạch nghiệp vụ: [`docs/PLAN-kepper.md`](docs/PLAN-kepper.md). Đánh giá bảo vệ dữ liệu: [`docs/data-protection-assessment.md`](docs/data-protection-assessment.md).
 
+Hướng dẫn sử dụng cho nhân viên và lãnh đạo (kèm ảnh từng bước, cách dùng Claude desktop): [`docs/huong-dan-su-dung/`](docs/huong-dan-su-dung/README.md).
+
 Kepler Hub được khởi tạo từ WorkHub (repo `tom18072001/ND57`, nhánh `workhub-kanban`). Phần lõi giữ nguyên:
 - dự án, Kanban, danh sách, lịch, việc con;
 - duyệt nhiều cấp, bình luận @nhắc tên, tệp đính kèm hai chiều;
