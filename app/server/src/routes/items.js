@@ -233,7 +233,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       mtl: project.kind === 'MTL' ? (() => {
         const act = rolled.get(item.id);
         const st = MTL.statusOf(item, act, new Date(), MTL.alertConfigOf(project));
-        return { actual: act, planned: st.planned ?? MTL.plannedPct(item), status: st.code, statusLabel: MTL.STATUS[st.code], variance: st.variance ?? null, lateDays: st.lateDays ?? null };
+        return { actual: act, planned: st.planned ?? MTL.plannedPct(item), status: st.code, statusLabel: MTL.STATUS[st.code], variance: st.variance ?? null, lateDays: st.lateDays ?? null, grace: !!st.grace };
       })() : null,
       submitRounds: item.approvals.length,
       children: item.children.map(({ children: grand, ...c }) => ({ ...c, assignees: c.assignees.map(a => a.user), stage: stageOf({ ...c, pendingApproval: c.approvals[0] }, allSteps), childProgress: rules.childProgress(grand),

@@ -12,6 +12,8 @@ const pct = v => (v == null ? '—' : `${num(v)}%`);
 const spiTone = s => (s == null ? '' : s >= 0.95 ? 'ok' : s >= 0.8 ? 'warn' : 'danger');
 const scoreTone = s => (s == null ? '' : s >= 85 ? 'ok' : s >= 70 ? 'warn' : 'danger');
 const statusPill = i => `<span class="pill mtl-st ${TONE[i.status] || ''}" data-testid="mtl-status">${esc(i.statusLabel || '')}${i.status === 'OVERDUE' && i.lateDays ? ` ${i.lateDays} ngày` : ''}</span>`;
+// Độ lệch có dấu: + / − (dấu trừ chuẩn, không dùng gạch nối).
+const signed = v => (v > 0 ? '+' : v < 0 ? '−' : '') + num(Math.abs(v));
 const tLabel = i => (i.startT != null ? `T${num(i.startT, 0)}–T${num(i.endT, 0)}` : '');
 // Nút "?" giải thích chỉ số (giữ theme: chữ mờ, viền theo màu chữ).
 const help = text => `<span class="mtl-help muted" role="img" tabindex="0" title="${esc(text)}" aria-label="${esc(text)}" style="display:inline-flex;align-items:center;justify-content:center;width:1.1em;height:1.1em;margin-left:4px;border:1px solid currentColor;border-radius:50%;font-size:.75em;line-height:1;cursor:help;vertical-align:middle">?</span>`;
@@ -235,7 +237,7 @@ export async function drawMtlPlan(body, project, params) {
         <td class="mp-title" style="padding-left:${10 + depth * 18}px">${i.critical ? '<span class="crit" title="Đường găng"><svg class="gl gl-crit" viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="currentColor"/></svg></span> ' : ''}${esc(i.title)}${i.milestone ? ' <span class="ms" title="Mốc"><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg></span>' : ''}${i.assignees.length ? `<span class="muted xs mp-who">${i.assignees.map(u => personLink(u)).join(', ')}</span>` : ''}</td>
         <td class="mp-owner muted sm">${esc(i.ownerText || i.leadDepartmentName)}${i.externalParty ? '' : ''}</td>
         <td class="mp-t nowrap"><span>${tLabel(i)}</span><span class="muted xs">${fmtDate(i.baselineStart)} – ${fmtDate(i.baselineEnd)}</span></td>
-        <td class="num">${pct(i.planned)}</td><td class="num"><b>${pct(i.actual)}</b></td><td>${statusPill(i)}${i.variance != null && ['BEHIND', 'AHEAD', 'ON_TRACK'].includes(i.status) ? `<span class="muted xs"> ${i.variance > 0 ? '+' : ''}${num(i.variance)}</span>` : ''}</td>
+        <td class="num">${pct(i.planned)}</td><td class="num"><b>${pct(i.actual)}</b></td><td>${statusPill(i)}${i.variance != null && !i.grace && ['BEHIND', 'AHEAD', 'ON_TRACK'].includes(i.status) ? `<span class="muted xs"> ${signed(i.variance)}</span>` : ''}</td>
         <td class="mp-gantt"><div class="g-track" style="--gcol:${col}%">${curBand}${inWin(now) ? `<span class="g-today" style="left:${x(now)}%"></span>` : ''}${bar(i)}</div></td></tr>`;
   const foldKey = `proj:${project.id}:planFold`, fold = new Set(uiPref(foldKey) || []);
   const sprintHead = (sp, list) => {
@@ -290,7 +292,7 @@ export function mtlPanelBlock(d, project, c = {}) {
     <div class="row wrap">${d.planCode ? `<span class="code">Bước ${esc(d.planCode)}</span>` : ''}${d.critical ? '<span class="pill danger">Đường găng</span>' : ''}${d.milestone ? '<span class="pill"><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> Mốc</span>' : ''}${st.statusLabel ? `<span class="pill mtl-st ${TONE[st.status] || ''}">${esc(st.statusLabel)}</span>` : ''}</div>
     <div class="mtl-facts">
       <div><span class="muted xs">Kế hoạch gốc</span><b>${fmtDate(d.baselineStart)} – ${fmtDate(d.baselineEnd)}</b>${d.startT != null ? `<span class="muted xs"> (T${num(d.startT, 0)}–T${num(d.endT, 0)})</span>` : ''}</div>
-      <div><span class="muted xs">Kế hoạch / thực tế</span><b>${pct(st.planned)} / ${pct(st.actual ?? d.progress)}</b>${st.variance != null ? `<span class="muted xs"> (${st.variance > 0 ? '+' : ''}${num(st.variance)} điểm)</span>` : ''}</div>
+      <div><span class="muted xs">Kế hoạch / thực tế</span><b>${pct(st.planned)} / ${pct(st.actual ?? d.progress)}</b>${st.grace ? '<span class="muted xs" data-testid="mtl-grace"> (mới bắt đầu, chưa tính chậm)</span>' : st.variance != null ? `<span class="muted xs"> (${signed(st.variance)} điểm)</span>` : ''}</div>
       ${d.ownerText ? `<div><span class="muted xs">Đầu mối</span>${esc(d.ownerText)}</div>` : ''}
       ${d.externalParty ? `<div><span class="muted xs">Cơ quan / đơn vị ngoài</span>${esc(d.externalParty)}</div>` : ''}
       ${c.fields?.forecastEnd ? `<label><span class="muted xs">Dự báo hoàn thành</span><input type="date" id="ipForecast" value="${d.forecastEnd ? new Date(new Date(d.forecastEnd).getTime() + 7 * 3_600_000).toISOString().slice(0, 10) : ''}" data-testid="item-forecast"></label>`

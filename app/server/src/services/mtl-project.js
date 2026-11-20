@@ -22,7 +22,7 @@ async function computeProject(prisma, project, user, day = new Date()) {
     const a = actual.get(r.id) ?? r.progress;
     const st = M.statusOf(r, a, day, cfg);
     return { ...r, assignees: r.assignees.map(x => x.user), supportDepartmentIds: r.supportDepartments.map(x => x.departmentId), supportDepartments: undefined,
-      code: `${project.key}-${r.number}`, actual: a, planned: st.planned ?? M.plannedPct(r, day), status: st.code, statusLabel: M.STATUS[st.code], variance: st.variance ?? null,
+      code: `${project.key}-${r.number}`, actual: a, planned: st.planned ?? M.plannedPct(r, day), status: st.code, statusLabel: M.STATUS[st.code], variance: st.variance ?? null, grace: !!st.grace,
       lateDays: st.lateDays ?? null, daysLeft: st.daysLeft ?? null, startsIn: st.startsIn ?? null, children: 0 };
   });
   const byId = new Map(items.map(i => [i.id, i]));
