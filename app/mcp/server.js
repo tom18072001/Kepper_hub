@@ -15,8 +15,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 
-const VERSION = '0.5.0';
-const BASE = String(process.env.KEPPER_URL || 'http://localhost:4100').replace(/\/+$/, '');
+const VERSION = '0.5.1';
+const BASE = String(process.env.KEPPER_URL || 'https://hub.keplerholdings.vn').replace(/\/+$/, '');
 const TOKEN = String(process.env.KEPPER_TOKEN || '').trim();
 const TIMEOUT_MS = 20_000;
 const MAX_ROWS = 100;
