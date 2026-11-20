@@ -67,7 +67,10 @@ rồi làm lại bước 1–2. Xong việc thì `down -v` để xoá hẳn bả
 |---|---|---|
 | `anh/claude-01-tien-ich-da-cai.png` | Settings → Customize → Connectors, dòng Kepler Hub có ✓ | Có (chụp máy thật, 20/11/2026) |
 | `anh/claude-02-cau-hinh.png` | Cấu hình tiện ích: Địa chỉ Kepler Hub đã điền, ô Token trống | Có (chụp máy thật, 20/11/2026) |
+| `anh/claude-04-skills-to-chuc.png` | Settings → Customize → Skills: hai skill "From your organization" | Có (chụp máy thật, 20/11/2026) |
+| `anh/claude-04-skill-kep.png` | Gõ `/kep`: mỗi skill một dòng | Có (chụp máy thật, 20/11/2026) |
 | `anh/claude-04-skill-bi-trung.png` | Gõ `/kep` thấy hai `kepler-hub` (minh hoạ lỗi cài trùng) | Có (chụp máy thật, 20/11/2026) |
+| `anh/claude-06-token-tao.png`, `claude-06-token-sao-chep.png` | Tạo token thủ công; token đã được che phần giữa (token gốc đã xoá) | Có (chụp máy thật, 20/11/2026) |
 | `anh/claude-03-chua-ket-noi.png` | Claude báo "Chưa kết nối Kepler Hub… bấm Cho phép (mã …)" | Còn thiếu |
 | `anh/claude-05-toi-la-ai.png` | Claude trả lời "Tôi là ai trong Kepler Hub?" | Còn thiếu |
 

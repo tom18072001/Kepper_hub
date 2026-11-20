@@ -171,11 +171,19 @@ Chỉ bấm **Cho phép** cho yêu cầu do chính bạn vừa tạo trên chín
 Chỉ dùng khi máy không tự mở được trình duyệt (trang Cho phép không hiện).
 
 1. Trang **Kết nối Claude** → mở **Tạo token thủ công**.
-2. Nhập tên máy, chọn quyền và hiệu lực (30 / 60 / 90 ngày) → **Tạo token**.
-3. **Sao chép token ngay** (Kepler Hub không hiện lại), dán vào ô **Token Kepler Hub** trong cấu hình tiện ích trên Claude desktop.
-4. Không gửi token cho ai, không dán vào chat.
 
 ![Tạo token thủ công](anh/03-token-thu-cong.png)
+
+2. Nhập tên máy (vd. "Laptop văn phòng"), chọn quyền và hiệu lực (30 / 60 / 90 ngày) → **Tạo token**.
+
+![Điền tên máy, quyền, hiệu lực rồi bấm Tạo token](anh/claude-06-token-tao.png)
+
+3. **Bấm Sao chép ngay**: Kepler Hub chỉ hiện token **một lần**.
+
+![Token vừa tạo (ảnh đã che phần giữa token)](anh/claude-06-token-sao-chep.png)
+
+4. Dán vào ô **Token Kepler Hub** trong cấu hình tiện ích (Settings → Customize → Connectors → Kepler Hub, mục 3.2) → **Save**.
+5. Không gửi token cho ai, không dán vào chat, không chụp màn hình có token. Lộ token thì **Thu hồi** ngay ở danh sách **Máy đã kết nối**.
 
 ### 3.5 Cài skill Kepler cho Claude
 
@@ -186,13 +194,19 @@ Skill giúp Claude biết cách làm việc với Kepler Hub đúng quy tắc c�
 | `kepler-hub` | Việc, dự án, báo cáo tuần, nhân sự, đối tác, nhắc việc, thông báo |
 | `kepler-luu-tai-lieu` | Lưu tài liệu đúng thư mục phòng trên NAS `\\192.168.130.2\DATA`, đặt tên tệp đúng quy ước |
 
-1. Trong Claude desktop: **Settings → Customize → Skills**. Nếu hai skill đã có trong danh sách (quản trị bật cho cả công ty): bật lên là xong, **không tải lên thêm**.
-2. Chưa có: xin IT tệp `.zip` của skill → **+ Add** → tải tệp lên.
-3. Kiểm tra: trong ô chat gõ `/kep`. Danh sách phải có **đúng một** `kepler-hub` và một `kepler-luu-tai-lieu`.
+Công ty đã cấp sẵn hai skill này cho mọi người: **bạn không phải cài gì**, chỉ kiểm tra.
 
-**Thấy hai `kepler-hub` giống nhau** (như ảnh dưới) là đang có hai bản cùng tên: thường là một bản công ty cấp và một bản bạn tự tải lên, hoặc bản cũ và bản mới. Claude có thể dùng nhầm bản cũ. Cách sửa: **Settings → Customize → Skills**, giữ bản mới nhất (hoặc bản công ty cấp), tắt hoặc xoá bản còn lại, rồi gõ lại `/kep` để kiểm tra.
+1. Claude desktop → **Settings → Customize → Skills → Yours**. Mục **From your organization** có `kepler-hub` và `kepler-luu-tai-lieu`, ghi *required by your organization*.
 
-![Gõ /kep thấy hai skill kepler-hub: cần xoá một bản](anh/claude-04-skill-bi-trung.png)
+![Settings → Customize → Skills: hai skill do công ty cấp](anh/claude-04-skills-to-chuc.png)
+
+2. Trong ô chat gõ `/kep`: phải thấy **đúng một** `kepler-hub` và một `kepler-luu-tai-lieu`.
+
+![Gõ /kep: mỗi skill một dòng](anh/claude-04-skill-kep.png)
+
+**Không tự tải skill Kepler lên** (+ Add). Tải thêm sẽ thành hai bản cùng tên, Claude có thể dùng nhầm bản cũ. Gõ `/kep` mà thấy hai `kepler-hub` như ảnh dưới: vào **Settings → Customize → Skills**, xoá bản bạn tự tải (bản không ghi *required by your organization*), rồi gõ lại `/kep`.
+
+![Lỗi: gõ /kep thấy hai skill kepler-hub](anh/claude-04-skill-bi-trung.png)
 
 Tuỳ chọn: tiện ích **Kepler NAS** (`kepler-nas.mcpb`, IT cấp) cho Claude **đọc** thư mục NAS bằng chính quyền Windows của bạn, để skill `kepler-luu-tai-lieu` chỉ đúng thư mục có thật. Tiện ích chỉ đọc, không ghi, không xoá.
 
@@ -460,7 +474,7 @@ Quy chế quản lý dự án (RACI) **sắp ban hành**. Khi có, tài liệu v
 | Thấy | Nghĩa là | Làm gì |
 |---|---|---|
 | Claude không có công cụ Kepler Hub, không biết Kepler Hub là gì | Chưa cài hoặc chưa bật tiện ích | Làm lại mục 3.2; kiểm tra **Settings → Customize → Connectors → Kepler Hub** đang **Enabled** |
-| Gõ `/kep` thấy hai `kepler-hub` | Cài trùng skill (bản công ty + bản tự tải, hoặc bản cũ + bản mới) | Settings → Customize → Skills: giữ một bản, xoá bản kia (mục 3.5) |
+| Gõ `/kep` thấy hai `kepler-hub` | Có thêm một bản skill tự tải lên, trùng tên bản công ty cấp | Settings → Customize → Skills: xoá bản tự tải, giữ bản *required by your organization* (mục 3.5) |
 | "Chưa kết nối Kepler Hub… bấm Cho phép (mã …)" | Lần đầu dùng, hoặc kết nối cũ đã hết hạn / bị thu hồi | Bấm **Cho phép** đúng mã trên trang vừa mở, rồi hỏi lại Claude |
 | "Chưa xác thực: …" | Token hết hạn, bị thu hồi, hoặc bạn vừa đổi mật khẩu | Hỏi lại Claude để mở trang Cho phép. Dùng token thủ công: tạo token mới (mục 3.4) |
 | "Tài khoản phải đổi mật khẩu trên giao diện trước" | Tài khoản đang bị buộc đổi mật khẩu | Đăng nhập Kepler Hub trên trình duyệt, đổi mật khẩu, rồi kết nối lại |
