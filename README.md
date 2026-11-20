@@ -91,7 +91,7 @@ Vận hành trên máy chạy:
   - Muốn dùng thử trên máy chạy thì đặt `ALLOW_DEMO_SEED=yes`.
 
 Trước khi dùng thật cho nhiều người (phản biện đầy đủ, có đo tải 50 người: `docs/production-readiness.md`):
-- chạy trên máy luôn bật — **NAS công ty**: `sudo sh deploy/nas-setup.sh <thư-mục-dữ-liệu> https://kepper.<tên-miền>`, hướng dẫn `docs/deploy-nas.md`; nâng cấp `sudo sh deploy/upgrade.sh`; đồng bộ giờ NTP;
+- chạy trên máy luôn bật — **NAS công ty**: `sudo sh deploy/nas-setup.sh <thư-mục-dữ-liệu> https://hub.keplerholdings.vn`, hướng dẫn `docs/deploy-nas.md`; nâng cấp `sudo sh deploy/upgrade.sh`; đồng bộ giờ NTP;
 - đặt reverse proxy TLS (HTTPS) phía trước cổng 4100, `TRUST_PROXY=1`, `APP_ORIGIN` = đúng địa chỉ người dùng gõ;
 - khoá các tài khoản mẫu;
 - bật mã hoá + bản sao lưu ngoài máy (ngoài NAS).

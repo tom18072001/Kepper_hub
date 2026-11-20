@@ -1,11 +1,11 @@
 #!/bin/sh
 # Cài / nâng cấp Kepler Hub trên máy ảo Ubuntu (Hyper-V) có HTTPS nội bộ bằng Caddy — docs/deploy-vm.md
-#   sh deploy/vm-deploy.sh <tên-máy> [tệp-tổ-chức.json]      vd. sh deploy/vm-deploy.sh kepler-hub.kepler.com /tmp/org.json
+#   sh deploy/vm-deploy.sh <tên-máy> [tệp-tổ-chức.json]      vd. sh deploy/vm-deploy.sh hub.keplerholdings.vn /tmp/org.json
 # Chạy trong thư mục mã nguồn, bằng tài khoản có sudo + nhóm docker. Lần đầu: tạo /srv/kepler-hub, .env (khoá ngẫu nhiên),
 # bật app + Caddy, nhập tổ chức (nếu có tệp). Lần sau: giữ .env và dữ liệu, sao lưu trước rồi build lại.
 set -eu
 cd "$(dirname "$0")/.."
-HOST="${1:?Thiếu tên máy, vd. kepler-hub.kepler.com}"; ORG="${2:-}"; DATA=/srv/kepler-hub
+HOST="${1:?Thiếu tên máy, vd. hub.keplerholdings.vn}"; ORG="${2:-}"; DATA=/srv/kepler-hub
 set_env() { if grep -q "^$1=" .env; then sed -i "s|^$1=.*|$1=$2|" .env; else printf '%s=%s\n' "$1" "$2" >> .env; fi; }
 first=0
 if [ ! -f .env ]; then

@@ -1,5 +1,5 @@
 # Kepler Hub — HTTPS nội bộ (docker compose --profile https).
-# HUB_HOST: một hoặc nhiều tên máy, cách nhau dấu phẩy + cách, vd. "kepler-hub.kepler.com, hub.keplerholdings.vn".
+# HUB_HOST: một hoặc nhiều tên máy, cách nhau dấu phẩy + cách, vd. "hub.keplerholdings.vn" hoặc "hub.keplerholdings.vn, <tên-khác>".
 {
 	admin off
 	# Cổng 80 do khối :80 bên dưới tự xử lý (trang cài chứng chỉ + chuyển HTTPS).

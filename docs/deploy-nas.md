@@ -1,7 +1,7 @@
 # Chạy Kepler Hub trên NAS công ty
 
 Dành cho quản trị hệ thống. Thay máy cá nhân (Docker Desktop, `http://localhost:4100`) bằng NAS công ty chạy liên tục,
-nhân viên mở bằng laptop qua `https://kepper.<tên-miền-công-ty>`.
+nhân viên mở bằng laptop qua `https://hub.keplerholdings.vn`.
 Đánh giá đầy đủ (có / chưa đáp ứng production 40–50 người): `docs/production-readiness.md`.
 
 ```
@@ -34,7 +34,7 @@ sudo -i
 cd /volume1/docker                     # thư mục chia sẻ chỉ quản trị thấy (Synology); QNAP: /share/Container
 git clone https://github.com/tom18072001/Kepper_hub.git kepper   # repo riêng tư: dùng deploy key chỉ đọc, hoặc chép mã nguồn qua thư mục chia sẻ
 cd kepper && git checkout <nhánh đang dùng>
-sh deploy/nas-setup.sh /volume1/kepper-data https://kepper.<tên-miền-công-ty>
+sh deploy/nas-setup.sh /volume1/kepper-data https://hub.keplerholdings.vn
 vi .env                                # ROOT_ADMIN_PASSWORD, ORG_NAME, (MODULES, HR_ENC_KEY nếu bật HRM)
 cp <logo> /volume1/kepper-data/branding/   # logo.png, mark.png — logo thật chỉ nằm trên NAS, không đưa vào git
 docker compose up -d --build
@@ -61,7 +61,7 @@ docker load -i kepper-images.tar && docker compose up -d --no-build
 
 | Biến | NAS có reverse proxy trên chính NAS | Ghi chú |
 |---|---|---|
-| `APP_ORIGIN` | `https://kepper.<tên-miền>` | Phải **đúng** địa chỉ người dùng gõ. Mở bằng địa chỉ khác (IP, http) → đăng nhập báo "Địa chỉ … chưa được phép". Địa chỉ đầu tiên được điền sẵn vào tiện ích Claude |
+| `APP_ORIGIN` | `https://hub.keplerholdings.vn` | Phải **đúng** địa chỉ người dùng gõ. Mở bằng địa chỉ khác (IP, http) → đăng nhập báo "Địa chỉ … chưa được phép". Địa chỉ đầu tiên được điền sẵn vào tiện ích Claude |
 | `APP_BIND` | `127.0.0.1` | Chỉ proxy trên NAS vào được cổng 4100. Proxy ở máy khác: IP LAN của NAS + tường lửa chỉ cho IP proxy |
 | `TRUST_PROXY` | `1` | Lấy IP thật của laptop (nhật ký truy cập, kiểm tra "cùng máy" khi kết nối Claude). Thiếu → mọi người cùng một IP |
 | `PGDATA_PATH`, `UPLOADS_PATH` | thư mục trên ổ NAS | Để trống = volume Docker (dùng khi thư mục chia sẻ vướng ACL) |
@@ -97,7 +97,7 @@ kepper.<tên-miền> {
 
 ## 5. Laptop nhân viên
 
-- Lưu dấu trang `https://kepper.<tên-miền>`; đăng nhập lại một lần (phiên trên máy cũ không dùng được).
+- Lưu dấu trang `https://hub.keplerholdings.vn`; đăng nhập lại một lần (phiên trên máy cũ không dùng được).
 - Claude Desktop: tải tiện ích ở trang **Kết nối Claude** — địa chỉ Kepper điền sẵn theo `APP_ORIGIN`.
   Máy đã cài bản cũ (localhost): gỡ, cài lại; lần hỏi đầu Kepper mở trang "Cho phép" để kết nối.
 - Ngoài văn phòng: VPN về công ty rồi mở như bình thường.
@@ -148,7 +148,7 @@ Lần nâng cấp **đầu tiên** lên bản có tính năng này, tab cũ chư
 
 ## 9. Kiểm tra sau khi cài
 
-- [ ] Laptop mở `https://kepper.<tên-miền>`: chứng chỉ hợp lệ, không cảnh báo.
+- [ ] Laptop mở `https://hub.keplerholdings.vn`: chứng chỉ hợp lệ, không cảnh báo.
 - [ ] Đăng nhập từ 2 laptop khác nhau; thông báo tức thời hiện ngay (SSE qua proxy).
 - [ ] Tệp nhật ký `<dữ liệu>/logs/access-<ngày>.jsonl` ghi IP LAN của laptop (không phải 172.x / 127.0.0.1) → `TRUST_PROXY` đúng.
 - [ ] Đính kèm một tệp, đổi ảnh đại diện → được (thư mục uploads ghi được).
