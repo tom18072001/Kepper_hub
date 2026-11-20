@@ -54,7 +54,7 @@ module.exports = function mountExcel(app, { prisma, auth, audit, config }) {
     if (project.kind === 'MTL') MG.mtlExportGuard(req.user, project, rights);
     else if (!canExport(req.user, project)) fail(403, 'Bạn không có quyền xuất Excel dự án này', 'FORBIDDEN');
     const items = await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, AND: [itemVisibleWhere(req.user)] }, orderBy: { number: 'asc' },
-      include: { state: true, assignees: { include: { user: true } }, labels: { include: { label: true } } } });
+      include: { state: true, assignees: { include: { user: { select: { id: true, fullName: true } } } }, labels: { include: { label: true } } } });
     const wb = new ExcelJS.Workbook();
     wb.creator = `WorkHub - ${req.user.username}`;
     wb.created = new Date();

@@ -438,7 +438,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
     MG.mtlExportGuard(req.user, project, rights); // MTL: quy định xuất (người quản lý dự án / Ban GĐ)
     const settings = await R.getSettings(prisma);
     const items = await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, AND: [itemVisibleWhere(req.user)] }, orderBy: { number: 'asc' },
-      include: { state: true, assignees: { include: { user: true } }, supporters: { include: { user: true } },
+      include: { state: true, assignees: { include: { user: { select: { id: true, fullName: true } } } }, supporters: { include: { user: { select: { id: true, fullName: true } } } },
         approvals: { where: { status: 'PENDING' }, select: { currentLevel: true, status: true, withAssigner: true, withBoard: true } }, documents: { where: { kind: 'BASIS' }, orderBy: { id: 'asc' } } } });
     const steps = await prisma.approvalStep.findMany({ where: { projectId: project.id }, orderBy: { level: 'asc' } });
     const names = Object.fromEntries((await prisma.user.findMany({ where: { id: { in: [...new Set(items.map(i => i.assignedById).filter(Boolean))] } }, select: { id: true, fullName: true } })).map(u => [u.id, u.fullName]));

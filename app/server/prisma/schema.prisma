@@ -253,6 +253,7 @@ model WorkItem {
   @@index([cycleId])
   @@index([parentId])
   @@index([assignedById])
+  @@index([reporterId])
 }
 
 // ---------- GĐ2: chu kỳ, tiếp nhận yêu cầu, việc lặp lại, bộ lọc đã lưu ----------
@@ -518,6 +519,7 @@ model ApprovalRequest {
 
   @@index([status])
   @@index([workItemId])
+  @@index([requestedById])
 }
 
 model ApprovalAction {
@@ -585,6 +587,7 @@ model DueExtension {
   createdAt     DateTime  @default(now())
 
   @@index([workItemId, status])
+  @@index([requestedById])
 }
 
 // Văn bản liên quan (số hiệu từ hệ thống văn bản điện tử): căn cứ giao việc, sản phẩm tham mưu, văn bản đã phát hành.
@@ -998,6 +1001,7 @@ model HrAttendance {
 
   @@unique([userId, day])
   @@index([departmentId, day])
+  @@index([day])
 }
 
 // ---- Văn thư (QyĐ-GA-01): sổ văn bản đến / đi / nội bộ, cấp số liên tục theo dãy, hạn xử lý theo độ khẩn ----

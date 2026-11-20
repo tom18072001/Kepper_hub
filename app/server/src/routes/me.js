@@ -23,6 +23,10 @@ module.exports = function mountMe(app, { prisma, auth }) {
     ]);
     res.json({ items, unread });
   });
+  // Chỉ số chưa đọc — cho nhịp đếm 30s (không tải 50 dòng thông báo mỗi nhịp).
+  app.get('/api/notifications/unread-count', auth, async (req, res) => {
+    res.json({ unread: await prisma.notification.count({ where: { userId: req.user.id, readAt: null } }) });
+  });
   app.post('/api/notifications/:id/read', auth, async (req, res) => {
     await prisma.notification.updateMany({ where: { id: intParam(req.params.id), userId: req.user.id, readAt: null }, data: { readAt: new Date() } });
     res.json({ ok: true });
