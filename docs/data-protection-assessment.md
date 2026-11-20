@@ -659,7 +659,7 @@ cho nhân viên; (3) chạy trên **máy ảo Ubuntu (Hyper-V) trên máy chủ 
 
 - Văn thư vào sổ → máy chủ cấp số trong giao dịch có khoá (không trùng / nhảy số) → thông báo trong ứng dụng cho người xử lý, Pháp chế (khi có thời hạn pháp lý).
   08:20 hằng ngày nhắc trước hạn / quá hạn; thứ Hai tổng hợp quá hạn cho Ban GĐ. Không gửi ra ngoài (Viber vẫn tắt).
-- Máy trạm → `https://hub.keplerholdings.vn` (DNS nội bộ trỏ IP máy chủ) → NAT của Hyper-V → Caddy (TLS) trong máy ảo → app (cổng nội bộ) → Postgres trên đĩa máy ảo.
+- Máy trạm → `https://hub.keplerholdings.vn` (DNS nội bộ trỏ IP riêng của máy ảo 192.168.130.250, từ 20/11/2026; trước đó qua NAT của Hyper-V trên DC) → Caddy (TLS) trong máy ảo → app (cổng nội bộ) → Postgres trên đĩa máy ảo.
 - Service worker của bản cài ứng dụng **không đệm** dữ liệu / API (chỉ chuyển tiếp; mất mạng hiện trang báo) — không có bản sao dữ liệu trên máy trạm ngoài phiên trình duyệt như trước.
 
 ### 3. Rà năng lực (thay đổi)
@@ -669,7 +669,7 @@ cho nhân viên; (3) chạy trên **máy ảo Ubuntu (Hyper-V) trên máy chủ 
 | GOV-02 | Đầy đủ | Văn bản mang mức bảo mật + độ khẩn từ lúc vào sổ (Điều 5) | Bắt buộc |
 | PRE-01 | Đầy đủ | Vào sổ / sửa / hủy: văn thư + Ban GĐ; D7: lãnh đạo bộ phận đó; người xử lý chỉ đổi bước xử lý của mình; quản trị IT không đọc nội dung; Claude chỉ đọc, không thấy Bảo mật cao | Bắt buộc |
 | PRE-03 | Một phần | HTTPS bằng CA nội bộ; app không mở cổng ra ngoài máy ảo; SSH chỉ khoá, tường lửa ufw. Còn thiếu: phát chứng chỉ gốc qua AD (`certutil -dspublish`), mã hoá đĩa máy ảo | Bắt buộc |
-| PRE-04 | Một phần | Máy ảo tách khỏi Domain Controller (không chạy ứng dụng web trên DC); chỉ cổng 80/443 chuyển vào | Bắt buộc |
+| PRE-04 | Một phần | Máy ảo tách khỏi Domain Controller (không chạy ứng dụng web trên DC). Từ 20/11/2026 máy ảo có IP LAN riêng; DC không còn nhận hay chuyển cổng 80/443/2222 | Bắt buộc |
 | DET-01 | Đầy đủ | AuditLog `CREATE / UPDATE / CANCEL` DocRecord + lịch sử từng văn bản (DocEvent) | Bắt buộc |
 | RES-01 | Một phần | Sao lưu hằng ngày trong máy ảo; còn thiếu bản ngoài máy ảo (ổ D máy chủ hoặc NAS) + khoá age | Bắt buộc |
 | PRI-02 | Đầy đủ | Danh bạ chỉ trường công việc (không CCCD, địa chỉ nhà); mật khẩu ban đầu bắt đổi ở lần đăng nhập đầu | Bắt buộc |
