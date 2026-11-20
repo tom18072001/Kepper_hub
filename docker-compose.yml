@@ -154,6 +154,7 @@ services:
         condition: service_healthy
     environment:
       HUB_HOST: ${HUB_HOST:-localhost}
+      HUB_DEFAULT_SNI: ${HUB_DEFAULT_SNI:-localhost}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./deploy/ca-help.html:/srv/ca-help/index.html:ro

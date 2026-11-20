@@ -4,6 +4,8 @@
 	admin off
 	# Cổng 80 do khối :80 bên dưới tự xử lý (trang cài chứng chỉ + chuyển HTTPS).
 	auto_https disable_redirects
+	# Trình duyệt không gửi SNI khi mở bằng IP: dùng tên này để chọn chứng chỉ.
+	default_sni {$HUB_DEFAULT_SNI:localhost}
 }
 
 # Cổng 80 (mọi tên máy): trang hướng dẫn + tệp chứng chỉ gốc để máy cài tin cậy; còn lại chuyển sang HTTPS.

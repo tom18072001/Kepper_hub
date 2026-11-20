@@ -14,7 +14,9 @@ Bố trí đang chạy từ 20/11/2026: máy ảo `KeplerHub`, IP **192.168.130.
 
 ## Tên miền
 
-- Dùng **một tên**: `hub.keplerholdings.vn`, thuộc tên miền công ty (đăng ký VNNIC). `APP_ORIGIN=https://hub.keplerholdings.vn`, `HUB_HOST="hub.keplerholdings.vn"`.
+- Tên chính: `hub.keplerholdings.vn`, thuộc tên miền công ty (đăng ký VNNIC). Từ 20/11/2026 mở thêm được bằng IP `https://192.168.130.250` (theo yêu cầu CNTT):
+  `APP_ORIGIN=https://hub.keplerholdings.vn,https://192.168.130.250`, `HUB_HOST="hub.keplerholdings.vn, 192.168.130.250"`, `HUB_DEFAULT_SNI=192.168.130.250`.
+  Trình duyệt không gửi tên máy (SNI) khi mở bằng IP, nên Caddy cần `default_sni` để chọn chứng chỉ cấp cho IP. Cùng chứng chỉ gốc, máy đã tin thì không cảnh báo.
 - **Không** dùng tên dưới domain AD `kepler.com` cho Hub: `kepler.com` chỉ là tên nội bộ của AD, tên công khai thuộc một đơn vị khác.
   Máy không dùng DNS của AD (VPN dùng 8.8.8.8, điện thoại) sẽ tra tên đó trên Internet — chủ thật của `kepler.com` tạo bản ghi là nhận được đăng nhập.
 - Tên miền và chuyện "chỉ dùng nội bộ" là hai việc riêng: Hub chỉ vào được từ LAN / VPN vì IP là IP nội bộ, dù bản ghi công khai tồn tại.
@@ -99,7 +101,7 @@ Bố trí cũ: máy ảo 10.77.0.10 sau NAT, DC chuyển cổng 80 / 443 / 2222 
 
 ## Hết cảnh báo "kết nối không riêng tư" (16/11/2026)
 
-- Chứng chỉ do Caddy của máy ảo tự cấp (`tls internal`) cho đúng tên trong `HUB_HOST`; **không phụ thuộc IP** — đổi IP không phải cấp lại. Máy cần tin chứng chỉ gốc **một lần**:
+- Chứng chỉ do Caddy của máy ảo tự cấp (`tls internal`) cho đúng tên trong `HUB_HOST`; chứng chỉ của tên không phụ thuộc IP. Nếu `HUB_HOST` có IP thì đổi IP phải sửa `HUB_HOST`, `APP_ORIGIN`, `HUB_DEFAULT_SNI`. Máy cần tin chứng chỉ gốc **một lần**:
   - Máy trong domain: trên DC chạy `certutil -dspublish -f <kepler-hub-ca.crt> RootCA` (Domain Admin), máy trạm nhận qua Group Policy (hoặc `gpupdate /force`).
   - Máy ngoài domain / điện thoại: mở `http://hub.keplerholdings.vn/cai-chung-chi` (trang hướng dẫn, tải `kepler-hub-ca.crt`).
 - Tên khác ngoài `hub.keplerholdings.vn` (không khuyến nghị): `HUB_HOST="hub.keplerholdings.vn, <tên-khác>"` và thêm cùng các tên vào `APP_ORIGIN` (`https://...`).
