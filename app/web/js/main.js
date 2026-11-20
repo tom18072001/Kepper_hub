@@ -149,20 +149,19 @@ export function renderProjectNav() {
   highlightNav();
 }
 
+const setNotifDot = n => { const dot = $('#notifDot'); dot.textContent = n > 9 ? '9+' : String(n); dot.classList.toggle('hidden', !n); };
 let countersBusy = false;
 export async function refreshCounters() {
   if (!store.me || countersBusy) return;
   countersBusy = true;
   try {
-    const [notif, counts] = await Promise.all([api('/api/notifications'), api('/api/approvals/counts')]);
-    const dot = $('#notifDot');
-    dot.textContent = notif.unread > 9 ? '9+' : String(notif.unread);
-    dot.classList.toggle('hidden', !notif.unread);
+    // Nhịp đếm chỉ cần số chưa đọc (không tải cả danh sách 50 thông báo); danh sách tải khi mở panel chuông.
+    const [notif, counts] = await Promise.all([api('/api/notifications/unread-count'), api('/api/approvals/counts')]);
+    setNotifDot(notif.unread);
     const title = `${counts.queue} chờ duyệt, ${counts.extensions} đề nghị gia hạn`;
     // Số chờ duyệt: ở mục "Chờ tôi duyệt" và trên tiêu đề nhóm "Công việc" (hiện khi nhóm đang gập / sidebar thu gọn).
     for (const b of [$('#approvalBadge'), $('#moreBadge')]) if (b) { b.textContent = counts.total; b.classList.toggle('hidden', !counts.total); b.title = title; }
     store.counts = counts;
-    store.notifications = notif;
   } catch { /* bỏ qua lỗi đếm */ } finally { countersBusy = false; }
 }
 setInterval(() => { if (document.visibilityState === 'visible') refreshCounters(); }, 30_000);
@@ -172,8 +171,11 @@ $('#notifBtn').addEventListener('click', async e => {
   e.stopPropagation();
   const panel = $('#notifPanel');
   if (!panel.classList.contains('hidden')) { panel.classList.add('hidden'); return; }
-  await refreshCounters();
-  const { items = [] } = store.notifications || {};
+  // Mở panel mới tải danh sách thông báo (nhịp 30s chỉ lấy số chưa đọc).
+  const notif = await api('/api/notifications').catch(() => ({ items: [], unread: 0 }));
+  store.notifications = notif;
+  setNotifDot(notif.unread);
+  const { items = [] } = notif;
   panel.innerHTML = `<div class="notif-head"><span>Thông báo</span><button class="btn btn-sm btn-ghost" id="readAll">Đánh dấu đã đọc</button></div>` +
     (items.map(n => `<a class="notif-item${n.readAt ? '' : ' unread'}" href="${esc(n.link || '#')}" data-id="${n.id}" data-testid="notif-item"><b>${esc(n.title)}</b>${n.body ? `<div class="muted sm notif-body">${esc(n.body)}</div>` : ''}<div class="muted xs">${ago(n.createdAt)}</div></a>`).join('') || '<div class="empty">Chưa có thông báo</div>');
   panel.classList.remove('hidden');
