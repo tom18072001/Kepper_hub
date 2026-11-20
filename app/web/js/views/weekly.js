@@ -181,7 +181,7 @@ function rowHtml(list, r, i) {
   const f = st.week, ed = st.rep.canEdit, linked = !!r.itemId, od = isOverdue(r, f);
   const dis = ed ? '' : 'disabled';
   const pct = r.pctLocked
-    ? `<label class="wk-f">% hoàn thành<input type="number" value="${esc(r.pct)}" readonly title="Tự tính theo checklist của hạng mục"><span class="wk-note">tự tính theo checklist</span></label>`
+    ? `<label class="wk-f">% hoàn thành<input type="number" value="${esc(r.pct)}" readonly title="Tự tính từ việc nhánh của hạng mục"><span class="wk-note">tự tính từ việc nhánh</span></label>`
     : `<label class="wk-f">% hoàn thành<span class="wk-pct"><input type="number" min="0" max="100" step="5" inputmode="numeric" data-k="pct" value="${esc(r.pct)}" ${dis} data-testid="wk-pct-${testKey(r)}">${ed ? [50, 100].map(v => `<button type="button" data-pct="${v}" class="${Number(r.pct) === v ? 'on' : ''}">${v === 100 ? '<svg class="gl gl-ck" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>Xong' : v + '%'}</button>`).join('') : ''}</span></label>`;
   const statusList = linked ? [...new Set([r.status === 'Vướng' ? (r.autoStatus || 'Chậm') : r.status, 'Vướng'])] : ctx.statuses;
   const status = `<label class="wk-f">Tình trạng${linked ? ' <span class="wk-note">(tính từ MTL)</span>' : ''}<select data-k="status" ${dis} data-testid="wk-status-${testKey(r)}">${opts(statusList, r.status)}</select></label>`;

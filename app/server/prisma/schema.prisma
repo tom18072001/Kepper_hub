@@ -38,6 +38,7 @@ model User {
   department     Department?           @relation(fields: [departmentId], references: [id])
   isRootAdmin    Boolean               @default(false)
   isActive       Boolean               @default(true)
+  boardAll       Boolean               @default(false) // "Ban Giám đốc toàn quyền": Ban Giám đốc của MỌI việc (quản trị chọn trong Phân quyền; mặc định không ai)
   deactivatedAt  DateTime? // thời điểm khoá tài khoản; ghi chú cá nhân bị xoá sau 30 ngày kể từ mốc này
   mustChangePw   Boolean               @default(true)
   sessionVersion Int                   @default(0)
@@ -181,7 +182,7 @@ model WorkItem {
   deliverable        String               @default("") // sản phẩm đầu ra
   outputs            String               @default("") // sản phẩm đã có theo tiến độ (mỗi dòng một văn bản)
   resultNote         String               @default("") // kết quả / khó khăn, kiến nghị
-  review             String               @default("") // đánh giá của người giao
+  review             String               @default("") // ô "Đánh giá của người giao" cũ — CHỈ ĐỌC (đánh giá nay = mức chấm + nhận xét lúc duyệt)
   reviewedById       Int?
   reviewedAt         DateTime?
   coordinatorText    String               @default("") // đơn vị / người phối hợp ngoài hệ thống (ghi tự do)
@@ -233,7 +234,7 @@ model WorkItem {
   assignees          WorkItemAssignee[] // người chủ trì
   supporters         WorkItemSupporter[] // người phối hợp (tài khoản trong hệ thống)
   labels             WorkItemLabel[]
-  checklist          ChecklistItem[]
+  checklist          ChecklistItem[] // đã bỏ — chỉ còn để giữ bảng cũ
   comments           Comment[]
   activities         Activity[]
   attachments        Attachment[]
@@ -430,14 +431,17 @@ model WorkItemLabel {
   @@id([workItemId, labelId])
 }
 
+// ĐÃ BỎ (20/11/2026): Checklist thay bằng việc nhánh. Migration 20261120100000 chuyển mỗi mục thành một việc nhánh (migratedItemId).
+// Bảng giữ lại chỉ để đối chiếu / quay lui — không route nào đọc / ghi; xoá ở bản sau.
 model ChecklistItem {
-  id         Int      @id @default(autoincrement())
-  workItemId Int
-  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  title      String
-  done       Boolean  @default(false)
-  position   Int      @default(0)
-  createdAt  DateTime @default(now())
+  id             Int      @id @default(autoincrement())
+  workItemId     Int
+  workItem       WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  title          String
+  done           Boolean  @default(false)
+  position       Int      @default(0)
+  createdAt      DateTime @default(now())
+  migratedItemId Int? // việc nhánh đã tạo từ mục này
 
   @@index([workItemId])
 }
@@ -506,6 +510,7 @@ model ApprovalRequest {
   totalLevels   Int
   fromStateId   Int? // trạng thái trước khi gửi duyệt, để trả lại khi bị từ chối
   withAssigner  Boolean          @default(false) // true: cấp 1 = người giao duyệt + chấm mức hoàn thành; cấp k > 1 = bước k-1 của dự án
+  withBoard     Boolean          @default(false) // true (việc mốc / đường găng lúc gửi duyệt): cấp 1 = Ban Giám đốc của việc duyệt + chấm mức, thay người giao
   requestedById Int
   createdAt     DateTime         @default(now())
   closedAt      DateTime?

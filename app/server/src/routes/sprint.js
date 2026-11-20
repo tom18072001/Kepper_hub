@@ -51,15 +51,10 @@ const row = (i, depth, deptName, canProgress, hasReview = true) => ({ canProgres
   variance: i.variance, lateDays: i.lateDays, daysLeft: i.daysLeft, progressAt: i.progressAt, completedAt: i.completedAt, done: M.isDone(i), ...reviewBits(i, hasReview),
 });
 
-// Ai được bấm cập nhật % trên thẻ (lib/policy.js mtl.progress): việc lá không dùng checklist; người được giao,
-// lãnh đạo bộ phận chủ trì hoặc người quản lý dự án. Máy chủ vẫn kiểm lại ở PATCH.
+// Ai được bấm cập nhật % trên thẻ: người chủ trì của việc lá chưa xong (services/task-access.js — tiến độ: L; việc có việc nhánh
+// thì % tự tính từ việc nhánh). Máy chủ vẫn kiểm lại ở PATCH.
 async function progressRule(prisma, user, rights, items) {
-  const ids = items.filter(i => !i.children).map(i => i.id);
-  const withChecklist = new Set(ids.length ? (await prisma.checklistItem.findMany({ where: { workItemId: { in: ids } }, distinct: ['workItemId'], select: { workItemId: true } })).map(c => c.workItemId) : []);
-  const leaders = new Map();
-  for (const d of new Set(items.map(i => i.leadDepartmentId).filter(x => x != null))) leaders.set(d, await approval.deptLeaderIds(prisma, d));
-  return i => !i.children && !withChecklist.has(i.id) && P.can({ userId: user.id, it: false }, 'edit', 'mtl.progress',
-    { item: { assigneeIds: (i.assignees || []).map(a => a.id), leadLeaderIds: leaders.get(i.leadDepartmentId) || [], projectManager: rights.canManage } });
+  return i => !i.children && !M.isDone(i) && P.can({ userId: user.id, it: false }, 'edit', 'mtl.progress', { item: { assigneeIds: (i.assignees || []).map(a => a.id) } });
 }
 
 module.exports = function mountSprint(app, { prisma, auth, audit }) {

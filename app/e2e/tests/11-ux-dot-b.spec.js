@@ -64,7 +64,7 @@ test('B1 + B6. Cập nhật nhanh: nút "Gửi duyệt", hoàn tác trong 5 giâ
   expect((await itemOf(staff, it.id)).state.category).not.toBe('REVIEW');
 });
 
-test('B2. Panel chi tiết việc: 3 tab, % chỉ qua "Báo cáo tiến độ", gộp ô trùng (giữ dữ liệu cũ), mô tả tự lưu, "Mở tất cả các mục"', async ({ page }) => {
+test('B2. Panel chi tiết việc: 3 tab, % chỉ qua "Báo cáo tiến độ", gộp ô trùng (giữ dữ liệu cũ), mô tả tự lưu, "Mở tất cả các mục"', async ({ page, browser }) => {
   await login(page, 'nv.kinhdoanh2');
   const kd = (await (await apiAs(page, '/api/projects')).json()).find(p => p.key === 'KD');
   const items = await (await apiAs(page, `/api/projects/${kd.id}/items`)).json();
@@ -107,14 +107,19 @@ test('B2. Panel chi tiết việc: 3 tab, % chỉ qua "Báo cáo tiến độ", 
   // Trao đổi: bình luận + lịch sử.
   await panel.getByTestId('ip-tab-talk').click();
   await expect(panel.getByTestId('activity')).toContainText('báo cáo tiến độ 40%');
-  // Mô tả tự lưu (không còn nút "Lưu mô tả").
+  // Mô tả là kế hoạch: người chủ trì chỉ xem (không ô soạn); người giao sửa, tự lưu (không còn nút "Lưu mô tả").
   await panel.getByTestId('ip-tab-overview').click();
   await expect(panel.getByTestId('save-description')).toHaveCount(0);
-  const desc = panel.getByTestId('item-description');
+  await expect(panel.locator('#ipDesc[contenteditable="true"]')).toHaveCount(0);
+  const boss = await (await browser.newContext()).newPage();
+  await login(boss, 'tp.kinhdoanh');
+  await boss.goto(`/#/projects/${kd.id}?view=list&item=${it.id}`);
+  const bp = boss.getByTestId('item-panel');
+  const desc = bp.getByTestId('item-description');
   await desc.click();
-  await page.keyboard.press('End');
-  await page.keyboard.type(' Gồm phí lắp đặt (giả).');
-  await expect(panel.getByTestId('description-state')).toHaveText('Đã lưu', { timeout: 5000 });
+  await boss.keyboard.press('End');
+  await boss.keyboard.type(' Gồm phí lắp đặt (giả).');
+  await expect(bp.getByTestId('description-state')).toHaveText('Đã lưu', { timeout: 5000 });
   await expect.poll(async () => (await itemOf(page, it.id)).descriptionHtml).toContain('Gồm phí lắp đặt (giả).');
   // "Ngày giao" chỉ một chỗ; không còn chữ "Cột tự do"; nút đổi chế độ tên "Mở tất cả các mục" / "Thu gọn các mục".
   await expect(panel.locator('label', { hasText: /^Ngày giao/ })).toHaveCount(1);
@@ -244,14 +249,23 @@ test('B3 + B4 + B5 + N2. Dự án MTL: tab mặc định, Lịch trong "Khác", 
   expect(created.taskType).toBe('PLAN');
   expect(created.assignees.map(a => a.id)).toEqual([me.id]);
 
-  // N2: nhân viên (không quản lý dự án, không lãnh đạo bộ phận) không thấy "Tạo việc" trong dự án MTL.
+  // N2 (quyền tối thiểu theo vai): thành viên không chủ trì việc nào trong dự án MTL không thấy "Tạo việc";
+  // người chủ trì chỉ thêm việc nhánh dưới việc mình chủ trì.
+  const outsider = await (await browser.newContext()).newPage();
+  await login(outsider, 'nv.kythuat');
+  expect(await (await apiAs(outsider, `/api/projects/${project.id}/create-scope`)).json()).toEqual({ root: false, parents: [], reason: 'MTL_CHILD_ONLY' });
+  await outsider.goto(`/#/projects/${project.id}?view=board`);
+  await expect(outsider.locator('#viewBody')).toBeVisible();
+  await expect(outsider.getByTestId('new-item')).toHaveCount(0);
+  await expect(outsider.locator('[data-testid^="quick-add-"]')).toHaveCount(0);
   const staff = await (await browser.newContext()).newPage();
   await login(staff, 'nv.phaply');
-  expect(await (await apiAs(staff, `/api/projects/${project.id}/create-scope`)).json()).toEqual({ root: false, parents: [], reason: 'MTL_CHILD_ONLY' });
-  await staff.goto(`/#/projects/${project.id}?view=board`);
-  await expect(staff.locator('#viewBody')).toBeVisible();
-  await expect(staff.getByTestId('new-item')).toHaveCount(0);
-  await expect(staff.locator('[data-testid^="quick-add-"]')).toHaveCount(0);
+  const staffMe = await (await apiAs(staff, '/api/me')).json();
+  const ss = await (await apiAs(staff, `/api/projects/${project.id}/create-scope`)).json();
+  expect(ss.root).toBe(false);
+  expect(ss.parents.length).toBeGreaterThan(0);
+  const all = await (await apiAs(pmo, `/api/projects/${project.id}/items`)).json();
+  for (const id of ss.parents) expect(all.find(i => i.id === id).assignees.map(a => a.id)).toContain(staffMe.id);
   // Lãnh đạo bộ phận: thấy "Tạo việc" nhưng chỉ thêm việc con trong hạng mục bộ phận mình; thiếu việc cha → báo ngay trên form.
   const lead = await (await browser.newContext()).newPage();
   await login(lead, 'tb.phaply');
@@ -272,22 +286,24 @@ test('B3 + B4 + B5 + N2. Dự án MTL: tab mặc định, Lịch trong "Khác", 
   await toast(lead, 'Đã tạo DA-');
 });
 
-test('N9. Dự án MTL: việc có checklist — ô % trong "Báo cáo tiến độ" chỉ hiển thị, gửi báo cáo không bị từ chối', async ({ browser }) => {
+test('N9. Dự án MTL: việc có việc nhánh — ô % trong "Báo cáo tiến độ" chỉ hiển thị, gửi báo cáo không bị từ chối', async ({ browser }) => {
   const pmo = await (await browser.newContext()).newPage();
   await login(pmo, 'pmo');
   const project = await projectDA(pmo);
   const staff = await (await browser.newContext()).newPage();
   await login(staff, 'nv.phaply');
   const me = await (await apiAs(staff, '/api/me')).json();
-  // Một việc lá đang làm của nv.phaply, chưa có checklist: PMO thêm checklist 2 mục, đánh dấu xong 1 → % = 50 (tự tính).
+  // Một việc lá đang làm của nv.phaply: người chủ trì chia 2 việc nhánh của việc mình (Checklist đã bỏ — khi đó là người giao của
+  // việc nhánh); việc nhánh 1 báo 100% → % việc cha = 50 (tự tính từ việc nhánh).
   const items = await (await apiAs(pmo, `/api/projects/${project.id}/items`)).json();
   const states = Object.fromEntries((await (await apiAs(pmo, `/api/projects/${project.id}`)).json()).states.map(s => [s.id, s.category]));
-  const it = items.find(i => i.assignees.some(a => a.id === me.id) && !i.counts.children && !i.counts.checklistTotal && ['UNSTARTED', 'STARTED'].includes(states[i.stateId]));
+  const it = items.find(i => i.assignees.some(a => a.id === me.id) && !i.counts.children && ['UNSTARTED', 'STARTED'].includes(states[i.stateId]));
   expect(it, 'nv.phaply cần một việc lá đang mở (dữ liệu mẫu)').toBeTruthy();
-  const c1 = await (await apiAs(pmo, `/api/items/${it.id}/checklist`, { method: 'POST', data: { title: 'Soạn hồ sơ (giả)' } })).json();
-  await apiAs(pmo, `/api/items/${it.id}/checklist`, { method: 'POST', data: { title: 'Nộp hồ sơ (giả)' } });
-  expect((await apiAs(pmo, `/api/checklist/${c1.id}`, { method: 'PATCH', data: { done: true } })).status()).toBe(200);
-  expect((await itemOf(pmo, it.id)).progress).toBe(50);
+  const k1 = await (await apiAs(staff, `/api/projects/${project.id}/items`, { method: 'POST', data: { title: 'Soạn hồ sơ (giả)', parentId: it.id, assigneeIds: [me.id] } })).json();
+  expect(k1.assignedById).toBe(me.id);
+  expect((await apiAs(staff, `/api/projects/${project.id}/items`, { method: 'POST', data: { title: 'Nộp hồ sơ (giả)', parentId: it.id, assigneeIds: [me.id] } })).status()).toBe(201);
+  expect((await apiAs(staff, `/api/items/${k1.id}`, { method: 'PATCH', data: { progress: 100 } })).status()).toBe(200);
+  expect((await itemOf(pmo, it.id)).mtl.actual).toBe(50);
 
   await staff.goto(`/#/projects/${project.id}?view=list&item=${it.id}`);
   const panel = staff.getByTestId('item-panel');
@@ -296,15 +312,14 @@ test('N9. Dự án MTL: việc có checklist — ô % trong "Báo cáo tiến đ
   const pct = panel.getByTestId('report-progress');
   await expect(pct).toHaveValue('50');
   await expect(pct).toHaveAttribute('readonly', '');
-  await expect(panel.getByTestId('report-progress-auto')).toContainText('tính theo checklist 1/2');
-  await expect(panel.getByTestId('side-report')).toHaveCount(0); // cột phải ghi "tự tính theo checklist"
+  await expect(panel.getByTestId('report-progress-auto')).toContainText('tính theo việc nhánh');
+  await expect(panel.getByTestId('side-report')).toHaveCount(0); // cột phải ghi "tự tính từ việc nhánh"
   await panel.getByTestId('report-content').fill('Đã soạn xong hồ sơ, chờ nộp (giả)');
   await panel.getByTestId('report-submit').click();
   await toast(staff, 'Đã gửi báo cáo tiến độ');
   const after = await itemOf(staff, it.id);
-  expect(after.progress).toBe(50);
+  expect(after.mtl.actual).toBe(50);
   expect(after.progressReports[0].content).toBe('Đã soạn xong hồ sơ, chờ nộp (giả)');
-  expect(after.progressReports[0].progress).toBe(50);
 });
 
 test('B7 + N1 + N3 + N4. Việc của tôi: "Ghi chú của tôi" ngoài dãy tab lọc; thông báo xuống dòng, không tràn ở khổ 375 px', async ({ browser }) => {

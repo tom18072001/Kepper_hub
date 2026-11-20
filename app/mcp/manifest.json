@@ -89,7 +89,7 @@
     },
     {
       "name": "kepper_update_progress",
-      "description": "Cập nhật tiến độ / checklist"
+      "description": "Cập nhật tiến độ"
     },
     {
       "name": "kepper_add_comment",

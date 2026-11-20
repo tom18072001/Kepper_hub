@@ -7,7 +7,7 @@ const { downloadName, contentDisposition } = require('../lib/attachment-utils');
 const { verifyUpload, previewable, typeOf } = require('../lib/files');
 const { convertWord, streamToBuffer } = require('../lib/document-preview');
 const { fail, intParam } = require('../lib/http');
-const { loadItem } = require('../services/access');
+const TA = require('../services/task-access');
 const tree = require('../services/tree');
 const { activity } = require('../services/events');
 const bus = require('../services/bus');
@@ -18,8 +18,10 @@ module.exports = function mountAttachments(app, { prisma, auth, audit, config })
   const upload = multer({ dest: path.join(config.uploadTmpDir, 'workhub-upload'), limits: { fileSize: MAX_FILE_BYTES, files: 5 } });
 
   app.post('/api/items/:id/attachments', auth, async (req, res, next) => {
-    // Kiểm tra quyền TRƯỚC khi nhận tệp.
-    req.itemCtx = await loadItem(prisma, req.user, intParam(req.params.id), 'edit');
+    // Kiểm tra quyền TRƯỚC khi nhận tệp: tài liệu bên giao (người giao, Ban Giám đốc) hoặc bên thực hiện (chủ trì, phối hợp).
+    const ctx = await TA.loadTask(prisma, req.user, intParam(req.params.id));
+    if (!ctx.caps.docsGive && !ctx.caps.docsBack) TA.assertCap(ctx.caps, 'docsBack', 'Chỉ người giao, Ban Giám đốc, người chủ trì hoặc người phối hợp gửi tệp cho việc này');
+    req.itemCtx = { ...ctx, itemId: ctx.task.id };
     next();
   }, upload.array('files', 5), async (req, res) => {
     const files = req.files || [];
@@ -63,10 +65,13 @@ module.exports = function mountAttachments(app, { prisma, auth, audit, config })
     }
   });
 
+  // Tệp của việc: chỉ người xem đầy đủ việc mới tải / xem (người xem tóm tắt không thấy tài liệu). Xoá: chỉ người đã gửi tệp.
   async function attachmentFor(req, need = 'view') {
     const row = await prisma.attachment.findUnique({ where: { id: intParam(req.params.id) } });
     if (!row) fail(404, 'Không tìm thấy tệp', 'NOT_FOUND');
-    const ctx = await loadItem(prisma, req.user, row.workItemId, need);
+    const ctx = await TA.loadTask(prisma, req.user, row.workItemId);
+    TA.assertCap(ctx.caps, 'view');
+    if (need === 'delete' && (row.uploadedById !== req.user.id || !ctx.caps.deleteOwnFiles)) fail(403, TA.MESSAGES.deleteFile, 'FORBIDDEN');
     return { ...row, projectId: ctx.project.id };
   }
 
@@ -108,7 +113,7 @@ module.exports = function mountAttachments(app, { prisma, auth, audit, config })
   });
 
   app.delete('/api/attachments/:id', auth, async (req, res) => {
-    const a = await attachmentFor(req, 'edit');
+    const a = await attachmentFor(req, 'delete');
     await prisma.$transaction(async tx => {
       await tx.attachment.delete({ where: { id: a.id } });
       await activity(tx, a.workItemId, req.user.id, 'ATTACHMENT_DELETED', { fileName: a.fileName });

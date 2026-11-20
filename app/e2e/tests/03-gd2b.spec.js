@@ -6,10 +6,6 @@ const { login, apiAs, openProject, column, card, toast } = require('./helpers');
 
 test.describe.configure({ mode: 'serial' });
 
-async function setState(page, name) {
-  const value = await page.getByTestId('item-state').locator('option', { hasText: name }).first().getAttribute('value');
-  await page.getByTestId('item-state').selectOption(value);
-}
 async function createItem(page, title, { level, assignee } = {}) {
   await page.getByTestId('new-item').click();
   await page.getByTestId('create-title').fill(title);
@@ -27,13 +23,25 @@ test('9. Duyệt linh hoạt: người giao duyệt + chấm mức; việc chỉ
   await login(manager, 'tp.kinhdoanh');
   await openProject(manager, 'KD');
 
-  // a) Việc nhỏ: "Chỉ người giao duyệt". Trưởng phòng (người giao) bấm Hoàn thành thay người chủ trì → vào Chờ duyệt;
-  //    duyệt bắt buộc chấm mức hoàn thành rồi mới thành Hoàn thành.
-  await (await createItem(manager, 'In 50 bộ tài liệu hội thảo', { level: 0, assignee: 'Phạm Văn An' })).click();
+  // a) Việc nhỏ: "Chỉ người giao duyệt". Gửi duyệt là bước của người chủ trì — trưởng phòng (người giao) không bấm "Hoàn thành"
+  //    thay (ô khoá, API 403); người chủ trì gửi duyệt → người giao duyệt, bắt buộc chấm mức hoàn thành rồi mới thành Hoàn thành.
+  const small = await createItem(manager, 'In 50 bộ tài liệu hội thảo', { level: 0, assignee: 'Phạm Văn An' });
+  await small.click();
   await expect(manager.getByTestId('approval-section')).toContainText('Quy trình duyệt 1 cấp');
-  await setState(manager, 'Hoàn thành');
-  await toast(manager, 'Đã chuyển vào "Chờ duyệt"');
-  await expect(column(manager, 'Chờ duyệt').locator('.kcard', { hasText: 'In 50 bộ tài liệu hội thảo' })).toBeVisible();
+  await expect(manager.getByTestId('item-state').locator('option', { hasText: 'Hoàn thành' })).toHaveAttribute('disabled', '');
+  await expect(manager.getByTestId('submit-approval')).toHaveCount(0);
+  const smallId = await small.getAttribute('data-id');
+  await manager.getByTestId('close-panel').click();
+  const doer = await (await browser.newContext()).newPage();
+  await login(doer, 'nv.kinhdoanh1');
+  const kdId = (await (await apiAs(doer, '/api/projects')).json()).find(p => p.key === 'KD').id;
+  const reviewState = (await (await apiAs(doer, `/api/projects/${kdId}`)).json()).states.find(s => s.category === 'REVIEW');
+  expect((await apiAs(manager, `/api/items/${smallId}`, { method: 'PATCH', data: { stateId: reviewState.id } })).status()).toBe(403);
+  expect((await apiAs(doer, `/api/items/${smallId}`, { method: 'PATCH', data: { stateId: reviewState.id } })).status()).toBe(200);
+  await manager.reload();
+  const smallCard = column(manager, 'Chờ duyệt').locator('.kcard', { hasText: 'In 50 bộ tài liệu hội thảo' });
+  await expect(smallCard).toBeVisible();
+  await smallCard.click();
   await manager.getByTestId('approve-btn').click();
   await toast(manager, 'Hãy chấm mức hoàn thành');
   await manager.getByTestId('rating-PASS').check();
@@ -85,8 +93,8 @@ test('9. Duyệt linh hoạt: người giao duyệt + chấm mức; việc chỉ
   await expect(column(manager, 'Hoàn thành').getByTestId(`card-${code}`)).toBeVisible();
   await manager.getByTestId('close-panel').click();
 
-  // c) Không tự duyệt: trưởng phòng gửi duyệt việc của chính mình → không có nút duyệt, API trả 403.
-  const own = await createItem(manager, 'Đề xuất ngân sách quảng cáo tháng 11', { level: 1 });
+  // c) Không tự duyệt: trưởng phòng tự giao cho mình (chủ trì) rồi gửi duyệt → không có nút duyệt, API trả 403.
+  const own = await createItem(manager, 'Đề xuất ngân sách quảng cáo tháng 11', { level: 1, assignee: 'Lê Thu Hà (tôi)' });
   const ownCode = await own.locator('.code').textContent();
   await own.click();
   await manager.getByTestId('submit-approval').click();

@@ -108,7 +108,7 @@ async function buildWeekly(prisma, user, { projectId, departmentId, from, to }) 
       dueDate: true, assignedAt: true, createdAt: true, startedAt: true, completedAt: true, rating: true, ratedAt: true, projectId: true,
       project: { select: { key: true, name: true, departmentId: true } }, state: { select: { category: true, name: true } },
       assignees: { select: { user: { select: { fullName: true } } } },
-      approvals: { where: { status: 'PENDING' }, select: { status: true, currentLevel: true, totalLevels: true, withAssigner: true }, take: 1 },
+      approvals: { where: { status: 'PENDING' }, select: { status: true, currentLevel: true, totalLevels: true, withAssigner: true, withBoard: true }, take: 1 },
       progressReports: { where: { createdAt: { gte: from, lt: end }, OR: [{ difficulties: { not: '' } }, { proposals: { not: '' } }] },
         select: { id: true, createdAt: true, difficulties: true, proposals: true, answer: true, answeredAt: true, authorId: true, answeredById: true, asSupporter: true }, orderBy: { createdAt: 'asc' } } },
     orderBy: [{ projectId: 'asc' }, { number: 'asc' }],

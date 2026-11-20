@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { store, personLink } from '../store.js';
 import { $, esc, fmtDate, fmtDateTime, ago, toast, errorMessage, openModal, closeModal, multiSelect, readMulti, bindMulti, dateInput, fromDateInput, dueCountdown, draft, debounce } from '../util.js';
 import { icon } from '../icons.js';
+import { capsOf } from '../task-caps.js';
 
 export const TASK_TYPES = { PLAN: 'Kế hoạch năm', ADHOC: 'Đột xuất (theo chỉ đạo)' };
 // Thang 5 mức hoàn thành người giao chấm khi duyệt (khớp server/src/services/task-rules.js).
@@ -16,7 +17,7 @@ const userOpts = (prefer) => {
   return list.sort((a, b) => rank(a) - rank(b) || a.fullName.localeCompare(b.fullName, 'vi')).map(u => ({ id: u.id, label: u.fullName + (u.departmentId === prefer ? '' : ` — ${store.departments.find(d => d.id === u.departmentId)?.name || ''}`) }));
 };
 
-const ROLE_TEXT = { LEAD: 'Bạn chủ trì', SUPPORT: 'Bạn phối hợp', LEADER: 'Lãnh đạo phòng chủ trì', ASSIGNER: 'Bạn là người giao' };
+const ROLE_TEXT = { LEAD: 'Bạn chủ trì', SUPPORT: 'Bạn phối hợp', LEADER: 'Lãnh đạo bộ phận', ASSIGNER: 'Bạn là người giao', BOARD: 'Ban Giám đốc', OWNER: 'Chủ dự án / PMO' };
 const STAGE_TONE = { PENDING_ACCEPT: 'warn', RETURNED: 'danger', WAIT_DEPT: 'info', WAIT_BGD: 'info', WAIT_APPROVAL: 'info', DONE: 'ok' };
 const dayDiff = (a, b) => Math.round((new Date(a) - new Date(b)) / 86_400_000);
 export const stagePill = (st, testid) => (st ? `<span class="pill stage ${STAGE_TONE[st.code] || ''}"${testid ? ` data-testid="${testid}"` : ''}>${esc(st.label)}</span>` : '');
@@ -30,16 +31,16 @@ export const countdownPill = (d, testid = '') => { const c = dueCountdown(d, sto
 // Thanh tóm tắt đầu panel: khâu, vai trò của tôi, hạn đếm ngược (và hạn nộp phòng), MỘT hành động chính + tối đa 2 phụ.
 // Duyệt / gia hạn / kiến nghị không có nút ở đây — ô xử lý nằm ngay bên dưới (vùng "Cần bạn xử lý").
 export function summaryBar(d, { review, editable }) {
-  const can = d.can || {};
+  const can = d.can || {}, c = capsOf(d);
   const pending = d.approvals.find(a => a.status === 'PENDING');
   const cand = []; // [mức ưu tiên, html không lớp màu]
   const btn = (attrs, iconName, label, title) => ({ attrs, iconName, label, title });
   if (editable && can.accept) cand.push(btn('data-act="accept" data-testid="bar-accept"', 'users', 'Tiếp nhận &amp; phân công', 'Tiếp nhận & phân công (A)'));
-  if (isOpen(d) && editable && !pending && d.dispatchStatus !== 'PENDING' && can.work && review && d.dispatchStatus && (d.approvalSteps || []).length)
+  if (isOpen(d) && !pending && d.dispatchStatus !== 'PENDING' && c.submit && c.progress && review && d.dispatchStatus && (d.approvalSteps || []).length)
     cand.push(btn('data-act="submit-product" data-testid="bar-submit"', 'send', d.submitRounds ? `Nộp lại (lần ${d.submitRounds + 1})` : 'Nộp sản phẩm', 'Nộp sản phẩm (phiếu trình)'));
-  if (isOpen(d) && editable && !pending && d.dispatchStatus !== 'PENDING' && (can.work || can.support))
-    cand.push(btn('data-act="open-report" data-testid="bar-report"', 'send', can.work ? 'Báo cáo tiến độ' : 'Báo cáo phần phối hợp', 'Báo cáo tiến độ (R)'));
-  if (editable && can.supportLead && isOpen(d)) cand.push(btn('data-act="support-staff" data-testid="bar-support-staff"', 'users', 'Cử cán bộ phối hợp', ''));
+  if (!pending && d.dispatchStatus !== 'PENDING' && c.progress)
+    cand.push(btn('data-act="open-report" data-testid="bar-report"', 'send', 'Báo cáo tiến độ', 'Báo cáo tiến độ (R)'));
+  if (c.supportStaff) cand.push(btn('data-act="support-staff" data-testid="bar-support-staff"', 'users', 'Cử cán bộ phối hợp', ''));
   const acts = cand.slice(0, 3).map((b, i) => `<button class="btn ${i === 0 ? 'btn-primary' : 'btn-ghost'} btn-sm" ${b.attrs}${b.title ? ` title="${esc(b.title)}"` : ''}>${icon(b.iconName)}${b.label}</button>`);
   const internal = d.internalDueDate ? `<span class="muted sm">nộp phòng <b>${fmtDate(d.internalDueDate)}</b></span>` : '';
   return `<div class="ip-summary" data-testid="item-summary">
@@ -73,15 +74,16 @@ export function actionZone(d) {
 
 // Khối "Điều hành": loại nhiệm vụ, đơn vị chủ trì / phối hợp, hạn nộp phòng, hạn gốc, gia hạn. Trả { status, summary, body } để item-panel bọc vào khối thu gọn.
 export function dispatchParts(d, editable, assigned = true) {
-  const can = d.can || {};
-  const ownerEdit = editable && (d.rights.canManage || can.isAssigner);
+  const can = d.can || {}, c = capsOf(d);
+  // Đơn vị chủ trì / phối hợp, hạn nộp phòng là kế hoạch: người giao, Ban Giám đốc.
+  const ownerEdit = !!c.plan;
   const status = d.dispatchStatus === 'PENDING'
     ? `<span class="pill warn" data-testid="dispatch-status">Chờ phòng tiếp nhận${d.dispatchedAt ? ` · ${ago(d.dispatchedAt)}` : ''}</span>`
     : d.dispatchStatus === 'ACCEPTED' ? `<span class="pill ok" data-testid="dispatch-status">Phòng đã phân công${d.acceptedByName ? ` · ${esc(d.acceptedByName)}` : ''}</span>` : '';
   const ext = pendingExt(d);
   const lastExt = (d.extensions || []).find(x => x.status !== 'PENDING');
   const due = d.originalDueDate && d.dueDate && fmtDate(d.originalDueDate) !== fmtDate(d.dueDate) ? `<div class="muted xs" data-testid="original-due">Hạn gốc ${fmtDate(d.originalDueDate)} · đã gia hạn đến <b>${fmtDate(d.dueDate)}</b></div>` : '';
-  const canInternal = editable && (can.isLeadLeader || can.isAssigner || d.rights.canManage) && !!d.leadDepartmentId;
+  const canInternal = !!c.plan && !!d.leadDepartmentId;
   const internal = d.leadDepartmentId ? `<label title="Phòng đặt cho cán bộ, không muộn hơn hạn của người giao">Hạn nộp phòng (nội bộ)${canInternal
     ? `<input type="date" id="ipInternalDue" value="${dateInput(d.internalDueDate)}"${d.dueDate ? ` max="${dateInput(d.dueDate)}"` : ''} data-testid="item-internal-due">`
     : `<div><b>${d.internalDueDate ? fmtDate(d.internalDueDate) : '—'}</b></div>`}</label>` : '';
@@ -93,11 +95,11 @@ export function dispatchParts(d, editable, assigned = true) {
     </div>
     ${due}
     <div class="row wrap" style="margin-top:8px">
-      ${(can.accept || can.reassign) && editable ? `<button class="btn btn-ghost btn-sm" data-act="accept" data-testid="accept-dispatch">${icon('users')}${can.accept ? 'Tiếp nhận &amp; phân công' : 'Phân công lại'}</button>` : ''}
-      ${isOpen(d) && editable && !ext && can.work && d.dispatchStatus !== 'PENDING' ? `<button class="btn btn-ghost btn-sm" data-act="extension" data-testid="request-extension" title="Xin gia hạn (E)">${icon('clock')}Xin gia hạn</button>` : ''}
-      ${isOpen(d) && editable && can.supportLead ? `<button class="btn btn-ghost btn-sm" data-act="support-staff" data-testid="support-staff">${icon('users')}Cử cán bộ phối hợp</button>` : ''}
+      ${(can.accept || can.reassign) ? `<button class="btn btn-ghost btn-sm" data-act="accept" data-testid="accept-dispatch">${icon('users')}${can.accept ? 'Tiếp nhận &amp; phân công' : 'Phân công lại'}</button>` : ''}
+      ${!ext && c.extension && d.dispatchStatus !== 'PENDING' ? `<button class="btn btn-ghost btn-sm" data-act="extension" data-testid="request-extension" title="Xin gia hạn (E)">${icon('clock')}Xin gia hạn</button>` : ''}
+      ${c.supportStaff ? `<button class="btn btn-ghost btn-sm" data-act="support-staff" data-testid="support-staff">${icon('users')}Cử cán bộ phối hợp</button>` : ''}
     </div>
-    ${ext && !canDecideExtNow(d) ? `<div class="muted sm" data-testid="extension-pending" style="margin-top:8px">Đề nghị gia hạn đến <b>${fmtDate(ext.newDue)}</b>${ext.oldDue ? ` (+${dayDiff(ext.newDue, ext.oldDue)} ngày)` : ''} — ${esc(ext.requestedByName || '')}, ${ago(ext.createdAt)} · chờ người giao quyết định.</div>`
+    ${ext && !canDecideExtNow(d) ? `<div class="muted sm" data-testid="extension-pending" style="margin-top:8px">Đề nghị gia hạn đến <b>${fmtDate(ext.newDue)}</b>${ext.oldDue ? ` (+${dayDiff(ext.newDue, ext.oldDue)} ngày)` : ''} — ${esc(ext.requestedByName || '')}, ${ago(ext.createdAt)} · chờ Ban Giám đốc quyết định.</div>`
       : !ext && lastExt ? `<div class="muted xs" style="margin-top:6px">Gia hạn gần nhất: ${lastExt.status === 'APPROVED' ? 'được đồng ý' : 'không được đồng ý'} (${fmtDate(lastExt.newDue)}) · ${esc(lastExt.decidedByName || '')}${lastExt.decisionNote ? ' — ' + esc(lastExt.decisionNote) : ''}</div>` : ''}
     ${d.rating ? `<div class="rating-box" data-testid="item-rating">Xếp loại: <b>${esc(d.ratingLabel || RATINGS[d.rating])}</b>${d.ratedByName ? ` · ${esc(d.ratedByName)}, ${fmtDate(d.ratedAt)}` : ''}</div>` : ''}`;
   const summary = [TASK_TYPES[d.taskType]?.split(' (')[0], d.leadDepartment?.name, d.internalDueDate ? `nộp phòng ${fmtDate(d.internalDueDate)}` : null, d.rating ? RATINGS[d.rating] : null].filter(Boolean).map(esc).join(' · ');
@@ -107,15 +109,15 @@ export function dispatchParts(d, editable, assigned = true) {
 // Báo cáo tiến độ: biểu mẫu + 2 báo cáo mới nhất, các báo cáo cũ hơn thu gọn. Kiến nghị chờ trả lời nằm ở vùng "Cần bạn xử lý".
 export function progressParts(d, editable) {
   const reports = d.progressReports || [];
-  const sup = !!d.can?.support;
+  // Tiến độ (báo cáo, %, khó khăn, kiến nghị): chỉ người chủ trì. Người phối hợp gửi tài liệu, bình luận.
+  const sup = false, mayReport = !!capsOf(d).progress;
   const mineLead = d.assignees.some(x => x.id === store.me.id);
   const last = reports[0];
   const stale = !last || Date.now() - new Date(last.createdAt) > 7 * 86_400_000;
   const formOpen = d.dispatchStatus === 'ACCEPTED' && mineLead && (!reports.length || stale) && !['WAIT_DEPT', 'WAIT_BGD', 'WAIT_APPROVAL'].includes(d.stage?.code);
-  // Dự án MTL: việc có việc con / checklist thì % do máy chủ tự tính (services/mtl-guard.js) — ô % chỉ hiển thị, báo cáo không gửi %.
-  const kids = (d.children || []).length, checks = (d.checklist || []).length;
-  const auto = !sup && d.mtl && (kids || checks)
-    ? (kids ? `tính theo việc con (${d.childProgress?.done ?? 0}/${d.childProgress?.total ?? kids} đã duyệt)` : `tính theo checklist ${(d.checklist || []).filter(c => c.done).length}/${checks}`) : '';
+  // Dự án MTL: việc có việc nhánh thì % do máy chủ tự tính (services/mtl-guard.js) — ô % chỉ hiển thị, báo cáo không gửi %.
+  const kids = (d.children || []).length;
+  const auto = d.mtl && kids ? `tính theo việc nhánh (${d.childProgress?.done ?? 0}/${d.childProgress?.total ?? kids} đã duyệt)` : '';
   const pctNow = auto ? Math.round(d.mtl?.actual ?? d.progress) : d.progress;
   const row = r => `<div class="report" data-testid="progress-report">
       <div class="who"><b>${esc(r.authorName || '')}</b>${r.asSupporter ? ' <span class="pill">phối hợp</span>' : ''} · ${r.progress}% · <span title="${fmtDateTime(r.createdAt)}">${ago(r.createdAt)}</span></div>
@@ -123,7 +125,7 @@ export function progressParts(d, editable) {
       ${r.difficulties ? `<div class="muted sm"><b>Khó khăn:</b> ${esc(r.difficulties)}</div>` : ''}
       ${r.proposals ? `<div class="proposal"><b>Kiến nghị:</b> ${esc(r.proposals)}${r.forwardedAt ? `<div class="muted xs">Phòng đã trình BGĐ${r.forwardNote ? `: ${esc(r.forwardNote)}` : ''}</div>` : ''}${r.answer ? `<div class="answer"><b>${esc(r.answeredByName || '')}:</b> ${esc(r.answer)}</div>` : `<div class="muted xs">${r.forwardedAt ? 'Chờ BGĐ cho ý kiến' : 'Chờ lãnh đạo cho ý kiến'}</div>`}</div>` : ''}
     </div>`;
-  const form = isOpen(d) && editable && (d.can?.work || sup || !d.dispatchStatus) && d.dispatchStatus !== 'PENDING' ? `<details class="report-form" id="reportForm" data-sub="reportForm"${formOpen ? ' open' : ''}><summary class="btn btn-ghost btn-sm" data-testid="report-open" title="Báo cáo tiến độ (R)">${icon('send')}${sup ? 'Báo cáo phần phối hợp' : 'Báo cáo tiến độ'}</summary>
+  const form = mayReport && d.dispatchStatus !== 'PENDING' ? `<details class="report-form" id="reportForm" data-sub="reportForm"${formOpen ? ' open' : ''}><summary class="btn btn-ghost btn-sm" data-testid="report-open" title="Báo cáo tiến độ (R)">${icon('send')}${sup ? 'Báo cáo phần phối hợp' : 'Báo cáo tiến độ'}</summary>
       ${sup ? '<p class="muted xs">Báo cáo phần việc phối hợp của bạn; tiến độ chung của việc do người chủ trì cập nhật.</p>' : ''}
       <div class="report-grid">
         <label>${sup ? 'Phần phối hợp đã xong (%)' : 'Tiến độ (%)'}<input type="number" min="0" max="100" step="5" id="rpProgress" value="${sup ? 0 : pctNow}" data-testid="report-progress"${auto ? ' readonly aria-readonly="true" data-auto="1" aria-describedby="rpAutoHint"' : ''}>${auto ? `<span class="muted xs" id="rpAutoHint" data-testid="report-progress-auto">${esc(auto)} — không nhập tay</span>` : ''}</label>
@@ -170,8 +172,10 @@ function fillFromVanthu(p, r) {
   $('[data-testid="document-submit"]', p)?.focus();
 }
 // Biểu mẫu "Thêm văn bản" — dùng trong khối Kết quả & tài liệu của panel (căn cứ ở cột bên giao, sản phẩm / đã phát hành ở cột bên thực hiện).
-export function documentForm(editable, { defaultKind = 'BASIS' } = {}) {
-  if (!editable) return '';
+// kinds: loại văn bản người dùng được thêm (Căn cứ giao việc: người giao / BGĐ; Sản phẩm, Đã phát hành: người chủ trì / phối hợp).
+export function documentForm(editable, { defaultKind = 'BASIS', kinds = Object.keys(DOC_KINDS) } = {}) {
+  if (!editable || !kinds.length) return '';
+  if (!kinds.includes(defaultKind)) defaultKind = kinds[0];
   const pick = vanthuOn() ? `<div class="doc-pick" data-testid="document-pick">
         <label for="docPickQ">Chọn từ sổ Văn thư</label>
         <input type="search" id="docPickQ" autocomplete="off" maxlength="100" placeholder="Tìm theo số hoặc trích yếu…" aria-describedby="docPickHelp" data-testid="document-pick-q">
@@ -180,7 +184,7 @@ export function documentForm(editable, { defaultKind = 'BASIS' } = {}) {
         <p class="muted xs" id="docPickNote" aria-live="polite" data-testid="document-pick-note"></p></div>` : '';
   return `<details class="doc-form" data-sub="docForm"><summary class="btn btn-ghost btn-sm" data-testid="document-open">${icon('plus')}Thêm văn bản</summary>${pick}
       <div class="report-grid">
-        <label>Loại<select id="docKind" data-testid="document-kind">${Object.entries(DOC_KINDS).map(([k, v]) => `<option value="${k}"${k === defaultKind ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+        <label>Loại<select id="docKind" data-testid="document-kind">${Object.entries(DOC_KINDS).filter(([k]) => kinds.includes(k)).map(([k, v]) => `<option value="${k}"${k === defaultKind ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
         <label>Số, ký hiệu<input id="docNumber" maxlength="80" placeholder="VD: 45/BC-TT" data-testid="document-number"></label>
         <label>Ngày văn bản<input type="date" id="docDate"></label>
         <label>Nơi ban hành<input id="docIssuer" maxlength="200"></label>
@@ -233,14 +237,17 @@ function minusWorkdays(date, n) {
   return x.toISOString().slice(0, 10);
 }
 export function acceptDialog(d, refresh) {
-  const opts = userOpts(d.leadDepartmentId);
+  const c = capsOf(d);
+  // Lãnh đạo bộ phận chủ trì (bước chưa có người): chỉ người trong phòng mình; người giao / Ban Giám đốc: bất kỳ ai.
+  const opts = c.assign ? userOpts(d.leadDepartmentId) : userOpts(d.leadDepartmentId).filter(o => store.users.find(u => u.id === o.id)?.departmentId === d.leadDepartmentId);
   const today = new Date(Date.now() + 7 * 3_600_000).toISOString().slice(0, 10);
   const suggest = d.internalDueDate ? dateInput(d.internalDueDate) : d.dueDate ? (s => (s >= today ? s : ''))(minusWorkdays(d.dueDate, 2)) : '';
   const modal = openModal(`<h2>${d.dispatchStatus === 'PENDING' ? 'Tiếp nhận &amp; phân công' : 'Phân công lại'}</h2>
     <p class="muted sm">${esc(d.code)} · ${esc(d.title)}${d.dueDate ? ` · hạn ${fmtDate(d.dueDate)}` : ''}</p>
     <div class="field"><label>Cán bộ chủ trì</label>${multiSelect('acceptLead', opts, d.assignees.map(a => a.id), 'Chọn cán bộ', { search: true })}</div>
     <div class="field"><label>Cán bộ phối hợp</label>${multiSelect('acceptSupport', opts, (d.supporters || []).map(a => a.id), 'Không', { search: true })}</div>
-    <label class="field">Hạn nộp phòng (nội bộ) <span class="muted xs">— để phòng còn thời gian duyệt trước hạn${d.dueDate ? ` ${fmtDate(d.dueDate)}` : ''}</span><input type="date" id="acceptInternalDue" value="${suggest}"${d.dueDate ? ` max="${dateInput(d.dueDate)}"` : ''} data-testid="accept-internal-due">${!d.internalDueDate && suggest ? '<span class="muted xs">Gợi ý: trước hạn 2 ngày làm việc — sửa được.</span>' : ''}</label>
+    ${c.plan ? `<label class="field">Hạn nộp phòng (nội bộ) <span class="muted xs">— để phòng còn thời gian duyệt trước hạn${d.dueDate ? ` ${fmtDate(d.dueDate)}` : ''}</span><input type="date" id="acceptInternalDue" value="${suggest}"${d.dueDate ? ` max="${dateInput(d.dueDate)}"` : ''} data-testid="accept-internal-due">${!d.internalDueDate && suggest ? '<span class="muted xs">Gợi ý: trước hạn 2 ngày làm việc — sửa được.</span>' : ''}</label>`
+      : d.internalDueDate ? `<p class="muted sm">Hạn nộp phòng: <b>${fmtDate(d.internalDueDate)}</b> (người giao đặt)</p>` : ''}
     <label class="field">Ghi chú phân công<textarea id="acceptNote" rows="2" maxlength="1000" data-testid="accept-note"></textarea></label>
     <div class="modal-actions"><button class="btn btn-ghost" data-close>Huỷ</button><button class="btn btn-primary" data-act="ok" data-testid="accept-submit">Phân công</button></div>`, { wide: true });
   bindMulti(modal, () => {});
@@ -250,7 +257,8 @@ export function acceptDialog(d, refresh) {
     const assigneeIds = readMulti(modal, 'acceptLead');
     if (!assigneeIds.length) { toast('Chọn ít nhất một cán bộ chủ trì', 'err'); return; }
     try {
-      await api(`/api/items/${d.id}/accept`, { method: 'POST', body: { assigneeIds, supporterIds: readMulti(modal, 'acceptSupport'), note: $('#acceptNote', modal).value.trim(), internalDueDate: fromDateInput($('#acceptInternalDue', modal).value) } });
+      const due = $('#acceptInternalDue', modal);
+      await api(`/api/items/${d.id}/accept`, { method: 'POST', body: { assigneeIds, supporterIds: readMulti(modal, 'acceptSupport'), note: $('#acceptNote', modal).value.trim(), ...(due ? { internalDueDate: fromDateInput(due.value) } : {}) } });
       closeModal(); toast('Đã phân công', 'ok'); refresh();
     } catch (error) { toast(errorMessage(error), 'err'); }
   };
@@ -400,7 +408,7 @@ export async function handleDispatchClick(e, p, d, refresh, patch) {
   if (go) { const el = p.querySelector('#' + go.dataset.goto) || p.querySelector(`[data-testid="${go.dataset.goto}"]`); el?.closest('details')?.setAttribute('open', ''); el?.scrollIntoView({ block: 'start', behavior: 'smooth' }); el?.querySelector('textarea, input')?.focus({ preventScroll: true }); return true; }
   if (act === 'report') {
     const pctInput = $('#rpProgress', p);
-    // % tự tính (checklist / việc con): không gửi — máy chủ giữ % hiện tại.
+    // % tự tính (việc nhánh): không gửi — máy chủ giữ % hiện tại.
     const body = { ...(pctInput.dataset.auto ? {} : { progress: Number(pctInput.value) }), content: $('#rpContent', p).value.trim(), difficulties: $('#rpDiff', p).value.trim(), proposals: $('#rpProp', p).value.trim() };
     if (!body.content) { toast('Nhập nội dung đã làm', 'err'); $('#rpContent', p).focus(); return true; }
     try { await api(`/api/items/${d.id}/progress-reports`, { method: 'POST', body }); for (const k of ['rpContent', 'rpDiff', 'rpProp']) draft(`${d.id}:${k}`, ''); toast('Đã gửi báo cáo tiến độ', 'ok'); refresh(); } catch (error) { toast(errorMessage(error), 'err'); }

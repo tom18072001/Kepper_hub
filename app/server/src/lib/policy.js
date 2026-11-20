@@ -14,7 +14,7 @@ const DATASETS = {
   'weekly.compliance': { label: 'Bảo mật', pii: 'cơ bản', note: 'Điểm tuân thủ giao ban theo trưởng bộ phận' },
   'weekly.config': { label: 'Nội bộ', pii: 'không', note: 'Bộ phận phải nộp, thứ tự, tuần chấm điểm, hạn nộp ngày lễ' },
   'weekly.roles': { label: 'Nội bộ', pii: 'không', note: 'Bộ phận thư ký, danh sách PMO — quyết định vai trò giao ban' },
-  'mtl.progress': { label: 'Bảo mật', pii: 'không', note: '% tiến độ, checklist của một hạng mục MTL' },
+  'mtl.progress': { label: 'Bảo mật', pii: 'không', note: '% tiến độ của một hạng mục MTL' },
   'mtl.plan': { label: 'Bảo mật', pii: 'không', note: 'Tên, đường găng, mốc, kế hoạch gốc của hạng mục MTL' },
   'kpi.person': { label: 'Bảo mật', pii: 'cơ bản (đánh giá cá nhân)', note: 'KPI theo người' },
   // ---- Playground CRM đối tác (nhà thầu, tư vấn, cơ quan, ngân hàng, nhà cung cấp) ----
@@ -102,10 +102,10 @@ function rule(s, action, dataset, ctx, env) {
       if (action === 'edit') return s.director;
       return false;
     case 'mtl.progress': {
-      // % / checklist: người được giao, lãnh đạo bộ phận chủ trì, người quản lý dự án (PMO của dự án).
+      // % tiến độ: chỉ người chủ trì (quyền tối thiểu theo vai, services/task-access.js — 20/11/2026).
       const it = ctx.item || {};
       if (action === 'view') return true; // xem đã lọc bằng itemVisibleWhere
-      if (action === 'edit') return !!it.projectManager || (it.assigneeIds || []).includes(s.userId) || (it.leadLeaderIds || []).includes(s.userId);
+      if (action === 'edit') return (it.assigneeIds || []).includes(s.userId);
       if (action === 'export') return mtlExport(s, ctx);
       return false;
     }
@@ -113,11 +113,10 @@ function rule(s, action, dataset, ctx, env) {
       const it = ctx.item || {};
       if (action === 'view') return true;
       if (action === 'edit') {
-        // Tên, găng, mốc, hạn, kế hoạch gốc, cấu trúc cây, bộ phận chủ trì của bước MTL tổng: chỉ người quản lý dự án.
-        if (it.projectManager) return true;
-        // Lãnh đạo bộ phận chủ trì: chi tiết hoá (thêm / sửa việc con) và phân công người trong hạng mục bộ phận mình (MTL bộ phận).
-        if (['child', 'detail', 'assign'].includes(ctx.op)) return (it.leadLeaderIds || []).includes(s.userId);
-        return false;
+        // Kế hoạch của MỘT hạng mục (tên, găng, mốc, hạn, kế hoạch gốc): người giao, Ban Giám đốc của việc (it.boss, task-access).
+        if (ctx.op === 'item') return !!it.boss;
+        // Thao tác cả dự án (tạo bước MTL tổng, nhập Excel, chuyển ghi chú thành việc): người quản lý dự án.
+        return !!it.projectManager;
       }
       if (action === 'export') return mtlExport(s, ctx);
       return false;
@@ -228,8 +227,8 @@ const MESSAGES = {
   'weekly.meeting': 'Chỉ TGĐ / Ban giám đốc và thư ký giao ban ghi điểm danh, kết luận, Action Log',
   'weekly.compliance': 'Điểm tuân thủ chỉ thư ký giao ban và Ban giám đốc xem',
   'weekly.roles': 'Chỉ Ban giám đốc chọn bộ phận thư ký và PMO',
-  'mtl.progress': 'Chỉ người được giao, lãnh đạo bộ phận chủ trì hoặc người quản lý dự án cập nhật tiến độ hạng mục này',
-  'mtl.plan': 'Kế hoạch MTL (tên, găng, mốc, hạn, cấu trúc, phân công) do người quản lý dự án sửa; lãnh đạo bộ phận chủ trì chi tiết hoá phần bộ phận mình',
+  'mtl.progress': 'Tiến độ hạng mục do người chủ trì cập nhật',
+  'mtl.plan': 'Kế hoạch hạng mục MTL do người giao hoặc Ban Giám đốc sửa; tạo bước MTL tổng, nhập Excel do người quản lý dự án (PMO)',
   'crm.partner': 'Chỉ bộ phận phụ trách đối tác, người phụ trách hoặc Ban giám đốc sửa đối tác này',
   'crm.contact': 'Người liên hệ của đối tác chỉ bộ phận phụ trách, người phụ trách và Ban giám đốc xem / sửa',
   'crm.interaction': 'Nhật ký làm việc với đối tác chỉ bộ phận phụ trách, người phụ trách, người được giao theo dõi và Ban giám đốc xem',

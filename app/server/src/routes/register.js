@@ -2,12 +2,13 @@
 // nhập Kế hoạch công tác năm (.docx), nhập / xuất sổ Excel đúng mẫu.
 const path = require('node:path');
 const MG = require('../services/mtl-guard');
+const TA = require('../services/task-access');
 const fs = require('node:fs/promises');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
 const { fail, intParam, optionalInt, optionalDate, text, oneOf } = require('../lib/http');
 const { permissionScope, isItAdmin } = require('../lib/permissions');
-const { loadProject, loadItem, itemVisibleWhere, visibleProjectsWhere } = require('../services/access');
+const { loadProject, itemVisibleWhere, visibleProjectsWhere } = require('../services/access');
 const { verifyUpload } = require('../lib/files');
 const { activity, notify } = require('../services/events');
 const { deptLeaderIds } = require('../services/approval');
@@ -212,16 +213,12 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
   // hạn = rows[i].dueDate ?? (anchorDate + offsetDays) ?? hạn việc cha, không muộn hơn hạn việc cha (cắt về hạn cha, báo trong `warnings`).
   app.post('/api/items/:id/apply-template', auth, async (req, res) => {
     const id = intParam(req.params.id);
-    const { project, rights } = await loadItem(prisma, req.user, id, 'edit');
+    // Áp mẫu = tạo việc nhánh: người chủ trì, người giao, Ban Giám đốc của việc cha (services/task-access.js).
+    const { project, rights } = await TA.loadTask(prisma, req.user, id, { need: 'children' });
     const body = req.body || {};
     const tpl = await prisma.taskTemplate.findUnique({ where: { id: intParam(body.templateId, 'Mẫu') } }) || fail(404, 'Không tìm thấy mẫu', 'NOT_FOUND');
     const parent = await prisma.workItem.findUnique({ where: { id }, include: { assignees: true } });
     // Áp mẫu được cho việc ở mọi cấp (việc con nhiều cấp); trần cấp kiểm tra khi tạo (services/tree.js).
-    // Giống "chia nhiều việc nhánh": người quản lý, người giao, lãnh đạo phòng chủ trì, người chủ trì.
-    const allowed = rights.canManage || parent.assignedById === req.user.id || parent.assignees.some(a => a.userId === req.user.id)
-      || (await deptLeaderIds(prisma, parent.leadDepartmentId ?? project.departmentId)).includes(req.user.id);
-    if (!allowed) fail(403, 'Chỉ người quản lý dự án, người giao việc hoặc lãnh đạo phòng chủ trì được áp mẫu', 'FORBIDDEN');
-    MG.mtlBulkGuard(req.user, project, rights); // MTL: áp mẫu (tạo hàng loạt) chỉ người quản lý dự án
     const prefix = text(body.prefix, 'Ký hiệu', { max: 12 }) || null;
     const anchorDate = dayInput(body.anchorDate, 'Ngày mốc');
     if (body.rows !== undefined && body.rows !== null && (!Array.isArray(body.rows) || body.rows.length > 30)) fail(422, 'Danh sách việc nhánh không hợp lệ');
@@ -442,7 +439,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
     const settings = await R.getSettings(prisma);
     const items = await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, AND: [itemVisibleWhere(req.user)] }, orderBy: { number: 'asc' },
       include: { state: true, assignees: { include: { user: true } }, supporters: { include: { user: true } },
-        approvals: { where: { status: 'PENDING' }, select: { currentLevel: true, status: true, withAssigner: true } }, documents: { where: { kind: 'BASIS' }, orderBy: { id: 'asc' } } } });
+        approvals: { where: { status: 'PENDING' }, select: { currentLevel: true, status: true, withAssigner: true, withBoard: true } }, documents: { where: { kind: 'BASIS' }, orderBy: { id: 'asc' } } } });
     const steps = await prisma.approvalStep.findMany({ where: { projectId: project.id }, orderBy: { level: 'asc' } });
     const names = Object.fromEntries((await prisma.user.findMany({ where: { id: { in: [...new Set(items.map(i => i.assignedById).filter(Boolean))] } }, select: { id: true, fullName: true } })).map(u => [u.id, u.fullName]));
     const deptNames = Object.fromEntries((await prisma.department.findMany({ select: { id: true, name: true } })).map(d => [d.id, d.name]));

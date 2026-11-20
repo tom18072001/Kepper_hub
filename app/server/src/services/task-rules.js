@@ -10,12 +10,19 @@ const { fail } = require('../lib/http');
 const RATINGS = { EXCELLENT: 'Xuất sắc', GOOD: 'Tốt', PASS: 'Đạt', NEEDS_IMPROVEMENT: 'Cần cải thiện', POOR: 'Kém' };
 // Bước duyệt ảo của người giao (cấp 1 của phiếu withAssigner).
 const ASSIGNER_STEP = Object.freeze({ level: 1, name: 'Người giao duyệt', approverType: 'ASSIGNER', virtual: true });
+// Việc MỐC hoặc trên ĐƯỜNG GĂNG (chủ dự án chốt 20/11/2026): cấp 1 = Ban Giám đốc của việc duyệt + chấm mức, thay người giao.
+const BOARD_STEP = Object.freeze({ level: 1, name: 'Ban Giám đốc duyệt', approverType: 'BOARD', virtual: true });
+// Bước duyệt chấm mức hoàn thành (cấp 1 của phiếu mới): người giao, hoặc Ban Giám đốc với việc mốc / đường găng.
+const isGradeStep = step => step?.approverType === 'ASSIGNER' || step?.approverType === 'BOARD';
+// Việc do Ban Giám đốc duyệt hoàn thành: mốc hoặc đường găng.
+const isBoardItem = item => !!(item?.critical || item?.milestone);
 
-// Chuỗi bước duyệt của một phiếu: phiếu mới = [người giao, ...bước dự án dời lên 1 cấp]; phiếu cũ = bước dự án.
-function chainOf(projectSteps, withAssigner = true) {
+// Chuỗi bước duyệt của một phiếu: phiếu mới = [người giao (việc mốc / găng: Ban Giám đốc), ...bước dự án dời lên 1 cấp];
+// phiếu cũ = bước dự án.
+function chainOf(projectSteps, withAssigner = true, { board = false } = {}) {
   const steps = [...projectSteps].sort((a, b) => a.level - b.level);
   if (!withAssigner) return steps;
-  return [ASSIGNER_STEP, ...steps.map((s, i) => ({ ...s, level: i + 2 }))];
+  return [board ? BOARD_STEP : ASSIGNER_STEP, ...steps.map((s, i) => ({ ...s, level: i + 2 }))];
 }
 const stepAt = (chain, level) => chain.find(s => s.level === level) || null;
 
@@ -62,16 +69,30 @@ function assignerApprovers(item, ctx) {
     || { ids: [], reason: 'NONE' };
 }
 
+// Người duyệt cấp "Ban Giám đốc" của việc mốc / đường găng: Ban Giám đốc toàn quyền + PGĐ phụ trách bộ phận chủ trì.
+//   ctx: { active, topIds: ids Ban Giám đốc toàn quyền, supervisorOf(deptId), projectDepartmentId } (+ như assignerApprovers để dự phòng)
+// Không bao giờ chứa người chủ trì: Ban Giám đốc đồng thời là người chủ trì → Ban Giám đốc khác duyệt.
+// Chưa có ai (chưa đánh dấu Ban Giám đốc toàn quyền, phòng chưa có PGĐ phụ trách) → người giao duyệt như việc thường (phiếu không bị kẹt).
+function boardApprovers(item, ctx) {
+  const assignees = new Set(item.assigneeIds || []);
+  const ok = id => id != null && ctx.active.has(id) && !assignees.has(id);
+  const dept = item.leadDepartmentId ?? ctx.projectDepartmentId ?? null;
+  const ids = [...new Set([...(ctx.topIds || []), dept != null ? ctx.supervisorOf(dept) : null])].filter(ok);
+  if (ids.length) return { ids, reason: 'BOARD' };
+  const fallback = assignerApprovers(item, ctx);
+  return { ...fallback, reason: fallback.ids.length ? 'BOARD_FALLBACK_' + fallback.reason : 'NONE' };
+}
+
 // Kiểm tra một quyết định duyệt (ngoài việc người dùng có nằm trong danh sách người duyệt của cấp hay không).
 function checkDecision({ step, decision, rating, comment, userId, assigneeIds = [], requestedById }) {
   if (assigneeIds.includes(userId)) fail(403, 'Người chủ trì không tự duyệt việc của mình', 'SELF_APPROVAL');
-  // Người giao tự bấm "Hoàn thành" thay người chủ trì vẫn duyệt được (để chấm điểm); các cấp dự án thì không tự duyệt phiếu mình gửi.
-  if (step?.approverType !== 'ASSIGNER' && requestedById === userId) fail(403, 'Không thể tự duyệt việc do chính mình gửi duyệt', 'SELF_APPROVAL');
+  // Cấp chấm mức (người giao / Ban Giám đốc) duyệt phiếu của người khác gửi; các cấp dự án thì không tự duyệt phiếu mình gửi.
+  if (!isGradeStep(step) && requestedById === userId) fail(403, 'Không thể tự duyệt việc do chính mình gửi duyệt', 'SELF_APPROVAL');
   if (decision === 'REJECT' && !String(comment || '').trim()) fail(422, 'Trả lại phải ghi lý do', 'REASON_REQUIRED');
-  if (decision === 'APPROVE' && step?.approverType === 'ASSIGNER') {
+  if (decision === 'APPROVE' && isGradeStep(step)) {
     if (!rating) fail(422, 'Hãy chấm mức hoàn thành (Xuất sắc / Tốt / Đạt / Cần cải thiện / Kém) trước khi duyệt', 'RATING_REQUIRED');
     if (!RATINGS[rating]) fail(422, 'Mức hoàn thành không hợp lệ', 'INVALID_RATING');
   } else if (rating && !RATINGS[rating]) fail(422, 'Mức hoàn thành không hợp lệ', 'INVALID_RATING');
 }
 
-module.exports = { RATINGS, ASSIGNER_STEP, chainOf, stepAt, childProgress, assertChildrenDone, completionTarget, assignerApprovers, checkDecision };
+module.exports = { RATINGS, ASSIGNER_STEP, BOARD_STEP, isGradeStep, isBoardItem, chainOf, stepAt, childProgress, assertChildrenDone, completionTarget, assignerApprovers, boardApprovers, checkDecision };

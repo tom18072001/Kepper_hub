@@ -15,9 +15,10 @@ function stageOf(item, steps = []) {
   const pending = item.pendingApproval || (Array.isArray(item.approvals) ? item.approvals.find(a => !a.status || a.status === 'PENDING') : null);
   if (cat === 'REVIEW' && pending) {
     // Phiếu mới (withAssigner): cấp 1 = người giao, cấp k = bước k-1 của dự án.
-    const step = pending.withAssigner ? (pending.currentLevel === 1 ? { approverType: 'ASSIGNER' } : steps.find(s => s.level === pending.currentLevel - 1))
+    const step = pending.withAssigner ? (pending.currentLevel === 1 ? { approverType: pending.withBoard ? 'BOARD' : 'ASSIGNER' } : steps.find(s => s.level === pending.currentLevel - 1))
       : steps.find(s => s.level === pending.currentLevel);
     if (step?.approverType === 'ASSIGNER') return out('WAIT_ASSIGNER');
+    if (step?.approverType === 'BOARD') return out('WAIT_BGD', 'Chờ Ban Giám đốc duyệt'); // việc mốc / đường găng
     if (step?.approverType === 'DEPARTMENT_MANAGER') return out('WAIT_DEPT');
     if (step?.approverType === 'DIRECTOR' || step?.approverType === 'SUPERVISOR') return out('WAIT_BGD');
     return out('WAIT_APPROVAL', step ? `Chờ duyệt: ${step.name}` : STAGES.WAIT_APPROVAL);

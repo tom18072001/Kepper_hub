@@ -75,7 +75,7 @@ async function renderUsers(root) {
     <div class="admin-scroll"><table class="table admin-cards adm-users" data-testid="users-table"><thead><tr><th>Tài khoản</th><th>Họ tên</th><th>Nhóm</th><th>Phòng ban</th><th>Trạng thái</th><th>Đăng nhập gần nhất</th><th></th></tr></thead><tbody>
     ${users.map(u => `<tr data-testid="user-${esc(u.username)}"><td class="card-title" data-label="Tài khoản"><b>${esc(u.username)}</b>${u.isRootAdmin ? ' <span class="pill">Gốc</span>' : ''}</td>
       <td class="adm-name" data-label="Họ tên"><span>${esc(u.fullName)}<span class="muted xs adm-block">${esc(u.displayTitle || '')}</span></span></td>
-      <td data-label="Nhóm"><span>${ROLE_LABEL[u.role] || esc(u.role)}${u.profileMismatch ? ` <span class="pill warn" title="Quyền hiện tại khác quyền mặc định của nhóm tài khoản — mở Phân quyền để xem và khôi phục" data-testid="mismatch-${esc(u.username)}">Lệch quyền</span>` : ''}</span></td>
+      <td data-label="Nhóm"><span>${ROLE_LABEL[u.role] || esc(u.role)}${u.boardAll ? ' <span class="pill info" title="Ban Giám đốc của mọi việc (chọn trong Phân quyền)" data-testid="board-all-pill">BGĐ toàn quyền</span>' : ''}${u.profileMismatch ? ` <span class="pill warn" title="Quyền hiện tại khác quyền mặc định của nhóm tài khoản — mở Phân quyền để xem và khôi phục" data-testid="mismatch-${esc(u.username)}">Lệch quyền</span>` : ''}</span></td>
       <td data-label="Phòng ban"><span>${esc(u.department?.name || '—')}${u.department && store.departments.find(d => d.id === u.department.id)?.isActive === false ? ' <span class="muted xs">(đã khoá)</span>' : ''}</span></td>
       <td data-label="Trạng thái">${u.isActive ? (u.mustChangePw ? '<span class="pill">Chờ đổi mật khẩu</span>' : '<span class="pill">Hoạt động</span>') : '<span class="pill">Đã khoá</span>'}</td>
       <td class="muted sm" data-label="Đăng nhập gần nhất">${u.lastLoginAt ? fmtDateTime(u.lastLoginAt) : '—'}</td>
@@ -204,6 +204,9 @@ async function permissionEditor(root, userId, users = []) {
       ? `<span>Quyền hiện tại khác quyền mặc định của nhóm ${esc(ROLE_LABEL[user.role] || user.role)} (${diffSummary(mismatch)}).</span>`
       : `<span class="muted">Quyền hiện tại trùng quyền mặc định của nhóm ${esc(ROLE_LABEL[user.role] || user.role)}.</span>`}
       ${canWrite && mismatch.length ? `<button type="button" class="btn btn-ghost btn-sm" data-restore data-testid="perm-restore">${ICON.undo}Khôi phục quyền theo vai trò</button>` : ''}</div>
+    ${user.role !== 'admin' ? `<label class="admin-box check" data-testid="perm-board-all-box"><input type="checkbox" id="permBoardAll" data-testid="perm-board-all"${user.boardAll ? ' checked' : ''}${canWrite ? '' : ' disabled'}>
+      <span><b>Ban Giám đốc toàn quyền</b> — là Ban Giám đốc của <b>mọi việc</b> ở mọi bộ phận: sửa kế hoạch, người giao, duyệt gia hạn. Chọn riêng từng người
+      (không theo phòng, không theo nhóm tài khoản). PGĐ phụ trách bộ phận không cần chọn ở đây — đã là Ban Giám đốc của việc bộ phận mình phụ trách (Phòng ban → PGĐ phụ trách).</span></label>` : ''}
     <div class="admin-scroll"><table class="table perm-grid"><thead><tr><th>Nhóm</th><th>Quyền</th><th>Xem</th><th>Thao tác</th></tr></thead><tbody>
     ${cat.permissions.map(p => `<tr data-row="${p.key}"><td class="muted sm">${esc(p.group)}</td><td><b>${esc(p.label)}</b><div class="muted xs">${esc(p.description)}</div></td>
       ${['VIEW', 'OPERATE'].map(action => p.actions.includes(action) ? `<td><select data-key="${p.key}" data-action="${action}" ${canWrite ? '' : 'disabled'} data-testid="grant-${p.key}-${action}" aria-label="${esc(p.label)} — ${ACTION_TEXT[action]}"><option value="">—</option>${p.scopes.map(s => `<option value="${s}"${current.get(p.key + '|' + action) === s ? ' selected' : ''}>${SCOPE_TEXT[s]}</option>`).join('')}</select></td>` : '<td></td>').join('')}</tr>`).join('')}
@@ -228,6 +231,8 @@ async function permissionEditor(root, userId, users = []) {
   modal.querySelector('[data-save]')?.addEventListener('click', async () => {
     try {
       await api(`/api/admin/users/${userId}/permissions`, { method: 'PUT', body: { grants: picked() } });
+      const board = $('#permBoardAll', modal);
+      if (board && board.checked !== !!user.boardAll) await api(`/api/admin/users/${userId}/board`, { method: 'PUT', body: { boardAll: board.checked } });
       closeModal(); toast('Đã lưu phân quyền', 'ok');
       if (users.some(u => u.id === userId)) renderUsers(root);
     } catch (error) { $('#permError', modal).textContent = errorMessage(error); }

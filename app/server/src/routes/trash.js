@@ -1,18 +1,18 @@
 // Thùng rác: xoá dự án (người quản lý dự án), xem và khôi phục việc / dự án trong vòng 7 ngày.
 const { fail, intParam, text } = require('../lib/http');
-const { loadProject, loadItem, projectRights, visibleProjectsWhere, itemVisibleWhere } = require('../services/access');
+const { loadProject, projectRights, visibleProjectsWhere, itemVisibleWhere } = require('../services/access');
 const { activity } = require('../services/events');
 const approval = require('../services/approval');
 const bus = require('../services/bus');
 const T = require('../services/trash');
-const MG = require('../services/mtl-guard');
+const TA = require('../services/task-access');
 
 module.exports = function mountTrash(app, { prisma, auth, audit }) {
   // Xoá việc → thùng rác (kèm việc con). Thay cho "Lưu trữ" trước đây.
   app.delete('/api/items/:id', auth, async (req, res) => {
     const id = intParam(req.params.id);
-    const { project, rights } = await loadItem(prisma, req.user, id, 'delete');
-    await MG.mtlDeleteGuard(prisma, req.user, project, rights, id); // MTL: xoá bước tổng = người quản lý dự án
+    // Xoá việc: người giao, Ban Giám đốc của việc (services/task-access.js).
+    const { project } = await TA.loadTask(prisma, req.user, id, { need: 'delete' });
     const ids = await prisma.$transaction(async tx => {
       const item = await tx.workItem.findUnique({ where: { id } });
       if (item.archivedAt) fail(409, 'Việc đã ở trong thùng rác', 'ALREADY_DELETED');
@@ -28,8 +28,7 @@ module.exports = function mountTrash(app, { prisma, auth, audit }) {
 
   app.post('/api/items/:id/restore', auth, async (req, res) => {
     const id = intParam(req.params.id);
-    const { project, rights } = await loadItem(prisma, req.user, id, 'delete');
-    await MG.mtlDeleteGuard(prisma, req.user, project, rights, id);
+    const { project } = await TA.loadTask(prisma, req.user, id, { need: 'delete' });
     await prisma.$transaction(async tx => {
       const item = await tx.workItem.findUnique({ where: { id } });
       if (!item.archivedAt) fail(409, 'Việc không nằm trong thùng rác', 'NOT_DELETED');
@@ -64,12 +63,17 @@ module.exports = function mountTrash(app, { prisma, auth, audit }) {
   // Nội dung thùng rác mà người dùng được khôi phục.
   app.get('/api/trash', auth, async (req, res) => {
     const visible = await prisma.project.findMany({ where: visibleProjectsWhere(req.user), include: { members: { where: { userId: req.user.id } } } });
-    const canDelete = visible.filter(p => projectRights(req.user, p, p.members[0]).canDelete);
-    const byId = Object.fromEntries(canDelete.map(p => [p.id, p]));
-    const items = await prisma.workItem.findMany({
-      where: { archivedAt: { not: null }, projectId: { in: canDelete.map(p => p.id) }, AND: [itemVisibleWhere(req.user)] }, orderBy: { archivedAt: 'desc' }, take: 300,
-      select: { id: true, number: true, title: true, projectId: true, archivedAt: true, deletedById: true, parentId: true },
+    const byId = Object.fromEntries(visible.map(p => [p.id, p]));
+    // Việc trong thùng rác người dùng khôi phục được: người giao, Ban Giám đốc của việc (cùng luật với xoá).
+    const org = await TA.orgContext(prisma);
+    const rows = await prisma.workItem.findMany({
+      where: { archivedAt: { not: null }, projectId: { in: visible.map(p => p.id) }, AND: [itemVisibleWhere(req.user)] }, orderBy: { archivedAt: 'desc' }, take: 1000,
+      select: { ...TA.TASK_SELECT, deletedById: true },
     });
+    const items = rows.filter(i => {
+      const p = byId[i.projectId], task = TA.taskOf(i);
+      return TA.taskCapabilities(req.user, task, TA.itemContext(org, { project: p, rights: projectRights(req.user, p, p.members[0]), member: p.members[0], item: task })).delete;
+    }).slice(0, 300);
     // Dự án đã xoá: chỉ hiện cho người quản lý được dự án đó (kiểm tra như khi chưa xoá).
     const deleted = await prisma.project.findMany({ where: { deletedAt: { not: null } }, include: { members: { where: { userId: req.user.id } }, department: { select: { name: true } }, _count: { select: { items: true } } }, orderBy: { deletedAt: 'desc' } });
     const projects = deleted.filter(p => projectRights(req.user, { ...p, archivedAt: null }, p.members[0]).canManage);

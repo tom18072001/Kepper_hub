@@ -16,7 +16,9 @@ const DEPARTMENTS = [
   { code: 'QLXD', name: 'Ban Quản lý xây dựng' }, { code: 'GR', name: 'Ban Đối ngoại – GPMB' },
 ];
 const USERS = [
-  { username: 'giamdoc', fullName: 'Trần Minh Giám', displayTitle: 'Giám đốc', role: 'director', dept: 'BGD' },
+  // boardAll: "Ban Giám đốc toàn quyền" (Ban Giám đốc của mọi việc, services/task-access.js) — chỉ dữ liệu GIẢ; máy chạy thật do quản trị chọn.
+  // PMO cùng phòng "Ban Giám đốc" nhưng KHÔNG được đánh dấu: không phải Ban Giám đốc của việc.
+  { username: 'giamdoc', fullName: 'Trần Minh Giám', displayTitle: 'Giám đốc', role: 'director', dept: 'BGD', boardAll: true },
   { username: 'tp.kinhdoanh', fullName: 'Lê Thu Hà', displayTitle: 'Trưởng phòng Kinh doanh', role: 'manager', dept: 'KD' },
   { username: 'nv.kinhdoanh1', fullName: 'Phạm Văn An', displayTitle: 'Chuyên viên kinh doanh', role: 'member', dept: 'KD' },
   { username: 'nv.kinhdoanh2', fullName: 'Đỗ Thị Bình', displayTitle: 'Chuyên viên kinh doanh', role: 'member', dept: 'KD' },
@@ -60,7 +62,7 @@ async function seed(prisma = new PrismaClient(), env = process.env) {
     users[u.username] = await prisma.$transaction(async tx => {
       const existing = await tx.user.findUnique({ where: { username: u.username } });
       if (existing) return existing;
-      const created = await tx.user.create({ data: { username: u.username, fullName: u.fullName, displayTitle: u.displayTitle, role: u.role,
+      const created = await tx.user.create({ data: { username: u.username, fullName: u.fullName, displayTitle: u.displayTitle, role: u.role, boardAll: !!u.boardAll,
         departmentId: dept[u.dept].id, passwordHash: bcrypt.hashSync(DEFAULT_PASSWORD, 10), mustChangePw: true } });
       await grantInitialPermissions(tx, created, root.id);
       return created;
@@ -82,7 +84,7 @@ async function seed(prisma = new PrismaClient(), env = process.env) {
       const due = it.dueInDays == null ? null : new Date(Date.now() + it.dueInDays * 86_400_000);
       await tx.workItem.create({ data: {
         projectId: project.id, number: n, title: it.title, descriptionHtml: `<p>${it.title}.</p>`, descriptionText: it.title + '.', stateId: state.id, priority: it.priority || 'MEDIUM',
-        reporterId: users[lead].id, dueDate: due, startDate: due ? new Date(due.getTime() - 5 * 86_400_000) : null, position: n * 1024,
+        reporterId: users[lead].id, assignedById: users[lead].id, assignedAt: new Date(), dueDate: due, startDate: due ? new Date(due.getTime() - 5 * 86_400_000) : null, position: n * 1024,
         startedAt: ['STARTED', 'REVIEW', 'COMPLETED'].includes(it.category) ? new Date(Date.now() - (it.startedDaysAgo || 3) * 86_400_000) : null,
         completedAt: it.category === 'COMPLETED' ? new Date() : null,
         assignees: { create: (it.assignees || []).map(u => ({ userId: users[u].id })) },

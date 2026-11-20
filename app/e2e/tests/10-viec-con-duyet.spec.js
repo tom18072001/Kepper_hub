@@ -53,11 +53,15 @@ test('20. Việc con: lồng / thu gọn / dòng riêng trong Danh sách, nằm 
   const open = kids.filter(k => k.stage?.code !== 'DONE');
   if (open.length) {
     const review = (await (await apiAs(pmo, `/api/projects/${project.id}`)).json()).states.find(s => s.category === 'REVIEW');
-    const r = await apiAs(pmo, `/api/items/${parent.id}`, { method: 'PATCH', data: { stateId: review.id } });
+    // Gửi duyệt là bước của người chủ trì (tb.phaply chủ trì DA-8): người giao (PMO) không gửi duyệt thay.
+    expect((await apiAs(pmo, `/api/items/${parent.id}`, { method: 'PATCH', data: { stateId: review.id } })).status()).toBe(403);
+    const head = await (await browser.newContext()).newPage();
+    await login(head, 'tb.phaply');
+    const r = await apiAs(head, `/api/items/${parent.id}`, { method: 'PATCH', data: { stateId: review.id } });
     expect(r.status()).toBe(409);
     expect((await r.json()).code).toBe('CHILDREN_OPEN');
-    await pmo.getByTestId('card-DA-8').locator('.title').click();
-    await expect.poll(() => pmo.locator('#ipState').evaluate(sel => [...sel.options].filter(o => o.text.startsWith('Hoàn thành')).map(o => [o.text, o.disabled]))).toEqual([['Hoàn thành (còn việc con chưa duyệt)', true]]);
-    await expect(pmo.getByTestId('children-block-note')).toBeVisible();
+    await head.goto(`/#/projects/${project.id}?item=${parent.id}`);
+    await expect.poll(() => head.locator('#ipState').evaluate(sel => [...sel.options].filter(o => o.text.startsWith('Hoàn thành')).map(o => [o.text, o.disabled]))).toEqual([['Hoàn thành (còn việc con chưa duyệt)', true]]);
+    await expect(head.getByTestId('children-block-note')).toBeVisible();
   }
 });

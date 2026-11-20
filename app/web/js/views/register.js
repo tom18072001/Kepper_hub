@@ -25,9 +25,8 @@ export function drawRegister(body, current, { filtered, openItemHash, reload }) 
   // Mọi bộ lọc trừ trạng thái hạn: nhóm việc vẫn hiện khi có việc nhánh khớp trạng thái hạn đang chọn.
   const scoped = filtered(['dl']).map(i => ({ ...i, state: states[i.stateId], dl: deadlineStatus({ ...i, state: states[i.stateId] }, soon) }));
   const status = current.filters.dl || '';
-  // Tiến độ việc giao về phòng: chỉ người chủ trì / lãnh đạo phòng chủ trì sửa (máy chủ kiểm tra lại).
-  const me = store.me, leader = ['manager', 'deputy'].includes(me.role);
-  const canProgress = i => !i.dispatchStatus || i.assignees.some(a => a.id === me.id) || (leader && me.departmentId === i.leadDepartmentId) || project.rights.canManage;
+  // Tiến độ: chỉ người chủ trì (máy chủ trả `my.progress` cho từng việc và kiểm lại khi lưu).
+  const canProgress = i => !!i.my?.progress;
   const cols = 17 + (ui.full ? 4 : 0);
   const byParent = new Map();
   for (const i of scoped) if (i.parentId) { if (!byParent.has(i.parentId)) byParent.set(i.parentId, []); byParent.get(i.parentId).push(i); }

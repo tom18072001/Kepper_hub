@@ -47,15 +47,16 @@ test('Thông báo muộn / vắng: lãnh đạo xem bộ phận mình; ghi chú 
   allow('weekly.notice', 'edit', { departmentId: OWN, createdById: 6, op: 'delete' }, ['secretary', 'member']);
 });
 
-test('MTL: % / checklist — người được giao, lãnh đạo bộ phận chủ trì, người quản lý dự án; kế hoạch chỉ người quản lý dự án', () => {
+test('MTL: % chỉ người chủ trì; kế hoạch hạng mục: người giao / BGĐ; thao tác cả dự án: người quản lý dự án', () => {
   const item = { assigneeIds: [6], leadLeaderIds: [5], projectManager: false };
-  allow('mtl.progress', 'edit', { item }, ['leader', 'member']);
-  allow('mtl.progress', 'edit', { item: { ...item, projectManager: true } }, ROLES.filter(r => r !== 'it'));
+  allow('mtl.progress', 'edit', { item }, ['member']); // S.member là người chủ trì (userId 6); lãnh đạo bộ phận không còn cập nhật thay
+  allow('mtl.progress', 'edit', { item: { ...item, projectManager: true } }, ['member']); // PMO không cập nhật % thay người chủ trì
   allow('mtl.plan', 'edit', { item }, []);
   allow('mtl.plan', 'edit', { item: { ...item, projectManager: true } }, ROLES.filter(r => r !== 'it'));
-  // Lãnh đạo bộ phận chủ trì: thêm / sửa việc con, phân công — không sửa bước tổng, không đổi cấu trúc.
-  for (const op of ['child', 'detail', 'assign']) allow('mtl.plan', 'edit', { item, op }, ['leader']);
-  allow('mtl.plan', 'edit', { item, op: 'struct' }, []);
+  // Kế hoạch một hạng mục: người giao / Ban Giám đốc của việc (task-access tính it.boss); quản lý dự án không tự có quyền này.
+  allow('mtl.plan', 'edit', { item: { ...item, projectManager: true }, op: 'item' }, []);
+  allow('mtl.plan', 'edit', { item: { ...item, boss: true }, op: 'item' }, ROLES.filter(r => r !== 'it'));
+  for (const op of ['child', 'detail', 'assign']) allow('mtl.plan', 'edit', { item, op }, []);
   // Xuất ra tệp: quản lý dự án, Ban GĐ; lãnh đạo bộ phận phần bộ phận mình.
   allow('mtl.plan', 'export', { item }, ['director']);
   allow('mtl.progress', 'export', { item, op: 'dept' }, ['director', 'leader']);

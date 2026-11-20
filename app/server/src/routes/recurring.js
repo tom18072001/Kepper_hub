@@ -1,7 +1,8 @@
 // Quy tắc việc lặp lại theo dự án (quản lý dự án cấu hình).
 const { fail, intParam, text, oneOf } = require('../lib/http');
 const { sanitizeHtml } = require('../lib/rich-text');
-const { loadProject, loadItem } = require('../services/access');
+const { loadProject } = require('../services/access');
+const TA = require('../services/task-access');
 const W = require('../services/workitems');
 const R = require('../services/recurring');
 
@@ -39,10 +40,15 @@ module.exports = function mountRecurring(app, { prisma, auth, audit }) {
     res.status(201).json({ ...row, schedule: R.describe(row) });
   });
 
+  // Quy tắc của dự án: người quản lý dự án. Quy tắc lập từ một việc ("Lặp lại việc này"): thêm người giao / Ban Giám đốc của việc đó.
   async function ruleFor(req, need) {
     const rule = await prisma.recurringRule.findUnique({ where: { id: intParam(req.params.id) } });
     if (!rule) fail(404, 'Không tìm thấy quy tắc', 'NOT_FOUND');
-    await loadProject(prisma, req.user, rule.projectId, need);
+    const { rights } = await loadProject(prisma, req.user, rule.projectId);
+    if (need === 'manage' && !rights.canManage) {
+      const source = rule.sourceItemId ? await TA.loadTask(prisma, req.user, rule.sourceItemId).catch(() => null) : null;
+      if (!source?.caps.recur) fail(403, 'Chỉ người quản lý dự án, hoặc người giao / Ban Giám đốc của việc gốc, sửa lịch lặp lại', 'FORBIDDEN');
+    }
     return rule;
   }
   app.patch('/api/recurring/:id', auth, async (req, res) => {
@@ -70,7 +76,8 @@ module.exports = function mountRecurring(app, { prisma, auth, audit }) {
   // "Lặp lại việc này": tạo quy tắc từ một việc có sẵn (sao chép tiêu đề, mô tả, ưu tiên, người nhận, nhãn).
   app.post('/api/items/:id/recurring', auth, async (req, res) => {
     const id = intParam(req.params.id);
-    const { project } = await loadItem(prisma, req.user, id, 'manage');
+    // Lặp lại việc: người giao, Ban Giám đốc của việc.
+    const { project } = await TA.loadTask(prisma, req.user, id, { need: 'recur' });
     const item = await prisma.workItem.findUnique({ where: { id }, include: { assignees: true, labels: true } });
     if (item.recurringRuleId && await prisma.recurringRule.findUnique({ where: { id: item.recurringRuleId } }))
       fail(409, 'Việc này đã có lịch lặp lại — hãy sửa lịch hiện có', 'RULE_EXISTS');

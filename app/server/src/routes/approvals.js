@@ -4,8 +4,8 @@ const { permissionScope } = require('../lib/permissions');
 const approval = require('../services/approval');
 const rules = require('../services/task-rules');
 const W = require('../services/workitems');
-const MG = require('../services/mtl-guard');
-const { loadItem } = require('../services/access');
+const TA = require('../services/task-access');
+
 const { activity } = require('../services/events');
 const bus = require('../services/bus');
 
@@ -21,14 +21,18 @@ async function decisionScope(prisma, user) {
   if (permissionScope(user, 'work.approve', 'OPERATE') === 'UNIT' && user.departmentId != null) leaderDepts.add(user.departmentId);
   for (const u of fromIds.length ? await prisma.user.findMany({ where: { id: { in: fromIds }, isActive: true }, select: { departmentId: true, role: true } }) : []) if (u.departmentId != null && u.role !== 'director') leaderDepts.add(u.departmentId);
   const supervised = (await prisma.department.findMany({ where: { supervisorId: { in: [user.id, ...fromIds] } }, select: { id: true } })).map(d => d.id);
-  return { assigners: [user.id, ...fromIds], leaderDepts: [...leaderDepts], supervised };
+  // Ban Giám đốc của việc (services/task-access.js): TGĐ — mọi việc; PGĐ phụ trách — việc của phòng mình phụ trách.
+  const org = await TA.orgContext(prisma, now);
+  const ownSupervised = (await prisma.department.findMany({ where: { supervisorId: user.id }, select: { id: true } })).map(d => d.id);
+  return { assigners: [user.id, ...fromIds], leaderDepts: [...leaderDepts], supervised, top: org.topIds.includes(user.id), ownSupervised };
 }
 // Kiến nghị "của tôi": người giao / PGĐ phụ trách luôn thấy; lãnh đạo phòng chỉ thấy kiến nghị chưa trình lên BGĐ.
 const proposalScope = s => ({ OR: [{ workItem: { assignedById: { in: s.assigners } } }, ...(s.supervised.length ? [{ workItem: { leadDepartmentId: { in: s.supervised } } }] : []),
   ...(s.leaderDepts.length ? [{ forwardedAt: null, workItem: { leadDepartmentId: { in: s.leaderDepts } } }] : [])] });
-const scopeWhere = s => ({ OR: [{ assignedById: { in: s.assigners } }, ...(s.leaderDepts.length ? [{ leadDepartmentId: { in: s.leaderDepts } }] : []), ...(s.supervised.length ? [{ leadDepartmentId: { in: s.supervised } }] : [])] });
-// Giống điều kiện ở POST /api/extensions/:id/decide: người giao; việc không có người giao khác thì lãnh đạo phòng chủ trì (kể cả uỷ quyền).
-const canDecideExt = (s, userId, ext, item) => item.assignedById === userId || ((!item.assignedById || item.assignedById === ext.requestedById) && s.leaderDepts.includes(item.leadDepartmentId));
+const scopeWhere = s => (s.top ? {} : { OR: [{ assignedById: { in: s.assigners } }, ...(s.leaderDepts.length ? [{ leadDepartmentId: { in: s.leaderDepts } }] : []), ...(s.supervised.length ? [{ leadDepartmentId: { in: s.supervised } }] : [])] });
+// Giống điều kiện ở POST /api/extensions/:id/decide: Ban Giám đốc của việc (TGĐ; PGĐ phụ trách bộ phận chủ trì) duyệt mọi đề nghị gia hạn.
+// Người giao, lãnh đạo bộ phận chủ trì vẫn thấy đề nghị để nắm (không có nút).
+const canDecideExt = (s, userId, ext, item) => s.top || s.ownSupervised.includes(item.leadDepartmentId ?? item.project?.departmentId);
 const ITEM_SELECT = { id: true, number: true, title: true, dueDate: true, priority: true, taskType: true, assignedById: true, leadDepartmentId: true, archivedAt: true,
   project: { select: { id: true, key: true, name: true, departmentId: true, deletedAt: true } }, assignees: { select: { user: { select: { id: true, fullName: true } } } } };
 
@@ -60,7 +64,7 @@ module.exports = function mountApprovals(app, { prisma, auth, audit, config = {}
       const submit = request.actions.filter(a => a.decision === 'SUBMIT').at(-1);
       out.push({
         id: request.id, status: request.status, currentLevel: request.currentLevel, totalLevels: request.totalLevels, stepName: step?.name || null, createdAt: request.createdAt,
-        lastLevel: request.currentLevel === request.totalLevels, ratingRequired: step?.approverType === 'ASSIGNER', submitNote: submit?.comment || null, requestedByName: n[request.requestedById] || null,
+        lastLevel: request.currentLevel === request.totalLevels, ratingRequired: rules.isGradeStep(step), submitNote: submit?.comment || null, requestedByName: n[request.requestedById] || null,
         onBehalfOf: onBehalfOfId ? n[onBehalfOfId] || null : null,
         item: { id: item.id, code: `${project.key}-${item.number}`, title: item.title, priority: item.priority, dueDate: item.dueDate, state: item.state.name, taskType: item.taskType,
           assignees: item.assignees.map(a => a.user), assignedByName: n[item.assignedById] || null, departmentName: d[deptOf(item)] || null },
@@ -78,7 +82,7 @@ module.exports = function mountApprovals(app, { prisma, auth, audit, config = {}
       include: { workItem: { select: ITEM_SELECT } }, orderBy: { createdAt: 'asc' }, take: 200,
     });
     const n = await names(rows.flatMap(r => [r.requestedById, r.workItem.assignedById])); const d = await deptNames();
-    // Chỉ người được quyết định thật (người giao; nếu không có người giao khác thì lãnh đạo phòng / người quản lý) mới có nút; PGĐ phụ trách xem để nắm.
+    // Chỉ Ban Giám đốc của việc có nút quyết định; người giao / lãnh đạo bộ phận xem để nắm.
     res.json(rows.map(r => {
       const it = r.workItem;
       const canDecide = canDecideExt(s, req.user.id, r, it);
@@ -108,9 +112,9 @@ module.exports = function mountApprovals(app, { prisma, auth, audit, config = {}
     const s = await decisionScope(prisma, req.user);
     const [queue, extensions, proposals, hr] = await Promise.all([
       approval.queueFor(prisma, req.user).then(q => q.length),
-      // Chỉ đếm đề nghị mình được quyết định (khớp tab "Đề nghị gia hạn"); PGĐ phụ trách xem để nắm nhưng không đếm.
+      // Chỉ đếm đề nghị mình được quyết định (khớp tab "Đề nghị gia hạn"): Ban Giám đốc của việc.
       prisma.dueExtension.findMany({ where: { status: 'PENDING', requestedById: { not: req.user.id }, workItem: { archivedAt: null, project: { deletedAt: null }, ...scopeWhere(s) } },
-        select: { requestedById: true, workItem: { select: { assignedById: true, leadDepartmentId: true } } }, take: 500 }).then(rows => rows.filter(r => canDecideExt(s, req.user.id, r, r.workItem)).length),
+        select: { requestedById: true, workItem: { select: { assignedById: true, leadDepartmentId: true, project: { select: { departmentId: true } } } } }, take: 500 }).then(rows => rows.filter(r => canDecideExt(s, req.user.id, r, r.workItem)).length),
       prisma.progressReport.count({ where: { proposals: { not: '' }, answer: null, authorId: { not: req.user.id }, workItem: { archivedAt: null, project: { deletedAt: null } }, AND: [proposalScope(s)] } }),
       hrmOn ? hrPending(prisma, req.user) : 0,
     ]);
@@ -134,7 +138,7 @@ module.exports = function mountApprovals(app, { prisma, auth, audit, config = {}
     const extra = new Set();
     const out = rows.map(r => {
       const item = r.workItem, project = item.project;
-      const chain = rules.chainOf(ctx.steps.get(project.id) || [], !!r.withAssigner);
+      const chain = rules.chainOf(ctx.steps.get(project.id) || [], !!r.withAssigner, { board: !!r.withBoard });
       const step = r.status === 'PENDING' ? rules.stepAt(chain, r.currentLevel) : null;
       const waitingOn = step ? approval.approverIdsSync(ctx, project, step, approval.withDoers(item, r.requestedById), { delegates: false }) : [];
       waitingOn.forEach(id => extra.add(id));
@@ -159,7 +163,8 @@ module.exports = function mountApprovals(app, { prisma, auth, audit, config = {}
     const head = await prisma.approvalRequest.findUnique({ where: { id }, select: { workItemId: true, requestedById: true } });
     if (!head) fail(404, 'Không tìm thấy yêu cầu duyệt', 'NOT_FOUND');
     if (head.requestedById !== req.user.id) fail(403, 'Chỉ người gửi duyệt được rút lại yêu cầu này', 'FORBIDDEN');
-    const { project, rights } = await loadItem(prisma, req.user, head.workItemId, 'edit');
+    const { project, rights, caps } = await TA.loadTask(prisma, req.user, head.workItemId);
+    TA.assertCap(caps, 'submit');
     const want = req.body?.progress;
     const result = await prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'item:' + head.workItemId}))`;
@@ -172,9 +177,8 @@ module.exports = function mountApprovals(app, { prisma, auth, audit, config = {}
       const toState = from && !['REVIEW', 'COMPLETED'].includes(from.category) ? from
         : await tx.workflowState.findFirst({ where: { projectId: project.id, category: 'STARTED' }, orderBy: { position: 'asc' } });
       if (!toState) fail(409, 'Dự án chưa có cột "Đang thực hiện"', 'INVALID_STATE');
-      await MG.mtlGuard(tx, req.user, project, rights, item.id, { progress: true, toState, fromCategory: 'REVIEW' });
-      // % chỉ trả về mức cũ với việc nhập % tay (không có việc con, không theo checklist) — giống quy định một nguồn %.
-      const kids = await tx.workItem.count({ where: { parentId: item.id, archivedAt: null } }) + await tx.checklistItem.count({ where: { workItemId: item.id } });
+      // % chỉ trả về mức cũ với việc nhập % tay (không có việc con) — giống quy định một nguồn %.
+      const kids = await tx.workItem.count({ where: { parentId: item.id, archivedAt: null } });
       const pct = Number(want);
       const restore = want != null && Number.isInteger(pct) && pct >= 0 && pct < 100 && pct !== item.progress && !kids;
       await approval.cancelPending(tx, { item, actor: req.user, reason: 'Người gửi rút lại' });

@@ -13,6 +13,7 @@ const APPROVER_TYPES = {
   SUPERVISOR: 'Người giao / PGĐ phụ trách',
   USER: 'Người được chỉ định',
   ASSIGNER: 'Người giao việc',
+  BOARD: 'Ban Giám đốc của việc (mốc / đường găng)',
 };
 const { RATINGS, ASSIGNER_STEP } = rules;
 const assigneeIdsOf = item => (item?.assignees || []).map(a => a.userId ?? a.user?.id ?? a.id).filter(id => id != null);
@@ -39,13 +40,13 @@ async function approvalContext(client, projectIds = [], now = new Date()) {
     client.department.findMany({ select: { id: true, supervisorId: true } }),
     client.delegation.findMany({ where: { revokedAt: null, startsAt: { lte: now }, endsAt: { gte: now } }, select: { fromUserId: true, toUserId: true } }),
     projectIds.length ? client.approvalStep.findMany({ where: { projectId: { in: projectIds } }, orderBy: { level: 'asc' } }) : [],
-    client.user.findMany({ where: { isActive: true, isRootAdmin: false, role: { not: 'admin' } }, select: { id: true, departmentId: true } }),
+    client.user.findMany({ where: { isActive: true, isRootAdmin: false, role: { not: 'admin' } }, select: { id: true, departmentId: true, boardAll: true } }),
   ]);
   const scope = new Map(users.map(u => [u.id, permissionScope(u, 'work.approve', 'OPERATE')]));
   const steps_ = new Map(projectIds.map(id => [id, []]));
   for (const st of steps) steps_.get(st.projectId)?.push(st);
   return { users, scope, sys: new Set(users.filter(u => scope.get(u.id) === 'SYSTEM').map(u => u.id)), supervisor: new Map(depts.map(d => [d.id, d.supervisorId])), delegations, steps: steps_,
-    active: new Map(active.map(u => [u.id, { departmentId: u.departmentId }])) };
+    active: new Map(active.map(u => [u.id, { departmentId: u.departmentId }])), top: active.filter(u => u.boardAll).map(u => u.id) };
 }
 const withDelegatesSync = (ctx, ids) => (ids.length ? [...new Set([...ids, ...ctx.delegations.filter(d => ids.includes(d.fromUserId)).map(d => d.toUserId)])] : ids);
 // `item` (tuỳ chọn): việc giao về phòng thì cấp "Trưởng phòng" là lãnh đạo PHÒNG CHỦ TRÌ, không phải phòng sở hữu sổ;
@@ -61,11 +62,19 @@ function assignerApproversSync(ctx, project, item) {
     supervisorOf: dept => ctx.supervisor.get(dept) ?? null, directors: [...ctx.sys],
   });
 }
+// BOARD: việc mốc / đường găng — Ban Giám đốc toàn quyền + PGĐ phụ trách bộ phận chủ trì (không gồm người chủ trì).
+function boardApproversSync(ctx, project, item) {
+  return rules.boardApprovers({ assignedById: item?.assignedById, reporterId: item?.reporterId, leadDepartmentId: item?.leadDepartmentId, assigneeIds: assigneeIdsOf(item) }, {
+    active: ctx.active || new Map(), topIds: ctx.top || [], projectLeadId: project.leadId ?? null, projectDepartmentId: project.departmentId ?? null,
+    leaders: dept => ctx.users.filter(u => Number(u.departmentId) === Number(dept) && ctx.scope.get(u.id)).map(u => u.id),
+    supervisorOf: dept => ctx.supervisor.get(dept) ?? null, directors: [...ctx.sys],
+  });
+}
 function approverIdsSync(ctx, project, step, item = null, { delegates = true } = {}) {
   if (!step) return [];
   let ids = [];
-  if (step.approverType === 'ASSIGNER') {
-    ids = assignerApproversSync(ctx, project, item).ids;
+  if (rules.isGradeStep(step)) {
+    ids = (step.approverType === 'BOARD' ? boardApproversSync(ctx, project, item) : assignerApproversSync(ctx, project, item)).ids;
     if (!delegates) return ids;
     const mine = new Set(assigneeIdsOf(item));
     return withDelegatesSync(ctx, ids).filter(id => !mine.has(id));
@@ -93,7 +102,7 @@ function approverIdsSync(ctx, project, step, item = null, { delegates = true } =
 async function approverIds(client, project, step, item = null, opts = {}) {
   if (!step) return [];
   if (step.approverType === 'PROJECT_LEAD' || step.approverType === 'USER') {
-    const ids = approverIdsSync({ users: [], scope: new Map(), sys: new Set(), supervisor: new Map(), delegations: [] }, project, step, item, { delegates: false });
+    const ids = approverIdsSync({ users: [], scope: new Map(), sys: new Set(), supervisor: new Map(), delegations: [], top: [] }, project, step, item, { delegates: false });
     return opts.delegates === false ? ids : withDelegates(client, ids);
   }
   return approverIdsSync(await approvalContext(client), project, step, item, opts);
@@ -137,14 +146,14 @@ async function levelsForItem(client, project, steps, item = {}) {
   }
   return { levels: clamp(project.defaultApprovalLevels ?? steps.length), source: 'DEFAULT' };
 }
-// Chuỗi duyệt khi gửi duyệt một việc: luôn có người giao ở cấp 1, sau đó các cấp dự án áp dụng cho việc.
+// Chuỗi duyệt khi gửi duyệt một việc: cấp 1 = người giao (việc mốc / đường găng: Ban Giám đốc của việc), sau đó các cấp dự án.
 async function stepsForItem(client, project, item) {
   const steps = await stepsOf(client, project.id);
-  return rules.chainOf(steps.slice(0, (await levelsForItem(client, project, steps, item)).levels), true);
+  return rules.chainOf(steps.slice(0, (await levelsForItem(client, project, steps, item)).levels), true, { board: rules.isBoardItem(item) });
 }
-// Chuỗi duyệt của một phiếu đã mở (phiếu cũ không có cấp người giao).
+// Chuỗi duyệt của một phiếu đã mở (phiếu cũ không có cấp người giao). Cấp 1 chốt lúc gửi duyệt (withBoard).
 async function chainFor(client, project, request) {
-  return rules.chainOf(await stepsOf(client, project.id), !!request.withAssigner).filter(s => s.level <= request.totalLevels);
+  return rules.chainOf(await stepsOf(client, project.id), !!request.withAssigner, { board: !!request.withBoard }).filter(s => s.level <= request.totalLevels);
 }
 // n = số cấp dự án (không tính cấp người giao, luôn có).
 function levelsLabel(n, total) {
@@ -157,13 +166,15 @@ function itemCode(project, item) { return `${project.key}-${item.number}`; }
 
 // Gọi trong transaction khi việc vừa được chuyển vào cột REVIEW.
 async function openRequest(tx, { project, item, fromStateId, actor }) {
+  if (item.critical === undefined || item.milestone === undefined) item = { ...item, ...(await tx.workItem.findUnique({ where: { id: item.id }, select: { critical: true, milestone: true, leadDepartmentId: true } })) };
+  const board = rules.isBoardItem(item);
   const steps = await stepsForItem(tx, project, item);
   const pending = await tx.approvalRequest.findFirst({ where: { workItemId: item.id, status: 'PENDING' } });
   if (pending) return pending;
   if (!item.assignees) item = { ...item, assignees: await tx.workItemAssignee.findMany({ where: { workItemId: item.id } }) };
   item = withDoers(item, actor.id);
   const request = await tx.approvalRequest.create({ data: {
-    workItemId: item.id, totalLevels: steps.length, currentLevel: 1, fromStateId, requestedById: actor.id, withAssigner: true,
+    workItemId: item.id, totalLevels: steps.length, currentLevel: 1, fromStateId, requestedById: actor.id, withAssigner: true, withBoard: board,
     actions: { create: { level: 0, actorId: actor.id, decision: 'SUBMIT' } },
   } });
   await tx.workItem.update({ where: { id: item.id }, data: { returnedAt: null, returnNote: null } });
@@ -194,7 +205,7 @@ async function canAct(client, user, project, request, item = request.workItem) {
   const chain = await chainFor(client, project, request);
   const step = rules.stepAt(chain, request.currentLevel);
   if (assigneeIdsOf(item).includes(user.id)) return false;
-  if (step?.approverType !== 'ASSIGNER' && request.requestedById === user.id) return false;
+  if (!rules.isGradeStep(step) && request.requestedById === user.id) return false;
   // Một người không duyệt hai cấp của cùng một phiếu (vd. vừa duyệt cấp phòng, vừa được uỷ quyền cấp BGĐ).
   const actions = request.actions || await client.approvalAction.findMany({ where: { requestId: request.id }, select: { actorId: true, decision: true, level: true } });
   if (actions.some(a => a.actorId === user.id && a.decision === 'APPROVE' && a.level < request.currentLevel)) return false;
@@ -213,15 +224,16 @@ async function decide(prisma, user, requestId, decision, comment, { rating } = {
     const step = rules.stepAt(steps, request.currentLevel);
     rules.checkDecision({ step, decision, rating, comment, userId: user.id, assigneeIds: assigneeIdsOf(item), requestedById: request.requestedById });
     if (request.actions.some(a => a.actorId === user.id && a.decision === 'APPROVE' && a.level < request.currentLevel)) fail(403, 'Bạn đã duyệt ở bước trước của phiếu này — bước sau do người khác duyệt', 'DOUBLE_APPROVAL');
-    if (!(await canAct(tx, user, project, request))) fail(403, step?.approverType === 'ASSIGNER' ? 'Chỉ người giao việc (hoặc người duyệt thay theo uỷ quyền) được duyệt và chấm mức hoàn thành' : 'Bạn không phải người duyệt ở bước này', 'NOT_APPROVER');
-    const graded = decision === 'APPROVE' && step?.approverType === 'ASSIGNER';
+    if (!(await canAct(tx, user, project, request))) fail(403, step?.approverType === 'BOARD' ? 'Việc mốc / đường găng: Ban Giám đốc của việc (Ban Giám đốc toàn quyền, PGĐ phụ trách bộ phận chủ trì) duyệt và chấm mức hoàn thành'
+      : step?.approverType === 'ASSIGNER' ? 'Chỉ người giao việc (hoặc người duyệt thay theo uỷ quyền) được duyệt và chấm mức hoàn thành' : 'Bạn không phải người duyệt ở bước này', 'NOT_APPROVER');
+    const graded = decision === 'APPROVE' && rules.isGradeStep(step);
     const watchers = [request.requestedById, item.reporterId, ...item.assignees.map(a => a.userId)];
     const onBehalfOfId = await actingFor(tx, user, project, step, item);
     const onBehalfOf = onBehalfOfId ? (await tx.user.findUnique({ where: { id: onBehalfOfId }, select: { fullName: true } }))?.fullName : null;
     await tx.approvalAction.create({ data: { requestId, level: request.currentLevel, actorId: user.id, decision, comment: comment || null, onBehalfOfId, rating: graded ? rating : null } });
-    // Người giao chấm mức hoàn thành (kèm nhận xét) ngay ở cấp của mình — lưu ai, lúc nào, mức nào, nhận xét gì.
-    if (graded) await tx.workItem.update({ where: { id: item.id }, data: { rating, ratedById: user.id, ratedAt: new Date(),
-      review: comment ? comment.slice(0, 2000) : '', reviewedById: user.id, reviewedAt: new Date() } });
+    // Người giao chấm mức hoàn thành ngay ở cấp của mình — lưu ai, lúc nào, mức nào; nhận xét nằm ở lượt duyệt (ApprovalAction.comment).
+    // Đánh giá = mức chấm + nhận xét lúc duyệt; KHÔNG ghi đè / xoá nội dung ô "Đánh giá của người giao" cũ (WorkItem.review, chỉ đọc).
+    if (graded) await tx.workItem.update({ where: { id: item.id }, data: { rating, ratedById: user.id, ratedAt: new Date() } });
     // Thông báo "Cần duyệt" của bước này hết hiệu lực với mọi người (đã có người xử lý).
     await tx.notification.updateMany({ where: { type: 'APPROVAL_REQUESTED', link: itemLink(project, item), readAt: null }, data: { readAt: new Date() } });
     const label = `${itemCode(project, item)} · ${item.title.slice(0, 80)}`;
@@ -262,7 +274,7 @@ async function decide(prisma, user, requestId, decision, comment, { rating } = {
     const done = await tx.workflowState.findFirst({ where: { projectId: project.id, category: 'COMPLETED' }, orderBy: { position: 'asc' } });
     const position = await endPosition(tx, done.id);
     // Phiếu cũ: cấp cuối có thể xếp loại tuỳ chọn. Phiếu mới: mức đã chấm ở cấp người giao.
-    const legacyGrade = !graded && rating && RATINGS[rating] ? { rating, ratedById: user.id, ratedAt: new Date(), ...(comment ? { review: comment.slice(0, 2000), reviewedById: user.id, reviewedAt: new Date() } : {}) } : {};
+    const legacyGrade = !graded && rating && RATINGS[rating] ? { rating, ratedById: user.id, ratedAt: new Date() } : {};
     // KPI "đúng hạn" tính theo ngày người chủ trì gửi duyệt (người duyệt chậm không làm người làm bị tính trễ).
     const completedAt = request.withAssigner ? request.createdAt : new Date();
     await tx.workItem.update({ where: { id: item.id }, data: { stateId: done.id, completedAt, position, progress: 100, returnedAt: null, returnNote: null, ...legacyGrade } });
@@ -294,8 +306,8 @@ async function queueFor(prisma, user, { withContext = false } = {}) {
     // Một người không duyệt hai cấp của cùng một phiếu.
     if (request.actions.some(a => a.actorId === user.id && a.decision === 'APPROVE' && a.level < request.currentLevel)) continue;
     const project = request.workItem.project;
-    const step = rules.stepAt(rules.chainOf(ctx.steps.get(project.id) || [], !!request.withAssigner), request.currentLevel);
-    if (step?.approverType !== 'ASSIGNER' && request.requestedById === user.id) continue;
+    const step = rules.stepAt(rules.chainOf(ctx.steps.get(project.id) || [], !!request.withAssigner, { board: !!request.withBoard }), request.currentLevel);
+    if (!rules.isGradeStep(step) && request.requestedById === user.id) continue;
     const it = withDoers(request.workItem, request.requestedById);
     if (assigneeIdsOf(it).includes(user.id)) continue;
     if (approverIdsSync(ctx, project, step, it).includes(user.id)) out.push({ request, step, onBehalfOfId: actingForSync(ctx, user, project, step, it) });

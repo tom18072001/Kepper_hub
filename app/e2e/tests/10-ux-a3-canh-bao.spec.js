@@ -54,7 +54,13 @@ test('A3. Cảnh báo theo số liệu hiện tại, thông báo gộp, tooltip 
   await expect(box.getByTestId('mtl-alert').filter({ hasText: `CB-${overdue.number}` })).toHaveCount(1);
 
   // 3) Việc cập nhật 50% → cảnh báo "Chậm khởi động" ghi "đã hết", không còn dòng cảnh báo đang hiệu lực của việc đó.
-  expect((await apiAs(pmo, `/api/items/${late.id}`, { method: 'PATCH', data: { progress: 50 } })).status()).toBe(200);
+  //    Tiến độ do người chủ trì cập nhật (quyền tối thiểu theo vai): người giao giao chủ trì cho nv.phaply, người chủ trì báo 50%.
+  expect((await apiAs(pmo, `/api/items/${late.id}`, { method: 'PATCH', data: { progress: 50 } })).status()).toBe(403);
+  const staff = await (await browser.newContext()).newPage();
+  await login(staff, 'nv.phaply');
+  const sid = (await (await apiAs(staff, '/api/me')).json()).id;
+  expect((await apiAs(pmo, `/api/items/${late.id}`, { method: 'PATCH', data: { assigneeIds: [sid] } })).status()).toBe(200);
+  expect((await apiAs(staff, `/api/items/${late.id}`, { method: 'PATCH', data: { progress: 50 } })).status()).toBe(200);
   const d2 = await (await apiAs(pmo, `/api/projects/${project.id}/mtl`)).json();
   expect(d2.items.find(i => i.id === late.id).status).not.toBe('LATE_START');
   await pmo.reload();

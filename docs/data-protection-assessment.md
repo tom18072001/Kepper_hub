@@ -877,3 +877,74 @@ Trang chủ và tab "Chờ duyệt" của Nhân sự (`/api/hrm/meta` → `me.pe
 - Người làm qua nửa đêm bấm "Chấm ra" lúc 0 giờ sẽ được hỏi lại; nếu vẫn xác nhận, ngày **mới** bị ghi thiếu giờ vào và hôm đó không chấm vào chồng được —
   phải gửi giải trình (đã ghi rõ trong hộp hỏi lại). Chưa hỗ trợ ca làm qua đêm — nếu Kepper có ca đêm cần quyết định riêng.
 - Bảng công tháng cũ: ngày nào trước đây có giờ ra mà không có giờ vào (vd. nhập CSV thiếu cột vào) nay hiện "Thiếu giờ vào" thay vì "Đủ công" — người phụ trách nhân sự nên soát lại trước khi chốt công tháng đang mở.
+
+## Quyền tối thiểu theo vai trên một việc + bỏ Checklist (20/11/2026)
+
+Theo bảng quyền chủ dự án chốt ngày 20/11/2026 (nguyên tắc: kế hoạch là chỉ đạo của Ban Giám đốc qua người giao; ai làm phần nào thì
+chỉ thấy và sửa phần đó). Lỗi gốc trên bản thật: người chủ trì có vai hệ thống "Giám đốc" sửa được kế hoạch, mốc, đường găng, hạn,
+người giao và tự viết "Đánh giá của người giao" của việc do TGĐ giao. Thay đổi:
+
+- **Một nguồn quyền** `server/src/services/task-access.js` → `taskCapabilities(user, item, ctx)`: vai A (người giao), B (Ban Giám đốc của việc
+  = "Ban Giám đốc toàn quyền" do quản trị đánh dấu riêng từng người (`User.boardAll`, KHÔNG theo phòng; mặc định không ai) + PGĐ phụ trách
+  bộ phận chủ trì — chỉ với việc bộ phận mình phụ trách), L, S, D, O, U và quyền theo **từng trường / hành động**.
+  Vai hệ thống `director` không còn tự động là Ban Giám đốc (vẫn xem toàn bộ). Mọi route ghi vào việc kiểm qua hàm này; giao diện chỉ dựng ô nhập khi có quyền.
+- **Xem theo vai:** thành viên dự án không liên quan (U) chỉ nhận tóm tắt (tên, người chủ trì, hạn, trạng thái, %); API chi tiết không trả tài liệu,
+  báo cáo tiến độ, đánh giá, bình luận; tải / xem trước tệp bị chặn; thẻ trên Bảng bỏ mô tả, số văn bản, số bình luận / tệp.
+- **Đánh giá** = mức chấm + nhận xét lúc duyệt (`ApprovalAction`). Bỏ ô viết tay; duyệt **không còn ghi đè / xoá** `WorkItem.review` — nội dung cũ chỉ đọc.
+- **Gia hạn:** Ban Giám đốc của việc duyệt mọi đề nghị (trước: người giao / lãnh đạo phòng). **Xoá tệp / văn bản:** chỉ người đã gửi.
+- **Gửi duyệt** là bước của người chủ trì (người giao / Ban Giám đốc không gửi duyệt thay; vẫn duyệt, tạm dừng, huỷ, mở lại).
+- **Việc mốc hoặc đường găng:** khi gửi duyệt hoàn thành, cấp 1 của phiếu là **Ban Giám đốc của việc** (Ban Giám đốc toàn quyền + PGĐ phụ trách
+  bộ phận chủ trì) duyệt và chấm mức, thay người giao (chốt trên phiếu lúc gửi — `ApprovalRequest.withBoard`, migration `20261120120000`).
+  Người chủ trì không tự duyệt; Ban Giám đốc đồng thời là người chủ trì thì Ban Giám đốc khác duyệt; chưa có ai thì người giao duyệt như việc thường.
+- **Nhập lại MTL** chỉ thêm bước mới, bước đã có giữ nguyên (bỏ tuỳ chọn đặt lại kế hoạch gốc khi nhập).
+- **Bỏ Checklist:** migration `20261120100000_bo_checklist_thanh_viec_nhanh` chuyển mỗi mục thành việc nhánh (cùng người chủ trì; người giao =
+  người chủ trì việc cha; mục đã xong → Hoàn thành ghi thẳng, có lịch sử). Bảng `ChecklistItem` giữ lại (không đọc / ghi) với cột `migratedItemId`
+  để đối chiếu và quay lui; xoá ở bản sau. Bản thật: 0 mục.
+- **Dữ liệu thật không đổi:** không đổi người giao của việc nào (44 việc NOXH vẫn do PMO giao — PMO vẫn sửa kế hoạch các việc đó với vai người giao;
+  NOXH-45 do TGĐ giao — PMO chỉ làm phần người chủ trì).
+
+**Kết luận cổng:** ĐẠT — thay đổi **thu hẹp** quyền xem / sửa (tối thiểu hoá theo vai), không thêm tập dữ liệu mới, không gửi dữ liệu ra ngoài.
+Kèm 3 khuyến nghị cho chủ dự án (mục 4).
+
+### 1. Phân loại
+
+| Tập dữ liệu | Nhãn nội bộ | Phân loại pháp lý | Ghi chú |
+|---|---|---|---|
+| Kế hoạch một việc (tên, mô tả, hạn, mốc, đường găng, kế hoạch gốc, người giao, nguồn) | Bảo mật (dự án MTL) / Nội bộ (dự án thường) | Không phải DLCN (trừ họ tên người giao / chủ trì: DLCN cơ bản) | Chỉ A, B sửa; tóm tắt cho U không gồm mô tả |
+| Báo cáo tiến độ, khó khăn, kiến nghị, tài liệu, bình luận | Bảo mật / Nội bộ | DLCN cơ bản (họ tên, nội dung trao đổi) | U không còn xem được |
+| Đánh giá (mức chấm + nhận xét lúc duyệt; ô đánh giá cũ chỉ đọc) | Nội bộ | DLCN cơ bản (đánh giá kết quả công việc của một người) | Chỉ người liên quan (A, B, L, S, D, O, người duyệt) xem |
+| Việc nhánh chuyển từ mục checklist cũ | Theo việc cha | Theo việc cha | Lịch sử ghi nguồn `CHECKLIST` và mã mục cũ |
+| Danh sách "Ban Giám đốc toàn quyền" (`User.boardAll`) | Nội bộ | DLCN cơ bản (gắn với tài khoản) | Quản trị chọn trong hộp Phân quyền (cần quyền Phân quyền); mỗi lần đổi ghi AuditLog `BOARD_ALL_UPDATE`, bật thì báo Ban giám đốc; không chọn được tài khoản quản trị IT, không tự chọn mình |
+
+### 2. Dòng dữ liệu
+
+- Không đổi: dữ liệu vẫn chỉ trong máy chủ nội bộ; không kênh mới ra ngoài (Viber vẫn tắt). MCP (Claude) gọi cùng API nên nhận đúng phạm vi mới
+  (người không liên quan chỉ nhận tóm tắt; công cụ cập nhật bỏ đánh dấu checklist).
+- Migration chạy một lần trong giao dịch của `prisma migrate deploy`; sao lưu CSDL trước khi deploy theo `deploy/vm-deploy.sh` như thường lệ.
+
+### 3. Rà năng lực (thay đổi)
+
+| Mã | Trạng thái | Ghi chú | Ưu tiên |
+|---|---|---|---|
+| GOV-01 | Một phần → tốt hơn | Bảng quyền theo vai thành mã (`task-access.js`) + test ma trận vai × trường (`task-access.test.js`) + e2e theo vai (`15-quyen-toi-thieu.spec.js`); văn bản quy chế do phiên khác soạn | Bắt buộc |
+| GOV-02 | Một phần | "Ban Giám đốc của việc" = danh sách Ban Giám đốc toàn quyền (quản trị chọn, có nhật ký) + thiết lập PGĐ phụ trách có sẵn — cần giữ đúng hai thiết lập này; không suy theo phòng, không theo vai director | Bắt buộc |
+| PRE-01 | Đầy đủ | Kiểm quyền ở máy chủ theo từng trường thực sự đổi; giao diện không còn ô cho sửa mà máy chủ trả 403. Người không liên quan không tải được tệp | Bắt buộc |
+| PRE-02 | Đầy đủ | Tách nhiệm: người chủ trì không sửa kế hoạch, không tự đánh giá, không tự gia hạn; người giao không gửi duyệt thay; việc mốc / găng do Ban Giám đốc duyệt (người chủ trì là Ban Giám đốc thì người khác duyệt); không ai tự nhận làm người giao việc chưa có người giao; quản trị không tự đánh dấu mình là Ban Giám đốc toàn quyền | Bắt buộc |
+| DET-01 | Đầy đủ | Mọi thay đổi vẫn ghi hoạt động việc + AuditLog như cũ; migration ghi lịch sử cho việc nhánh và việc cha | Bắt buộc |
+| PRI-01 | Đầy đủ | Tối thiểu hoá: U chỉ nhận 5 trường tóm tắt; thẻ danh sách bỏ mô tả / văn bản / số bình luận | Bắt buộc |
+| PRI-02 | Một phần → tốt hơn | Đánh giá cá nhân không còn hiện cho thành viên dự án không liên quan (khuyến nghị đợt "việc con duyệt" nay đã áp dụng một phần) | Bắt buộc |
+| RES-01 | Không đổi | Bảng `ChecklistItem` giữ lại để đối chiếu / quay lui; quay lui toàn bộ bằng bản sao lưu trước deploy | Bắt buộc |
+
+### 4. Khuyến nghị và rủi ro còn lại
+
+- **Khuyến nghị 1 — thiết lập sau khi deploy:** quản trị đánh dấu "Ban Giám đốc toàn quyền" đúng người chủ dự án đã chốt (Quản trị → Tài khoản →
+  Phân quyền → ô "Ban Giám đốc toàn quyền"); chưa đánh dấu ai thì không ai là Ban Giám đốc của mọi việc. Kiểm thiết lập PGĐ phụ trách từng bộ phận
+  (Quản trị → Phòng ban) — PGĐ phụ trách chỉ là Ban Giám đốc của việc bộ phận mình phụ trách chủ trì, việc bộ phận khác chỉ xem.
+- **Khuyến nghị 2 — các API danh sách khác:** xuất Excel dự án, tìm kiếm, báo cáo tuần, "Việc của tôi" vẫn dùng quyền xem theo dự án như cũ
+  (không chứa tài liệu / bình luận, nhưng xuất Excel có cột mô tả, sản phẩm). Nên soát và áp cùng mức tóm tắt cho người không liên quan ở đợt sau.
+- **Khuyến nghị 3 — người nhập thay (Văn phòng):** người nhập việc thay lãnh đạo vẫn xem đầy đủ việc mình nhập nhưng không còn sửa được
+  (kế hoạch thuộc người giao / Ban Giám đốc). Nếu cần sửa lỗi gõ, người giao sửa hoặc chủ dự án quyết định cho thêm vai "người nhập".
+- Duyệt hoàn thành vẫn theo quy trình duyệt (cấp 1 = người giao); Ban Giám đốc không tự động vào hàng chờ duyệt mọi việc (tránh dồn thông báo) —
+  BGĐ duyệt khi là người giao hoặc khi quy trình dự án có bước Ban Giám đốc / PGĐ phụ trách.
+- Việc nhánh chuyển từ checklist không mang hạn riêng (nhận hạn / kế hoạch gốc của việc cha). Mục chưa xong của một việc cha đã Hoàn thành thành
+  việc nhánh mở dưới việc cha đã xong (bản thật không có trường hợp này).
