@@ -659,7 +659,7 @@ cho nhân viên; (3) chạy trên **máy ảo Ubuntu (Hyper-V) trên máy chủ 
 
 - Văn thư vào sổ → máy chủ cấp số trong giao dịch có khoá (không trùng / nhảy số) → thông báo trong ứng dụng cho người xử lý, Pháp chế (khi có thời hạn pháp lý).
   08:20 hằng ngày nhắc trước hạn / quá hạn; thứ Hai tổng hợp quá hạn cho Ban GĐ. Không gửi ra ngoài (Viber vẫn tắt).
-- Máy trạm → `https://kepler-hub.kepler.com` (DNS nội bộ trỏ IP máy chủ) → NAT của Hyper-V → Caddy (TLS) trong máy ảo → app (cổng nội bộ) → Postgres trên đĩa máy ảo.
+- Máy trạm → `https://hub.keplerholdings.vn` (DNS nội bộ trỏ IP máy chủ) → NAT của Hyper-V → Caddy (TLS) trong máy ảo → app (cổng nội bộ) → Postgres trên đĩa máy ảo.
 - Service worker của bản cài ứng dụng **không đệm** dữ liệu / API (chỉ chuyển tiếp; mất mạng hiện trang báo) — không có bản sao dữ liệu trên máy trạm ngoài phiên trình duyệt như trước.
 
 ### 3. Rà năng lực (thay đổi)

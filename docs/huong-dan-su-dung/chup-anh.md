@@ -71,7 +71,7 @@ rồi làm lại bước 1–2. Xong việc thì `down -v` để xoá hẳn bả
 | `anh/claude-04-skill-kep.png` | Gõ `/kep`: mỗi skill một dòng | Có (chụp máy thật, 20/11/2026) |
 | `anh/claude-04-skill-bi-trung.png` | Gõ `/kep` thấy hai `kepler-hub` (minh hoạ lỗi cài trùng) | Có (chụp máy thật, 20/11/2026) |
 | `anh/claude-06-token-tao.png`, `claude-06-token-sao-chep.png` | Tạo token thủ công; token đã được che phần giữa (token gốc đã xoá) | Có (chụp máy thật, 20/11/2026) |
-| `anh/claude-03-chua-ket-noi.png` | Claude báo "Chưa kết nối Kepler Hub… bấm Cho phép (mã …)" | Còn thiếu |
-| `anh/claude-05-toi-la-ai.png` | Claude trả lời "Tôi là ai trong Kepler Hub?" | Còn thiếu |
+| `anh/claude-03-chua-ket-noi.png` | Claude báo "Chưa kết nối Kepler Hub… bấm Cho phép (mã …)" | Chưa dùng (tài liệu hướng dẫn bằng chữ) |
+| `anh/claude-05-toi-la-ai.png` | Claude trả lời "Tôi là ai trong Kepler Hub?" | Chưa dùng (tài liệu hướng dẫn bằng chữ) |
 
 Chụp bằng tài khoản thử hoặc che họ tên, email, token. **Không** đưa ảnh có token đầy đủ vào repo; token đã lộ trong ảnh phải thu hồi ngay. Kết nối Claude tới bản thử 4530 (Địa chỉ Kepler Hub = `http://localhost:4530`, tài khoản mẫu) để ảnh chỉ có dữ liệu giả.

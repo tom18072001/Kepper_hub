@@ -14,7 +14,7 @@ Mỗi nghiệp vụ có hai đường: **làm trên giao diện** (ảnh từng 
 ## Ảnh
 
 - `anh/*.png`: chụp tự động trên **bản cài thử, dữ liệu giả** bằng `app/e2e/huong-dan/chup-anh.mjs`. Cách chụp lại khi giao diện đổi: [chup-anh.md](chup-anh.md).
-- Ảnh màn hình **Claude desktop** không chụp tự động được: `anh/claude-*.png` chụp tay trên máy thật (đã che thông tin cá nhân). Còn thiếu 2 ảnh, xem bảng trong [chup-anh.md](chup-anh.md); tài liệu để khung "📷 Ảnh cần chụp" ở chỗ đó.
+- Ảnh màn hình **Claude desktop** không chụp tự động được: `anh/claude-*.png` chụp tay trên máy thật (đã che thông tin cá nhân), danh sách trong [chup-anh.md](chup-anh.md).
 
 ## Đề xuất sửa skill
 

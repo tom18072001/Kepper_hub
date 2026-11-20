@@ -105,10 +105,21 @@ async function unmark(page) {
     document.querySelectorAll('.hd-badge').forEach(n => n.remove());
   });
 }
+// Địa chỉ thật nhân viên dùng. Trang nào in địa chỉ máy chủ (vd. "Kết nối Claude": ô Địa chỉ Kepler Hub đã điền sẵn …)
+// thì ảnh hiện địa chỉ này thay cho địa chỉ bản cài thử — chỉ đổi chữ hiển thị trước khi chụp, không đổi dữ liệu.
+const PUBLIC_ORIGIN = String(process.env.PUBLIC_ORIGIN || 'https://hub.keplerholdings.vn').replace(/\/+$/, '');
+async function showPublicOrigin(page) {
+  const from = new URL(BASE).origin;
+  await page.evaluate(([a, b]) => {
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) if (n.nodeValue.includes(a)) n.nodeValue = n.nodeValue.split(a).join(b);
+  }, [from, PUBLIC_ORIGIN]);
+}
 const shots = [];
 async function shot(page, name, { el, fullPage = false, maxHeight } = {}) {
   const file = path.join(OUT, `${name}.png`);
   await page.waitForTimeout(250);
+  await showPublicOrigin(page);
   if (el) {
     const loc = typeof el === 'string' ? page.locator(el).first() : el.first();
     const box = maxHeight ? await loc.boundingBox() : null;
@@ -169,7 +180,17 @@ group('02-trang-chu', async () => {
 });
 
 group('03-ket-noi', async () => {
+  // Bắt đầu từ "chưa có máy nào kết nối": thu hồi kết nối do lần chụp trước để lại (chỉ trên bản thử).
+  const old = await as('nv.phaply', 'GET', '/api/me/tokens');
+  for (const t of Array.isArray(old.j) ? old.j : (old.j?.tokens || [])) if (!t.revokedAt) await as('nv.phaply', 'DELETE', `/api/me/tokens/${t.id}`);
   const page = await pageAs('nv.phaply');
+  // Kết nối đã thu hồi của các lần chụp trước vẫn nằm trong danh sách (dòng "Đã thu hồi"): ẩn khỏi ảnh để giống máy dùng lần đầu.
+  const hideRevoked = () => page.evaluate(() => {
+    const body = document.querySelector('section.cl-list tbody');
+    if (!body) return;
+    body.querySelectorAll('tr').forEach(tr => { if (/Đã thu hồi/.test(tr.textContent)) tr.remove(); });
+    if (!body.querySelector('tr')) body.innerHTML = '<tr><td colspan="5" class="empty">Chưa có máy nào kết nối.</td></tr>';
+  });
   await go(page, '#/today');
   await page.getByTestId('user-menu').click();
   await page.waitForTimeout(400);
@@ -178,17 +199,21 @@ group('03-ket-noi', async () => {
   await page.keyboard.press('Escape');
   await go(page, '#/claude');
   await mark(page, page.getByTestId('claude-mcpb'), '1');
+  await hideRevoked();
   await shot(page, '03-trang-ket-noi-claude');
   const start = await raw('POST', '/api/claude/connect/start', { body: { device: 'LAPTOP-PHAPLY-01' } });
   await go(page, `#/claude?connect=${start.j.userCode}`);
   await page.waitForSelector('[data-testid="claude-connect"]');
   await mark(page, page.getByTestId('claude-connect-approve'), '2');
+  await hideRevoked();
   await shot(page, '03-cho-phep');
   await page.getByTestId('claude-connect-approve').click();
   await page.waitForTimeout(1200);
+  await hideRevoked();
   await shot(page, '03-da-ket-noi');
   await page.locator('details.cl-manual summary').click();
   await page.waitForTimeout(400);
+  await hideRevoked();
   await shot(page, '03-token-thu-cong', { el: 'section.cl-list' });
   await page.context().close();
 });
