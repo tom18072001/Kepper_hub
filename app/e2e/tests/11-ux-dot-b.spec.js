@@ -127,7 +127,12 @@ test('B2. Panel chi tiết việc: 3 tab, % chỉ qua "Báo cáo tiến độ", 
   await expect(panel.getByTestId('panel-full-toggle')).toHaveText('Thu gọn các mục');
   await panel.getByTestId('panel-full-toggle').click();
   await expect(panel.getByTestId('panel-full-toggle')).toHaveText('Mở tất cả các mục');
-  await expect(panel.getByTestId('item-priority')).toBeHidden();
+  // Thu gọn không được làm mất thao tác: ô tạo việc nhánh vẫn hiện, ô sửa được ở cột phải không bị ẩn (chỉ ẩn trường chỉ đọc).
+  await expect(panel.getByTestId('child-input')).toBeVisible();
+  await expect(panel.getByTestId('item-priority')).toBeHidden(); // người chủ trì chỉ xem ưu tiên → trường chỉ đọc được ẩn
+  await expect(panel.locator('.lite-hide').locator('input, select, textarea, button')).toHaveCount(0);
+  // Bấm chuột vào nút đổi chế độ: không để lại khung viền bàn phím (focus chỉ trả lại khi bấm bằng bàn phím).
+  await expect(panel.getByTestId('panel-full-toggle')).not.toBeFocused();
   await panel.getByTestId('panel-full-toggle').click();
   await expect(panel.getByTestId('item-priority')).toBeVisible();
   // Phím M (bình luận) tự chuyển sang tab Trao đổi.

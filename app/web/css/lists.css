@@ -335,10 +335,10 @@ details.ph-more-menu>summary::-webkit-details-marker{display:none}
 .ph-menu .menu-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border:none;background:none;border-radius:6px;font:inherit;font-size:.9rem;color:var(--text);text-align:left;cursor:pointer;text-decoration:none}
 .ph-menu .menu-item:hover,.ph-menu .menu-item:focus-visible{background:var(--brand-050);color:var(--brand)}
 
-/* Panel việc dạng gọn (mặc định): khối mở / đóng theo vai trò, ẩn ô thêm mới còn trống và trường ít dùng ở cột phải.
+/* Panel việc dạng gọn (mặc định): khối mở / đóng theo vai trò; chỉ ẩn trường CHỈ ĐỌC còn trống / ít dùng ở cột phải.
+   Không bao giờ ẩn nút / ô người xem thao tác được (tạo việc nhánh, thêm mô tả, mức duyệt…): thu gọn không được làm mất việc.
    "Mở tất cả các mục" (cạnh thanh tab) hiện đủ và mở mọi khối. */
-.ip-lite .sec-compact,.ip-lite .desc-add,.ip-lite .lite-hide{display:none!important}
-.ip-lite .level-pick{display:none}
+.ip-lite .lite-hide{display:none!important}
 .ip-mode{font-size:.84rem;color:var(--brand);text-align:right;white-space:nowrap}
 
 /* Panel việc: 3 tab Tổng quan · Kết quả & tài liệu · Trao đổi */
@@ -350,7 +350,9 @@ details.ph-more-menu>summary::-webkit-details-marker{display:none}
 .ip-tabs [role=tab].active,.ip-tabs [role=tab][aria-selected="true"]{color:var(--brand);box-shadow:inset 0 -2px 0 var(--brand)}
 .ip-tabs [role=tab]:focus-visible{outline:2px solid var(--gold,#c9a227);outline-offset:-2px}
 .ip-tab-n{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:999px;background:var(--surface-2);color:var(--text-2,var(--muted));font-size:.72rem;font-weight:700;line-height:18px;text-align:center}
-.ip-tabbar .ip-mode{padding:8px 0}
+.ip-tabbar .ip-mode{padding:6px 8px;margin-bottom:2px;border-radius:6px;flex-shrink:0}
+.ip-tabbar .ip-mode:hover{background:var(--surface-2)}
+.ip-tabbar .ip-mode:focus-visible{outline:2px solid var(--gold,#c9a227);outline-offset:0}
 .ip-pane[hidden]{display:none!important}
 /* Cột phải: tiêu đề nhóm (không phải nhãn ô nhập), tiến độ chỉ hiển thị */
 .ip-side .side-h{font-size:.8rem;font-weight:600;color:var(--muted);display:block;margin-bottom:6px}

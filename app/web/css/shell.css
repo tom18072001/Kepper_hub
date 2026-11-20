@@ -123,8 +123,10 @@
 body.nav-collapsed #sidebar.sidebar{width:var(--rail)}
 body.nav-collapsed .sb-scroll{padding:12px 8px}
 body.nav-collapsed .sb-gh{justify-content:center}
+/* Menu thu gọn vẫn giữ nút "Tạo dự án" (lối tạo dự án duy nhất) — xếp dưới biểu tượng nhóm. */
+body.nav-collapsed .sb-gh:has(.sb-add){flex-direction:column;gap:2px}
 body.nav-collapsed .sb-gt{flex:none;justify-content:center;padding:7px;position:relative}
-body.nav-collapsed .sb-gt .t,body.nav-collapsed .sb-gt .chev,body.nav-collapsed #sidebar .sb-add,body.nav-collapsed #sidebar .sb-items a .t,body.nav-collapsed #sidebar .sb-dept,body.nav-collapsed #sidebar .sb-none{display:none}
+body.nav-collapsed .sb-gt .t,body.nav-collapsed .sb-gt .chev,body.nav-collapsed #sidebar .sb-items a .t,body.nav-collapsed #sidebar .sb-dept,body.nav-collapsed #sidebar .sb-none{display:none}
 body.nav-collapsed .sb-gt .badge{position:absolute;margin:0;transform:translate(12px,-10px);display:inline-block}
 body.nav-collapsed .sb-group.shut .sb-items{display:flex}
 body.nav-collapsed .sb-items{margin:2px 0 8px;padding:0 0 8px;border-left:none;border-bottom:1px solid var(--navy-line);align-items:center}
