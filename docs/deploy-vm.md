@@ -99,6 +99,35 @@ Bố trí cũ: máy ảo 10.77.0.10 sau NAT, DC chuyển cổng 80 / 443 / 2222 
    ```
 6. Bỏ `table 100` / `routing-policy` khỏi eth0 trong netplan khi tiện; xoá checkpoint sau vài ngày chạy ổn (`Remove-VMSnapshot`).
 
+## Truy cập từ ngoài văn phòng qua Tailscale (20/11/2026)
+
+Không dùng VPN của router, không mở cổng ra Internet. Tailscale cài **ngay trên máy ảo Hub**, chỉ quảng bá đúng IP của Hub,
+nên người ngoài vào được Hub mà không đi tới DC hay máy khác trong LAN.
+
+- Mạng Tailscale: của tài khoản quản trị do CNTT giữ. Máy ảo: node `kepler-hub` (100.75.222.99).
+- Cài trên máy ảo:
+  ```bash
+  curl -fsSL https://tailscale.com/install.sh | sudo sh
+  echo 'net.ipv4.ip_forward = 1' | sudo tee /etc/sysctl.d/99-tailscale.conf && sudo sysctl -p /etc/sysctl.d/99-tailscale.conf
+  sudo tailscale up --hostname=kepler-hub --advertise-routes=192.168.130.250/32 --accept-dns=false --accept-routes=false
+  ```
+  Mở link in ra, đăng nhập vào mạng Tailscale của công ty.
+- Trang quản trị (https://login.tailscale.com/admin/machines, tài khoản quản trị):
+  1. `kepler-hub` → `…` → **Edit route settings** → tick `192.168.130.250/32` → Save.
+  2. `kepler-hub` → `…` → **Disable key expiry** (không thì máy ảo rớt khỏi mạng sau 180 ngày).
+  3. **Access controls**: thành viên thường chỉ tới Hub, quản trị giữ toàn quyền:
+     ```json
+     "grants": [
+       { "src": ["autogroup:admin"],  "dst": ["*"], "ip": ["*"] },
+       { "src": ["autogroup:member"], "dst": ["192.168.130.250"], "ip": ["tcp:443", "tcp:80"] }
+     ]
+     ```
+  4. **Users → Invite users**: mỗi người một email, vai Member. Không dùng chung tài khoản.
+- Tên `hub.keplerholdings.vn` công khai trỏ về 192.168.130.250, nên máy bật Tailscale tra ra đúng IP và đi qua route trên; chứng chỉ không đổi.
+- Kiểm tra trên máy ảo: `sudo tailscale status --json | python3 -c 'import json,sys;print(json.load(sys.stdin)["Self"].get("PrimaryRoutes"))'` → `['192.168.130.250/32']`.
+  Thử thật: điện thoại tắt wifi, bật Tailscale, mở `https://hub.keplerholdings.vn`.
+- Gỡ quyền một người: xoá người đó trong **Users** (máy của họ rớt khỏi mạng ngay).
+
 ## Hết cảnh báo "kết nối không riêng tư" (16/11/2026)
 
 - Chứng chỉ do Caddy của máy ảo tự cấp (`tls internal`) cho đúng tên trong `HUB_HOST`; chứng chỉ của tên không phụ thuộc IP. Nếu `HUB_HOST` có IP thì đổi IP phải sửa `HUB_HOST`, `APP_ORIGIN`, `HUB_DEFAULT_SNI`. Máy cần tin chứng chỉ gốc **một lần**:
