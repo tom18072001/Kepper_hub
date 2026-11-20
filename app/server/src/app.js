@@ -176,15 +176,22 @@ function createApp({ prisma, config }) {
       ],
     }));
   });
-  // Trang chính ghi sẵn mã bản giao diện (<meta name="kepler-build">) — mã của chính JS mà tab này nạp, để so với header API.
+  // Tài sản tĩnh gắn mã bản (/b/<mã>/…): cache vĩnh viễn (immutable), bỏ qua revalidate. Mã bản đổi → đường dẫn đổi → trình duyệt tải lại đúng một lần.
+  // Tên tệp không đổi giữa các bản, nhưng mỗi mã bản là một "ảnh chụp" riêng trong cache trình duyệt; import tương đối trong JS/CSS tự nối theo tiền tố.
+  app.use('/b/:build', express.static(config.webDir, { index: false, redirect: false, immutable: true, maxAge: '365d' }));
+  // Trang chính ghi sẵn mã bản giao diện (<meta name="kepler-build">) và viết tiền tố /b/<mã>/ vào link CSS + script để dùng cache vĩnh viễn ở trên.
   app.get(['/', '/index.html'], (req, res, next) => {
     fsSync.readFile(path.join(config.webDir, 'index.html'), 'utf8', (error, html) => {
       if (error) return next();
+      const pfx = `/b/${buildId}/`;
       res.setHeader('Cache-Control', 'no-cache');
-      res.type('html').send(html.replace(/(<meta name="kepler-build" content=")[^"]*"/, `$1${buildId}"`));
+      res.type('html').send(html
+        .replace(/(<meta name="kepler-build" content=")[^"]*"/, `$1${buildId}"`)
+        .replace(/(<link rel="stylesheet" href=")(styles\.css|css\/[^"]+|assets\/fonts\/[^"]+)"/g, `$1${pfx}$2"`)
+        .replace(/(<script type="module" src=")(js\/[^"]+)"/g, `$1${pfx}$2"`));
     });
   });
-  // HTML/JS/CSS luôn kiểm tra lại (ETag) để bản cập nhật hiện ngay; font giữ cache 7 ngày.
+  // Đường dẫn KHÔNG gắn mã (truy cập trực tiếp, bản cũ, sw.js, manifest, install.html): luôn kiểm tra lại (ETag); font giữ cache 7 ngày.
   app.use(express.static(config.webDir, { index: 'index.html', setHeaders(res, file) {
     res.setHeader('Cache-Control', /\.woff2$/.test(file) ? 'public, max-age=604800' : 'no-cache');
   } }));
