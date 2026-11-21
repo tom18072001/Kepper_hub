@@ -14,7 +14,12 @@ async function newPage(browser, username) {
 // Hộp thoại gốc của trình duyệt (confirm / alert) không được dùng: đếm để khẳng định bằng 0.
 const countDialogs = page => { const n = { v: 0 }; page.on('dialog', d => { n.v++; d.dismiss().catch(() => {}); }); return n; };
 
+// Kịch bản chấm công "hôm nay" chỉ có nghĩa vào ngày làm việc: cuối tuần bảng công (hrm-sheet) hiện ô ngày nghỉ (T7/CN)
+// thay cho "Thiếu giờ vào", nên bỏ qua để CI không đỏ theo thứ trong tuần (chạy lại vào ngày thường vẫn phủ đủ).
+const isWeekendVN = [0, 6].includes(new Date(vnDate(0) + 'T00:00:00Z').getUTCDay());
+
 test('H6. Chấm ra khi chưa chấm vào: nút khoá kèm lý do, máy chủ chặn; xác nhận trên trang thì ghi "thiếu giờ vào"', async ({ browser }) => {
+  test.skip(isWeekendVN, 'Chấm công "hôm nay": cuối tuần bảng công hiện ngày nghỉ, không áp dụng — chạy ngày thường');
   const nv = await newPage(browser, 'nv.kythuat'); // không có dữ liệu chấm công mẫu
   const dialogs = countDialogs(nv);
   await nv.goto('/#/hrm');

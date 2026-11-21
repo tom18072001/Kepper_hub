@@ -79,6 +79,44 @@ test('máy chủ: trang chính ghi mã bản vào <meta name="kepler-build">, kh
   } finally { s.close(); }
 });
 
+test('máy chủ: trang chính viết tiền tố /b/<mã>/ vào link CSS + script; tài sản gắn mã cache vĩnh viễn (immutable)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'build-pfx-'));
+  fs.mkdirSync(path.join(dir, 'js', 'views'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'css'));
+  fs.mkdirSync(path.join(dir, 'assets', 'fonts'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'index.html'),
+    '<head><meta name="kepler-build" content="">' +
+    '<link rel="stylesheet" href="assets/fonts/be-vietnam-pro.css">' +
+    '<link rel="stylesheet" href="styles.css">' +
+    '<link rel="stylesheet" href="css/shell.css">' +
+    '<link rel="manifest" href="manifest.webmanifest">' +
+    '<script type="module" src="js/main.js"></script></head>');
+  fs.writeFileSync(path.join(dir, 'styles.css'), 'body{}');
+  fs.writeFileSync(path.join(dir, 'css', 'shell.css'), '.x{}');
+  fs.writeFileSync(path.join(dir, 'js', 'main.js'), 'import "./views/home.js"');
+  fs.writeFileSync(path.join(dir, 'js', 'views', 'home.js'), 'export default 1');
+  const s = await serve({ dir });
+  try {
+    const build = s.app.locals.buildId;
+    const html = await (await fetch(s.base + '/')).text();
+    // CSS + script được gắn tiền tố; manifest + meta thì không.
+    assert.match(html, new RegExp(`href="/b/${build}/styles\\.css"`));
+    assert.match(html, new RegExp(`href="/b/${build}/css/shell\\.css"`));
+    assert.match(html, new RegExp(`href="/b/${build}/assets/fonts/be-vietnam-pro\\.css"`));
+    assert.match(html, new RegExp(`src="/b/${build}/js/main\\.js"`));
+    assert.match(html, /href="manifest\.webmanifest"/); // manifest giữ đường dẫn ổn định
+    // Tài sản gắn mã: 200 + cache vĩnh viễn immutable; import tương đối (views/) cũng phục vụ được dưới tiền tố.
+    for (const p of ['js/main.js', 'js/views/home.js', 'css/shell.css']) {
+      const r = await fetch(`${s.base}/b/${build}/${p}`);
+      assert.equal(r.status, 200, p);
+      assert.match(r.headers.get('cache-control'), /immutable/, p);
+      assert.match(r.headers.get('cache-control'), /max-age=31536000/, p);
+    }
+    // Cùng tệp qua đường KHÔNG gắn mã vẫn no-cache (bản cũ / truy cập trực tiếp).
+    assert.equal((await fetch(s.base + '/js/main.js')).headers.get('cache-control'), 'no-cache');
+  } finally { s.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('máy chủ: mã bản tính từ chính thư mục web đang phục vụ', async () => {
   const dir = webDir();
   const s = await serve({ dir });
