@@ -23,6 +23,7 @@ export const PAGE_TITLES = {
   crm: 'Đối tác',
   hrm: 'Nhân sự',
   dashboard: 'Thống kê công việc',
+  kpi: 'KPI & phân tích',
   me: 'Thông tin cá nhân',
   claude: 'Kết nối Claude',
   catalog: 'Danh mục',
@@ -51,6 +52,7 @@ const NAV = [
   ] },
   { id: 'stats', name: 'Thống kê', color: '#2E6DB4', icon: 'chart', items: [
     { href: '#/dashboard', label: T.dashboard, icon: 'chart', testid: 'nav-dashboard', id: 'navDashboard', show: () => can('reports.dashboard'), desc: 'Số việc, thời gian làm, KPI' },
+    { href: '#/kpi', label: T.kpi, icon: 'target', testid: 'nav-kpi', show: () => can('reports.kpi'), desc: 'Thời gian xử lý, đánh giá, xu hướng (Ban giám đốc)' },
   ] },
 ];
 const ADMIN = { id: 'admin', name: 'Quản trị', color: '#5B6676', icon: 'shield', items: [

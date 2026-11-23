@@ -299,11 +299,12 @@ export async function route({ background = false } = {}) {
       }
       syncPanel();
     } else if (parts[0] === 'approvals') { await renderApprovals(view, params, setCrumbs); syncPanel(); }
-    else if (['requests', 'schedule', 'ops', 'dept', 'summary', 'kpi'].includes(parts[0])) { location.replace('#/home'); return; } // nghiệp vụ NQ57 đã bỏ (Kepler Hub)
+    else if (['requests', 'schedule', 'ops', 'dept', 'summary'].includes(parts[0])) { location.replace('#/home'); return; } // nghiệp vụ NQ57 đã bỏ (Kepler Hub)
     else if (parts[0] === 'tuan') { closeItem(); await renderWeekly(view, parts[1] || '', params, setCrumbs); }
     else if (parts[0] === 'home') { await renderHome(view, params, setCrumbs); syncPanel(); }
     else if (parts[0] === 'today') { closeItem(); await renderToday(view, params, setCrumbs, () => token === renderToken); }
     else if (parts[0] === 'sprint') { await renderQuick(view, params, setCrumbs); syncPanel(); }
+    else if (parts[0] === 'kpi') { closeItem(); await (await import('./views/analytics.js')).renderAnalytics(view, params, setCrumbs); }
     else if (parts[0] === 'dashboard') { closeItem(); await renderDashboard(view, params, setCrumbs); }
     else if (parts[0] === 'trash') { closeItem(); await renderTrash(view, setCrumbs); }
     else if (parts[0] === 'claude') { closeItem(); await renderClaude(view, setCrumbs, params); }

@@ -997,3 +997,22 @@ kho dự án (đã có từ trước) cần quyền ghi — giữ như hiện t�
 - Thành viên dự án ở vai "Người xem" (VIEWER) cũng xem được tài liệu (chủ dự án chọn "thành viên + Ban GĐ", không phân vai).
 - Nếu máy ảo bị chiếm quyền, phạm vi đọc = toàn bộ `#10.DuAn` (như trước, không đổi).
 - Dự án chưa có thư mục trên NAS (tên = KEY hoặc bắt đầu bằng "KEY-") thì tab NAS báo "Chưa có thư mục" — IT tạo thư mục, Hub không tự tạo.
+
+## KPI & phân tích thống kê công việc (Ban giám đốc) — 24/11/2026
+
+Chủ dự án chốt: (1) thời gian xử lý có hai chỉ số: bắt đầu làm → hoàn thành, và giao → được duyệt; (2) Tốt / Trung bình / Kém gộp từ mức người giao chấm khi duyệt (không thêm trường); đánh giá chung của một người / phòng = TRUNG VỊ điểm (100/85/70/50/0) quy về mức ≥ 80 Tốt, ≥ 60 Trung bình, còn lại Kém, chỉ khi có ít nhất 5 việc được chấm (chủ dự án chốt "Đổi sang trung vị"; điểm bình quân chỉ để tham khảo); (3) chỉ Ban giám đốc (quyền `reports.kpi` toàn tổ chức) xem. Admin IT không xem (giữ QĐ 16/10/2026); file xuất là Excel; (4) thống kê mô tả, xu hướng, phát hiện bất thường; không dự báo.
+
+| Tập dữ liệu | Nhãn | Pháp lý | Ghi chú |
+|---|---|---|---|
+| Phân tích KPI theo người / phòng (`/api/kpi/analytics`, tệp `phan-tich-kpi_*.xlsx`) | **Bảo mật** | DLCN cơ bản (đánh giá kết quả công việc của cá nhân) — thuộc tập `kpi.person` | Không có cột mới trong CSDL; tính từ dữ liệu đã có |
+
+| Năng lực | Hiện trạng | Mức |
+|---|---|---|
+| PRE-06 Kiểm soát truy cập | Máy chủ trả 403 cho mọi người không có `reports.kpi` SYSTEM (nhân viên, trưởng / phó phòng, admin IT, quản trị gốc); test đơn vị + e2e | Bắt buộc — có |
+| DET-01 Nhật ký | Ghi `VIEW_KPI_ANALYTICS` / `EXPORT_KPI_ANALYTICS` (kỳ, phòng, số người; không ghi số liệu) | Bắt buộc — có |
+| PRE (rò rỉ khi xuất) | Tệp Excel ghi nhãn Bảo mật và dấu người xuất trên mỗi trang; không xuất qua token Claude (`assertNotVia`); `Cache-Control: private, no-store` | Bắt buộc — có |
+| PRI-01 Tối thiểu hoá / công bằng | Không xếp hạng người (sắp theo phòng, tên); luôn hiện cỡ mẫu; nhóm < 5 việc ghi "mẫu nhỏ — chưa đủ để kết luận"; không đưa ra đánh giá chung khi < 5 việc được chấm (dùng trung vị để một lần Kém không lấn át); thời gian làm chỉ tính việc có ghi nhận lúc bắt đầu; xu hướng chỉ khi ≥ 12 việc trên ≥ 4 kỳ; bất thường chỉ khi ≥ 8 việc; KPI không gắn lương thưởng | Khuyến nghị — có |
+| QĐ-EXT | `kpi.person` vẫn trong NEVER_EXTERNAL: không gửi mail / Teams / Viber | Bắt buộc — giữ |
+| PRI-04 | Hồ sơ đánh giá tác động xử lý DLCN (nhân viên, KPI) vẫn phải lập — phân tích này là thêm một mục đích xử lý của cùng dữ liệu | Bắt buộc — chưa có (giữ nguyên khuyến nghị cũ) |
+
+Khuyến nghị cho chủ dự án: ghi mục đích "phân tích KPI tham khảo cho Ban giám đốc" vào hồ sơ đánh giá tác động (PRI-04); thông báo cho nhân viên rằng thời gian xử lý và mức đánh giá được tổng hợp cho Ban giám đốc.

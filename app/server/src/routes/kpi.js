@@ -39,6 +39,7 @@ function rangeOf(query, now) {
 }
 
 module.exports = function mountKpi(app, { prisma, auth, audit }) {
+  require('./analytics')(app, { prisma, auth, audit }); // KPI & phân tích thống kê (Ban giám đốc)
   app.get('/api/kpi', auth, async (req, res) => {
     if (permissionScope(req.user, 'reports.kpi', 'VIEW') !== 'SYSTEM') fail(403, 'Chỉ Ban giám đốc được xem KPI', 'FORBIDDEN');
     const now = new Date();
