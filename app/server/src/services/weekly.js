@@ -239,7 +239,8 @@ function validate(data, f, { deptName = () => '', mandatory = [] } = {}) {
   if (!res.length && !on.length && !rk.length) e.push('Phần I, II hoặc III cần ít nhất 1 hạng mục.');
   if (!on.length && !rk.length && !pl.length) e.push('Phần II, III hoặc IV cần ít nhất 1 việc cho tuần mới.');
   const check = (r, label) => {
-    if (!r.due) e.push(`${label}: thiếu deadline.`);
+    // Dòng gắn hạng mục MTL / việc: hạn lấy từ việc (không sửa trong báo cáo) — việc chưa đặt hạn không chặn nộp.
+    if (!r.due && !r.itemId) e.push(`${label}: thiếu deadline.`);
     if (!r.ownerIds.length) e.push(`${label}: thiếu người phụ trách.`);
     if (needsIssue(r, f)) {
       const why = issueLabel(r, f);

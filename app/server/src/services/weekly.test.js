@@ -202,6 +202,9 @@ test('làm sạch + kiểm tra: Chậm / Vướng / Quá hạn bắt buộc nguy
   Object.assign(data.results[0], { cause: 'Chờ Sở (giả)', solution: 'Đôn đốc (giả)', helpWhat: 'Làm việc với Sở', helpBy: '2026-11-03', ownerIds: [50] });
   data.ongoing[0].next = 'Nộp hồ sơ'; data.ongoing[0].ownerIds = [50]; data.plans[0].ownerIds = [50]; data.plans[0].due = '2026-11-05'; data.plans[0].output = 'Biên bản (giả)'; data.results[2].ownerIds = [50];
   assert.deepEqual(WK.validate(data, F), []);
+  // Dòng gắn việc (vd. việc thường đã xong, chưa từng đặt hạn): hạn lấy từ việc, không bắt nhập. Dòng tự do vẫn bắt buộc.
+  assert.deepEqual(WK.validate({ ...data, results: [...data.results, { key: 'm7', itemId: 7, task: 'Việc thường (giả)', status: 'Hoàn thành', due: '', ownerIds: [50] }] }, F), []);
+  assert.ok(WK.validate({ ...data, results: [...data.results, { key: 'f7', itemId: null, task: 'Tự do (giả)', status: 'Hoàn thành', due: '', ownerIds: [50] }] }, F).some(e => /Tự do.*thiếu deadline/.test(e)));
   // Hạng mục bắt buộc (MTL quá hạn, việc TGĐ giao…) không được bỏ khỏi báo cáo.
   assert.ok(WK.validate(data, F, { mandatory: [{ itemId: 77, task: 'Bước găng (giả)', ref: 'DA-77' }] }).some(e => /Không được bỏ “Bước găng \(giả\)” \(DA-77\)/.test(e)));
   assert.deepEqual(WK.writeBacks(data), [{ itemId: 1, pct: 70 }]); // hạng mục 4 không đổi %
