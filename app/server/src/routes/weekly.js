@@ -4,7 +4,8 @@
 const crypto = require('node:crypto');
 const { fail, intParam } = require('../lib/http');
 const P = require('../lib/policy');
-const { visibleProjectsWhere, loadItem } = require('../services/access');
+const { visibleProjectsWhere, itemVisibleWhere, loadItem } = require('../services/access');
+const A = require('../services/alerts');
 const { notify } = require('../services/events');
 const approval = require('../services/approval');
 const bus = require('../services/bus');
@@ -29,7 +30,7 @@ const sha256 = v => crypto.createHash('sha256').update(WK.stableStringify(v)).di
 // Một khoá cho mọi lần ghi báo cáo của một bộ phận / tuần (nháp, nộp): không có hai lần ghi chen nhau.
 const reportLock = (tx, departmentId, week) => tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'weekly:' + departmentId + ':' + week}))`;
 // Dòng có actionRef không thuộc Action Log đang mở của CHÍNH bộ phận này → bỏ liên kết (không đóng hộ việc của bộ phận khác).
-const stripForeignActions = (data, actions) => { const ok = new Set(actions.map(a => a.ref)); for (const r of [...data.results, ...data.ongoing]) if (r.actionRef && !ok.has(r.actionRef)) r.actionRef = null; };
+const stripForeignActions = (data, actions) => { const ok = new Set(actions.map(a => a.ref)); for (const r of [...data.results, ...data.ongoing, ...(data.risks || [])]) if (r.actionRef && !ok.has(r.actionRef)) r.actionRef = null; };
 const COMPLIANCE_KEY = month => `weekly.compliance.${month}`;
 
 module.exports = function mountWeekly(app, { prisma, auth, audit }) {
@@ -76,16 +77,38 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     const out = [];
     for (const p of projects) {
       const { items, cfg } = await MP.computeProject(prisma, p, user, now);
-      for (const i of items) out.push({ ...i, projectKey: p.key, projectId: p.id, cfg, done: M.isDone(i), cancelled: M.isCancelled(i) });
+      for (const i of items) {
+        const st = { code: i.status, planned: i.planned, variance: i.variance, daysLeft: i.daysLeft, lateDays: i.lateDays, startsIn: i.startsIn };
+        out.push({ ...i, kind: 'MTL', projectKey: p.key, projectId: p.id, cfg, done: M.isDone(i), cancelled: M.isCancelled(i),
+          started: A.isStarted(i), risk: A.riskOf(i, { st, cfg, day: now }) });
+      }
     }
     return out;
   }
+  // Việc thường (dự án bảng công việc, không phải MTL) người dùng xem được: còn mở, hoặc xong từ ngày `since`.
+  // "Đang làm" / "nguy cơ chậm" theo services/alerts.js (isStarted, riskOf) — cùng định nghĩa với hạng mục MTL.
+  async function taskItemsFor(user, now, since) {
+    const rows = await prisma.workItem.findMany({
+      where: { archivedAt: null, project: { kind: { not: 'MTL' }, archivedAt: null, ...visibleProjectsWhere(user) }, AND: [itemVisibleWhere(user)],
+        OR: [{ state: { category: { notIn: ['COMPLETED', 'CANCELLED'] } } }, { completedAt: { gte: since } }] },
+      select: { id: true, number: true, title: true, parentId: true, leadDepartmentId: true, startDate: true, dueDate: true, progress: true, progressAt: true,
+        startedAt: true, completedAt: true, returnedAt: true, state: { select: { category: true } }, assignees: { select: { user: { select: { id: true, fullName: true } } } },
+        project: { select: { id: true, key: true, departmentId: true } } },
+    });
+    return rows.map(r => {
+      const done = r.state.category === 'COMPLETED', started = A.isStarted(r), risk = done ? null : A.riskOf(r, { day: now });
+      return { ...r, kind: 'TASK', code: `${r.project.key}-${r.number}`, projectKey: r.project.key, projectId: r.project.id, project: undefined,
+        leadDepartmentId: r.leadDepartmentId ?? r.project.departmentId, assignees: r.assignees.map(a => a.user), actual: r.progress, children: 0,
+        done, cancelled: r.state.category === 'CANCELLED', started, risk };
+    });
+  }
+  const workItemsFor = async (user, now, since) => [...await mtlItemsFor(user, now), ...await taskItemsFor(user, now, since)];
   // Điền sẵn cho một bộ phận (dùng khi xem và khi nộp — máy chủ tự xác định hạng mục bắt buộc).
   async function prefillFor(user, departmentId, week, now) {
     const [prevRep, members, items] = await Promise.all([
       prisma.weeklyReport.findUnique({ where: { departmentId_week: { departmentId, week: WK.addDays(week, -7) } } }),
       prisma.user.findMany({ where: { departmentId, ...ACTIVE_USER }, select: { id: true, fullName: true, displayTitle: true }, orderBy: { fullName: 'asc' } }),
-      mtlItemsFor(user, now),
+      workItemsFor(user, now, WK.at(WK.addDays(week, -4), 0, 0)),
     ]);
     const memberIds = new Set(members.map(u => u.id));
     const cand = WK.deptCandidates(items, departmentId, memberIds);
@@ -133,14 +156,15 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
       canDelete: P.can(s, 'edit', 'weekly.notice', { departmentId: n.departmentId, createdById: n.createdById, op: 'delete' }) };
   };
 
-  // Ngữ cảnh làm sạch: người phụ trách hợp lệ (tài khoản đang hoạt động), bộ phận, hạng mục MTL người lập xem được.
-  async function cleanCtx(user, now) {
+  // Ngữ cảnh làm sạch: người phụ trách hợp lệ (tài khoản đang hoạt động), bộ phận, hạng mục MTL + việc thường người lập xem được.
+  async function cleanCtx(user, now, week) {
     const [users, depts, items] = await Promise.all([
       prisma.user.findMany({ where: ACTIVE_USER, select: { id: true } }),
       prisma.department.findMany({ where: { isActive: true }, select: { id: true, name: true } }),
-      mtlItemsFor(user, now),
+      workItemsFor(user, now, WK.at(WK.addDays(week, -11), 0, 0)),
     ]);
-    return { userIds: new Set(users.map(u => u.id)), deptIds: new Set(depts.map(d => d.id)), itemIds: new Set(items.map(i => i.id)), deptName: id => depts.find(d => d.id === id)?.name || '', items };
+    return { userIds: new Set(users.map(u => u.id)), deptIds: new Set(depts.map(d => d.id)), itemIds: new Set(items.map(i => i.id)),
+      taskIds: new Set(items.filter(i => i.kind === 'TASK').map(i => i.id)), deptName: id => depts.find(d => d.id === id)?.name || '', items };
   }
   const bodyDept = req => { const id = req.body?.departmentId ? intParam(req.body.departmentId, 'Bộ phận') : req.user.departmentId; if (!id) fail(422, 'Tài khoản chưa thuộc bộ phận nào', 'NO_DEPARTMENT'); return id; };
 
@@ -149,7 +173,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     const s = await subjectOf(req);
     const week = weekParam(req.body?.week), departmentId = bodyDept(req);
     await deptAccess(s, departmentId, 'edit');
-    const ctx = await cleanCtx(req.user, new Date());
+    const ctx = await cleanCtx(req.user, new Date(), week);
     const data = WK.sanitize(req.body?.data, ctx);
     stripForeignActions(data, (await D.openActions(prisma, week, departmentId)).actions);
     const base = req.body?.baseUpdatedAt ? new Date(req.body.baseUpdatedAt).getTime() : null;
@@ -183,28 +207,39 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     // Sau giờ giao ban, bản đã nộp không gửi lại được (trừ thư ký) — giữ nguyên căn cứ của buổi họp. (Kiểm lại trong khoá bên dưới.)
     const lockedAfterMeeting = r => r?.firstSubmittedAt && now > S.meetingAt && !s.secretary;
     if (lockedAfterMeeting(pre)) fail(409, 'Đã qua giờ giao ban — muốn sửa báo cáo, liên hệ thư ký giao ban', 'REPORT_LOCKED');
-    const ctx = await cleanCtx(req.user, now);
+    const ctx = await cleanCtx(req.user, now, week);
     const data = WK.sanitize(req.body?.data, ctx);
     const { prefill, cand, actions } = await prefillFor(req.user, departmentId, week, now);
     stripForeignActions(data, actions);
     const candIds = new Set(cand.map(i => i.id)), byId = new Map(ctx.items.map(i => [i.id, i]));
     // Dòng MTL: tên, mã, bước, găng, mốc, hạn, người phụ trách, khoá % lấy từ MTL; tình trạng tính lại từ MTL theo % mới —
     // người lập chỉ nâng lên "Vướng" (một nguồn sự thật; báo cáo không đổi được tên / mã hạng mục MTL).
-    for (const r of [...data.results, ...data.ongoing]) {
+    // Việc thường: tên, mã, hạn, người phụ trách, %, tình trạng và nguy cơ chậm lấy từ việc (người lập chỉ nâng lên "Vướng").
+    for (const r of [...data.results, ...data.ongoing, ...data.risks]) {
       const i = r.itemId && byId.get(r.itemId);
       if (!i) continue;
       Object.assign(r, { task: i.title, ref: i.code, step: i.planCode || '', critical: !!i.critical, milestone: !!i.milestone });
-      r.pctLocked = i.children > 0;
       if (i.assignees?.length) r.ownerIds = i.assignees.map(a => a.id);
+      if (i.kind === 'TASK') {
+        Object.assign(r, { pctLocked: true, pct: i.done ? 100 : Math.round(i.progress || 0), due: WK.dayOf(i.dueDate) || r.due, risk: i.risk?.code || null, riskNote: WK.riskNoteOf(i.risk) });
+        r.status = r.status === 'Vướng' && !i.done ? 'Vướng' : WK.taskStatus(i);
+        if (r.status === WK.DONE) Object.assign(r, { risk: null, riskNote: '' });
+        continue;
+      }
+      r.pctLocked = i.children > 0;
       r.due = WK.dayOf(i.baselineEnd) || r.due;
       if (r.pctLocked) r.pct = i.done ? 100 : Math.round(i.actual || 0);
       const pct = r.pct === '' ? Math.round(i.actual || 0) : r.pct;
       const done = i.done || (!r.pctLocked && pct >= 100);
-      const computed = WK.statusFromMtl(M.statusOf({ ...i, progress: pct }, done ? 100 : pct, now, i.cfg).code, done);
+      const st = M.statusOf({ ...i, progress: pct }, done ? 100 : pct, now, i.cfg);
+      const computed = WK.statusFromMtl(st.code, done);
       r.status = r.status === 'Vướng' && !done ? 'Vướng' : computed;
+      // Nguy cơ chậm tính lại theo % mới (cùng quy tắc cảnh báo MTL).
+      const risk = done ? null : A.riskOf({ ...i, progress: pct, actual: pct }, { st, cfg: i.cfg, day: now });
+      Object.assign(r, { risk: risk?.code || null, riskNote: WK.riskNoteOf(risk) });
       if (r.status === WK.DONE) r.pct = 100;
     }
-    const mandatory = [...prefill.results, ...prefill.ongoing].filter(r => r.mandatory);
+    const mandatory = [...prefill.results, ...prefill.ongoing, ...prefill.risks].filter(r => r.mandatory);
     const errors = WK.validate(data, week, { deptName: ctx.deptName, mandatory });
     // Trả lại dữ liệu đã tính lại (tình trạng dòng MTL) để giao diện hiện đúng khối giải trình cần điền.
     if (errors.length) return res.status(422).json({ error: `Còn ${errors.length} mục cần sửa`, code: 'REPORT_INCOMPLETE', errors, data });
@@ -223,7 +258,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
           const { project, rights } = await loadItem(prisma, req.user, w.itemId, 'edit');
           const it = byId.get(w.itemId);
           if (project.kind !== 'MTL' || !P.can(s, 'edit', 'mtl.progress', { item: { assigneeIds: (it.assignees || []).map(a => a.id) } })) { skipped.push(w.itemId); continue; }
-          plan.push({ w, project, rights, code: it.code, row: [...data.results, ...data.ongoing].find(r => r.itemId === w.itemId) });
+          plan.push({ w, project, rights, code: it.code, row: [...data.results, ...data.ongoing, ...data.risks].find(r => r.itemId === w.itemId) });
         } catch (error) { if (error.status && error.status < 500) skipped.push(w.itemId); else throw error; }
       }
     }
@@ -257,7 +292,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     const updated = done.updated.map(p => p.w.itemId);
     for (const p of done.updated) bus.item(p.project.id, p.w.itemId, req.user.id);
     await audit(req, 'WEEKLY_REPORT_SUBMIT', 'WeeklyReport', saved.id, null, { departmentId, week, n: saved.submitCount, sha256: hash, onBehalf: acc.onBehalf, receivedAt, firstSubmittedAt: saved.firstSubmittedAt,
-      items: final.results.length + final.ongoing.length, plans: final.plans.length, progressUpdated: updated.length, progressSkipped: skipped.length, progressConflicts: conflicts.length });
+      items: final.results.length + final.ongoing.length + final.risks.length, plans: final.plans.length, progressUpdated: updated.length, progressSkipped: skipped.length, progressConflicts: conflicts.length });
     const notices = await prisma.weeklyNotice.findMany({ where: { week, departmentId } });
     res.json({ ok: true, submittedAt: saved.submittedAt, firstSubmittedAt: saved.firstSubmittedAt, submitCount: saved.submitCount, sha256: hash,
       progressUpdated: updated.length, progressSkipped: skipped.length, progressConflicts: conflicts, onBehalf: acc.onBehalf,

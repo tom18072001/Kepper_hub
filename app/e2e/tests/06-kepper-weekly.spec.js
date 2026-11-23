@@ -18,16 +18,25 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   await expect(nv).toHaveURL(/#\/tuan/);
   await expect(nv.getByTestId('weekly')).toBeVisible();
   await expect(nv.getByTestId('wk-dept-name')).toHaveText('Ban Pháp lý');
-  await expect(nv.getByTestId('wk-prefill-note')).toContainText('hạng mục MTL của bộ phận');
+  await expect(nv.getByTestId('wk-prefill-note')).toContainText('hạng mục MTL / công việc của bộ phận');
   await expect(nv.getByTestId('wk-tab-tong-hop')).toHaveCount(0);
   await expect(nv.getByTestId('wk-tab-diem')).toHaveCount(0);
   const ctx0 = await (await apiAs(nv, '/api/weekly/context')).json();
   const week = ctx0.week;
   const addDays = (s, n) => new Date(Date.parse(s + 'T00:00:00Z') + n * 86_400_000).toISOString().slice(0, 10);
   const rep0 = await (await apiAs(nv, '/api/weekly/report')).json();
-  const linked = [...rep0.prefill.results, ...rep0.prefill.ongoing, ...rep0.prefill.plans].filter(r => r.itemId);
+  const P0 = rep0.prefill;
+  const linked = [...P0.results, ...P0.ongoing, ...P0.risks, ...P0.plans].filter(r => r.itemId);
   expect(linked.length).toBeGreaterThan(0);
-  expect(linked.every(r => r.source === 'MTL' || r.basis === 'MTL')).toBe(true);
+  expect(linked.every(r => ['MTL', 'Công việc'].includes(r.source || r.basis))).toBe(true);
+  // Báo cáo 3 phần: I chỉ có việc đã xong (dòng tự điền) · II mọi việc đang làm chưa xong · III việc chưa khởi động mà có nguy cơ chậm.
+  // Việc chưa bắt đầu (chưa tới kỳ, không có nguy cơ) không có ở I / II / III.
+  expect(P0.results.filter(r => r.itemId).every(r => r.status === 'Hoàn thành')).toBe(true);
+  expect(P0.ongoing.every(r => r.status !== 'Hoàn thành' && r.status !== 'Chưa bắt đầu')).toBe(true);
+  expect(P0.risks.every(r => r.risk && r.status !== 'Hoàn thành')).toBe(true);
+  await expect(nv.getByTestId('wk-risk-section')).toBeVisible();
+  for (const r of P0.risks) await expect(nv.getByTestId(`wk-riskchip-${r.ref}`)).toBeVisible();
+  for (const r of P0.ongoing.filter(x => x.risk)) await expect(nv.getByTestId(`wk-risk-${r.ref}`)).toBeVisible(); // đang làm có nguy cơ: liệt kê ở Phần III
 
   // 2) Thêm việc phát sinh "Vướng" → hiện khối nguyên nhân / giải pháp / đề nghị hỗ trợ.
   await nv.getByTestId('wk-add-results').click();
@@ -52,7 +61,7 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   // 5) Điền đủ: mọi khối Chậm / Vướng / Quá hạn, việc sẽ làm tuần tới, một kế hoạch tuần mới; đổi % một hạng mục MTL.
   // % của một hạng mục MTL do chính nhân viên này phụ trách (quy định: chỉ người được giao / lãnh đạo bộ phận chủ trì ghi %).
   const me = await (await apiAs(nv, '/api/me')).json();
-  const row = [...rep0.prefill.results, ...rep0.prefill.ongoing].find(r => r.itemId && r.status !== 'Hoàn thành' && !r.pctLocked && r.ownerIds.includes(me.id));
+  const row = [...rep0.prefill.results, ...rep0.prefill.ongoing, ...rep0.prefill.risks].find(r => r.itemId && r.status !== 'Hoàn thành' && !r.pctLocked && r.ownerIds.includes(me.id));
   const newPct = row.pct >= 90 ? 80 : row.pct + 5;
   const pctBox = nv.getByTestId(`wk-pct-${row.ref}`);
   await pctBox.fill(String(newPct)); await pctBox.blur();
@@ -147,6 +156,9 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
 
   // 9) Tổng hợp: KPI, tình trạng nộp, yêu cầu hỗ trợ gom theo nơi nhận.
   await expect(gd.getByTestId('wk-kpis')).toContainText('1/5');
+  await expect(gd.getByTestId('wk-kpis')).toContainText('Đang thực hiện, chưa xong');
+  await expect(gd.getByTestId('wk-kpis')).toContainText('Nguy cơ chậm tiến độ');
+  await expect(gd.getByTestId(`wk-detail-risk-${D('PL').id}`)).toHaveCount(1); // chi tiết bộ phận: phần III nguy cơ chậm
   await expect(gd.getByTestId(`wk-srow-${D('PL').id}`)).toContainText('Tô Minh Khoa');
   await expect(gd.getByTestId(`wk-srow-${D('TC').id}`)).toContainText('báo muộn');
   await expect(gd.getByTestId('wk-helps')).toContainText('Gửi Ban Giám đốc');
@@ -210,7 +222,7 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   await login(hc, 'nv.hcns');
   const gr = (await (await apiAs(hc, '/api/users/directory')).json()).find(u => u.departmentId === D('GR').id);
   const pre = (await (await apiAs(hc, `/api/weekly/report?departmentId=${D('GR').id}`)).json()).prefill;
-  for (const x of [...pre.results, ...pre.ongoing]) Object.assign(x, { ownerIds: x.ownerIds.length ? x.ownerIds : [gr.id], cause: 'Chờ (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF', next: x.next || 'Tiếp tục (giả)' });
+  for (const x of [...pre.results, ...pre.ongoing, ...pre.risks]) Object.assign(x, { ownerIds: x.ownerIds.length ? x.ownerIds : [gr.id], cause: 'Chờ (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF', next: x.next || 'Tiếp tục (giả)' });
   pre.results.push({ task: 'Làm việc với phường (giả)', source: 'Phát sinh', ownerIds: [gr.id], due: vnDate(5), status: 'Đúng tiến độ', pct: 30 });
   pre.plans.push({ task: 'Họp dân (giả)', basis: 'KH tháng', ownerIds: [gr.id], due: vnDate(8) });
   for (const p of pre.plans) Object.assign(p, { ownerIds: p.ownerIds?.length ? p.ownerIds : [gr.id], output: 'Biên bản (giả)' });
@@ -228,7 +240,7 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   // vẽ ngay trên trang (Huỷ thì không phát hành); còn yêu cầu chưa kết luận thì máy chủ chặn; kết luận đủ → phát hành.
   const past = addDays(week, -14);
   const prePast = (await (await apiAs(hc, `/api/weekly/report?week=${past}&departmentId=${D('GR').id}`)).json()).prefill;
-  for (const x of [...prePast.results, ...prePast.ongoing]) Object.assign(x, { ownerIds: x.ownerIds.length ? x.ownerIds : [gr.id], cause: 'Chờ (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF', next: x.next || 'Tiếp tục (giả)' });
+  for (const x of [...prePast.results, ...prePast.ongoing, ...prePast.risks]) Object.assign(x, { ownerIds: x.ownerIds.length ? x.ownerIds : [gr.id], cause: 'Chờ (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF', next: x.next || 'Tiếp tục (giả)' });
   prePast.results.push({ task: 'Xin chủ trương GPMB (giả)', source: 'Phát sinh', ownerIds: [gr.id], due: addDays(past, 3), status: 'Vướng', pct: 20,
     cause: 'Chờ ý kiến (giả)', solution: 'Báo cáo Ban GĐ (giả)', helpFrom: 'BGD', helpWhat: 'Ban GĐ làm việc với phường (giả)', helpBy: addDays(past, 7) });
   if (!prePast.plans.length) prePast.plans.push({ task: 'Họp dân (giả)', basis: 'KH tháng', ownerIds: [gr.id], due: addDays(past, 6) });

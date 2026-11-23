@@ -6,6 +6,9 @@ const DAY = 86_400_000, H7 = 7 * 3_600_000;
 // ---------- Danh mục theo BM-TH-01 ----------
 const SOURCES = ['KH tháng', 'KH quý', 'KH năm', 'Phát sinh', 'TGĐ giao', 'Chuyển tiếp tuần trước'];
 const MTL_SOURCE = 'MTL'; // hạng mục tự điền từ Master Timeline
+const TASK_SOURCE = 'Công việc'; // việc thường (bảng công việc, không phải MTL) tự điền theo bộ phận
+// Mã nguy cơ chậm tiến độ — định nghĩa và nhãn ở services/alerts.js (riskOf), dùng chung cảnh báo MTL hằng ngày.
+const RISK_CODES = ['OVERDUE', 'LATE_START', 'BEHIND', 'DUE_SOON'];
 const STATUSES = ['Hoàn thành', 'Đúng tiến độ', 'Chưa bắt đầu', 'Chậm', 'Vướng'];
 const DONE = 'Hoàn thành';
 const HELP_BGD = 'BGD', HELP_SELF = 'SELF'; // còn lại: 'D<id bộ phận>'
@@ -57,6 +60,20 @@ const meetingStarted = (S, now = new Date()) => now.getTime() >= new Date(S.meet
 const isOverdue = (r, f) => !!r.due && r.status !== DONE && r.due < f;
 const needsIssue = (r, f) => r.status === 'Chậm' || r.status === 'Vướng' || isOverdue(r, f);
 const issueLabel = (r, f) => [r.status === 'Chậm' || r.status === 'Vướng' ? r.status : null, isOverdue(r, f) ? 'Quá hạn' : null].filter(Boolean).join(' · ');
+// Nguy cơ chậm tiến độ của một dòng báo cáo chưa xong (Phần III): theo cảnh báo MTL / hạn việc (máy chủ tính khi điền sẵn và khi nộp),
+// hoặc bộ phận tự đánh dấu Chậm / Vướng, hoặc đã qua deadline. Trả về nhãn ('' = không có nguy cơ).
+function rowRisk(r, f) {
+  if (!r || r.status === DONE) return '';
+  const out = [];
+  if (r.risk) out.push(r.riskNote || r.risk);
+  if (r.status === 'Vướng') out.push('Vướng');
+  else if (r.status === 'Chậm' && !r.risk) out.push('Chậm');
+  if (isOverdue(r, f) && !r.risk) out.push('Quá hạn');
+  return out.join(' · ');
+}
+// Mọi dòng có nguy cơ chậm (Phần I, II và việc chưa khởi động ở Phần III) — cho lãnh đạo / giao ban.
+const riskRows = (data, f) => [...(data?.results || []), ...(data?.ongoing || []), ...(data?.risks || [])].filter(r => r.task && rowRisk(r, f));
+const riskNoteOf = k => (!k ? '' : k.code === 'OVERDUE' && k.days ? `${k.label} ${k.days} ngày` : k.code === 'DUE_SOON' && k.days != null ? `${k.label} (còn ${k.days} ngày)` : k.label);
 // Tình trạng MTL → tình trạng BM-TH-01 (người lập chỉ sửa khi thực tế khác, vd. "Vướng").
 function statusFromMtl(code, done) {
   if (done) return DONE;
@@ -64,10 +81,13 @@ function statusFromMtl(code, done) {
   if (['LATE_START', 'BEHIND', 'OVERDUE'].includes(code)) return 'Chậm';
   return 'Đúng tiến độ';
 }
+// Tình trạng BM-TH-01 của việc thường (không có kế hoạch gốc): xong / quá hạn → Chậm / đang làm / chưa bắt đầu.
+const taskStatus = i => (i.done ? DONE : i.risk?.code === 'OVERDUE' ? 'Chậm' : i.started ? 'Đúng tiến độ' : 'Chưa bắt đầu');
 
 // ---------- Điền sẵn ----------
-// items: hạng mục MTL người lập xem được, mỗi hạng mục { id, code, projectKey, planCode, title, parentId, baselineStart, baselineEnd,
-//   done, cancelled, completedAt, status, actual, assignees: [{ id }], leadDepartmentId, pctAuto (có việc nhánh: % tự tính), critical, milestone }.
+// items: hạng mục MTL + việc thường (kind 'TASK') người lập xem được, mỗi hạng mục { id, kind, code, projectKey, planCode, title, parentId,
+//   baselineStart, baselineEnd (MTL) | startDate, dueDate (việc thường), done, cancelled, completedAt, status (mã MTL), actual, assignees: [{ id }],
+//   leadDepartmentId, pctAuto (có việc nhánh: % tự tính), critical, milestone, started (alerts.isStarted), risk (alerts.riskOf) }.
 // memberIds: tài khoản thuộc bộ phận. prev: báo cáo tuần trước (data). actions: Action Log của buổi giao ban vừa rồi giao cho bộ phận.
 let seq = 0;
 const newKey = p => `${p}${Date.now().toString(36)}${(seq++).toString(36)}`;
@@ -85,67 +105,87 @@ function deptCandidates(items, deptId, memberIds) {
   return mine.filter(i => !hasMineBelow.has(i.id));
 }
 
+// Ngày bắt đầu / hạn: kế hoạch gốc MTL, không có thì ngày bắt đầu / hạn của việc.
+const startOf = i => dayOf(i.baselineStart || i.startDate), dueOf = i => dayOf(i.baselineEnd || i.dueDate);
 function mtlRow(i, extra = {}) {
-  const status = statusFromMtl(i.status, i.done);
-  const pct = i.done ? 100 : Math.round(i.actual || 0);
+  const task = i.kind === 'TASK';
+  const status = task ? taskStatus(i) : statusFromMtl(i.status, i.done);
+  const pct = i.done ? 100 : Math.round(i.actual ?? i.progress ?? 0);
   return {
-    key: `m${i.id}`, itemId: i.id, ref: i.code, step: i.planCode || '', project: i.projectKey || '', task: i.title, source: MTL_SOURCE,
-    ownerIds: (i.assignees || []).map(a => a.id), start: dayOf(i.baselineStart), due: dayOf(i.baselineEnd), status, pct, pct0: pct,
-    pctLocked: !!i.pctAuto, critical: !!i.critical, milestone: !!i.milestone, ...blankIssue(), next: '', mandatory: true, ...extra,
+    key: `m${i.id}`, itemId: i.id, ref: i.code, step: i.planCode || '', project: i.projectKey || '', task: i.title, source: task ? TASK_SOURCE : MTL_SOURCE,
+    ownerIds: (i.assignees || []).map(a => a.id), start: startOf(i), due: dueOf(i), status, pct, pct0: pct,
+    // Việc thường: % do người chủ trì cập nhật trên việc (báo cáo tuần không ghi ngược).
+    pctLocked: task || !!i.pctAuto, critical: !!i.critical, milestone: !!i.milestone, risk: i.done ? null : i.risk?.code || null, riskNote: i.done ? '' : riskNoteOf(i.risk),
+    ...blankIssue(), next: '', mandatory: true, ...extra,
   };
 }
+// Phần của một hạng mục / việc trong báo cáo tuần (yêu cầu chủ dự án 11/2026):
+//   xong trong tuần → I · đã bắt đầu, chưa xong → II (MỌI việc đang làm, không xét hạn) · chưa bắt đầu mà đã có nguy cơ chậm
+//   (chậm khởi động, trễ hạn, sắp hạn) → III · chưa bắt đầu, bắt đầu / đến hạn tới hết tuần sau → IV (kế hoạch) · còn lại: không báo cáo.
+// i.started / i.risk tính sẵn bằng alerts.isStarted / alerts.riskOf (một định nghĩa).
+function placeOf(i, S) {
+  if (i.cancelled) return null;
+  if (i.done) { const c = dayOf(i.completedAt); return c && c >= S.from && c <= addDays(S.to, 2) ? 'results' : null; }
+  if (i.started) return 'ongoing';
+  if (i.risk) return 'risks';
+  const s = startOf(i), e = dueOf(i);
+  return (s ? s <= S.nextTo : e && e <= S.nextTo) ? 'plans' : null;
+}
+const planRow = i => ({ key: `m${i.id}`, itemId: i.id, ref: i.code, step: i.planCode || '', task: i.title, basis: i.kind === 'TASK' ? TASK_SOURCE : MTL_SOURCE,
+  ownerIds: (i.assignees || []).map(a => a.id), due: dueOf(i), output: '' });
 
 function buildPrefill({ week: f, deptId, items = [], memberIds = new Set(), prev = null, actions = [] }) {
   const S = scheduleOf(f);
   const cand = deptCandidates(items, deptId, memberIds);
   const byId = new Map(items.map(i => [i.id, i]));
-  const results = [], ongoing = [], plans = [], seen = new Set();
+  const results = [], ongoing = [], risks = [], plans = [], seen = new Set();
+  const lists = { results, ongoing, risks };
   const add = (list, row) => { if (row.itemId) { if (seen.has(row.itemId)) return; seen.add(row.itemId); } list.push(row); };
+  // Đặt hạng mục vào đúng phần theo tình trạng hiện tại (placeOf).
+  const put = i => {
+    const where = placeOf(i, S);
+    if (where === 'plans') { if (!seen.has(i.id)) { seen.add(i.id); plans.push(planRow(i)); } } else if (where) add(lists[where], mtlRow(i));
+  };
 
-  // 1) Kế hoạch tuần trước (bản ĐÃ NỘP) → Phần I; việc chưa xong tuần trước → Phần II (QT-TH-01, Phần C bước 2).
+  // 1) Kế hoạch tuần trước (bản ĐÃ NỘP): dòng tự do → Phần I; việc chưa xong tuần trước → Phần II (QT-TH-01, Phần C bước 2).
+  //    Dòng gắn hạng mục / việc: đặt theo tình trạng hiện tại (xong → I, đang làm → II, nguy cơ chậm → III) — chuyển tiếp, không sót.
   if (prev) {
     for (const p of prev.plans || []) {
-      if (p.itemId) { const i = byId.get(p.itemId); if (i && !(i.done && dayOf(i.completedAt) < S.from)) add(results, mtlRow(i)); continue; }
+      if (p.itemId) { const i = byId.get(p.itemId); if (i) put(i); continue; }
       if (!String(p.task || '').trim()) continue;
       results.push({ key: p.key || newKey('f'), itemId: null, task: p.task, source: SOURCES.includes(p.basis) ? p.basis : 'KH tháng', ownerIds: p.ownerIds || [], due: p.due || '',
         status: 'Đúng tiến độ', pct: '', ...blankIssue(), mandatory: true });
     }
-    for (const r of [...(prev.results || []), ...(prev.ongoing || [])]) {
+    for (const r of [...(prev.results || []), ...(prev.ongoing || []), ...(prev.risks || [])]) {
       if (r.status === DONE || !String(r.task || '').trim()) continue;
-      if (r.itemId) { const i = byId.get(r.itemId); if (i && !i.done) add(ongoing, mtlRow(i)); continue; }
+      if (r.itemId) { const i = byId.get(r.itemId); if (i) put(i); continue; } // xong trong tuần → I, xong trước đó → bỏ
       if (ongoing.some(o => o.key === r.key) || results.some(o => o.key === r.key)) continue;
       ongoing.push({ key: r.key || newKey('f'), itemId: null, actionRef: r.actionRef || null, task: r.task, source: r.source === MTL_SOURCE ? 'Chuyển tiếp tuần trước' : r.source || 'Chuyển tiếp tuần trước',
         ownerIds: r.ownerIds || [], start: r.start || '', due: r.due || '', status: r.status || 'Đúng tiến độ', pct: r.pct ?? '', ...blankIssue(), next: '', mandatory: !!r.actionRef });
     }
   }
   // 2) Action Log giao ban (mọi việc TGĐ giao còn mở, kể cả tuần trước bộ phận chưa nộp) → Phần I, nguồn "TGĐ giao" — bắt buộc báo cáo.
-  const hasAction = ref => [...results, ...ongoing].some(r => r.actionRef === ref);
+  const hasAction = ref => [...results, ...ongoing, ...risks].some(r => r.actionRef === ref);
   for (const a of actions) if (!hasAction(a.ref)) results.push({ key: safeKey(`a${a.ref}`), actionRef: a.ref, itemId: null, task: a.task, source: 'TGĐ giao', ownerIds: a.ownerId ? [a.ownerId] : [],
     due: a.due || '', status: 'Đúng tiến độ', pct: '', ...blankIssue(), mandatory: true });
 
-  // 3) MTL của bộ phận: đến hạn / quá hạn / xong trong tuần → I; đang chạy nhiều tuần → II; bắt đầu tuần tới → III.
-  for (const i of cand) {
-    if (!i.baselineStart || !i.baselineEnd) continue;
-    const s = dayOf(i.baselineStart), e = dayOf(i.baselineEnd), c = dayOf(i.completedAt);
-    if (i.done) { if (c >= S.from && c <= S.to) add(results, mtlRow(i)); continue; }
-    if (e <= S.to) add(results, mtlRow(i));
-    else if (s <= S.to) add(ongoing, mtlRow(i));
-    else if (s <= S.nextTo) { if (!seen.has(i.id)) { seen.add(i.id); plans.push({ key: `m${i.id}`, itemId: i.id, ref: i.code, step: i.planCode || '', task: i.title, basis: MTL_SOURCE, ownerIds: (i.assignees || []).map(a => a.id), due: e, output: '' }); } }
-  }
+  // 3) Hạng mục MTL + việc thường của bộ phận theo tình trạng hiện tại (placeOf): xong trong tuần → I; đang làm → II;
+  //    chưa khởi động mà có nguy cơ chậm → III; sắp bắt đầu → IV; chưa bắt đầu (chưa tới kỳ) → không báo cáo.
+  for (const i of cand) put(i);
   // Nguyên nhân / giải pháp của tuần trước (bản đã nộp) cho cùng hạng mục còn chậm: điền sẵn để bộ phận xem lại, sửa nếu đã khác —
   // không phải gõ lại mỗi tuần. Đề nghị hỗ trợ không chép (mỗi tuần Ban GĐ kết luận riêng).
   if (prev) {
     const last = new Map();
-    for (const r of [...(prev.results || []), ...(prev.ongoing || [])]) if (r && (r.cause || r.solution)) last.set(r.itemId ? `i${r.itemId}` : `k${r.key}`, r);
-    for (const r of [...results, ...ongoing]) {
+    for (const r of [...(prev.results || []), ...(prev.ongoing || []), ...(prev.risks || [])]) if (r && (r.cause || r.solution)) last.set(r.itemId ? `i${r.itemId}` : `k${r.key}`, r);
+    for (const r of [...results, ...ongoing, ...risks]) {
       const p = last.get(r.itemId ? `i${r.itemId}` : `k${r.key}`);
-      if (!p || r.status === DONE || r.cause || r.solution) continue;
+      if (!p || r.status === DONE || r.cause || r.solution || !(needsIssue(r, f) || rowRisk(r, f))) continue;
       r.cause = String(p.cause || ''); r.solution = String(p.solution || ''); r.carried = true;
     }
   }
-  const rank = r => [r.status === DONE ? 2 : needsIssue(r, f) ? 0 : 1, r.due || '9999'];
+  const rank = r => [r.status === DONE ? 2 : needsIssue(r, f) || rowRisk(r, f) ? 0 : 1, r.due || '9999'];
   const order = (a, b) => { const x = rank(a), y = rank(b); return x[0] - y[0] || (x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0); };
-  return { results: results.sort(order), ongoing: ongoing.sort(order), plans: plans.sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0)), other: '' };
+  return { results: results.sort(order), ongoing: ongoing.sort(order), risks: risks.sort(order), plans: plans.sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0)), other: '' };
 }
 
 // ---------- Làm sạch dữ liệu gửi lên ----------
@@ -155,8 +195,9 @@ const pctOf = v => { if (v === '' || v == null) return ''; const n = Math.round(
 const idsOf = (v, allowed) => [...new Set([].concat(v || []).map(Number).filter(n => Number.isInteger(n) && n > 0 && (!allowed || allowed.has(n))))].slice(0, 5);
 function cleanHelp(v, deptIds) { const s = String(v ?? ''); return s === HELP_BGD || s === HELP_SELF || (/^D\d+$/.test(s) && deptIds.has(Number(s.slice(1)))) ? s : ''; }
 
-// ctx: { userIds: Set (tài khoản hợp lệ làm người phụ trách), deptIds: Set, itemIds: Set (hạng mục người lập xem được) }
-function sanitize(data, { userIds = null, deptIds = new Set(), itemIds = null } = {}) {
+// ctx: { userIds: Set (tài khoản hợp lệ làm người phụ trách), deptIds: Set, itemIds: Set (hạng mục / việc người lập xem được),
+//   taskIds: Set (phần của itemIds là việc thường, không phải MTL) }
+function sanitize(data, { userIds = null, deptIds = new Set(), itemIds = null, taskIds = null } = {}) {
   const d = data && typeof data === 'object' ? data : {};
   const base = r => {
     const itemId = Number.isInteger(r?.itemId) && (!itemIds || itemIds.has(r.itemId)) ? r.itemId : null;
@@ -167,20 +208,25 @@ function sanitize(data, { userIds = null, deptIds = new Set(), itemIds = null } 
     };
   };
   const row = (r, ongoing) => {
-    const o = { ...base(r), source: itemId(r) ? MTL_SOURCE : SOURCES.includes(r?.source) ? r.source : 'Phát sinh', status: STATUSES.includes(r?.status) ? r.status : 'Đúng tiến độ',
+    const risk = RISK_CODES.includes(r?.risk) ? r.risk : null;
+    const o = { ...base(r), source: itemSource(r) || (SOURCES.includes(r?.source) ? r.source : 'Phát sinh'), status: STATUSES.includes(r?.status) ? r.status : 'Đúng tiến độ',
+      risk, riskNote: risk ? str(r?.riskNote, 60) : '',
       pct: pctOf(r?.pct), pct0: pctOf(r?.pct0), pctLocked: !!r?.pctLocked, critical: !!r?.critical, milestone: !!r?.milestone,
       cause: str(r?.cause, 1000), solution: str(r?.solution, 1000), helpFrom: cleanHelp(r?.helpFrom, deptIds), helpWhat: str(r?.helpWhat, 1000), helpBy: day(r?.helpBy) };
     if (o.status === DONE) o.pct = 100;
     if (o.pct === 100 && o.status !== DONE) o.status = DONE;
+    if (o.status === DONE) { o.risk = null; o.riskNote = ''; }
     if (ongoing) { o.start = day(r?.start); o.next = str(r?.next, 1000); }
     return o;
   };
   const itemId = r => Number.isInteger(r?.itemId) && (!itemIds || itemIds.has(r.itemId));
+  const itemSource = r => (itemId(r) ? (taskIds?.has(r.itemId) ? TASK_SOURCE : MTL_SOURCE) : null);
   const lim = (v, n) => (Array.isArray(v) ? v.slice(0, n) : []);
   return {
     results: lim(d.results, 200).map(r => row(r, false)),
     ongoing: lim(d.ongoing, 200).map(r => row(r, true)),
-    plans: lim(d.plans, 200).map(p => ({ ...base(p), basis: itemId(p) ? MTL_SOURCE : SOURCES.includes(p?.basis) ? p.basis : 'KH tháng', output: str(p?.output, 500) })),
+    risks: lim(d.risks, 200).map(r => row(r, true)),
+    plans: lim(d.plans, 200).map(p => ({ ...base(p), basis: itemSource(p) || (SOURCES.includes(p?.basis) ? p.basis : 'KH tháng'), output: str(p?.output, 500) })),
     other: str(d.other, 3000),
   };
 }
@@ -188,9 +234,10 @@ function sanitize(data, { userIds = null, deptIds = new Set(), itemIds = null } 
 // ---------- Kiểm tra trước khi nộp (Điều 4, Phần C) ----------
 function validate(data, f, { deptName = () => '', mandatory = [] } = {}) {
   const e = [];
-  const res = data.results.filter(r => r.task), on = data.ongoing.filter(r => r.task), pl = data.plans.filter(p => p.task);
-  if (!res.length && !on.length) e.push('Phần I hoặc II cần ít nhất 1 hạng mục.');
-  if (!on.length && !pl.length) e.push('Phần II hoặc III cần ít nhất 1 việc cho tuần mới.');
+  const risks = data.risks || [];
+  const res = data.results.filter(r => r.task), on = data.ongoing.filter(r => r.task), rk = risks.filter(r => r.task), pl = data.plans.filter(p => p.task);
+  if (!res.length && !on.length && !rk.length) e.push('Phần I, II hoặc III cần ít nhất 1 hạng mục.');
+  if (!on.length && !rk.length && !pl.length) e.push('Phần II, III hoặc IV cần ít nhất 1 việc cho tuần mới.');
   const check = (r, label) => {
     if (!r.due) e.push(`${label}: thiếu deadline.`);
     if (!r.ownerIds.length) e.push(`${label}: thiếu người phụ trách.`);
@@ -213,14 +260,15 @@ function validate(data, f, { deptName = () => '', mandatory = [] } = {}) {
     check(r, `Phần II ${short(r.task)}`);
     if (!r.next && r.status !== DONE) e.push(`Phần II ${short(r.task)}: ghi việc sẽ làm tuần tới.`);
   });
+  risks.forEach((r, k) => { if (!r.task) e.push(`Phần III, việc ${k + 1}: thiếu tên việc.`); else check(r, `Phần III ${short(r.task)}`); });
   data.plans.forEach((p, k) => {
-    if (!p.task) { e.push(`Phần III, hạng mục ${k + 1}: thiếu tên hạng mục.`); return; }
-    if (!p.ownerIds.length) e.push(`Phần III ${short(p.task)}: thiếu người phụ trách.`);
-    if (!p.due) e.push(`Phần III ${short(p.task)}: thiếu deadline.`);
-    if (!p.output) e.push(`Phần III ${short(p.task)}: ghi sản phẩm đầu ra.`);
+    if (!p.task) { e.push(`Phần IV, hạng mục ${k + 1}: thiếu tên hạng mục.`); return; }
+    if (!p.ownerIds.length) e.push(`Phần IV ${short(p.task)}: thiếu người phụ trách.`);
+    if (!p.due) e.push(`Phần IV ${short(p.task)}: thiếu deadline.`);
+    if (!p.output) e.push(`Phần IV ${short(p.task)}: ghi sản phẩm đầu ra.`);
   });
   // Hạng mục bắt buộc báo cáo (MTL đến hạn / quá hạn / đang chạy, việc TGĐ giao, kế hoạch tuần trước) không được bỏ (Điều 4).
-  const has = (k, v) => [...data.results, ...data.ongoing].some(r => r[k] === v);
+  const has = (k, v) => [...data.results, ...data.ongoing, ...risks].some(r => r[k] === v);
   for (const m of mandatory) if (!(m.itemId ? has('itemId', m.itemId) : m.actionRef ? has('actionRef', m.actionRef) : has('key', m.key)))
     e.push(`Không được bỏ ${short(m.task)}${m.ref ? ` (${m.ref})` : ''} — đây là hạng mục bắt buộc báo cáo; cập nhật tình trạng thay vì bỏ.`);
   return e;
@@ -228,11 +276,11 @@ function validate(data, f, { deptName = () => '', mandatory = [] } = {}) {
 // Xoá nội dung vướng mắc ở hạng mục không còn Chậm / Vướng / Quá hạn (giữ báo cáo gọn).
 function finalize(data, f) {
   const fix = r => (needsIssue(r, f) ? { ...r, overdue: isOverdue(r, f) } : { ...r, ...blankIssue(), overdue: false });
-  return { ...data, results: data.results.filter(r => r.task).map(fix), ongoing: data.ongoing.filter(r => r.task).map(fix), plans: data.plans.filter(p => p.task) };
+  return { ...data, results: data.results.filter(r => r.task).map(fix), ongoing: data.ongoing.filter(r => r.task).map(fix), risks: (data.risks || []).filter(r => r.task).map(fix), plans: data.plans.filter(p => p.task) };
 }
 // % đề xuất ghi ngược vào MTL: hạng mục liên kết, không tự tính từ việc nhánh, % khác lúc điền sẵn (pct0).
 // Máy chủ chỉ ghi khi % trong MTL vẫn bằng pct0 (chưa ai đổi từ lúc điền sẵn) — tránh đè số mới bằng số cũ khi gửi lại.
-const writeBacks = data => [...data.results, ...data.ongoing]
+const writeBacks = data => [...data.results, ...data.ongoing, ...(data.risks || [])]
   .filter(r => r.itemId && !r.pctLocked && r.pct !== '' && r.pct !== r.pct0)
   .map(r => ({ itemId: r.itemId, pct: r.pct }));
 
@@ -264,22 +312,29 @@ const helpTarget = (h, deptName) => (h === HELP_BGD ? 'Ban Giám đốc' : h?.st
 function buildSummary({ week: f, depts, reports, notices, meeting = null, actions = [], actionRows = new Map(), now = new Date(), userName = () => '' }) {
   const S = scheduleOf(f, meeting), deptName = id => depts.find(d => d.id === id)?.name || '';
   const md = meeting?.data || {};
-  let submitted = 0, stuck = 0, overdue = 0;
-  const helps = [], rows = [];
+  let submitted = 0, stuck = 0, overdue = 0, nDone = 0, nOngoing = 0;
+  const helps = [], rows = [], risks = [];
   for (const d of depts) {
     const rep = reports.find(r => r.departmentId === d.id) || null;
     const sent = rep && rep.firstSubmittedAt ? rep : null;
     const ns = notices.filter(n => n.departmentId === d.id);
     const st = submissionStatus(sent, ns, S, now);
     const absent = ns.find(n => n.type === 'ABSENT') || null;
-    const items = sent ? [...(sent.data.results || []), ...(sent.data.ongoing || [])] : [];
+    const items = sent ? [...(sent.data.results || []), ...(sent.data.ongoing || []), ...(sent.data.risks || [])] : [];
     if (SUBMITTED.includes(st.code)) submitted++;
     const nStuck = items.filter(x => x.status === 'Chậm' || x.status === 'Vướng').length, nOver = items.filter(x => isOverdue(x, f)).length;
     stuck += nStuck; overdue += nOver;
+    // Ba phần chủ dự án cần nắm: xong trong tuần · đang làm chưa xong (chuyển tiếp tuần sau) · nguy cơ chậm.
+    const dDone = items.filter(x => x.status === DONE).length, dOngoing = sent ? (sent.data.ongoing || []).filter(x => x.status !== DONE).length : 0;
+    const dRisk = sent ? riskRows(sent.data, f) : [];
+    nDone += dDone; nOngoing += dOngoing;
+    for (const x of dRisk) risks.push({ departmentId: d.id, department: d.name, key: x.key, ref: x.ref || '', task: x.task, risk: rowRisk(x, f), due: x.due || '', pct: x.pct ?? '',
+      started: !(sent.data.risks || []).includes(x) });
     for (const x of items) if (needsIssue(x, f) && x.helpFrom && x.helpFrom !== HELP_SELF)
       helps.push({ key: `${d.id}:${safeKey(x.key)}`, fromId: d.id, from: d.name, to: helpTarget(x.helpFrom, deptName), toKey: x.helpFrom, task: x.task, ref: x.ref || '', what: x.helpWhat, by: x.helpBy, status: issueLabel(x, f), cause: x.cause, solution: x.solution, conclusion: md.conclusions?.[`${d.id}:${safeKey(x.key)}`] || null });
     rows.push({ id: d.id, name: d.name, status: st, submittedAt: sent?.firstSubmittedAt || null, lastSubmittedAt: sent?.submittedAt || null, resubmits: sent ? Math.max(0, (sent.submitCount || 1) - 1) : 0,
       submittedBy: sent ? userName(sent.submittedById) : '', items: sent ? items.length : null, stuck: sent ? nStuck : null, overdue: sent ? nOver : null,
+      done: sent ? dDone : null, ongoing: sent ? dOngoing : null, risk: sent ? dRisk.length : null,
       absent: absent ? { reason: REASONS[absent.reason] || '', note: absent.note, substitute: userName(absent.substituteId), noticed: !!absenceNoticed([absent], S) } : null,
       late: ns.filter(n => n.type === 'LATE').map(n => ({ reason: REASONS[n.reason] || '', note: n.note, expectedAt: n.expectedAt, createdAt: n.createdAt })),
       attendance: md.attendance?.[d.id] || null, failed: !!md.failed?.[d.id], report: sent ? sent.data : null, draft: !sent && !!rep });
@@ -293,7 +348,8 @@ function buildSummary({ week: f, depts, reports, notices, meeting = null, action
   const groups = [];
   for (const h of helps) { let g = groups.find(x => x.toKey === h.toKey); if (!g) groups.push(g = { toKey: h.toKey, to: h.to, list: [] }); g.list.push(h); }
   groups.sort((a, b) => (a.toKey === HELP_BGD ? -1 : b.toKey === HELP_BGD ? 1 : depts.findIndex(d => `D${d.id}` === a.toKey) - depts.findIndex(d => `D${d.id}` === b.toKey)));
-  return { week: f, schedule: S, kpis: { submitted, total: depts.length, overdue, stuck, helps: helps.length }, rows, helps: groups, actionReview, meeting: md, publishedAt: meeting?.publishedAt || null };
+  return { week: f, schedule: S, kpis: { submitted, total: depts.length, overdue, stuck, helps: helps.length, done: nDone, ongoing: nOngoing, risk: risks.length },
+    rows, risks, helps: groups, actionReview, meeting: md, publishedAt: meeting?.publishedAt || null };
 }
 // Bản tóm tắt cho trưởng / phó bộ phận (QC-TH-01 Điều 5): như văn bản sao chép — không họ tên, không ghi chú vắng / muộn,
 // không chi tiết báo cáo bộ phận khác (giữ bộ phận mình). Ma trận: lib/policy.js weekly.summary vs weekly.summary.detail.
@@ -304,6 +360,7 @@ function briefSummary(sum, ownDeptId) {
     // Yêu cầu hỗ trợ: bỏ nguyên nhân / giải pháp của bộ phận khác (văn bản sao chép cũng không có); Action Log: bỏ người phụ trách.
     helps: sum.helps.map(g => ({ ...g, list: g.list.map(({ cause, solution, ...h }) => (h.fromId === ownDeptId ? { ...h, cause, solution } : h)) })),
     actionReview: sum.actionReview.map(({ owner, ownerId, ...a }) => ({ ...a, owner: '' })),
+    risks: (sum.risks || []).filter(x => x.departmentId === ownDeptId),
     meeting: { conclusions: sum.meeting?.conclusions || {} } };
 }
 
@@ -318,16 +375,25 @@ function stableStringify(v) {
 function summaryText(sum) {
   const S = sum.schedule, f = sum.week;
   const L = ['BẢO MẬT – chỉ dùng nội bộ', `TỔNG HỢP BÁO CÁO TUẦN ${fmtD(S.from)}–${fmtDY(f)} · Giao ban 08:30 ${WD[weekday(S.meetingDay)]} ${fmtDY(S.meetingDay)}`, '',
-    `Đã nộp ${sum.kpis.submitted}/${sum.kpis.total} bộ phận · ${sum.kpis.stuck} chậm/vướng · ${sum.kpis.overdue} quá hạn · ${sum.kpis.helps} yêu cầu hỗ trợ`, '', 'TÌNH TRẠNG NỘP'];
-  for (const r of sum.rows) L.push(`- ${r.name}: ${r.status.label}${r.submittedAt ? ` (${fmtTime(r.submittedAt)})` : ''}${r.absent ? ` · VẮNG${r.absent.substitute || r.absent.hasSubstitute ? ', có người dự thay' : ''}` : ''}`);
+    `Đã nộp ${sum.kpis.submitted}/${sum.kpis.total} bộ phận · ${sum.kpis.done ?? 0} việc xong trong tuần · ${sum.kpis.ongoing ?? 0} đang thực hiện · ${sum.kpis.risk ?? 0} nguy cơ chậm · ${sum.kpis.stuck} chậm/vướng · ${sum.kpis.overdue} quá hạn · ${sum.kpis.helps} yêu cầu hỗ trợ`, '', 'TÌNH TRẠNG NỘP'];
+  for (const r of sum.rows) L.push(`- ${r.name}: ${r.status.label}${r.submittedAt ? ` (${fmtTime(r.submittedAt)})` : ''}${r.report ? ` · xong ${r.done ?? 0}, đang làm ${r.ongoing ?? 0}, nguy cơ chậm ${r.risk ?? 0}` : ''}${r.absent ? ` · VẮNG${r.absent.substitute || r.absent.hasSubstitute ? ', có người dự thay' : ''}` : ''}`);
   if (sum.actionReview.length) {
     L.push('', 'ACTION LOG ĐANG THEO DÕI');
     for (const a of sum.actionReview) L.push(`- [${a.department}] ${a.task} — ${a.status || 'chưa báo cáo'}${a.overdue && a.status !== DONE ? ', quá hạn' : ''}`);
   }
-  L.push('', 'HẠNG MỤC QUÁ HẠN / CHẬM / VƯỚNG');
-  let any = false;
-  for (const r of sum.rows) if (r.report) for (const x of [...r.report.results, ...r.report.ongoing]) if (needsIssue(x, f)) { any = true; L.push(`- [${r.name}] ${x.task} — ${issueLabel(x, f)}${isOverdue(x, f) ? ' ' + fmtD(x.due) : ''} — Giải pháp: ${x.solution}`); }
-  if (!any) L.push('- Không có');
+  const withReport = sum.rows.filter(r => r.report);
+  const list = (title, pick, line) => {
+    L.push('', title);
+    let any = false;
+    for (const r of withReport) for (const x of pick(r.report)) { any = true; L.push(line(r, x)); }
+    if (!any) L.push('- Không có');
+  };
+  const pctOf = x => (x.pct !== '' && x.pct != null ? ` · ${x.pct}%` : '');
+  list('I. ĐÃ HOÀN THÀNH TRONG TUẦN', d => [...(d.results || []), ...(d.ongoing || [])].filter(x => x.status === DONE), (r, x) => `- [${r.name}] ${x.task}`);
+  list('II. ĐANG THỰC HIỆN, CHƯA HOÀN THÀNH (chuyển tiếp tuần sau)', d => (d.ongoing || []).filter(x => x.status !== DONE),
+    (r, x) => `- [${r.name}] ${x.task}${pctOf(x)}${x.due ? ` · hạn ${fmtD(x.due)}` : ''}${rowRisk(x, f) ? ` · ${rowRisk(x, f)}` : ''}${x.next ? ` — Tuần tới: ${x.next}` : ''}`);
+  list('III. NGUY CƠ CHẬM TIẾN ĐỘ (trễ hạn / chậm / vướng / sắp hạn / chậm khởi động)', d => riskRows(d, f),
+    (r, x) => `- [${r.name}] ${x.task} — ${rowRisk(x, f)}${x.due ? ` (hạn ${fmtD(x.due)})` : ''}${pctOf(x)}${x.solution ? ` — Giải pháp: ${x.solution}` : ''}`);
   L.push('', 'YÊU CẦU HỖ TRỢ (xử lý 09:15 – 09:25)');
   if (!sum.helps.length) L.push('- Không có');
   for (const g of sum.helps) for (const h of g.list) L.push(`- ${h.from} → ${g.to}: ${h.what} (việc “${h.task}”)${h.by ? `, cần trước ${fmtD(h.by)}` : ''}${h.conclusion ? ` — Kết luận: ${DECISIONS[h.conclusion.decision] || ''}${h.conclusion.note ? ': ' + h.conclusion.note : ''}` : ''}`);
@@ -373,8 +439,8 @@ function fridaysOf(ym, now = new Date(), startWeek = null) {
 }
 
 module.exports = {
-  SOURCES, MTL_SOURCE, STATUSES, DONE, HELP_BGD, HELP_SELF, REASONS, NOTICE_TYPES, ATTENDANCE, DECISIONS, POINTS, POINT_LABEL,
+  SOURCES, MTL_SOURCE, TASK_SOURCE, RISK_CODES, STATUSES, DONE, HELP_BGD, HELP_SELF, REASONS, NOTICE_TYPES, ATTENDANCE, DECISIONS, POINTS, POINT_LABEL,
   isDay, addDays, dayOf, at, weekday, currentFriday, isFriday, fmtD, fmtDY, fmtTime, scheduleOf, meetingStarted,
-  isOverdue, needsIssue, issueLabel, statusFromMtl, deptCandidates, buildPrefill, sanitize, validate, finalize, writeBacks,
+  isOverdue, needsIssue, issueLabel, rowRisk, riskRows, riskNoteOf, placeOf, statusFromMtl, taskStatus, deptCandidates, buildPrefill, sanitize, validate, finalize, writeBacks,
   submissionStatus, absenceNoticed, SUBMITTED, buildSummary, briefSummary, summaryText, compliance, fridaysOf, stableStringify,
 };

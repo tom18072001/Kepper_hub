@@ -948,3 +948,43 @@ Kèm 3 khuyến nghị cho chủ dự án (mục 4).
   BGĐ duyệt khi là người giao hoặc khi quy trình dự án có bước Ban Giám đốc / PGĐ phụ trách.
 - Việc nhánh chuyển từ checklist không mang hạn riêng (nhận hạn / kế hoạch gốc của việc cha). Mục chưa xong của một việc cha đã Hoàn thành thành
   việc nhánh mở dưới việc cha đã xong (bản thật không có trường hợp này).
+
+## Báo cáo tuần / giao ban 3 phần: xong trong tuần · đang làm chưa xong · nguy cơ chậm (24/11/2026)
+
+Yêu cầu chủ dự án: báo cáo tuần bộ phận (BM-TH-01), bản tổng hợp giao ban và bản Word xuất từ Dashboard có đủ 3 phần. Phần (1) là việc xong trong tuần.
+Phần (2) là MỌI việc đã bắt đầu mà chưa xong: đang làm, chờ duyệt, bị trả lại, đã báo tiến độ. Phần này tự chuyển sang tuần sau. Phần (3) là việc có nguy cơ chậm.
+Việc chưa bắt đầu thì không báo cáo, trừ khi đã có nguy cơ chậm (chậm khởi động, trễ hạn, sắp đến hạn).
+Định nghĩa "đang làm" và "nguy cơ chậm" chỉ ở một chỗ: `services/alerts.js` (`isStarted`, `riskOf`). Hàm này dùng chung các mức cảnh báo MTL hằng ngày.
+
+### 1. Phân loại
+
+| Tập dữ liệu | Nhãn nội bộ | Pháp lý | Thay đổi |
+|---|---|---|---|
+| Báo cáo tuần bộ phận (`WeeklyReport.data`) | **Bảo mật** (không đổi) | DLCN cơ bản (người phụ trách gắn với việc) | Thêm mảng `risks` và trường `risk` / `riskNote` mỗi dòng. Thêm dòng **việc thường** (dự án bảng công việc), nguồn "Công việc" |
+| Bản tổng hợp giao ban, văn bản sao chép | Bảo mật | như trên | Thêm đếm xong / đang làm / nguy cơ chậm và danh sách nguy cơ. Bản tóm tắt cho trưởng / phó bộ phận chỉ có danh sách nguy cơ của bộ phận mình. Văn bản sao chép vẫn không có họ tên |
+| Bản Word báo cáo tuần (Dashboard) | Nội bộ / Bảo mật (như cũ) | như trên | Đổi phần III thành "nguy cơ chậm". Bảng theo phòng thêm cột đang làm và nguy cơ. Không thêm trường cá nhân |
+
+### 2. Dòng dữ liệu
+
+- Điền sẵn chỉ lấy việc thường **người lập xem được**, qua `visibleProjectsWhere` và `itemVisibleWhere`, giống bảng công việc.
+  Việc thuộc bộ phận khi: bộ phận chủ trì (hoặc phòng của dự án) là bộ phận lập báo cáo, hoặc người phụ trách là thành viên bộ phận.
+- Sau khi nộp, tên việc thường của bộ phận đến người xem báo cáo tuần theo `lib/policy.js`: Ban GĐ, thư ký, PMO, và trưởng / phó bộ phận cho bộ phận mình.
+  Không đổi ma trận quyền. Trước đây chỉ hạng mục MTL đi theo luồng này.
+- Không có kênh mới ra ngoài. MCP (`kepper_weekly_report`, `kepper_save_weekly_draft`) gọi cùng endpoint, định dạng chỉ thêm trường, không bỏ trường nào.
+
+### 3. Rà năng lực (thay đổi)
+
+| Mã | Trạng thái | Ghi chú | Ưu tiên |
+|---|---|---|---|
+| GOV-01 | Không đổi | Quyền xem báo cáo tuần vẫn qua `weekly.report` / `weekly.summary(.detail)` | Bắt buộc |
+| PRE-01 | Đầy đủ | Máy chủ chỉ nhận `itemId` mà người lập xem được (`sanitize` + `itemIds`). Lúc nộp, tên, mã, hạn, người phụ trách, %, tình trạng và nguy cơ của dòng việc thường đều lấy lại từ việc. Báo cáo tuần không ghi % ngược vào việc thường | Bắt buộc |
+| PRI-01 | Một phần | Việc thường mang tên việc và người phụ trách vào báo cáo Bảo mật. Nếu một việc thuộc dự án hạn chế (DEPARTMENT / thành viên), Ban GĐ, thư ký và PMO sẽ thấy **tên việc** qua báo cáo tuần | Nên có |
+| PRI-04 | Một phần | Hồ sơ đánh giá tác động xử lý DLCN, luồng "báo cáo tuần", cần ghi thêm nguồn "việc thường của bộ phận" | Bắt buộc |
+| DET-05 | Không đổi | Bản nộp vẫn băm SHA-256 và lưu phiên bản bất biến | Nên có |
+
+### 4. Khuyến nghị và rủi ro còn lại
+
+- **Khuyến nghị 1 (Nên có):** chủ dự án xác nhận việc này là chấp nhận được. Tên việc thường của dự án hạn chế đi vào báo cáo tuần bộ phận, và thư ký / PMO / Ban GĐ đọc được.
+  Theo QC-TH-01, đây là bộ phận báo cáo việc của mình lên. Nếu không chấp nhận, lọc theo `visibility` của dự án khi điền sẵn.
+- **Khuyến nghị 2 (Bắt buộc):** cập nhật hồ sơ đánh giá tác động xử lý DLCN (PRI-04) như mục 3.
+- Rủi ro: "nguy cơ chậm" tính theo ngày xem / ngày nộp, không theo thứ Sáu của tuần báo cáo. Bản đã nộp giữ nguyên nhãn lúc nộp. Bản nháp mở lại sẽ được tính lại khi bấm "Làm mới".

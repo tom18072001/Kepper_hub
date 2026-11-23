@@ -235,7 +235,7 @@ export function buildServer({ call = createSession() } = {}) {
       if (!d.canEdit) throw new KepperError(403, 'Bạn không lập báo cáo của bộ phận này');
       if (d.report?.firstSubmittedAt) throw new KepperError(409, 'Báo cáo đã nộp — sửa và "Gửi lại" trên giao diện Kepler Hub');
       const data = structuredClone(d.report?.data || d.prefill);
-      const rows = [...(data.results || []), ...(data.ongoing || []), ...(data.plans || [])];
+      const rows = [...(data.results || []), ...(data.ongoing || []), ...(data.risks || []), ...(data.plans || [])];
       const missing = [];
       for (const e of edits) { const r = rows.find(x => x.key === e.key); if (!r) { missing.push(e.key); continue; } const { key, ...rest } = e; Object.assign(r, rest); }
       data.plans = [...(data.plans || []), ...addPlans.map(p => ({ ...p, basis: p.basis || 'KH tháng', ownerIds: p.ownerIds || [] }))];

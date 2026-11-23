@@ -59,7 +59,7 @@ async function userNames(prisma, ids) {
   const rows = await prisma.user.findMany({ where: { id: { in: list } }, select: { id: true, fullName: true } });
   return Object.fromEntries(rows.map(u => [u.id, u.fullName]));
 }
-const rowOwnerIds = data => [...(data?.results || []), ...(data?.ongoing || []), ...(data?.plans || [])].flatMap(r => r.ownerIds || []);
+const rowOwnerIds = data => [...(data?.results || []), ...(data?.ongoing || []), ...(data?.risks || []), ...(data?.plans || [])].flatMap(r => r.ownerIds || []);
 const meetingOf = (prisma, week) => prisma.weeklyMeeting.findUnique({ where: { week } });
 
 async function usersWhere(prisma, test) {
@@ -85,7 +85,7 @@ async function openActions(prisma, f, departmentId = null) {
   const reps = await prisma.weeklyReport.findMany({ where: { week: { gt: from, lte: f }, firstSubmittedAt: { not: null }, departmentId: { in: [...new Set(list.map(a => a.departmentId))] } }, orderBy: { week: 'asc' } });
   const rows = new Map(), rowWeek = new Map(), ownerDept = new Map(list.map(a => [a.ref, a.departmentId]));
   // Chỉ báo cáo của ĐÚNG bộ phận được giao mới cập nhật / đóng được việc trong Action Log (bộ phận khác gửi actionRef thì bỏ qua).
-  for (const r of reps) for (const x of [...(r.data?.results || []), ...(r.data?.ongoing || [])])
+  for (const r of reps) for (const x of [...(r.data?.results || []), ...(r.data?.ongoing || []), ...(r.data?.risks || [])])
     if (x.actionRef && ownerDept.get(x.actionRef) === r.departmentId) { rows.set(x.actionRef, x); rowWeek.set(x.actionRef, r.week); }
   const actions = list.filter(a => a.meetingWeek === prevWeek || !(rows.get(a.ref)?.status === WK.DONE && rowWeek.get(a.ref) < f));
   return { actions, rows };
