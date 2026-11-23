@@ -235,15 +235,15 @@ test('tổng hợp giao ban: gom yêu cầu hỗ trợ theo nơi nhận, Action 
     { departmentId: 1, firstSubmittedAt: new Date('2026-10-30T16:00:00+07:00'), submittedAt: new Date('2026-10-30T16:00:00+07:00'), submitCount: 2, submittedById: 50,
       data: { results: [row('a', { status: 'Vướng', cause: 'C', solution: 'S', helpFrom: 'BGD', helpWhat: 'Ký văn bản', actionRef: '2026-10-23:1' }), row('b', { due: '2026-10-28', solution: 'S2', helpFrom: 'D2', helpWhat: 'Bố trí vốn' }), row('x', { status: 'Hoàn thành', pct: 100 })],
         ongoing: [row('c', { next: 'Trình ký' }), row('d', { risk: 'BEHIND', riskNote: 'Chậm tiến độ', status: 'Chậm', cause: 'C3', solution: 'S3', helpFrom: 'SELF' })],
-        risks: [row('e', { risk: 'LATE_START', riskNote: 'Chậm khởi động', status: 'Chậm', pct: 0, solution: 'S4', helpFrom: 'SELF' })], plans: [], other: '' } },
+        risks: [row('e', { risk: 'LATE_START', riskNote: 'Chậm khởi động', status: 'Chậm', pct: 0, started: false, solution: 'S4', helpFrom: 'SELF' })], plans: [], other: '' } },
     { departmentId: 2, firstSubmittedAt: null, data: { results: [], ongoing: [], plans: [] } },
   ];
   const notices = [{ departmentId: 3, type: 'ABSENT', reason: 'CONG_TAC', note: '', substituteId: 51, createdAt: new Date('2026-10-30T10:00:00+07:00') }];
   const actions = [{ id: 1, ref: '2026-10-23:1', task: 'Chốt phương án', departmentId: 1, ownerId: 50, due: '2026-10-28' }, { id: 2, ref: '2026-10-23:2', task: 'Gửi số liệu', departmentId: 2, due: '2026-10-27' }];
   const actionRows = new Map([['2026-10-23:1', reports[0].data.results[0]]]);
   const sum = WK.buildSummary({ week: F, depts, reports, notices, actions, actionRows, now: new Date('2026-11-02T07:00:00+07:00'), userName: id => ({ 50: 'Người A (giả)', 51: 'Người B (giả)' }[id] || '') });
-  assert.deepEqual(sum.kpis, { submitted: 1, total: 3, overdue: 1, stuck: 3, helps: 2, done: 1, ongoing: 2, risk: 4 });
-  assert.deepEqual([sum.rows[0].done, sum.rows[0].ongoing, sum.rows[0].risk], [1, 2, 4]); assert.equal(sum.rows[1].risk, null);
+  assert.deepEqual(sum.kpis, { submitted: 1, total: 3, overdue: 1, stuck: 3, helps: 2, done: 1, ongoing: 4, risk: 4 }); // đang làm: a, b (Phần I chưa xong) + c, d
+  assert.deepEqual([sum.rows[0].done, sum.rows[0].ongoing, sum.rows[0].risk], [1, 4, 4]); assert.equal(sum.rows[1].risk, null);
   assert.deepEqual(sum.risks.map(x => [x.task, x.risk, x.started]), [['Việc a', 'Vướng', true], ['Việc b', 'Quá hạn', true], ['Việc d', 'Chậm tiến độ', true], ['Việc e', 'Chậm khởi động', false]]);
   assert.deepEqual(sum.rows.map(r => r.status.code), ['ON_TIME', 'MISSING', 'MISSING']);
   assert.equal(sum.rows[0].resubmits, 1); assert.equal(sum.rows[1].draft, true);

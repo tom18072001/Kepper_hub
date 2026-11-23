@@ -34,13 +34,14 @@ function isStarted(item, actual = item.actual ?? item.progress) {
   return c === 'STARTED' || c === 'REVIEW' || !!item.returnedAt || !!item.startedAt || !!item.progressAt || (Number(actual) || 0) > 0;
 }
 const RISK_LABEL = { OVERDUE: 'Trễ hạn', LATE_START: 'Chậm khởi động', BEHIND: 'Chậm tiến độ', DUE_SOON: 'Sắp đến hạn' };
-// Việc thường (không có kế hoạch gốc MTL): "sắp đến hạn" khi còn ≤ 3 ngày.
+// Việc thường (không có kế hoạch gốc MTL): "sắp đến hạn" khi còn ≤ N ngày — N theo thiết lập "Số ngày cảnh báo sắp đến hạn"
+// của sổ giao việc (services/register.js DEFAULT_SETTINGS.dueSoonDays, mặc định 3); nơi gọi truyền taskDueSoonDays đã đọc từ thiết lập.
 const TASK_DUE_SOON_DAYS = 3;
 // Nguy cơ chậm của một việc chưa xong hôm nay → { code, label, days } hoặc null.
 // - Hạng mục MTL có kế hoạch gốc (st = M.statusOf(...), cfg = cấu hình cảnh báo của dự án): Trễ hạn, Chậm khởi động, Chậm tiến độ
 //   theo đúng cảnh báo hằng ngày; "Sắp đến hạn" (≤ cfg.dueSoonDays) chỉ tính khi % thực tế thấp hơn % kế hoạch.
 // - Việc thường / chưa có kế hoạch gốc: quá hạn (dueDate) hoặc còn ≤ TASK_DUE_SOON_DAYS ngày.
-function riskOf(item, { st = null, cfg = M.DEFAULT_ALERTS, day = new Date() } = {}) {
+function riskOf(item, { st = null, cfg = M.DEFAULT_ALERTS, day = new Date(), taskDueSoonDays = TASK_DUE_SOON_DAYS } = {}) {
   const c = item.state?.category ?? item.category;
   if (c === 'COMPLETED' || c === 'CANCELLED') return null;
   if (st && item.baselineStart && item.baselineEnd) {
@@ -51,7 +52,7 @@ function riskOf(item, { st = null, cfg = M.DEFAULT_ALERTS, day = new Date() } = 
   if (!item.dueDate) return null;
   const left = M.vnDay(item.dueDate) - M.vnDay(day);
   if (left < 0) return { code: 'OVERDUE', label: RISK_LABEL.OVERDUE, days: -left };
-  if (left <= TASK_DUE_SOON_DAYS) return { code: 'DUE_SOON', label: RISK_LABEL.DUE_SOON, days: left };
+  if (left <= taskDueSoonDays) return { code: 'DUE_SOON', label: RISK_LABEL.DUE_SOON, days: left };
   return null;
 }
 // Đã nhắc gần đây chưa (theo chu kỳ của loại)?

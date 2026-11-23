@@ -73,7 +73,7 @@ test('báo cáo tuần: chia theo phòng chủ trì và loại nhiệm vụ, kh�
   assert.deepEqual(khcn.plan, { total: 2, completed: 1, rate: 50 });
   assert.equal(d.status(items[4]), 'Chưa bắt đầu · sắp đến hạn (còn 1 ngày)');
   assert.match(d.status(items[0]), /^Hoàn thành 13\/10\/2026 \(đúng hạn\)$/);
-  assert.equal(d.status(items[1]), 'Chờ BGĐ cho ý kiến · quá hạn 6 ngày');
+  assert.equal(d.status(items[1]), 'Chờ BGĐ cho ý kiến · trễ hạn 6 ngày');
   assert.deepEqual(d.sections.overdue.map(i => [i.id, d.stage(i).label]), [[2, 'Chờ BGĐ cho ý kiến'], [3, 'Chờ phòng tiếp nhận']]);
   assert.deepEqual(d.sections.next.map(i => i.id), [4, 7]);
   assert.equal(d.issues.length, 1);

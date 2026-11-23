@@ -31,6 +31,12 @@ function rowRisk(r, f) {
   return out.join(' · ');
 }
 const LISTS = ['results', 'ongoing', 'risks', 'plans'];
+// Cùng quy tắc máy chủ (services/weekly.js rowStarted / partsOf): ba phần tính theo TÌNH TRẠNG dòng, không theo mảng lưu.
+const rowStarted = r => r.status === DONE || r.started !== false || Number(r.pct) > 0;
+function partsOf(d, f) {
+  const rows = [...(d.results || []), ...(d.ongoing || []), ...(d.risks || [])].filter(r => r && r.task);
+  return { done: rows.filter(r => r.status === DONE), ongoing: rows.filter(r => r.status !== DONE && rowStarted(r)), risk: rows.filter(r => rowRisk(r, f)) };
+}
 const AUTO = new Set(['MTL', 'Công việc']); // dòng tự điền từ MTL / việc thường
 const opts = (list, sel) => list.map(o => (Array.isArray(o) ? o : [o, o])).map(([v, l]) => `<option value="${esc(v)}"${String(v) === String(sel ?? '') ? ' selected' : ''}>${esc(l)}</option>`).join('');
 const toneOf = t => ({ good: 'c-good', warn: 'c-warn', bad: 'c-bad' }[t] || 'c-idle');
@@ -131,7 +137,7 @@ async function drawReport(body) {
   const editable = r.canEdit;
   body.innerHTML = `
     <div><h1>Báo cáo công việc tuần ${fmtD(S.from)} – ${fmtDY(S.to)}</h1>
-      <p class="wk-lead">Nộp trước <b>17:30 ${wday(S.deadlineDay)} ${fmtD(S.deadlineDay)}</b>. Đã <b>điền sẵn</b> từ MTL, công việc của bộ phận, kế hoạch tuần trước và Action Log, bạn chỉ sửa chỗ chưa đúng. Báo cáo gồm: việc <b>đã xong</b> trong tuần, <b>mọi việc đang làm chưa xong</b> (tự chuyển sang tuần sau) và việc <b>có nguy cơ chậm</b>; việc chưa bắt đầu không phải báo cáo. Việc <b>Chậm</b>, <b>Vướng</b>, <b>Quá hạn</b> cần ghi nguyên nhân, cách xử lý và hỗ trợ cần có. Gửi xong, % tự cập nhật vào MTL.</p></div>
+      <p class="wk-lead">Nộp trước <b>17:30 ${wday(S.deadlineDay)} ${fmtD(S.deadlineDay)}</b>. Đã <b>điền sẵn</b> từ MTL, công việc của bộ phận, kế hoạch tuần trước và Action Log, bạn chỉ sửa chỗ chưa đúng. Báo cáo gồm: việc <b>đã xong</b> trong tuần, <b>mọi việc đang làm chưa xong</b> (tự chuyển sang tuần sau) và việc <b>có nguy cơ chậm</b>. Việc chưa bắt đầu chỉ có mặt khi đã có nguy cơ chậm hoặc đã đăng ký tuần trước (Phần III), hay sắp bắt đầu (Phần IV). Việc <b>Chậm</b>, <b>Vướng</b>, <b>Quá hạn</b> cần ghi nguyên nhân, cách xử lý và hỗ trợ cần có. Gửi xong, % tự cập nhật vào MTL.</p></div>
     <section class="wk-card"><h2>Thông tin</h2>
       <div class="wk-grid">
         <label class="wk-f">Bộ phận<span class="wk-ro" data-testid="wk-dept-name">${esc(r.department.name)}</span></label>
@@ -146,14 +152,14 @@ async function drawReport(body) {
     </section>
     <section class="wk-card"><div class="wk-actions" style="justify-content:space-between">
       <p class="wk-note" style="max-width:60ch" data-testid="wk-prefill-note">${prefillNote(r)}</p>
-      ${editable ? '<button class="btn" type="button" id="wkRefresh" data-testid="wk-refresh">Làm mới từ MTL</button>' : ''}</div></section>
+      ${editable ? '<button class="btn" type="button" id="wkRefresh" data-testid="wk-refresh">Làm mới từ MTL và công việc</button>' : ''}</div></section>
     <section class="wk-card"><h2>I. Kết quả trong tuần <small>${fmtD(S.from)} – ${fmtD(S.to)} · việc đã hoàn thành, kế hoạch đã đăng ký, việc TGĐ giao, việc phát sinh</small></h2>
       <div class="wk-list" id="wkL-results"></div>
       ${editable ? '<div class="wk-actions"><button class="btn ghost" type="button" data-add="results" data-testid="wk-add-results">+ Thêm hạng mục</button></div>' : ''}</section>
     <section class="wk-card"><h2>II. Đang thực hiện, chưa hoàn thành <small>mọi việc đã bắt đầu (đang làm, chờ duyệt, bị trả lại) · tự chuyển sang báo cáo tuần sau</small></h2>
       <div class="wk-list" id="wkL-ongoing"></div>
       ${editable ? '<div class="wk-actions"><button class="btn ghost" type="button" data-add="ongoing" data-testid="wk-add-ongoing">+ Thêm việc đang thực hiện</button></div>' : ''}</section>
-    <section class="wk-card" data-testid="wk-risk-section"><h2>III. Nguy cơ chậm tiến độ <small>trễ hạn, chậm tiến độ, chậm khởi động, sắp đến hạn mà chưa đạt kế hoạch, vướng</small></h2>
+    <section class="wk-card" data-testid="wk-risk-section"><h2>III. Nguy cơ chậm tiến độ <small>trễ hạn, chậm tiến độ, chậm khởi động, sắp đến hạn (MTL: khi % thấp hơn kế hoạch), vướng, đăng ký tuần trước mà chưa làm</small></h2>
       <div id="wkRiskSum" data-testid="wk-risk-sum"></div>
       <div class="wk-list" id="wkL-risks"></div></section>
     <section class="wk-card"><h2>IV. Kế hoạch tuần mới <small>${fmtD(S.nextFrom)} – ${fmtD(S.nextTo)}</small></h2>
@@ -172,7 +178,7 @@ function prefillNote(r) {
   const parts = [`${linked} hạng mục MTL / công việc của bộ phận`];
   if (r.hasPrev) parts.push('kế hoạch tuần trước');
   if (r.actions) parts.push(`${r.actions} việc trong Action Log giao ban`);
-  return r.report ? `Đang mở bản đã lưu. Bấm “Làm mới từ MTL” để thêm hạng mục mới / cập nhật hạn, người phụ trách từ MTL (giữ nguyên phần bạn đã sửa).`
+  return r.report ? `Đang mở bản đã lưu. Bấm “Làm mới từ MTL và công việc” để thêm việc mới, chuyển việc sang đúng phần theo tình trạng hiện tại, cập nhật hạn, người phụ trách (giữ nguyên phần bạn đã sửa).`
     : `Đã điền sẵn từ: ${parts.join(', ')}. Kiểm tra tình trạng, % và bổ sung việc phát sinh.`;
 }
 // Dòng MTL: tình trạng tính từ MTL (máy chủ tính lại khi nộp) — người lập chỉ nâng lên "Vướng".
@@ -214,7 +220,7 @@ function rowHtml(list, r, i) {
     <div class="wk-row-head">${linked ? `<span class="code">${esc(r.ref)}</span>${r.step ? `<span>Bước ${esc(r.step)}</span>` : ''}${r.critical ? '<span class="crit" title="Đường găng"><svg class="gl gl-crit" viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="currentColor"/></svg> găng</span>' : ''}${r.milestone ? '<span title="Mốc"><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> mốc</span>' : ''}<span class="wk-chip c-idle">${srcLabel}</span>${list === 'risks' ? '<span class="wk-chip c-warn">chưa khởi động</span>' : ''}`
       : `<span>${list === 'results' ? 'Hạng mục' : 'Việc'} ${i + 1}</span>${r.source === 'TGĐ giao' ? '<span class="wk-chip c-gold">TGĐ giao</span>' : ''}`}
       ${risk ? `<span class="wk-chip c-bad" data-testid="wk-riskchip-${testKey(r)}">${esc(risk)}</span>` : ''}
-      ${ed ? `<span class="x">${list === 'results' && r.status !== DONE && !r.itemId ? `<button class="btn x" type="button" data-move="${i}" title="Chuyển sang Phần II (việc kéo dài nhiều tuần)">→ Đang thực hiện</button>` : ''}${r.mandatory ? '<span class="wk-chip c-idle" title="Hạng mục bắt buộc báo cáo (QC-TH-01 Điều 4) — cập nhật tình trạng, không bỏ">bắt buộc</span>' : `<button class="btn x" type="button" data-del="${list}" data-i="${i}" title="Bỏ khỏi báo cáo tuần này">Bỏ</button>`}</span>` : ''}</div>
+      ${ed ? `<span class="x">${list === 'results' && r.status !== DONE && !r.itemId ? `<button class="btn x" type="button" data-move="${i}" title="Chuyển sang Phần II (đang thực hiện, chưa hoàn thành)">→ Đang thực hiện</button>` : ''}${r.mandatory ? '<span class="wk-chip c-idle" title="Hạng mục bắt buộc báo cáo (QC-TH-01 Điều 4) — cập nhật tình trạng, không bỏ">bắt buộc</span>' : `<button class="btn x" type="button" data-del="${list}" data-i="${i}" title="Bỏ khỏi báo cáo tuần này">Bỏ</button>`}</span>` : ''}</div>
     ${linked ? `<div class="wk-title">${esc(r.task)}</div>
       <p class="wk-note">Phụ trách: ${!r.ownerIds?.length && ed ? `<span style="display:inline-block;min-width:220px">${ownerSelect(r)}</span>` : ownersText(r.ownerIds)} · Deadline <b>${fmtDY(r.due)}</b>${list !== 'results' && r.start ? ` · Bắt đầu ${fmtDY(r.start)}` : ''}</p>
       <div class="r-meta m3">${status}${pct}${list === 'ongoing' ? `<label class="wk-f">Việc sẽ làm tuần tới<input data-k="next" value="${esc(r.next)}" placeholder="Bước tiếp theo cụ thể" ${dis} data-testid="wk-next-${testKey(r)}"></label>` : '<span></span>'}</div>`
@@ -322,18 +328,21 @@ async function saveDraft() {
     else if (m) m.textContent = 'Chưa lưu được nháp: ' + errorMessage(error);
   }
 }
-// Làm mới từ MTL: thêm hạng mục mới, cập nhật hạn / người phụ trách / % (khi người lập chưa sửa %), giữ phần đã nhập.
+// Làm mới từ MTL và công việc: chuyển dòng sang đúng phần theo tình trạng hiện tại (kể cả từ Phần IV kế hoạch), thêm hạng mục mới, cập nhật hạn / người phụ trách / % (khi người lập chưa sửa %), giữ phần đã nhập.
 async function refreshFromMtl() {
   const r = await api(`/api/weekly/report?week=${st.week}&departmentId=${st.dept}`);
   const all = () => LISTS.flatMap(k => st.form[k]);
   let added = 0, updated = 0;
-  // Việc đã đổi tình trạng (vd. chưa khởi động → đang làm, đang làm → xong): chuyển dòng sang đúng phần, giữ phần đã nhập.
+  // Việc đã đổi tình trạng (vd. chưa khởi động → đang làm, đang làm → xong, kế hoạch → sắp hạn / làm sớm): chuyển dòng sang đúng phần,
+  // giữ phần đã nhập. Dòng ở Phần IV (kế hoạch) thay bằng dòng báo cáo mới (giữ người phụ trách đã chọn).
   for (const list of ['results', 'ongoing', 'risks']) for (const n of r.prefill[list] || []) {
     if (!n.itemId) continue;
-    for (const k of ['results', 'ongoing', 'risks']) {
+    for (const k of LISTS) {
       if (k === list) continue;
       const at = st.form[k].findIndex(x => x.itemId === n.itemId);
-      if (at >= 0) { const [x] = st.form[k].splice(at, 1); st.form[list].push({ next: '', start: '', ...x }); }
+      if (at < 0) continue;
+      const [x] = st.form[k].splice(at, 1);
+      st.form[list].push(k === 'plans' ? { ...n, ...(x.ownerPicked ? { ownerIds: x.ownerIds, ownerPicked: true } : {}) } : { next: '', start: '', ...x });
     }
   }
   for (const list of LISTS) for (const n of r.prefill[list] || []) {
@@ -341,7 +350,7 @@ async function refreshFromMtl() {
     const mine = all().filter(x => x.itemId === n.itemId);
     if (!mine.length) { st.form[list].push(n); added++; continue; }
     for (const x of mine) {
-      for (const k of ['task', 'ref', 'step', 'due', 'start', 'pctLocked', 'critical', 'milestone', 'risk', 'riskNote', 'source']) if (n[k] !== undefined) x[k] = n[k];
+      for (const k of ['task', 'ref', 'step', 'due', 'start', 'pctLocked', 'critical', 'milestone', 'risk', 'riskNote', 'source', 'started']) if (n[k] !== undefined) x[k] = n[k];
       if (!x.ownerPicked && n.ownerIds) x.ownerIds = n.ownerIds;
       if (n.pct0 !== undefined && (x.pct === x.pct0 || x.pctLocked)) { x.pct = n.pct; x.pct0 = n.pct0; x.status = n.status; }
       updated++;
@@ -512,14 +521,14 @@ function drawActions() {
 }
 function deptDetail(r, f, names) {
   if (!r.report) return `<div class="wk-empty">${esc(r.name)}: ${esc(r.status.label.toLowerCase())}.</div>`;
-  const R = r.report.results || [], O = r.report.ongoing || [], K = r.report.risks || [], P = r.report.plans || [];
-  const riskList = [...R, ...O, ...K].filter(x => x.task && rowRisk(x, f));
+  const P = r.report.plans || [], parts = partsOf(r.report, f);
+  const R = parts.done, O = parts.ongoing, riskList = parts.risk;
   const who = ids => (ids || []).map(names).filter(Boolean).join(', ');
   const rows = list => list.map(x => `<tr><td>${x.ref ? `<span class="wk-note">${esc(x.ref)}</span> ` : ''}${esc(x.task)}${needsIssue(x, f) && (x.cause || x.solution) ? `<br><span class="wk-note">Khó khăn: ${esc(x.cause)}<br>Giải pháp: ${esc(x.solution)}</span>` : ''}${x.next ? `<br><span class="wk-note">Tuần tới: ${esc(x.next)}</span>` : ''}</td><td>${esc(who(x.ownerIds))}</td><td>${fmtD(x.due)}</td><td>${statusChip(x, f)}${rowRisk(x, f) && !needsIssue(x, f) ? ` <span class="wk-chip c-warn">${esc(rowRisk(x, f))}</span>` : ''}</td><td>${esc(x.pct)}</td></tr>`).join('');
   return `<details class="wk-dept" data-testid="wk-detail-${r.id}"><summary>${esc(r.name)} <span class="wk-chip ${toneOf(r.status.tone)}">${esc(r.status.label)}</span></summary><div>
-    <div class="wk-table"><table><thead><tr><th>I. Kết quả trong tuần</th><th>Phụ trách</th><th>Deadline</th><th>Tình trạng</th><th>%</th></tr></thead><tbody>${rows(R) || '<tr><td colspan="5" class="wk-note">Không có</td></tr>'}</tbody></table></div>
+    <div class="wk-table"><table><thead><tr><th>I. Đã hoàn thành trong tuần</th><th>Phụ trách</th><th>Deadline</th><th>Tình trạng</th><th>%</th></tr></thead><tbody>${rows(R) || '<tr><td colspan="5" class="wk-note">Không có</td></tr>'}</tbody></table></div>
     <div class="wk-table"><table><thead><tr><th>II. Đang thực hiện, chưa hoàn thành</th><th>Phụ trách</th><th>Deadline</th><th>Tình trạng</th><th>%</th></tr></thead><tbody>${rows(O) || '<tr><td colspan="5" class="wk-note">Không có</td></tr>'}</tbody></table></div>
-    <div class="wk-table" data-testid="wk-detail-risk-${r.id}"><table><thead><tr><th>III. Nguy cơ chậm tiến độ</th><th>Phụ trách</th><th>Deadline</th><th>Nguy cơ</th><th>%</th></tr></thead><tbody>${riskList.map(x => `<tr><td>${x.ref ? `<span class="wk-note">${esc(x.ref)}</span> ` : ''}${esc(x.task)}${K.includes(x) ? ' <span class="wk-note">(chưa khởi động)</span>' : ''}${x.solution ? `<br><span class="wk-note">Giải pháp: ${esc(x.solution)}</span>` : ''}</td><td>${esc(who(x.ownerIds))}</td><td>${fmtD(x.due)}</td><td><span class="wk-chip c-bad">${esc(rowRisk(x, f))}</span></td><td>${esc(x.pct)}</td></tr>`).join('') || '<tr><td colspan="5" class="wk-note">Không có</td></tr>'}</tbody></table></div>
+    <div class="wk-table" data-testid="wk-detail-risk-${r.id}"><table><thead><tr><th>III. Nguy cơ chậm tiến độ</th><th>Phụ trách</th><th>Deadline</th><th>Nguy cơ</th><th>%</th></tr></thead><tbody>${riskList.map(x => `<tr><td>${x.ref ? `<span class="wk-note">${esc(x.ref)}</span> ` : ''}${esc(x.task)}${rowStarted(x) ? '' : ' <span class="wk-note">(chưa khởi động)</span>'}${x.solution ? `<br><span class="wk-note">Giải pháp: ${esc(x.solution)}</span>` : ''}</td><td>${esc(who(x.ownerIds))}</td><td>${fmtD(x.due)}</td><td><span class="wk-chip c-bad">${esc(rowRisk(x, f))}</span></td><td>${esc(x.pct)}</td></tr>`).join('') || '<tr><td colspan="5" class="wk-note">Không có</td></tr>'}</tbody></table></div>
     <div class="wk-table"><table><thead><tr><th>IV. Kế hoạch tuần mới</th><th>Căn cứ</th><th>Phụ trách</th><th>Deadline</th><th>Đầu ra</th></tr></thead><tbody>${P.map(p => `<tr><td>${esc(p.task)}</td><td>${esc(p.basis)}</td><td>${esc(who(p.ownerIds))}</td><td>${fmtD(p.due)}</td><td>${esc(p.output)}</td></tr>`).join('') || '<tr><td colspan="5" class="wk-note">Không có</td></tr>'}</tbody></table></div>
     ${r.report.other ? `<p class="wk-note"><b>Kiến nghị:</b> ${esc(r.report.other)}</p>` : ''}</div></details>`;
 }
