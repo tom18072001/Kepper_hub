@@ -123,3 +123,25 @@
   .st-push{margin-left:0}
 }
 @media (prefers-reduced-motion:reduce){.st-body,.st-seg button{transition:none}}
+
+/* KPI & phân tích (Ban giám đốc) */
+.an-notes{margin:0 0 12px;padding:10px 14px;background:var(--warn-soft);border-color:transparent;font-size:.88rem}
+.an-notes ul{margin:4px 0 0;padding-left:18px}
+.an-small{display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;background:var(--surface-3);color:var(--muted);font-size:.72rem;font-weight:600;white-space:nowrap}
+.an-chart{width:100%;height:auto;display:block}
+.an-chart .an-grid{stroke:var(--border);stroke-width:1}
+.an-chart .an-ax{fill:var(--muted);font-size:10px}
+.an-chart .an-center{stroke:var(--text-2);stroke-dasharray:4 3}
+.an-chart .an-limit{fill:none;stroke:var(--warn);stroke-dasharray:2 3}
+.an-chart .an-line{fill:none;stroke:var(--brand);stroke-width:2}
+.an-chart .an-pt{fill:var(--brand)}
+.an-chart .an-sig{fill:var(--danger)}
+.an-filters{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.an-filters input[type=date],.an-filters select{width:auto;flex:0 0 auto}
+.an-grid2{grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr))}
+[data-testid="an-trend"]{margin-bottom:16px}
+.an-err{color:var(--danger);font-weight:600}
+.an-detail{margin:16px 0}
+.an-detail summary{cursor:pointer;padding:2px 0}
+.an-detail[open] summary{margin-bottom:10px}
+.an-detail td:nth-child(2){min-width:240px}
