@@ -10,7 +10,7 @@ import { icon } from '../icons.js';
 const mods = () => store.settings?.modules || [];
 // Thanh tab chung của mục "Tài liệu" (dùng cả ở trang Văn thư).
 export function docTabs(active) {
-  const tabs = [['projects', 'Tài liệu dự án', '#/tai-lieu']];
+  const tabs = [['projects', 'Tài liệu dự án', '#/tai-lieu?tab=du-an']]; // có ?tab: không tự chuyển sang Văn thư (xem renderDocuments)
   if (mods().includes('vanthu')) tabs.push(['vanthu', 'Văn thư', '#/vanthu?book=DEN'], ['noibo', 'Quy chế, quy định nội bộ', '#/vanthu?book=NOIBO']);
   return `<nav class="seg vt-tabs doc-tabs" aria-label="Nhóm tài liệu">${tabs.map(([k, l, h]) => `<a href="${h}" class="${k === active ? 'on' : ''}"${k === active ? ' aria-current="page"' : ''} data-testid="doc-tab-${k}">${esc(l)}</a>`).join('')}</nav>`;
 }
@@ -18,14 +18,16 @@ export function docTabs(active) {
 const size = n => (n == null ? '' : n < 1024 ? `${n} B` : n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`);
 const fold = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().replace(/[\s\-_.]+/g, ' '); // như lib/project-docs.js
 const inlineOk = name => /\.(pdf|png|jpe?g|gif|webp)$/i.test(name);
-const link = params => '#/tai-lieu?' + new URLSearchParams(Object.entries(params).filter(([, v]) => v != null && v !== '')).toString();
+const link = params => '#/tai-lieu?' + new URLSearchParams(Object.entries({ tab: 'du-an', ...params }).filter(([, v]) => v != null && v !== '')).toString();
 
 let hubCache = null; // { projectId, at, data } — tránh tải lại khi đi sâu trong cây
 
 export async function renderDocuments(root, params, setCrumbs) {
   setCrumbs('Tài liệu');
   const st = { p: Number(params.get('p')) || null, src: ['hub', 'nas'].includes(params.get('src')) ? params.get('src') : '', path: params.get('path') || '', q: params.get('q') || '' };
-  const { projects, nasEnabled } = await api('/api/documents/projects');
+  const { projects, nasEnabled, nasError } = await api('/api/documents/projects');
+  // Mở từ menu (không tham số) mà không thuộc dự án nào — vd. văn thư HCNS: vào thẳng tab Văn thư.
+  if (!projects.length && !params.toString() && mods().includes('vanthu')) { location.replace('#/vanthu?book=DEN'); return; }
   const project = projects.find(x => x.id === st.p) || null;
   if (st.p && !project) st.p = null;
 
@@ -107,7 +109,7 @@ export async function renderDocuments(root, params, setCrumbs) {
       body.innerHTML = table([
         folderRow(hubRoot[0], hubRoot[1], `${project.hubFiles} tệp, xếp theo hạng mục → việc`, 'doc-src-hub'),
         project.nasFolder ? folderRow(nasRoot[0], nasRoot[1], 'Mọi tệp trong thư mục dự án, kể cả tệp không tải qua Hub (chỉ đọc)', 'doc-src-nas')
-          : `<tr data-testid="doc-src-nas-off"><td>${icon('folder')} <span class="muted">Thư mục dự án trên NAS</span></td><td class="muted sm" colspan="4">${nasEnabled ? `Chưa có thư mục cho dự án trên kho file (tên thư mục phải là "${esc(project.key)}" hoặc bắt đầu bằng "${esc(project.key)}-") — liên hệ IT tạo.` : 'Kho file NAS chưa được kết nối với Hub.'}</td></tr>`,
+          : `<tr data-testid="doc-src-nas-off"><td>${icon('folder')} <span class="muted">Thư mục dự án trên NAS</span></td><td class="muted sm" colspan="4">${nasError ? esc(nasError) : nasEnabled ? `Chưa có thư mục cho dự án trên kho file (tên thư mục phải là "${esc(project.key)}" hoặc bắt đầu bằng "${esc(project.key)}-") — liên hệ IT tạo.` : 'Kho file NAS chưa được kết nối với Hub.'}</td></tr>`,
       ], '');
       return bindRows();
     }

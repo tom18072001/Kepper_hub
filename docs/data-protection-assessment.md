@@ -997,6 +997,11 @@ kho dự án (đã có từ trước) cần quyền ghi — giữ như hiện t�
 - Thành viên dự án ở vai "Người xem" (VIEWER) cũng xem được tài liệu (chủ dự án chọn "thành viên + Ban GĐ", không phân vai).
 - Nếu máy ảo bị chiếm quyền, phạm vi đọc = toàn bộ `#10.DuAn` (như trước, không đổi).
 - Dự án chưa có thư mục trên NAS (tên = KEY hoặc bắt đầu bằng "KEY-") thì tab NAS báo "Chưa có thư mục" — IT tạo thư mục, Hub không tự tạo.
+- **Junction / reparse point NTFS phía máy chủ SMB** do máy chủ file tự đi qua: máy ảo chỉ thấy một thư mục bình thường, nên `realpath` phía Hub
+  không phát hiện được thư mục đó trỏ ra ngoài `#10.DuAn`. Đề nghị IT **không tạo junction / liên kết tượng trưng trong thư mục dự án `#10.DuAn`**.
+- NAS chậm / mất kết nối: mọi thao tác đọc là bất đồng bộ (không khoá Hub), mỗi thao tác chờ tối đa `NAS_OP_TIMEOUT_MS` (mặc định 8 s),
+  tìm kiếm dừng sau 3 s (trả kết quả đã có, báo "nhiều kết quả"); lỗi kết nối báo 503 "Kho file đang không truy cập được" (không nhầm với thư mục bị xoá).
+  Threadpool của Node (mặc định 4 luồng) vẫn có thể bị chiếm khi CIFS treo — cân nhắc đặt `UV_THREADPOOL_SIZE` lớn hơn (vd. 16) trên production.
 
 ## KPI & phân tích thống kê công việc (Ban giám đốc) — 24/11/2026
 

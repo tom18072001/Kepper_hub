@@ -3,6 +3,7 @@
 // Quyền: chỉ thành viên dự án và Ban Giám đốc (lib/project-docs.js canViewDocs) — kiểm ở máy chủ cho mọi API dưới đây;
 // dự án không được xem trả 404 (không lộ sự tồn tại). Tải tệp ghi nhật ký (audit DOWNLOAD); Claude (token) không tải nội dung tệp.
 const fs = require('node:fs');
+const { pipeline } = require('node:stream');
 const storage = require('../lib/storage');
 const nas = require('../lib/nas');
 const PD = require('../lib/project-docs');
@@ -28,7 +29,9 @@ module.exports = function mountDocuments(app, { prisma, auth, audit }) {
     if (!project || !PD.canViewDocs(req.user, project, member)) fail(404, 'Không tìm thấy dự án', 'NOT_FOUND');
     return project;
   }
-  const nasRoot = project => PD.projectRoot(project.key) || fail(404, 'Dự án chưa có thư mục trên kho file', 'NAS_NOT_FOUND');
+  const nasRoot = async project => (await PD.projectRoot(project.key)) || fail(404, 'Dự án chưa có thư mục trên kho file', 'NAS_NOT_FOUND');
+  // Gửi tệp: pipeline huỷ luồng đọc khi người dùng ngắt giữa chừng (không giữ file handle trên CIFS) hoặc khi đọc lỗi.
+  const send = (stream, res) => pipeline(stream, res, () => {});
 
   app.get('/api/documents/projects', auth, async (req, res) => {
     const list = await visibleProjects(req.user);
@@ -36,9 +39,12 @@ module.exports = function mountDocuments(app, { prisma, auth, audit }) {
     const itemProject = counts.length ? Object.fromEntries((await prisma.workItem.findMany({ where: { id: { in: counts.map(c => c.workItemId) } }, select: { id: true, projectId: true } })).map(i => [i.id, i.projectId])) : {};
     const perProject = {};
     for (const c of counts) perProject[itemProject[c.workItemId]] = (perProject[itemProject[c.workItemId]] || 0) + c._count._all;
+    // Gốc NAS đọc MỘT lần cho cả danh sách (bất đồng bộ). NAS lỗi: danh sách vẫn hiện, kèm lý do.
+    let names = null, nasError = null;
+    try { names = await PD.rootFolders(); } catch (e) { nasError = e.message; }
     res.json({
-      nasEnabled: nas.enabled(),
-      projects: list.map(p => ({ id: p.id, key: p.key, name: p.name, kind: p.kind, archived: !!p.archivedAt, hubFiles: perProject[p.id] || 0, nasFolder: nas.projectFolder(p.key) })),
+      nasEnabled: names != null, nasError,
+      projects: list.map(p => ({ id: p.id, key: p.key, name: p.name, kind: p.kind, archived: !!p.archivedAt, hubFiles: perProject[p.id] || 0, nasFolder: PD.folderFor(names, p.key) })),
     });
   });
 
@@ -76,16 +82,15 @@ module.exports = function mountDocuments(app, { prisma, auth, audit }) {
     res.setHeader('Cache-Control', 'private, no-store');
     await audit(req, inline ? 'PREVIEW' : 'DOWNLOAD', 'Attachment', a.id, null, { workItemId: a.workItemId, projectKey: project.key, fileName: a.fileName, via: 'documents' });
     const stream = await storage.getStream(a.objectKey);
-    stream.on('error', () => res.destroy());
-    stream.pipe(res);
+    send(stream, res);
   });
 
   // Một thư mục trong thư mục dự án trên NAS (?path= tương đối, trống = gốc). Tệp đã tải qua Hub được đánh dấu kèm mã việc.
   app.get('/api/documents/projects/:id/nas', auth, async (req, res) => {
     const project = await loadProject(req);
-    const base = nasRoot(project);
-    const q = String(req.query.q || '').trim();
-    const result = q ? PD.search(base.abs, q) : { ...PD.listDir(base.abs, req.query.path), truncated: false };
+    const base = await nasRoot(project);
+    const q = String(req.query.q || '').trim().slice(0, 200);
+    const result = q ? await PD.search(base.abs, q) : { ...(await PD.listDir(base.abs, req.query.path)), truncated: false };
     const keys = result.entries.filter(e => !e.dir).map(e => nas.PREFIX + `${base.folder}/${e.path}`);
     const linked = keys.length ? await prisma.attachment.findMany({ where: { objectKey: { in: keys }, workItem: { archivedAt: null } }, select: { id: true, objectKey: true, workItemId: true, workItem: { select: { number: true } } } }) : [];
     const byKey = Object.fromEntries(linked.map(a => [a.objectKey, { attachmentId: a.id, workItemId: a.workItemId, code: `${project.key}-${a.workItem.number}` }]));
@@ -99,9 +104,9 @@ module.exports = function mountDocuments(app, { prisma, auth, audit }) {
   app.get('/api/documents/projects/:id/nas/file', auth, async (req, res) => {
     assertNotVia(req); // Claude (token) không tải nội dung tệp
     const project = await loadProject(req);
-    const base = nasRoot(project);
-    const { abs, rel } = PD.resolveIn(base.abs, req.query.path);
-    const st = fs.statSync(abs);
+    const base = await nasRoot(project);
+    const { abs, rel } = await PD.resolveIn(base.abs, req.query.path);
+    const st = await PD.statOf(abs);
     if (!st.isFile()) fail(400, 'Không phải tệp', 'INVALID_PATH');
     const name = rel.split('/').pop();
     const inline = req.query.inline === '1' && /\.(pdf|png|jpe?g|gif|webp)$/i.test(name); // xem nhanh trên trình duyệt: chỉ PDF / ảnh
@@ -111,8 +116,6 @@ module.exports = function mountDocuments(app, { prisma, auth, audit }) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'private, no-store');
     await audit(req, 'DOWNLOAD', 'ProjectNasFile', project.id, null, { projectKey: project.key, path: `${base.folder}/${rel}`, size: st.size });
-    const stream = fs.createReadStream(abs);
-    stream.on('error', () => res.destroy());
-    stream.pipe(res);
+    send(fs.createReadStream(abs), res);
   });
 };

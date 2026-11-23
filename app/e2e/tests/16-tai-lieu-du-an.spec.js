@@ -122,6 +122,29 @@ test('T3. Quyền ở máy chủ: người không là thành viên không thấy
   const pgd = await (await browser.newContext()).newPage();
   await login(pgd, 'giamdoc');
   expect((await apiAs(pgd, `/api/documents/projects/${projectId}/nas?path=02.ThietKe`)).status()).toBe(200);
+  // Tải bằng đường dẫn tuyệt đối: bị coi là tương đối trong thư mục dự án → không ra ngoài.
+  const absPath = require('node:path').join(NAS_ROOT, 'ngoai-du-an.txt');
+  expect([400, 404], absPath).toContain((await apiAs(pgd, `/api/documents/projects/${projectId}/nas/file?path=${encodeURIComponent(absPath)}`)).status());
+  expect((await apiAs(pgd, `/api/documents/projects/${projectId}/nas/file?path=${encodeURIComponent('/etc/passwd')}`)).status()).toBe(404);
+
+  // Claude (token) xem danh sách được nhưng KHÔNG tải nội dung tệp — cả tệp Hub lẫn tệp NAS.
+  const tk = await apiAs(mem, '/api/me/tokens', { method: 'POST', data: { name: 'Thử tải tệp (giả)' } });
+  expect(tk.status(), await tk.text()).toBe(201);
+  const token = (await tk.json()).token;
+  const T = u => mem.request.fetch(u, { headers: { authorization: 'Bearer ' + token } });
+  expect((await T(`/api/documents/projects/${projectId}/nas`)).status()).toBe(200);
+  expect((await T(`/api/documents/files/${fileId}`)).status()).toBe(403);
+  expect((await T(`/api/documents/projects/${projectId}/nas/file?path=02.ThietKe/mat-bang-gia.dwg`)).status()).toBe(403);
+
+  // Việc đã xoá (thùng rác): tệp của việc không tải được qua mục Tài liệu, không còn trong cây.
+  const extra = await (await apiAs(pgd, `/api/projects/${projectId}/items`, { method: 'POST', data: { title: 'Việc sẽ xoá (giả)' } })).json();
+  const up = await apiAs(pgd, `/api/items/${extra.id}/attachments`, { method: 'POST', multipart: { files: { name: 'se-xoa.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF') } } });
+  expect(up.status(), await up.text()).toBe(201);
+  const extraFile = (await up.json())[0].id;
+  expect((await apiAs(mem, `/api/documents/files/${extraFile}`)).status()).toBe(200);
+  expect((await apiAs(pgd, `/api/items/${extra.id}`, { method: 'DELETE' })).status()).toBeLessThan(300);
+  expect((await apiAs(mem, `/api/documents/files/${extraFile}`)).status()).toBe(404);
+  expect((await (await apiAs(mem, `/api/documents/projects/${projectId}/hub`)).json()).files.some(f => f.id === extraFile)).toBe(false);
 });
 
 test('T4. Văn thư vẫn chạy như cũ, nằm trong "Tài liệu": tab Văn thư (đến / đi / tôi xử lý) và tab Quy chế, quy định nội bộ', async ({ page }) => {
@@ -139,4 +162,22 @@ test('T4. Văn thư vẫn chạy như cũ, nằm trong "Tài liệu": tab Văn t
   const r = await apiAs(page, '/api/vanthu/docs', { method: 'POST', data: { series: 'D5', entity: 'HLD', title: 'Quyết định ban hành quy chế (giả)' } });
   expect(r.status(), await r.text()).toBe(201);
   expect((await r.json()).number).toMatch(/^\d{3}\/\d{4}\/QĐ-HLD$/);
+});
+
+test('T5. Người không thuộc dự án nào (vd. văn thư HCNS) bấm "Tài liệu" → vào thẳng tab Văn thư; tab "Tài liệu dự án" vẫn mở được', async ({ page, browser }) => {
+  // Tài khoản giả mới ở phòng HCNS, chưa thuộc dự án nào (mọi tài khoản seed đều đã có dự án).
+  const admin = await (await browser.newContext()).newPage();
+  await login(admin, 'admin');
+  const hcns = (await (await apiAs(admin, '/api/departments')).json()).find(d => d.code === 'HCNS');
+  const r = await apiAs(admin, '/api/admin/users', { method: 'POST', data: { username: 'vt.hcns.gia', fullName: 'Văn thư HCNS (giả)', displayTitle: 'Văn thư (giả)', role: 'member', departmentId: hcns.id } });
+  expect([200, 201, 409], await r.text()).toContain(r.status());
+  await login(page, 'vt.hcns.gia');
+  expect((await (await apiAs(page, '/api/documents/projects')).json()).projects).toEqual([]);
+  await page.getByTestId('nav-tailieu').click();
+  await expect(page).toHaveURL(/#\/vanthu\?book=DEN$/);
+  await expect(page.getByTestId('doc-tab-vanthu')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('vt-tab-DEN')).toBeVisible();
+  await page.getByTestId('doc-tab-projects').click();
+  await expect(page.getByTestId('doc-empty')).toContainText('chưa là thành viên dự án nào');
+  // Người có dự án: menu mở tab Tài liệu dự án như cũ (kiểm ở T2).
 });
