@@ -56,6 +56,40 @@ test('thời gian làm (bắt đầu → xong) và giao → được duyệt (ng
   assert.equal(A.leadDays(item({ state: { category: 'STARTED' }, assignedAt: at(1) })), null);
 });
 
+test('giao → được duyệt tính từ mốc sớm hơn (giao, bắt đầu) nên luôn ≥ thời gian làm — ca KT-2 (ngày giao sau ngày bắt đầu)', () => {
+  // KT-2: giao 24/11 (ngày giao sửa tay), bắt đầu 21/11, xong 24/11 → làm 3 ngày; trước đây giao → duyệt = 0.
+  const kt2 = item({ assignedAt: new Date('2026-11-24T02:00:00Z'), startedAt: new Date('2026-11-21T02:00:00Z'), completedAt: new Date('2026-11-24T02:00:00Z') });
+  assert.equal(A.workDays(kt2), 3);
+  assert.equal(A.leadDays(kt2), 3);
+  assert.equal(A.assignedAfterStart(kt2), true);
+  assert.equal(A.leadStart(kt2).toISOString(), '2026-11-21T02:00:00.000Z');
+  // Bình thường (giao trước bắt đầu): vẫn từ ngày giao.
+  const ok = item({ assignedAt: at(0), startedAt: at(2), completedAt: at(5) });
+  assert.equal(A.leadDays(ok), 5);
+  assert.equal(A.assignedAfterStart(ok), false);
+  // Không có ngày giao: dùng ngày tạo, rồi so với ngày bắt đầu.
+  assert.equal(A.leadDays(item({ assignedAt: null, createdAt: at(3), startedAt: at(1), completedAt: at(4) })), 3);
+  // Phân tích: đếm số việc ngày giao sau ngày bắt đầu, ghi chú dữ liệu, cờ trên dòng chi tiết; giao → duyệt ≥ thời gian làm ở mọi dòng.
+  const r = A.analyze([kt2, ok], { from: new Date('2026-10-01T00:00:00+07:00'), to: new Date('2026-11-30T23:59:59+07:00'), now: new Date('2026-11-25T00:00:00Z'), users: [{ id: 1, fullName: 'An' }] });
+  assert.equal(r.overall.assignedAfterStart, 1);
+  assert.equal(r.byPerson[0].assignedAfterStart, 1);
+  assert.ok(r.notes.some(n => n.startsWith('1 việc có ngày giao sau ngày bắt đầu')));
+  assert.deepEqual(r.details.map(d => d.assignedAfterStart), [false, true]);
+  for (const d of r.details) assert.ok(d.leadDays >= d.workDays, d.code);
+});
+
+test('xu hướng không hiện kỳ chưa tới; việc mở chưa bắt đầu trong danh sách bất thường gắn cờ chưa bắt đầu', () => {
+  seq = 0;
+  const items = [];
+  for (let k = 0; k < 10; k++) items.push(item({ assignedAt: at(k), startedAt: at(k), completedAt: at(k + 1 + (k % 3)) }));
+  items.push(item({ state: { category: 'STARTED' }, assignedAt: at(0), startedAt: at(0) }));
+  items.push(item({ state: { category: 'UNSTARTED' }, assignedAt: at(0) }));
+  const r = A.analyze(items, { from: new Date('2026-01-01T00:00:00+07:00'), to: new Date('2026-12-31T23:59:59+07:00'), now: new Date('2026-11-05T03:00:00Z'), users: [] });
+  assert.equal(r.trend.unit, 'month');
+  assert.equal(r.trend.series.at(-1).label, 'Tháng 11/2026'); // không có Tháng 12/2026
+  assert.deepEqual(r.outliers.open.map(o => o.notStarted).sort(), [false, true]);
+});
+
 test('hàng rào Tukey chỉ khi đủ 8 mẫu; Theil–Sen bền với giá trị lạ', () => {
   assert.equal(A.upperFence([1, 2, 3, 4, 5, 6, 7]), null);
   assert.equal(A.upperFence([1, 2, 2, 3, 3, 3, 4, 4]), 3.25 + 1.5 * (3.25 - 2));

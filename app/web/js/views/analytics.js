@@ -18,18 +18,18 @@ const small = n => (n < 5 ? ' <span class="an-small" title="Dưới 5 việc: ch
 function groupCells(g) {
   const b = g.rating.bands;
   return `<td class="num">${g.completed}</td>
-    <td class="num st-sep">${v(g.workDays.mean)}</td><td class="num">${v(g.workDays.median)}${g.workDays.n ? `<div class="muted xs">n = ${g.workDays.n}</div>` : ''}</td>
-    <td class="num st-sep">${v(g.leadDays.mean)}</td><td class="num">${v(g.leadDays.median)}</td>
+    <td class="num st-sep nowrap">${v(g.workDays.mean)} / ${v(g.workDays.median)}${g.workDays.n ? `<div class="muted xs">n = ${g.workDays.n}</div>` : ''}</td>
+    <td class="num st-sep nowrap">${v(g.leadDays.mean)} / ${v(g.leadDays.median)}</td>
     <td class="num st-sep">${v(g.onTime.rate, '%')}<div class="muted xs">${g.onTime.onTime}/${g.onTime.judged}</div></td>
     <td class="num">${g.rejections}</td>
-    <td class="num st-sep">${g.rating.n}</td><td class="num">${b.GOOD} · ${b.AVERAGE} · ${b.POOR}</td>
-    <td class="num">${v(g.rating.median)}</td><td>${g.rating.band ? band(g.rating.band) : `<span class="muted xs" title="Cần ít nhất 5 việc được chấm">chưa đủ mẫu</span>`}</td>`;
+    <td class="num st-sep nowrap">${b.GOOD} · ${b.AVERAGE} · ${b.POOR}<div class="muted xs">n = ${g.rating.n}</div></td>
+    <td class="num">${v(g.rating.median)}</td><td>${g.rating.band ? band(g.rating.band) : `<span class="muted xs" title="Cần ít nhất 5 việc được chấm mới đánh giá chung">— (n &lt; 5)</span>`}</td>`;
 }
 const HEAD = `<th class="num">Việc xong</th>
-  <th class="num st-sep" title="Bắt đầu làm → hoàn thành; chỉ việc có ghi nhận lúc bắt đầu">Thời gian làm<br><span class="muted xs">TB, ngày</span></th><th class="num">Thời gian làm<br><span class="muted xs">trung vị, ngày</span></th>
-  <th class="num st-sep" title="Ngày giao → ngày được duyệt (việc không qua duyệt: → hoàn thành)">Giao → duyệt<br><span class="muted xs">TB, ngày</span></th><th class="num">Giao → duyệt<br><span class="muted xs">trung vị, ngày</span></th>
+  <th class="num st-sep" title="Bắt đầu làm → hoàn thành; chỉ việc có ghi nhận lúc bắt đầu">Thời gian làm<br><span class="muted xs">TB / trung vị, ngày</span></th>
+  <th class="num st-sep" title="Ngày giao (hoặc ngày bắt đầu nếu sớm hơn) → ngày được duyệt (việc không qua duyệt: → hoàn thành)">Giao → duyệt<br><span class="muted xs">TB / trung vị, ngày</span></th>
   <th class="num st-sep">Đúng hạn</th><th class="num" title="Số lần phiếu duyệt bị trả lại">Trả lại</th>
-  <th class="num st-sep" title="Số việc được người giao chấm mức khi duyệt">Được chấm</th><th class="num">Tốt · TB · Kém</th><th class="num" title="Trung vị điểm các lần chấm (100/85/70/50/0)">Điểm trung vị</th><th>Đánh giá chung</th>`;
+  <th class="num st-sep" title="Số việc người giao chấm khi duyệt, theo mức; n = số việc được chấm">Tốt · TB · Kém</th><th class="num" title="Trung vị điểm các lần chấm (100/85/70/50/0)">Điểm trung vị</th><th>Đánh giá chung</th>`;
 
 // Biểu đồ kiểm soát p (tỷ lệ đúng hạn theo kỳ, giới hạn ±3σ).
 function controlChart(c) {
@@ -82,11 +82,11 @@ export async function renderAnalytics(root, params, setCrumbs) {
     </div>
     <div class="card"><h3>Theo người <span class="muted xs">(sắp theo phòng, tên — không phải xếp hạng)</span></h3>
       <div class="tbl-scroll"><table class="table st-kpi" data-testid="an-people"><thead><tr><th>Phòng</th><th>Họ tên</th>${HEAD}</tr></thead><tbody>
-      ${r.byPerson.map(p => `<tr><td>${esc(p.department)}</td><td class="st-name">${esc(p.fullName)}${small(p.workDays.n)}</td>${groupCells(p)}</tr>`).join('') || '<tr><td colspan="13" class="empty">Chưa có việc hoàn thành / được chấm trong kỳ.</td></tr>'}
+      ${r.byPerson.map(p => `<tr><td>${esc(p.department)}</td><td class="st-name">${esc(p.fullName)}${small(p.workDays.n)}</td>${groupCells(p)}</tr>`).join('') || '<tr><td colspan="10" class="empty">Chưa có việc hoàn thành / được chấm trong kỳ.</td></tr>'}
       </tbody></table></div></div>
     <div class="card"><h3>Theo phòng chủ trì</h3>
       <div class="tbl-scroll"><table class="table st-kpi" data-testid="an-depts"><thead><tr><th>Phòng</th>${HEAD}</tr></thead><tbody>
-      ${r.byDepartment.map(d => `<tr><td class="st-name">${esc(d.name)}${small(d.workDays.n)}</td>${groupCells(d)}</tr>`).join('') || '<tr><td colspan="12" class="empty">Chưa có số liệu.</td></tr>'}
+      ${r.byDepartment.map(d => `<tr><td class="st-name">${esc(d.name)}${small(d.workDays.n)}</td>${groupCells(d)}</tr>`).join('') || '<tr><td colspan="9" class="empty">Chưa có số liệu.</td></tr>'}
       </tbody></table></div></div>
     <div class="card" data-testid="an-trend"><h3>Xu hướng theo ${r.trend.unit === 'week' ? 'tuần' : 'tháng'}</h3>
         <p class="muted sm">${r.trend.direction ? `Thời gian làm đang <b>${DIR[r.trend.direction]}</b> (${r.trend.workDaysSlope > 0 ? '+' : ''}${r.trend.workDaysSlope} ngày mỗi ${r.trend.unit === 'week' ? 'tuần' : 'tháng'}, độ dốc Theil–Sen).` : 'Chưa đủ kỳ có dữ liệu để nêu xu hướng.'}</p>
@@ -98,13 +98,13 @@ export async function renderAnalytics(root, params, setCrumbs) {
         ${r.control ? `${controlChart(r.control)}<p class="muted xs">Đường giữa ${r.control.center}%. Điểm đỏ: kỳ nằm ngoài giới hạn — khác thường, nên xem nguyên nhân.</p>` : `<div class="empty">Cần ít nhất ${r.thresholds.minControl} việc có hạn đã hoàn thành trong kỳ.</div>`}</div>
       <div class="card" data-testid="an-outliers"><h3>Việc kéo dài bất thường ${r.outliers ? `<span class="muted xs">(> ${r.outliers.fence} ngày = Q3 + 1,5 × IQR)</span>` : ''}</h3>
         ${!r.outliers ? `<div class="empty">Cần ít nhất ${r.thresholds.minOutlier} việc hoàn thành để xác định.</div>`
-          : [...r.outliers.completed.map(x => ({ ...x, k: 'Đã xong' })), ...r.outliers.open.map(x => ({ ...x, k: 'Đang mở' }))].map(x => `<div class="hbar" style="grid-template-columns:70px 1fr 70px"><a class="code" href="#/projects/${x.projectId}?item=${x.id}">${esc(x.code)}</a><span>${esc(x.title)} <span class="muted xs">· ${x.k}${x.assignees.length ? ' · ' + esc(x.assignees.join(', ')) : ''}</span></span><b>${x.days} ngày</b></div>`).join('') || '<div class="empty">Không có việc nào vượt ngưỡng.</div>'}</div>
+          : [...r.outliers.completed.map(x => ({ ...x, k: 'Đã xong' })), ...r.outliers.open.map(x => ({ ...x, k: x.notStarted ? 'Đang mở · chưa bắt đầu (tính từ ngày giao)' : 'Đang mở' }))].map(x => `<div class="hbar" style="grid-template-columns:70px 1fr 70px"><a class="code" href="#/projects/${x.projectId}?item=${x.id}">${esc(x.code)}</a><span>${esc(x.title)} <span class="muted xs">· ${x.k}${x.assignees.length ? ' · ' + esc(x.assignees.join(', ')) : ''}</span></span><b>${x.days} ngày</b></div>`).join('') || '<div class="empty">Không có việc nào vượt ngưỡng.</div>'}</div>
     </div>
     <details class="card an-detail" data-testid="an-details"><summary><b>Chi tiết từng việc hoàn thành</b> <span class="muted xs">(${r.details.length} việc — mỗi việc mất bao lâu)</span></summary>
       <div class="tbl-scroll"><table class="table st-kpi"><thead><tr><th>Mã</th><th>Tiêu đề</th><th>Phòng chủ trì</th><th>Người làm</th><th>Giao</th><th>Bắt đầu</th><th>Xong</th><th>Được duyệt</th>
         <th class="num">Thời gian làm</th><th class="num">Giao → duyệt</th><th>Đúng hạn</th><th class="num">Trả lại</th><th>Mức chấm</th></tr></thead><tbody>
       ${r.details.map(d => `<tr><td class="nowrap"><a class="code" href="#/projects/${d.projectId}?item=${d.id}">${esc(d.code)}</a></td><td>${esc(d.title)}</td><td>${esc(d.department)}</td><td>${esc(d.assignees.join(', '))}</td>
-        <td class="nowrap">${fmtDate(d.assignedAt)}</td><td class="nowrap">${d.startedAt ? fmtDate(d.startedAt) : '<span class="muted xs">không ghi</span>'}</td><td class="nowrap">${fmtDate(d.completedAt)}</td><td class="nowrap">${fmtDate(d.approvedAt)}</td>
+        <td class="nowrap">${fmtDate(d.assignedAt)}${d.assignedAfterStart ? ' <span class="an-small" title="Ngày giao sau ngày bắt đầu — giao → duyệt tính từ ngày bắt đầu">sau bắt đầu</span>' : ''}</td><td class="nowrap">${d.startedAt ? fmtDate(d.startedAt) : '<span class="muted xs">không ghi</span>'}</td><td class="nowrap">${fmtDate(d.completedAt)}</td><td class="nowrap">${fmtDate(d.approvedAt)}</td>
         <td class="num">${v(d.workDays)}</td><td class="num">${v(d.leadDays)}</td><td>${d.onTime == null ? '<span class="muted xs">không có hạn</span>' : d.onTime ? 'Có' : 'Không'}</td><td class="num">${d.rejections}</td><td>${d.rating ? esc(RATING[d.rating]) : ''}</td></tr>`).join('') || '<tr><td colspan="13" class="empty">Chưa có việc hoàn thành trong kỳ.</td></tr>'}
       </tbody></table></div></details>
     <p class="muted xs">Phương pháp: trung bình (TB), trung vị, tứ phân vị (Q1–Q3); thời gian làm chỉ tính việc có ghi nhận lúc bắt đầu; đánh giá chung chỉ khi có ít nhất 5 việc được chấm; "Tốt" = Xuất sắc + Tốt, "Trung bình" = Đạt, "Kém" = Cần cải thiện + Kém theo mức người giao chấm khi duyệt; đánh giá chung theo trung vị điểm (100/85/70/50/0): ≥ 80 là Tốt, ≥ 60 là Trung bình, còn lại Kém.

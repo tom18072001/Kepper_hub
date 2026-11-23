@@ -140,10 +140,16 @@ test('tệp Excel: đủ các trang; chi tiết từng việc ghi chuỗi (khôn
   assert.equal(d.getCell(2).value, '=HYPERLINK("http://x")'); // tiêu đề giống công thức vẫn là chuỗi
   assert.equal(d.getCell(2).type, ExcelJS.ValueType.String);
   assert.deepEqual([d.getCell(3).value, d.getCell(4).value, d.getCell(5).value], ['Dự án mẫu', 'Phòng A', 'An (giả)']);
-  assert.deepEqual([d.getCell(6).value, d.getCell(7).value, d.getCell(8).value, d.getCell(9).value], ['01/10/2026', '02/10/2026', '04/10/2026', '05/10/2026']);
+  // Ô ngày thật, định dạng dd/mm/yyyy, đúng NGÀY theo giờ VN (at(d) = 09:00 giờ VN).
+  for (const [c, iso] of [[6, '2026-10-01'], [7, '2026-10-02'], [8, '2026-10-04'], [9, '2026-10-05']]) {
+    assert.ok(d.getCell(c).value instanceof Date, `cột ${c}`);
+    assert.equal(d.getCell(c).value.toISOString().slice(0, 10), iso);
+    assert.equal(d.getCell(c).numFmt, 'dd/mm/yyyy');
+  }
   assert.deepEqual([d.getCell(10).value, d.getCell(11).value, d.getCell(12).value, d.getCell(13).value, d.getCell(14).value], [2, 4, 'Có', 0, 'Tốt (Tốt)']);
   const e = detail.getRow(3);
-  assert.deepEqual([e.getCell(7).value, e.getCell(10).value, e.getCell(11).value, e.getCell(12).value], ['không ghi nhận', '', 6, 'Không có hạn']);
+  assert.deepEqual([e.getCell(7).value, e.getCell(10).value, e.getCell(11).value, e.getCell(12).value], [null, '', 6, 'Không có hạn']);
+  assert.equal(e.getCell(15).value, 'Không ghi nhận lúc bắt đầu — không tính thời gian làm');
   const summary = back.getWorksheet('Tóm tắt').getColumn(2).values.map(String);
   assert.ok(summary.some(v => v.includes('chưa đánh giá chung')));
   assert.ok(summary.some(v => v.includes('đánh giá chung theo TRUNG VỊ điểm')));

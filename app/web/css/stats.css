@@ -144,3 +144,4 @@
 .an-detail{margin:16px 0}
 .an-detail summary{cursor:pointer;padding:2px 0}
 .an-detail[open] summary{margin-bottom:10px}
+.an-detail td:nth-child(2){min-width:240px}
