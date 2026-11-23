@@ -21,6 +21,7 @@ test('Ban giám đốc mở trang KPI & phân tích, xuất Excel', async ({ bro
   await expect(director.getByTestId('an-tiles')).toBeVisible();
   await expect(director.getByTestId('an-people')).toBeVisible();
   await expect(director.getByTestId('nav-kpi')).toHaveCount(1);
+  await expect(director.getByTestId('an-details')).toBeVisible();
   const [download] = await Promise.all([director.waitForEvent('download'), director.getByTestId('an-export').click()]);
   expect(download.suggestedFilename()).toMatch(/^phan-tich-kpi_.*\.xlsx$/);
 });
@@ -33,5 +34,6 @@ test('nhân viên, trưởng phòng, admin IT: API 403 và không có menu KPI &
   }
   const staff = await as(browser, 'nv.kinhdoanh2');
   await staff.goto('/#/kpi');
+  await expect(staff.getByTestId('an-forbidden')).toContainText('chỉ dành cho Ban giám đốc');
   await expect(staff.getByTestId('an-tiles')).toHaveCount(0);
 });

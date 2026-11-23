@@ -7,6 +7,7 @@ const { permissionScope } = require('../lib/permissions');
 const { visibleProjectsWhere, itemVisibleWhere } = require('../services/access');
 const S = require('../services/stats');
 const A = require('../services/analytics');
+const { RATINGS } = require('../services/task-rules');
 
 function assertAnalyticsAccess(user) {
   if (permissionScope(user, 'reports.kpi', 'VIEW') !== 'SYSTEM') fail(403, 'Chỉ Ban giám đốc được xem KPI và phân tích thống kê', 'FORBIDDEN');
@@ -31,7 +32,7 @@ async function load(prisma, user, query) {
       AND: [{ project: visibleProjectsWhere(user) }, itemVisibleWhere(user),
         { OR: [{ completedAt: range }, { ratedAt: range }, { state: { category: { notIn: ['COMPLETED', 'CANCELLED'] } } }] }] },
     select: { id: true, projectId: true, number: true, title: true, leadDepartmentId: true, dueDate: true, assignedAt: true, createdAt: true, startedAt: true, completedAt: true,
-      rating: true, ratedAt: true, state: { select: { category: true } }, project: { select: { key: true, departmentId: true } },
+      rating: true, ratedAt: true, state: { select: { category: true } }, project: { select: { key: true, name: true, departmentId: true } },
       assignees: { select: { userId: true } },
       approvals: { select: { status: true, closedAt: true, actions: { select: { decision: true } } } } },
   });
@@ -39,8 +40,9 @@ async function load(prisma, user, query) {
   const userIds = [...new Set(items.flatMap(i => i.assignees.map(a => a.userId)))];
   const users = (await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, fullName: true, department: { select: { id: true, name: true } } } }))
     .map(u => ({ id: u.id, fullName: u.fullName, departmentId: u.department?.id ?? null, departmentName: u.department?.name || '—' }));
-  const departments = await prisma.department.findMany({ where: { isActive: true, ...(departmentId ? { id: departmentId } : {}) }, select: { id: true, name: true }, orderBy: { name: 'asc' } });
+  const departments = await prisma.department.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } });
   const result = A.analyze(items, { users, departments, from, to, now });
+  if (departmentId) result.byDepartment = result.byDepartment.filter(d => d.id === departmentId);
   return { ...result, departmentId: departmentId ?? null, generatedAt: now };
 }
 
@@ -49,15 +51,18 @@ const BAND = b => (b ? A.BANDS[b] : '');
 const num = v => (v == null ? '' : v);
 function personRows(list) {
   return list.map(p => ({ dept: p.department ?? p.name, name: p.fullName ?? '', completed: p.completed,
-    workMedian: num(p.workDays.median), workIqr: num(p.workDays.iqr), leadMedian: num(p.leadDays.median), leadMean: num(p.leadDays.mean),
+    workMedian: num(p.workDays.median), workMean: num(p.workDays.mean), workIqr: num(p.workDays.iqr), workN: p.workDays.n,
+    leadMedian: num(p.leadDays.median), leadMean: num(p.leadDays.mean),
     onTime: num(p.onTime.rate), judged: p.onTime.judged, rejections: p.rejections,
-    rated: p.rating.n, good: p.rating.bands.GOOD, avg: p.rating.bands.AVERAGE, poor: p.rating.bands.POOR, score: num(p.rating.avg), band: BAND(p.rating.band),
-    note: p.workDays.n < A.MIN_SAMPLE ? 'Mẫu nhỏ — chưa đủ để kết luận' : '' }));
+    rated: p.rating.n, good: p.rating.bands.GOOD, avg: p.rating.bands.AVERAGE, poor: p.rating.bands.POOR, score: p.rating.avg == null ? '—' : p.rating.avg, band: BAND(p.rating.band) || '—',
+    note: [p.workDays.n < A.MIN_SAMPLE ? 'Mẫu nhỏ — chưa đủ để kết luận' : '', p.rating.n < A.MIN_SAMPLE ? `Dưới ${A.MIN_SAMPLE} việc được chấm — chưa đánh giá chung` : '',
+      p.noStart ? `${p.noStart} việc không ghi lúc bắt đầu` : ''].filter(Boolean).join('; ') }));
 }
 const GROUP_COLUMNS = [
   { header: 'Số việc xong', key: 'completed', width: 12 },
-  { header: 'Thời gian làm — trung vị (ngày)', key: 'workMedian', width: 16 }, { header: 'Thời gian làm — IQR (ngày)', key: 'workIqr', width: 14 },
-  { header: 'Giao → được duyệt — trung vị (ngày)', key: 'leadMedian', width: 18 }, { header: 'Giao → được duyệt — trung bình (ngày)', key: 'leadMean', width: 18 },
+  { header: 'Thời gian làm — TB (ngày)', key: 'workMean', width: 14 }, { header: 'Thời gian làm — trung vị (ngày)', key: 'workMedian', width: 16 },
+  { header: 'Thời gian làm — IQR (ngày)', key: 'workIqr', width: 14 }, { header: 'Số việc tính thời gian làm', key: 'workN', width: 14 },
+  { header: 'Giao → được duyệt — TB (ngày)', key: 'leadMean', width: 16 }, { header: 'Giao → được duyệt — trung vị (ngày)', key: 'leadMedian', width: 18 },
   { header: 'Đúng hạn (%)', key: 'onTime', width: 11 }, { header: 'Số việc có hạn', key: 'judged', width: 11 }, { header: 'Lần bị trả lại', key: 'rejections', width: 11 },
   { header: 'Số việc được chấm', key: 'rated', width: 12 }, { header: 'Tốt', key: 'good', width: 7 }, { header: 'Trung bình', key: 'avg', width: 10 }, { header: 'Kém', key: 'poor', width: 7 },
   { header: 'Điểm bình quân (0–100)', key: 'score', width: 12 }, { header: 'Đánh giá chung', key: 'band', width: 14 }, { header: 'Ghi chú', key: 'note', width: 30 },
@@ -80,10 +85,10 @@ async function workbook(r, user) {
   const sum = sheet(wb, 'Tóm tắt', [{ header: 'Chỉ số', key: 'k', width: 46 }, { header: 'Giá trị', key: 'v', width: 60 }], [
     { k: 'Kỳ', v: range }, { k: 'Nhãn dữ liệu', v: 'Bảo mật — đánh giá cá nhân; không gửi ra ngoài hệ thống' },
     { k: 'Số việc hoàn thành trong kỳ', v: o.completed },
-    { k: 'Thời gian làm (bắt đầu → xong): trung vị / Q1 – Q3 (ngày)', v: o.workDays.n ? `${o.workDays.median} / ${o.workDays.q1} – ${o.workDays.q3} (n = ${o.workDays.n})` : '—' },
-    { k: 'Giao → được duyệt: trung vị / trung bình (ngày)', v: o.leadDays.n ? `${o.leadDays.median} / ${o.leadDays.mean} (n = ${o.leadDays.n})` : '—' },
+    { k: 'Thời gian làm (bắt đầu → xong): TB / trung vị / Q1 – Q3 (ngày)', v: o.workDays.n ? `${o.workDays.mean} / ${o.workDays.median} / ${o.workDays.q1} – ${o.workDays.q3} (n = ${o.workDays.n})` : '—' },
+    { k: 'Giao → được duyệt: TB / trung vị (ngày)', v: o.leadDays.n ? `${o.leadDays.mean} / ${o.leadDays.median} (n = ${o.leadDays.n})` : '—' },
     { k: 'Tỷ lệ xong đúng hạn', v: o.onTime.rate == null ? '—' : `${o.onTime.rate}% (${o.onTime.onTime}/${o.onTime.judged})` },
-    { k: 'Đánh giá sau duyệt (Tốt / Trung bình / Kém)', v: `${o.rating.bands.GOOD} / ${o.rating.bands.AVERAGE} / ${o.rating.bands.POOR} — bình quân ${o.rating.avg ?? '—'} → ${BAND(o.rating.band) || '—'}` },
+    { k: 'Đánh giá sau duyệt (Tốt / Trung bình / Kém)', v: `${o.rating.bands.GOOD} / ${o.rating.bands.AVERAGE} / ${o.rating.bands.POOR} — ${o.rating.band ? `bình quân ${o.rating.avg} → ${BAND(o.rating.band)}` : `chưa đánh giá chung (dưới ${A.MIN_SAMPLE} việc được chấm)`}` },
     { k: 'Xu hướng thời gian làm', v: r.trend.direction == null ? 'Chưa đủ dữ liệu' : `${{ UP: 'Tăng', DOWN: 'Giảm', STABLE: 'Ổn định' }[r.trend.direction]} (${r.trend.workDaysSlope} ngày mỗi ${r.trend.unit === 'week' ? 'tuần' : 'tháng'}, Theil–Sen)` },
     { k: 'Ngưỡng kéo dài bất thường (Q3 + 1,5 × IQR)', v: r.outliers ? `${r.outliers.fence} ngày` : 'Chưa đủ dữ liệu' },
     {}, { k: 'Phương pháp', v: 'Trung vị, tứ phân vị (PERCENTILE.INC); bất thường theo Tukey; xu hướng theo độ dốc Theil–Sen; kiểm soát tỷ lệ đúng hạn bằng biểu đồ p (±3σ).' },
@@ -101,6 +106,16 @@ async function workbook(r, user) {
         signal: c?.signal === 'LOW' ? 'Thấp bất thường' : c?.signal === 'HIGH' ? 'Cao bất thường' : '' }; }));
   sheet(wb, 'Bất thường', [{ header: 'Loại', key: 'kind', width: 16 }, { header: 'Mã', key: 'code', width: 12 }, { header: 'Tiêu đề', key: 'title', width: 50 }, { header: 'Số ngày', key: 'days', width: 10 }, { header: 'Người chủ trì', key: 'who', width: 30 }],
     r.outliers ? [...r.outliers.completed.map(x => ({ kind: 'Đã xong', ...x })), ...r.outliers.open.map(x => ({ kind: 'Đang mở', ...x }))].map(x => ({ kind: x.kind, code: x.code, title: x.title, days: x.days, who: x.assignees.join(', ') })) : []);
+  // Chi tiết từng việc: mọi ô văn bản ghi dạng chuỗi (không công thức), ngày ghi dạng chuỗi dd/mm/yyyy giờ VN.
+  const txt = x => (x == null ? '' : String(x));
+  sheet(wb, 'Chi tiết việc', [{ header: 'Mã', key: 'code', width: 10 }, { header: 'Tiêu đề', key: 'title', width: 44 }, { header: 'Dự án', key: 'project', width: 22 },
+    { header: 'Phòng chủ trì', key: 'dept', width: 20 }, { header: 'Người làm', key: 'who', width: 26 }, { header: 'Ngày giao', key: 'a', width: 12 }, { header: 'Bắt đầu', key: 's', width: 12 },
+    { header: 'Hoàn thành', key: 'c', width: 12 }, { header: 'Được duyệt', key: 'p', width: 12 }, { header: 'Thời gian làm (ngày)', key: 'work', width: 12 },
+    { header: 'Giao → duyệt (ngày)', key: 'lead', width: 12 }, { header: 'Đúng hạn', key: 'onTime', width: 13 }, { header: 'Lần bị trả lại', key: 'rej', width: 10 }, { header: 'Mức chấm', key: 'rating', width: 14 }],
+    r.details.map(d => ({ code: txt(d.code), title: txt(d.title), project: txt(d.project), dept: txt(d.department), who: txt(d.assignees.join(', ')),
+      a: S.vnDate(d.assignedAt), s: d.startedAt ? S.vnDate(d.startedAt) : 'không ghi nhận', c: S.vnDate(d.completedAt), p: S.vnDate(d.approvedAt),
+      work: num(d.workDays), lead: num(d.leadDays), onTime: d.onTime == null ? 'Không có hạn' : d.onTime ? 'Có' : 'Không', rej: d.rejections,
+      rating: d.rating ? `${RATINGS[d.rating]} (${A.BANDS[A.ratingBand(d.rating)]})` : '' })));
   // Dấu vết người xuất (truy vết khi dữ liệu rời hệ thống).
   for (const ws of wb.worksheets) { ws.addRow([]); ws.addRow([`Xuất bởi ${user.fullName || user.username} lúc ${S.vnDateTime(r.generatedAt)} — Bảo mật, chỉ dùng nội bộ`]).font = { italic: true, color: { argb: 'FF888888' } }; }
   return wb;
@@ -132,3 +147,4 @@ function mountAnalytics(app, { prisma, auth, audit }) {
 module.exports = mountAnalytics;
 module.exports.assertAnalyticsAccess = assertAnalyticsAccess;
 module.exports.workbook = workbook;
+module.exports.rangeOf = rangeOf;

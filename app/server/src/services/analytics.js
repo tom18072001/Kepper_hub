@@ -25,6 +25,15 @@ const BAND_OF_RATING = { EXCELLENT: 'GOOD', GOOD: 'GOOD', PASS: 'AVERAGE', NEEDS
 const ratingBand = rating => BAND_OF_RATING[rating] || null;
 // Điểm bình quân (thang 100 của KPI: 100/85/70/50/0) → mức: ≥ 80 Tốt (trên điểm giữa Đạt–Tốt), ≥ 60 Trung bình (trên điểm giữa Cần cải thiện–Đạt), còn lại Kém.
 const bandOfScore = score => (score == null ? null : score >= 80 ? 'GOOD' : score >= 60 ? 'AVERAGE' : 'POOR');
+// MỘT chỗ duy nhất quyết "Đánh giá chung" của một nhóm việc được chấm (đổi cách gộp — bình quân / trung vị — chỉ sửa hàm này).
+// Dưới MIN_SAMPLE việc được chấm: KHÔNG kết luận (score, band = null); chỉ hiện phân bố Tốt · TB · Kém.
+// Hiện tại: bình quân điểm RATING_POINTS (Kém = 0 nên nhạy với một lần Kém — đang chờ chủ dự án chốt cách gộp).
+function overallRating(ratings) {
+  const points = ratings.map(r => RATING_POINTS[r]).filter(p => p != null);
+  if (points.length < MIN_SAMPLE) return { score: null, band: null };
+  const score = r1(points.reduce((a, b) => a + b, 0) / points.length);
+  return { score, band: bandOfScore(score) };
+}
 
 // ---------- Thống kê mô tả ----------
 // Phân vị nội suy tuyến tính (cùng cách Excel PERCENTILE.INC / R type 7).
@@ -58,7 +67,14 @@ function theilSen(points) {
 }
 
 // ---------- Mốc thời gian của một việc ----------
-const workDays = item => S.processingDays(item); // bắt đầu (?? giao ?? tạo) → hoàn thành
+// Thời gian làm = bắt đầu làm → hoàn thành, CHỈ khi có ghi nhận lúc bắt đầu (startedAt). Việc chuyển thẳng sang Hoàn thành
+// không có startedAt → không tính (không lấy ngày giao thay, khác processingDays của dashboard cũ); vẫn tính "giao → được duyệt".
+function workDays(item) {
+  if (!item.startedAt || !item.completedAt) return null;
+  const d = (ms(item.completedAt) - ms(item.startedAt)) / DAY;
+  return Number.isFinite(d) && d >= 0 ? d : null;
+}
+const noStart = item => S.isDone(item) && !item.startedAt;
 // Ngày được duyệt: phiếu APPROVED đóng muộn nhất; việc không qua duyệt → ngày hoàn thành.
 function approvedAt(item) {
   const closed = (item.approvals || []).filter(a => a.status === 'APPROVED' && a.closedAt).map(a => ms(a.closedAt));
@@ -81,13 +97,12 @@ function groupStats(done, rated) {
   const judged = done.filter(hasDue), onTime = judged.filter(S.onTimeDone).length;
   const bands = { GOOD: 0, AVERAGE: 0, POOR: 0 };
   for (const i of rated) bands[ratingBand(i.rating)]++;
-  const points = rated.map(i => RATING_POINTS[i.rating]);
-  const ratingAvg = points.length ? r1(points.reduce((a, b) => a + b, 0) / points.length) : null;
+  const overall = overallRating(rated.map(i => i.rating));
   return {
-    completed: done.length, workDays: work, leadDays: lead,
+    completed: done.length, workDays: work, leadDays: lead, noStart: done.filter(noStart).length,
     onTime: { judged: judged.length, onTime, rate: S.pct(onTime, judged.length) },
     rejections: done.reduce((n, i) => n + rejectionsOf(i), 0),
-    rating: { n: rated.length, avg: ratingAvg, band: bandOfScore(ratingAvg), bands, smallSample: rated.length < MIN_SAMPLE },
+    rating: { n: rated.length, avg: overall.score, band: overall.band, bands, smallSample: rated.length < MIN_SAMPLE },
   };
 }
 
@@ -169,15 +184,27 @@ function analyze(items, { users = [], departments = [], from, to, now = new Date
       .filter(([, d]) => Number.isFinite(d) && d > fence).sort((a, c) => c[1] - a[1]).map(([i, d]) => row(i, d)),
   };
 
+  // Chi tiết từng việc hoàn thành trong kỳ: mỗi việc mất bao lâu (để đối chiếu số tổng).
+  const deptName = new Map(departments.map(d => [d.id, d.name]));
+  const details = done.slice().sort((a, c) => ms(a.completedAt) - ms(c.completedAt)).map(i => ({
+    id: i.id, projectId: i.projectId ?? null, code: code(i), title: i.title, project: i.project?.name || i.project?.key || '',
+    department: deptName.get(S.departmentOf(i)) || '', assignees: (i.assignees || []).map(a => names.get(a.userId)).filter(Boolean),
+    assignedAt: i.assignedAt ?? i.createdAt ?? null, startedAt: i.startedAt ?? null, completedAt: i.completedAt, approvedAt: approvedAt(i),
+    workDays: r1(workDays(i)), leadDays: r1(leadDays(i)),
+    onTime: i.dueDate == null ? null : S.onTimeDone(i), rejections: rejectionsOf(i), rating: i.rating && ratingBand(i.rating) ? i.rating : null,
+  }));
+
   const notes = [];
+  if (overall.noStart) notes.push(`${overall.noStart} việc không ghi nhận lúc bắt đầu — không tính vào thời gian làm (vẫn tính vào giao → được duyệt).`);
+  if (overall.rating.n < MIN_SAMPLE) notes.push(`Chỉ có ${overall.rating.n} việc được chấm mức — chưa đưa ra đánh giá chung (cần ít nhất ${MIN_SAMPLE}).`);
   if (overall.completed < MIN_SAMPLE) notes.push(`Chỉ có ${overall.completed} việc hoàn thành trong kỳ — chưa đủ để kết luận.`);
   if (fence == null) notes.push(`Cần ít nhất ${MIN_OUTLIER} việc hoàn thành để xác định việc kéo dài bất thường.`);
   if (trend.direction == null) notes.push(`Cần ít nhất ${MIN_TREND_N} việc hoàn thành, rải trên ${MIN_TREND} ${b.unit === 'week' ? 'tuần' : 'tháng'}, để nêu xu hướng.`);
   if (!control) notes.push(`Biểu đồ kiểm soát tỷ lệ đúng hạn cần ít nhất ${MIN_CONTROL} việc có hạn đã hoàn thành (hiện ${totalJudged}).`);
 
-  return { from, to, overall, byPerson, byDepartment, trend, control, outliers, notes,
+  return { from, to, overall, byPerson, byDepartment, trend, control, outliers, details, notes,
     thresholds: { minSample: MIN_SAMPLE, minOutlier: MIN_OUTLIER, minTrend: MIN_TREND, minTrendN: MIN_TREND_N, minControl: MIN_CONTROL } };
 }
 
 module.exports = { BANDS, BAND_OF_RATING, MIN_SAMPLE, MIN_OUTLIER, MIN_TREND, MIN_TREND_N, MIN_CONTROL,
-  ratingBand, bandOfScore, quantile, describe, upperFence, theilSen, approvedAt, workDays, leadDays, rejectionsOf, groupStats, buckets, analyze };
+  ratingBand, bandOfScore, overallRating, quantile, describe, upperFence, theilSen, approvedAt, workDays, leadDays, rejectionsOf, groupStats, buckets, analyze };

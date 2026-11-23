@@ -26,16 +26,29 @@ test('gộp mức người giao chấm thành Tốt / Trung bình / Kém; điể
   assert.deepEqual([100, 80, 79.9, 70, 60, 59.9, null].map(A.bandOfScore), ['GOOD', 'GOOD', 'AVERAGE', 'AVERAGE', 'AVERAGE', 'POOR', null]);
 });
 
+test('đánh giá chung: dưới 5 việc được chấm KHÔNG kết luận (kể cả khi có một lần Kém); từ 5 việc mới quy về mức', () => {
+  // Các ca review vòng 1: 2 Tốt + 1 Kém, 1 Xuất sắc + 1 Kém, chỉ 1 Kém → không đưa ra "Kém".
+  for (const ratings of [['GOOD', 'GOOD', 'POOR'], ['EXCELLENT', 'POOR'], ['POOR'], ['GOOD', 'GOOD', 'GOOD', 'GOOD'], []])
+    assert.deepEqual(A.overallRating(ratings), { score: null, band: null }, ratings.join(','));
+  assert.deepEqual(A.overallRating(['GOOD', 'GOOD', 'GOOD', 'PASS', 'PASS']), { score: 79, band: 'AVERAGE' });
+  assert.deepEqual(A.overallRating(['EXCELLENT', 'GOOD', 'GOOD', 'GOOD', 'GOOD']), { score: 88, band: 'GOOD' });
+  // Mức cũ không thuộc thang (FAIL đã đổi thành POOR) bị bỏ, không làm đủ cỡ mẫu.
+  assert.deepEqual(A.overallRating(['GOOD', 'GOOD', 'GOOD', 'GOOD', 'FAIL']), { score: null, band: null });
+});
+
 test('thời gian làm (bắt đầu → xong) và giao → được duyệt (ngày phiếu duyệt cuối cùng)', () => {
   const i = item({ assignedAt: at(0), startedAt: at(2), completedAt: at(5),
     approvals: [{ status: 'REJECTED', closedAt: at(4), actions: [{ decision: 'REJECT' }] }, { status: 'APPROVED', closedAt: at(7), actions: [{ decision: 'APPROVE' }] }] });
   assert.equal(A.workDays(i), 3);
   assert.equal(A.leadDays(i), 7);
   assert.equal(A.rejectionsOf(i), 1);
-  // Không qua duyệt → tính đến lúc hoàn thành; không có ngày bắt đầu → từ ngày giao.
+  // Không qua duyệt → giao → duyệt tính đến lúc hoàn thành. Không ghi nhận lúc bắt đầu → KHÔNG có thời gian làm (không lấy ngày giao thay).
   const j = item({ assignedAt: at(1), completedAt: at(4) });
-  assert.equal(A.workDays(j), 3);
+  assert.equal(A.workDays(j), null);
   assert.equal(A.leadDays(j), 3);
+  // Ca review: giao ngày 0, bắt đầu ngày 9, xong ngày 10 → làm 1 ngày; cùng việc không bấm "Bắt đầu" → không tính (trước đây 10 ngày).
+  assert.equal(A.workDays(item({ assignedAt: at(0), startedAt: at(9), completedAt: at(10) })), 1);
+  assert.equal(A.workDays(item({ assignedAt: at(0), completedAt: at(10) })), null);
   // Chưa xong → không có thời gian.
   assert.equal(A.leadDays(item({ state: { category: 'STARTED' }, assignedAt: at(1) })), null);
 });
@@ -63,7 +76,7 @@ test('phân tích: theo người / phòng, mức đánh giá, cỡ mẫu, ghi ch
   const items = [
     item({ assignedAt: at(0), startedAt: at(1), completedAt: at(3), dueDate: at(5), rating: 'EXCELLENT', ratedAt: at(4) }),
     item({ assignedAt: at(0), startedAt: at(1), completedAt: at(9), dueDate: at(5), rating: 'PASS', ratedAt: at(10) }),
-    item({ assignedAt: at(0), completedAt: at(2), assignees: [{ userId: 2 }], leadDepartmentId: 2, rating: 'POOR', ratedAt: at(3) }),
+    item({ assignedAt: at(0), completedAt: at(2), assignees: [{ userId: 2 }], leadDepartmentId: 2, rating: 'POOR', ratedAt: at(3), dueDate: at(1) }),
     item({ state: { category: 'CANCELLED' }, completedAt: at(2) }),
     item({ assignedAt: at(-60), completedAt: at(-40) }), // xong ngoài kỳ
     item({ state: { category: 'STARTED' }, assignedAt: at(1) }),
@@ -73,13 +86,24 @@ test('phân tích: theo người / phòng, mức đánh giá, cỡ mẫu, ghi ch
     departments: [{ id: 1, name: 'Phòng A' }, { id: 2, name: 'Phòng B' }] });
   assert.equal(r.overall.completed, 3);
   assert.deepEqual(r.overall.rating.bands, { GOOD: 1, AVERAGE: 1, POOR: 1 });
-  assert.equal(r.overall.rating.avg, 56.7); // (100 + 70 + 0) / 3
-  assert.equal(r.overall.rating.band, 'POOR');
-  assert.deepEqual(r.overall.onTime, { judged: 2, onTime: 1, rate: 50 });
+  // 3 việc được chấm (Xuất sắc, Đạt, Kém) < 5 → không kết luận; chỉ có phân bố.
+  assert.equal(r.overall.rating.avg, null);
+  assert.equal(r.overall.rating.band, null);
+  assert.deepEqual(r.overall.onTime, { judged: 3, onTime: 1, rate: 33 });
+  // Thời gian làm chỉ từ việc có ghi nhận bắt đầu (2 việc của An: 2 và 8 ngày) → TB 5, trung vị 5; việc của Bình không có bắt đầu.
+  assert.deepEqual([r.overall.workDays.n, r.overall.workDays.mean, r.overall.workDays.median, r.overall.noStart], [2, 5, 5, 1]);
+  assert.deepEqual([r.overall.leadDays.n, r.overall.leadDays.mean], [3, 4.7]); // (3 + 9 + 2) / 3
+  assert.ok(r.notes.some(n => n.startsWith('1 việc không ghi nhận lúc bắt đầu')));
+  assert.ok(r.notes.some(n => n.includes('chưa đưa ra đánh giá chung')));
   // Sắp theo phòng rồi tên, không theo điểm.
-  assert.deepEqual(r.byPerson.map(p => [p.fullName, p.completed, p.workDays.median, p.rating.band]), [['An', 2, 5, 'GOOD'], ['Bình', 1, 2, 'POOR']]);
-  assert.equal(r.byPerson[0].rating.avg, 85);
+  assert.deepEqual(r.byPerson.map(p => [p.fullName, p.completed, p.workDays.median, p.workDays.n, p.rating.band]), [['An', 2, 5, 2, null], ['Bình', 1, null, 0, null]]);
+  assert.deepEqual(r.byPerson[1].rating.bands, { GOOD: 0, AVERAGE: 0, POOR: 1 });
   assert.equal(r.byPerson[0].workDays.smallSample, true);
+  // Chi tiết từng việc hoàn thành trong kỳ, theo ngày xong.
+  assert.deepEqual(r.details.map(d => [d.code, d.workDays, d.leadDays, d.onTime, d.rating]), [
+    ['DA-3', null, 2, false, 'POOR'], ['DA-1', 2, 3, true, 'EXCELLENT'], ['DA-2', 8, 9, false, 'PASS']]);
+  assert.equal(r.details[1].department, 'Phòng A');
+  assert.deepEqual(r.details[0].assignees, ['Bình']);
   assert.deepEqual(r.byDepartment.map(d => [d.name, d.completed]), [['Phòng A', 2], ['Phòng B', 1]]);
   assert.equal(r.outliers, null);
   assert.equal(r.control, null);
