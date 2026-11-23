@@ -38,7 +38,7 @@ test('26. Menu trái: nhãn menu khớp tiêu đề trang, nhóm mới, không c
   await expect(group('projects').first()).toHaveText('Tiến độ dự án');
   await expect(page.locator('#projectNav')).toBeAttached();
   await expect(group('meeting')).toHaveText(['Báo cáo tuần']);
-  await expect(group('stats')).toHaveText(['Thống kê công việc']);
+  await expect(group('stats')).toHaveText(['Thống kê công việc', 'KPI & phân tích']); // KPI & phân tích: chỉ Ban giám đốc (giamdoc)
   await expect(page.locator('#sidebar')).not.toContainText('Dashboard');
   await expect(page.getByTestId('nav-sprint')).not.toHaveAttribute('title', /sprint/i);
 
