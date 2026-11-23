@@ -129,6 +129,8 @@ test('tệp Excel: đủ các trang; chi tiết từng việc ghi chuỗi (khôn
   assert.equal(people.getRow(2).getCell(2).value, 'An (giả)');
   assert.equal(people.getRow(2).getCell(col('Thời gian làm — TB (ngày)')).value, 2);
   assert.equal(people.getRow(2).getCell(col('Đánh giá chung')).value, '—'); // 1 việc được chấm → không kết luận
+  assert.equal(people.getRow(2).getCell(col('Điểm trung vị (0–100)')).value, '—');
+  assert.ok(col('Điểm bình quân (tham khảo, không dùng kết luận)'));
   assert.equal(people.getRow(2).getCell(col('Tốt')).value, 1);
   assert.match(String(people.getRow(people.rowCount).getCell(1).value), /Xuất bởi Giám đốc .* Bảo mật/);
 
@@ -142,5 +144,7 @@ test('tệp Excel: đủ các trang; chi tiết từng việc ghi chuỗi (khôn
   assert.deepEqual([d.getCell(10).value, d.getCell(11).value, d.getCell(12).value, d.getCell(13).value, d.getCell(14).value], [2, 4, 'Có', 0, 'Tốt (Tốt)']);
   const e = detail.getRow(3);
   assert.deepEqual([e.getCell(7).value, e.getCell(10).value, e.getCell(11).value, e.getCell(12).value], ['không ghi nhận', '', 6, 'Không có hạn']);
-  assert.ok(back.getWorksheet('Tóm tắt').getColumn(2).values.some(v => String(v).includes('chưa đánh giá chung')));
+  const summary = back.getWorksheet('Tóm tắt').getColumn(2).values.map(String);
+  assert.ok(summary.some(v => v.includes('chưa đánh giá chung')));
+  assert.ok(summary.some(v => v.includes('đánh giá chung theo TRUNG VỊ điểm')));
 });

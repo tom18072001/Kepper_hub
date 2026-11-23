@@ -29,11 +29,14 @@ test('gộp mức người giao chấm thành Tốt / Trung bình / Kém; điể
 test('đánh giá chung: dưới 5 việc được chấm KHÔNG kết luận (kể cả khi có một lần Kém); từ 5 việc mới quy về mức', () => {
   // Các ca review vòng 1: 2 Tốt + 1 Kém, 1 Xuất sắc + 1 Kém, chỉ 1 Kém → không đưa ra "Kém".
   for (const ratings of [['GOOD', 'GOOD', 'POOR'], ['EXCELLENT', 'POOR'], ['POOR'], ['GOOD', 'GOOD', 'GOOD', 'GOOD'], []])
-    assert.deepEqual(A.overallRating(ratings), { score: null, band: null }, ratings.join(','));
-  assert.deepEqual(A.overallRating(['GOOD', 'GOOD', 'GOOD', 'PASS', 'PASS']), { score: 79, band: 'AVERAGE' });
-  assert.deepEqual(A.overallRating(['EXCELLENT', 'GOOD', 'GOOD', 'GOOD', 'GOOD']), { score: 88, band: 'GOOD' });
+    assert.deepEqual(A.overallRating(ratings), { score: null, band: null, mean: null }, ratings.join(','));
+  // Chủ dự án chốt TRUNG VỊ: 4 Tốt + 1 Kém → trung vị 85 → Tốt (bình quân 68 sẽ ra Trung bình); 3 Kém + 2 Tốt → trung vị 0 → Kém.
+  assert.deepEqual(A.overallRating(['GOOD', 'GOOD', 'GOOD', 'GOOD', 'POOR']), { score: 85, band: 'GOOD', mean: 68 });
+  assert.deepEqual(A.overallRating(['POOR', 'POOR', 'POOR', 'GOOD', 'GOOD']), { score: 0, band: 'POOR', mean: 34 });
+  assert.deepEqual(A.overallRating(['GOOD', 'GOOD', 'GOOD', 'PASS', 'PASS']), { score: 85, band: 'GOOD', mean: 79 });
+  assert.deepEqual(A.overallRating(['PASS', 'PASS', 'PASS', 'GOOD', 'EXCELLENT', 'POOR']), { score: 70, band: 'AVERAGE', mean: 65.8 }); // n chẵn: nội suy
   // Mức cũ không thuộc thang (FAIL đã đổi thành POOR) bị bỏ, không làm đủ cỡ mẫu.
-  assert.deepEqual(A.overallRating(['GOOD', 'GOOD', 'GOOD', 'GOOD', 'FAIL']), { score: null, band: null });
+  assert.deepEqual(A.overallRating(['GOOD', 'GOOD', 'GOOD', 'GOOD', 'FAIL']), { score: null, band: null, mean: null });
 });
 
 test('thời gian làm (bắt đầu → xong) và giao → được duyệt (ngày phiếu duyệt cuối cùng)', () => {
@@ -87,7 +90,8 @@ test('phân tích: theo người / phòng, mức đánh giá, cỡ mẫu, ghi ch
   assert.equal(r.overall.completed, 3);
   assert.deepEqual(r.overall.rating.bands, { GOOD: 1, AVERAGE: 1, POOR: 1 });
   // 3 việc được chấm (Xuất sắc, Đạt, Kém) < 5 → không kết luận; chỉ có phân bố.
-  assert.equal(r.overall.rating.avg, null);
+  assert.equal(r.overall.rating.median, null);
+  assert.equal(r.overall.rating.mean, null);
   assert.equal(r.overall.rating.band, null);
   assert.deepEqual(r.overall.onTime, { judged: 3, onTime: 1, rate: 33 });
   // Thời gian làm chỉ từ việc có ghi nhận bắt đầu (2 việc của An: 2 và 8 ngày) → TB 5, trung vị 5; việc của Bình không có bắt đầu.

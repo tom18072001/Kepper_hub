@@ -951,7 +951,7 @@ Kèm 3 khuyến nghị cho chủ dự án (mục 4).
 
 ## KPI & phân tích thống kê công việc (Ban giám đốc) — 24/11/2026
 
-Chủ dự án chốt: (1) thời gian xử lý có hai chỉ số: bắt đầu làm → hoàn thành, và giao → được duyệt; (2) Tốt / Trung bình / Kém gộp từ mức người giao chấm khi duyệt (không thêm trường); (3) chỉ Ban giám đốc (quyền `reports.kpi` toàn tổ chức) xem. Admin IT không xem (giữ QĐ 16/10/2026); file xuất là Excel; (4) thống kê mô tả, xu hướng, phát hiện bất thường; không dự báo.
+Chủ dự án chốt: (1) thời gian xử lý có hai chỉ số: bắt đầu làm → hoàn thành, và giao → được duyệt; (2) Tốt / Trung bình / Kém gộp từ mức người giao chấm khi duyệt (không thêm trường); đánh giá chung của một người / phòng = TRUNG VỊ điểm (100/85/70/50/0) quy về mức ≥ 80 Tốt, ≥ 60 Trung bình, còn lại Kém, chỉ khi có ít nhất 5 việc được chấm (chủ dự án chốt "Đổi sang trung vị"; điểm bình quân chỉ để tham khảo); (3) chỉ Ban giám đốc (quyền `reports.kpi` toàn tổ chức) xem. Admin IT không xem (giữ QĐ 16/10/2026); file xuất là Excel; (4) thống kê mô tả, xu hướng, phát hiện bất thường; không dự báo.
 
 | Tập dữ liệu | Nhãn | Pháp lý | Ghi chú |
 |---|---|---|---|
@@ -962,7 +962,7 @@ Chủ dự án chốt: (1) thời gian xử lý có hai chỉ số: bắt đầu
 | PRE-06 Kiểm soát truy cập | Máy chủ trả 403 cho mọi người không có `reports.kpi` SYSTEM (nhân viên, trưởng / phó phòng, admin IT, quản trị gốc); test đơn vị + e2e | Bắt buộc — có |
 | DET-01 Nhật ký | Ghi `VIEW_KPI_ANALYTICS` / `EXPORT_KPI_ANALYTICS` (kỳ, phòng, số người; không ghi số liệu) | Bắt buộc — có |
 | PRE (rò rỉ khi xuất) | Tệp Excel ghi nhãn Bảo mật và dấu người xuất trên mỗi trang; không xuất qua token Claude (`assertNotVia`); `Cache-Control: private, no-store` | Bắt buộc — có |
-| PRI-01 Tối thiểu hoá / công bằng | Không xếp hạng người (sắp theo phòng, tên); luôn hiện cỡ mẫu; nhóm < 5 việc ghi "mẫu nhỏ — chưa đủ để kết luận"; xu hướng chỉ khi ≥ 12 việc trên ≥ 4 kỳ; bất thường chỉ khi ≥ 8 việc; KPI không gắn lương thưởng | Khuyến nghị — có |
+| PRI-01 Tối thiểu hoá / công bằng | Không xếp hạng người (sắp theo phòng, tên); luôn hiện cỡ mẫu; nhóm < 5 việc ghi "mẫu nhỏ — chưa đủ để kết luận"; không đưa ra đánh giá chung khi < 5 việc được chấm (dùng trung vị để một lần Kém không lấn át); thời gian làm chỉ tính việc có ghi nhận lúc bắt đầu; xu hướng chỉ khi ≥ 12 việc trên ≥ 4 kỳ; bất thường chỉ khi ≥ 8 việc; KPI không gắn lương thưởng | Khuyến nghị — có |
 | QĐ-EXT | `kpi.person` vẫn trong NEVER_EXTERNAL: không gửi mail / Teams / Viber | Bắt buộc — giữ |
 | PRI-04 | Hồ sơ đánh giá tác động xử lý DLCN (nhân viên, KPI) vẫn phải lập — phân tích này là thêm một mục đích xử lý của cùng dữ liệu | Bắt buộc — chưa có (giữ nguyên khuyến nghị cũ) |
 

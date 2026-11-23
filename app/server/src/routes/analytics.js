@@ -54,7 +54,7 @@ function personRows(list) {
     workMedian: num(p.workDays.median), workMean: num(p.workDays.mean), workIqr: num(p.workDays.iqr), workN: p.workDays.n,
     leadMedian: num(p.leadDays.median), leadMean: num(p.leadDays.mean),
     onTime: num(p.onTime.rate), judged: p.onTime.judged, rejections: p.rejections,
-    rated: p.rating.n, good: p.rating.bands.GOOD, avg: p.rating.bands.AVERAGE, poor: p.rating.bands.POOR, score: p.rating.avg == null ? '—' : p.rating.avg, band: BAND(p.rating.band) || '—',
+    rated: p.rating.n, good: p.rating.bands.GOOD, avg: p.rating.bands.AVERAGE, poor: p.rating.bands.POOR, score: p.rating.median == null ? '—' : p.rating.median, scoreMean: p.rating.mean == null ? '—' : p.rating.mean, band: BAND(p.rating.band) || '—',
     note: [p.workDays.n < A.MIN_SAMPLE ? 'Mẫu nhỏ — chưa đủ để kết luận' : '', p.rating.n < A.MIN_SAMPLE ? `Dưới ${A.MIN_SAMPLE} việc được chấm — chưa đánh giá chung` : '',
       p.noStart ? `${p.noStart} việc không ghi lúc bắt đầu` : ''].filter(Boolean).join('; ') }));
 }
@@ -65,7 +65,7 @@ const GROUP_COLUMNS = [
   { header: 'Giao → được duyệt — TB (ngày)', key: 'leadMean', width: 16 }, { header: 'Giao → được duyệt — trung vị (ngày)', key: 'leadMedian', width: 18 },
   { header: 'Đúng hạn (%)', key: 'onTime', width: 11 }, { header: 'Số việc có hạn', key: 'judged', width: 11 }, { header: 'Lần bị trả lại', key: 'rejections', width: 11 },
   { header: 'Số việc được chấm', key: 'rated', width: 12 }, { header: 'Tốt', key: 'good', width: 7 }, { header: 'Trung bình', key: 'avg', width: 10 }, { header: 'Kém', key: 'poor', width: 7 },
-  { header: 'Điểm bình quân (0–100)', key: 'score', width: 12 }, { header: 'Đánh giá chung', key: 'band', width: 14 }, { header: 'Ghi chú', key: 'note', width: 30 },
+  { header: 'Điểm trung vị (0–100)', key: 'score', width: 12 }, { header: 'Điểm bình quân (tham khảo, không dùng kết luận)', key: 'scoreMean', width: 16 }, { header: 'Đánh giá chung', key: 'band', width: 14 }, { header: 'Ghi chú', key: 'note', width: 30 },
 ];
 function sheet(wb, name, columns, rows) {
   const ws = wb.addWorksheet(name);
@@ -88,11 +88,11 @@ async function workbook(r, user) {
     { k: 'Thời gian làm (bắt đầu → xong): TB / trung vị / Q1 – Q3 (ngày)', v: o.workDays.n ? `${o.workDays.mean} / ${o.workDays.median} / ${o.workDays.q1} – ${o.workDays.q3} (n = ${o.workDays.n})` : '—' },
     { k: 'Giao → được duyệt: TB / trung vị (ngày)', v: o.leadDays.n ? `${o.leadDays.mean} / ${o.leadDays.median} (n = ${o.leadDays.n})` : '—' },
     { k: 'Tỷ lệ xong đúng hạn', v: o.onTime.rate == null ? '—' : `${o.onTime.rate}% (${o.onTime.onTime}/${o.onTime.judged})` },
-    { k: 'Đánh giá sau duyệt (Tốt / Trung bình / Kém)', v: `${o.rating.bands.GOOD} / ${o.rating.bands.AVERAGE} / ${o.rating.bands.POOR} — ${o.rating.band ? `bình quân ${o.rating.avg} → ${BAND(o.rating.band)}` : `chưa đánh giá chung (dưới ${A.MIN_SAMPLE} việc được chấm)`}` },
+    { k: 'Đánh giá sau duyệt (Tốt / Trung bình / Kém)', v: `${o.rating.bands.GOOD} / ${o.rating.bands.AVERAGE} / ${o.rating.bands.POOR} — ${o.rating.band ? `điểm trung vị ${o.rating.median} → ${BAND(o.rating.band)} (bình quân tham khảo ${o.rating.mean})` : `chưa đánh giá chung (dưới ${A.MIN_SAMPLE} việc được chấm)`}` },
     { k: 'Xu hướng thời gian làm', v: r.trend.direction == null ? 'Chưa đủ dữ liệu' : `${{ UP: 'Tăng', DOWN: 'Giảm', STABLE: 'Ổn định' }[r.trend.direction]} (${r.trend.workDaysSlope} ngày mỗi ${r.trend.unit === 'week' ? 'tuần' : 'tháng'}, Theil–Sen)` },
     { k: 'Ngưỡng kéo dài bất thường (Q3 + 1,5 × IQR)', v: r.outliers ? `${r.outliers.fence} ngày` : 'Chưa đủ dữ liệu' },
     {}, { k: 'Phương pháp', v: 'Trung vị, tứ phân vị (PERCENTILE.INC); bất thường theo Tukey; xu hướng theo độ dốc Theil–Sen; kiểm soát tỷ lệ đúng hạn bằng biểu đồ p (±3σ).' },
-    { k: 'Mức đánh giá', v: 'Xuất sắc + Tốt = Tốt; Đạt = Trung bình; Cần cải thiện + Kém = Kém. Điểm 100/85/70/50/0; bình quân ≥ 80 Tốt, ≥ 60 Trung bình.' },
+    { k: 'Mức đánh giá', v: 'Xuất sắc + Tốt = Tốt; Đạt = Trung bình; Cần cải thiện + Kém = Kém. Điểm 100/85/70/50/0; đánh giá chung theo TRUNG VỊ điểm: ≥ 80 Tốt, ≥ 60 Trung bình, còn lại Kém; chỉ khi có ít nhất 5 việc được chấm. Điểm bình quân chỉ để tham khảo.' },
     { k: 'Lưu ý', v: 'Số liệu tham khảo, không xếp hạng và không gắn lương thưởng. Nhóm dưới 5 việc: chưa đủ để kết luận.' },
     ...r.notes.map(n => ({ k: 'Ghi chú dữ liệu', v: n })),
   ]);

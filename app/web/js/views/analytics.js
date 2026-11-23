@@ -23,13 +23,13 @@ function groupCells(g) {
     <td class="num st-sep">${v(g.onTime.rate, '%')}<div class="muted xs">${g.onTime.onTime}/${g.onTime.judged}</div></td>
     <td class="num">${g.rejections}</td>
     <td class="num st-sep">${g.rating.n}</td><td class="num">${b.GOOD} · ${b.AVERAGE} · ${b.POOR}</td>
-    <td class="num">${v(g.rating.avg)}</td><td>${g.rating.band ? band(g.rating.band) : `<span class="muted xs" title="Cần ít nhất 5 việc được chấm">chưa đủ mẫu</span>`}</td>`;
+    <td class="num">${v(g.rating.median)}</td><td>${g.rating.band ? band(g.rating.band) : `<span class="muted xs" title="Cần ít nhất 5 việc được chấm">chưa đủ mẫu</span>`}</td>`;
 }
 const HEAD = `<th class="num">Việc xong</th>
   <th class="num st-sep" title="Bắt đầu làm → hoàn thành; chỉ việc có ghi nhận lúc bắt đầu">Thời gian làm<br><span class="muted xs">TB, ngày</span></th><th class="num">Thời gian làm<br><span class="muted xs">trung vị, ngày</span></th>
   <th class="num st-sep" title="Ngày giao → ngày được duyệt (việc không qua duyệt: → hoàn thành)">Giao → duyệt<br><span class="muted xs">TB, ngày</span></th><th class="num">Giao → duyệt<br><span class="muted xs">trung vị, ngày</span></th>
   <th class="num st-sep">Đúng hạn</th><th class="num" title="Số lần phiếu duyệt bị trả lại">Trả lại</th>
-  <th class="num st-sep" title="Số việc được người giao chấm mức khi duyệt">Được chấm</th><th class="num">Tốt · TB · Kém</th><th class="num">Điểm BQ</th><th>Đánh giá chung</th>`;
+  <th class="num st-sep" title="Số việc được người giao chấm mức khi duyệt">Được chấm</th><th class="num">Tốt · TB · Kém</th><th class="num" title="Trung vị điểm các lần chấm (100/85/70/50/0)">Điểm trung vị</th><th>Đánh giá chung</th>`;
 
 // Biểu đồ kiểm soát p (tỷ lệ đúng hạn theo kỳ, giới hạn ±3σ).
 function controlChart(c) {
@@ -78,7 +78,7 @@ export async function renderAnalytics(root, params, setCrumbs) {
       ${tile(`${v(o.workDays.mean)} <span class="st-of">/ ${v(o.workDays.median)}</span>`, 'Thời gian làm, TB / trung vị (ngày)', o.workDays.n ? `Q1–Q3: ${o.workDays.q1}–${o.workDays.q3} · n = ${o.workDays.n}${o.noStart ? ` · ${o.noStart} việc không ghi lúc bắt đầu` : ''}` : '')}
       ${tile(`${v(o.leadDays.mean)} <span class="st-of">/ ${v(o.leadDays.median)}</span>`, 'Giao → được duyệt, TB / trung vị (ngày)', o.leadDays.n ? `n = ${o.leadDays.n}` : '')}
       ${tile(v(o.onTime.rate, '%'), 'Xong đúng hạn', `${o.onTime.onTime}/${o.onTime.judged} việc có hạn`)}
-      ${tile(o.rating.band ? BAND[o.rating.band][0] : '—', 'Đánh giá sau duyệt', `Tốt ${o.rating.bands.GOOD} · TB ${o.rating.bands.AVERAGE} · Kém ${o.rating.bands.POOR}${o.rating.band ? ` · điểm BQ ${o.rating.avg}` : ` · chưa đủ ${r.thresholds.minSample} việc được chấm`}`)}
+      ${tile(o.rating.band ? BAND[o.rating.band][0] : '—', 'Đánh giá sau duyệt', `Tốt ${o.rating.bands.GOOD} · TB ${o.rating.bands.AVERAGE} · Kém ${o.rating.bands.POOR}${o.rating.band ? ` · điểm trung vị ${o.rating.median}` : ` · chưa đủ ${r.thresholds.minSample} việc được chấm`}`)}
     </div>
     <div class="card"><h3>Theo người <span class="muted xs">(sắp theo phòng, tên — không phải xếp hạng)</span></h3>
       <div class="tbl-scroll"><table class="table st-kpi" data-testid="an-people"><thead><tr><th>Phòng</th><th>Họ tên</th>${HEAD}</tr></thead><tbody>
@@ -107,7 +107,7 @@ export async function renderAnalytics(root, params, setCrumbs) {
         <td class="nowrap">${fmtDate(d.assignedAt)}</td><td class="nowrap">${d.startedAt ? fmtDate(d.startedAt) : '<span class="muted xs">không ghi</span>'}</td><td class="nowrap">${fmtDate(d.completedAt)}</td><td class="nowrap">${fmtDate(d.approvedAt)}</td>
         <td class="num">${v(d.workDays)}</td><td class="num">${v(d.leadDays)}</td><td>${d.onTime == null ? '<span class="muted xs">không có hạn</span>' : d.onTime ? 'Có' : 'Không'}</td><td class="num">${d.rejections}</td><td>${d.rating ? esc(RATING[d.rating]) : ''}</td></tr>`).join('') || '<tr><td colspan="13" class="empty">Chưa có việc hoàn thành trong kỳ.</td></tr>'}
       </tbody></table></div></details>
-    <p class="muted xs">Phương pháp: trung bình (TB), trung vị, tứ phân vị (Q1–Q3); thời gian làm chỉ tính việc có ghi nhận lúc bắt đầu; đánh giá chung chỉ khi có ít nhất 5 việc được chấm; "Tốt" = Xuất sắc + Tốt, "Trung bình" = Đạt, "Kém" = Cần cải thiện + Kém theo mức người giao chấm khi duyệt; điểm bình quân (100/85/70/50/0) ≥ 80 là Tốt, ≥ 60 là Trung bình.
+    <p class="muted xs">Phương pháp: trung bình (TB), trung vị, tứ phân vị (Q1–Q3); thời gian làm chỉ tính việc có ghi nhận lúc bắt đầu; đánh giá chung chỉ khi có ít nhất 5 việc được chấm; "Tốt" = Xuất sắc + Tốt, "Trung bình" = Đạt, "Kém" = Cần cải thiện + Kém theo mức người giao chấm khi duyệt; đánh giá chung theo trung vị điểm (100/85/70/50/0): ≥ 80 là Tốt, ≥ 60 là Trung bình, còn lại Kém.
       Phạm vi phòng = phòng chủ trì việc. Số liệu để tham khảo, không xếp hạng, không gắn lương thưởng.</p>`;
 
   const sel = root.querySelector('#anPeriod');

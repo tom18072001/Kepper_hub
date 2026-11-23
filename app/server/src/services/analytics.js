@@ -3,7 +3,7 @@
 //  - Thời gian xử lý hiện HAI chỉ số: "thời gian làm" = bắt đầu làm → hoàn thành (không có ngày bắt đầu: ngày giao)
 //    và "giao → được duyệt" = ngày giao → ngày phiếu duyệt cuối cùng được duyệt (việc không qua duyệt: → hoàn thành).
 //  - Đánh giá Tốt / Trung bình / Kém GỘP từ mức người giao đã chấm khi duyệt (không thêm trường):
-//    Xuất sắc + Tốt = Tốt; Đạt = Trung bình; Cần cải thiện + Kém = Kém. Đánh giá chung của nhóm = điểm bình quân (thang 100) quy về 3 mức.
+//    Xuất sắc + Tốt = Tốt; Đạt = Trung bình; Cần cải thiện + Kém = Kém. Đánh giá chung của nhóm = TRUNG VỊ điểm (thang 100) quy về 3 mức (chủ dự án chốt 24/11/2026: "Đổi sang trung vị").
 //  - Thống kê mô tả + xu hướng + phát hiện bất thường; không dự báo.
 // Dữ liệu còn nhỏ → dùng thống kê bền (trung vị, IQR), luôn kèm cỡ mẫu, đánh dấu mẫu nhỏ; KHÔNG xếp hạng người (sắp theo phòng, tên).
 // Hàm thuần, không truy vấn CSDL (route: routes/analytics.js).
@@ -23,16 +23,16 @@ const r1 = S.round1;
 const BANDS = { GOOD: 'Tốt', AVERAGE: 'Trung bình', POOR: 'Kém' };
 const BAND_OF_RATING = { EXCELLENT: 'GOOD', GOOD: 'GOOD', PASS: 'AVERAGE', NEEDS_IMPROVEMENT: 'POOR', POOR: 'POOR' };
 const ratingBand = rating => BAND_OF_RATING[rating] || null;
-// Điểm bình quân (thang 100 của KPI: 100/85/70/50/0) → mức: ≥ 80 Tốt (trên điểm giữa Đạt–Tốt), ≥ 60 Trung bình (trên điểm giữa Cần cải thiện–Đạt), còn lại Kém.
+// Điểm (thang 100 của KPI: 100/85/70/50/0) → mức: ≥ 80 Tốt (trên điểm giữa Đạt–Tốt), ≥ 60 Trung bình (trên điểm giữa Cần cải thiện–Đạt), còn lại Kém.
 const bandOfScore = score => (score == null ? null : score >= 80 ? 'GOOD' : score >= 60 ? 'AVERAGE' : 'POOR');
-// MỘT chỗ duy nhất quyết "Đánh giá chung" của một nhóm việc được chấm (đổi cách gộp — bình quân / trung vị — chỉ sửa hàm này).
-// Dưới MIN_SAMPLE việc được chấm: KHÔNG kết luận (score, band = null); chỉ hiện phân bố Tốt · TB · Kém.
-// Hiện tại: bình quân điểm RATING_POINTS (Kém = 0 nên nhạy với một lần Kém — đang chờ chủ dự án chốt cách gộp).
+// MỘT chỗ duy nhất quyết "Đánh giá chung" của một nhóm việc được chấm (đổi cách gộp chỉ sửa hàm này).
+// Dưới MIN_SAMPLE việc được chấm: KHÔNG kết luận (score, band, mean = null); chỉ hiện phân bố Tốt · TB · Kém.
+// score = TRUNG VỊ điểm RATING_POINTS (PERCENTILE.INC) — bền với một lần Kém (0 điểm); mean = bình quân, chỉ để tham khảo, không dùng kết luận.
 function overallRating(ratings) {
-  const points = ratings.map(r => RATING_POINTS[r]).filter(p => p != null);
-  if (points.length < MIN_SAMPLE) return { score: null, band: null };
-  const score = r1(points.reduce((a, b) => a + b, 0) / points.length);
-  return { score, band: bandOfScore(score) };
+  const points = ratings.map(r => RATING_POINTS[r]).filter(p => p != null).sort((a, b) => a - b);
+  if (points.length < MIN_SAMPLE) return { score: null, band: null, mean: null };
+  const score = r1(quantile(points, 0.5));
+  return { score, band: bandOfScore(score), mean: r1(points.reduce((a, b) => a + b, 0) / points.length) };
 }
 
 // ---------- Thống kê mô tả ----------
@@ -102,7 +102,7 @@ function groupStats(done, rated) {
     completed: done.length, workDays: work, leadDays: lead, noStart: done.filter(noStart).length,
     onTime: { judged: judged.length, onTime, rate: S.pct(onTime, judged.length) },
     rejections: done.reduce((n, i) => n + rejectionsOf(i), 0),
-    rating: { n: rated.length, avg: overall.score, band: overall.band, bands, smallSample: rated.length < MIN_SAMPLE },
+    rating: { n: rated.length, median: overall.score, mean: overall.mean, band: overall.band, bands, smallSample: rated.length < MIN_SAMPLE },
   };
 }
 
