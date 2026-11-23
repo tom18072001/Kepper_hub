@@ -19,6 +19,7 @@ export const PAGE_TITLES = {
   trash: 'Thùng rác',
   tuan: 'Báo cáo tuần',
   vanthu: 'Văn thư',
+  'tai-lieu': 'Tài liệu',
   crm: 'Đối tác',
   hrm: 'Nhân sự',
   dashboard: 'Thống kê công việc',
@@ -43,7 +44,8 @@ const NAV = [
     { href: '#/tuan', label: T.tuan, icon: 'calendar', testid: 'nav-tuan', match: '#/tuan', desc: 'BM-TH-01, tổng hợp giao ban, chấm điểm' },
   ] },
   { id: 'biz', name: 'Nghiệp vụ', color: '#B8641C', icon: 'building', items: [
-    { href: '#/vanthu', label: T.vanthu, icon: 'file', testid: 'nav-vanthu', id: 'navVanthu', match: '#/vanthu', show: () => mods().includes('vanthu'), desc: 'Sổ văn bản đến, đi, nội bộ' },
+    // "Tài liệu" (thay mục "Văn thư"): tài liệu dự án (tệp tải lên Hub + thư mục dự án trên NAS); văn thư và quy chế là các tab bên trong.
+    { href: '#/tai-lieu', label: T['tai-lieu'], icon: 'file', testid: 'nav-tailieu', id: 'navTailieu', match: '#/tai-lieu|#/vanthu', desc: 'Tài liệu dự án, văn thư, quy chế nội bộ' },
     { href: '#/crm', label: T.crm, icon: 'building', testid: 'nav-crm', id: 'navCrm', match: '#/crm', show: () => mods().includes('crm'), desc: 'Nhà thầu, cơ quan, ngân hàng' },
     { href: '#/hrm', label: T.hrm, icon: 'users', testid: 'nav-hrm', id: 'navHrm', match: '#/hrm', show: () => mods().includes('hrm'), desc: 'Hồ sơ, nghỉ phép, chấm công' },
   ] },
@@ -139,7 +141,7 @@ export function highlightNav() {
   const hash = location.hash, base = hash.split('?')[0];
   $$('#sidebar a[href]').forEach(a => {
     const href = a.getAttribute('href'), m = a.dataset.match;
-    a.classList.toggle('active', hash === href || base === href || (m && hash.startsWith(m))
+    a.classList.toggle('active', hash === href || base === href || (m && m.split('|').some(x => hash.startsWith(x)))
       || (href.startsWith('#/projects/') && (hash.startsWith(href + '/') || hash.startsWith(href + '?'))));
   });
   // Đang ở một trang trong nhóm đã đóng: mở nhóm ra.

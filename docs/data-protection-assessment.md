@@ -948,3 +948,52 @@ Kèm 3 khuyến nghị cho chủ dự án (mục 4).
   BGĐ duyệt khi là người giao hoặc khi quy trình dự án có bước Ban Giám đốc / PGĐ phụ trách.
 - Việc nhánh chuyển từ checklist không mang hạn riêng (nhận hạn / kế hoạch gốc của việc cha). Mục chưa xong của một việc cha đã Hoàn thành thành
   việc nhánh mở dưới việc cha đã xong (bản thật không có trường hợp này).
+
+## Tài liệu: kho tài liệu theo dự án — tệp tải lên Hub + thư mục dự án trên NAS (24/11/2026)
+
+Theo yêu cầu của chủ dự án: mục "Văn thư" trên menu đổi thành **"Tài liệu"**. Bên trong có ba tab: **Tài liệu dự án** (mới),
+**Văn thư** (văn bản đến / đi / tôi xử lý — dữ liệu và luồng vào sổ, cấp số giữ nguyên) và **Quy chế, quy định nội bộ** (sổ nội bộ D5–D7).
+Tài liệu dự án duyệt như cây thư mục, lọc theo dự án, tìm theo tên tệp:
+- "Theo công việc": tệp nhân viên tải lên trong các việc, xếp theo hạng mục → việc → việc nhánh;
+- "Thư mục dự án trên NAS": mọi tệp trong thư mục dự án (`NAS_ROOT/<KEY>-…`, production `/data/nas` = `#10.DuAn`), **kể cả tệp không tải qua Hub**. Hub chỉ đọc.
+
+Chủ dự án đã chọn (24/11/2026):
+- Hiện cả tệp có sẵn trên NAS (quét thư mục dự án, chỉ đọc).
+- **Chỉ thành viên dự án và Ban Giám đốc** xem tài liệu của dự án. Trưởng dự án tính như thành viên. Quản trị IT không xem.
+
+**Kết luận cổng:** ĐẠT CÓ ĐIỀU KIỆN. Điều kiện: mount `#10.DuAn` vào máy ảo ở chế độ chỉ đọc là đủ cho tính năng này, nhưng tải tệp đính kèm vào
+kho dự án (đã có từ trước) cần quyền ghi — giữ như hiện tại và rà quyền NTFS của thư mục dự án (mục 4).
+
+### 1. Phân loại
+
+| Tập dữ liệu | Nhãn nội bộ | Phân loại pháp lý | Ghi chú |
+|---|---|---|---|
+| Tệp trong thư mục dự án trên NAS | Bảo mật (hồ sơ pháp lý, tài chính, thiết kế dự án); có thể có tệp Hạn chế | Có thể chứa DLCN cơ bản (hợp đồng, CMND/CCCD trong hồ sơ đền bù, giải phóng mặt bằng); DLCN nhạy cảm nếu có hồ sơ nhân thân → áp mức cao nhất | Hub không lưu bản sao, không lập chỉ mục nội dung — chỉ đọc tên, kích thước, ngày sửa khi người dùng mở thư mục |
+| Tệp tải lên trong việc (`Attachment`) | Theo dự án: Bảo mật | Như trên | Không đổi cách lưu |
+
+### 2. Dòng dữ liệu
+
+- `GET /api/documents/projects` — dự án người dùng được xem tài liệu (Ban GĐ: mọi dự án chưa xoá; người khác: dự án mình là thành viên / trưởng dự án).
+- `GET /api/documents/projects/:id/hub` — danh sách tệp tải lên và cây việc chứa tệp.
+- `GET /api/documents/projects/:id/nas?path=|q=` — liệt kê một thư mục hoặc tìm theo tên (giới hạn 200 kết quả, 20.000 mục, sâu 12 cấp).
+- `GET /api/documents/projects/:id/nas/file?path=` và `GET /api/documents/files/:id` — tải / xem nhanh (PDF, ảnh).
+- Dự án không được xem trả **404** (không lộ sự tồn tại). Mọi lần tải / xem ghi AuditLog (`DOWNLOAD` / `PREVIEW`, `ProjectNasFile` kèm đường dẫn, hoặc `Attachment` kèm `via: documents`).
+- Claude (token) xem được danh sách nhưng **không tải nội dung tệp** (`assertNotVia`).
+- Đường dẫn: chỉ nhận đường dẫn tương đối trong thư mục dự án; chặn `..`, `.`, ổ đĩa, NUL, thư mục hệ thống/ẩn; so `realpath` để chặn symlink / junction trỏ ra ngoài; tìm kiếm không đi theo symlink. Ẩn tệp hệ thống (`Thumbs.db`, `~$…`, `@eaDir`, `#recycle`…).
+
+### 3. Rà năng lực (thay đổi)
+
+| Mã | Trạng thái | Ghi chú | Ưu tiên |
+|---|---|---|---|
+| PRE-01 | Một phần | Hub kiểm quyền theo dự án ở máy chủ (unit `lib/project-docs.test.js`, e2e `16-tai-lieu-du-an`). **Trong mục Tài liệu, thành viên dự án tải được mọi tệp của dự án**, kể cả tệp của việc mà trong panel việc họ chỉ xem tóm tắt — đúng quyết định của chủ dự án, rộng hơn quyền từng việc | Bắt buộc |
+| PRE-02 | Một phần | Hub chỉ đọc thư mục dự án; không có API ghi / xoá tệp NAS ngoài luồng đính kèm cũ | Bắt buộc |
+| DET-01 | Đầy đủ | AuditLog mỗi lần tải / xem, kèm đường dẫn tệp NAS | Bắt buộc |
+| PRI-xx | Một phần | Không lập chỉ mục nội dung, không đưa nội dung tệp vào log; tên tệp có thể chứa tên người (ghi vào AuditLog `path`) | Nên |
+
+### 4. Khuyến nghị và rủi ro còn lại
+
+- **Thư mục dự án trên NAS có thể chứa tài liệu mà không phải thành viên nào cũng nên xem** (vd. hồ sơ lương, đền bù có CCCD). Hub hiện cho mọi thành viên dự án xem cả thư mục.
+  Khuyến nghị: đặt tài liệu Hạn chế ngoài thư mục `#10.DuAn/<dự án>` hoặc trong thư mục con mà Hub sẽ ẩn (có thể bổ sung danh sách thư mục loại trừ nếu chủ dự án cần).
+- Thành viên dự án ở vai "Người xem" (VIEWER) cũng xem được tài liệu (chủ dự án chọn "thành viên + Ban GĐ", không phân vai).
+- Nếu máy ảo bị chiếm quyền, phạm vi đọc = toàn bộ `#10.DuAn` (như trước, không đổi).
+- Dự án chưa có thư mục trên NAS (tên = KEY hoặc bắt đầu bằng "KEY-") thì tab NAS báo "Chưa có thư mục" — IT tạo thư mục, Hub không tự tạo.

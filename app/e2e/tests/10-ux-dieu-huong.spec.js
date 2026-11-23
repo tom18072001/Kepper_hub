@@ -5,7 +5,7 @@ const { test, expect } = require('@playwright/test');
 const { login } = require('./helpers');
 
 // Trang có tiêu đề (h1) đúng bằng tên ở menu. Các trang còn lại do gói khác sửa phần tiêu đề; ở đây chỉ kiểm tiêu đề tab.
-const H1_SAME_AS_MENU = new Set(['#/home', '#/approvals', '#/sprint', '#/trash', '#/crm', '#/hrm', '#/vanthu']);
+const H1_SAME_AS_MENU = new Set(['#/home', '#/approvals', '#/sprint', '#/trash', '#/crm', '#/hrm', '#/tai-lieu']);
 
 test('25. Đăng nhập: nhãn gắn với ô nhập, nút hiện mật khẩu, lối quên mật khẩu', async ({ page }) => {
   await page.goto('/');
