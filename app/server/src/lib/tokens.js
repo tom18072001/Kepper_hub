@@ -32,6 +32,8 @@ const WRITE_ALLOW = [
   // Playground CRM / HRM (khi có module): nhật ký làm việc với đối tác, đơn nghỉ phép của chính mình.
   ['POST', /^\/api\/crm\/partners\/\d+\/interactions$/], ['POST', /^\/api\/crm\/followups\/\d+\/done$/],
   ['POST', /^\/api\/hrm\/leaves$/],
+  // Văn thư: tạo DỰ THẢO tài liệu nội bộ kèm PDF (không cấp số; phê duyệt / trả lại / vào sổ vẫn trên giao diện).
+  ['POST', /^\/api\/vanthu\/drafts$/],
 ];
 
 // Chuẩn hoá đường dẫn như Express 5 khớp route (không phân biệt hoa thường, bỏ "/" cuối) — và chặt hơn: giải mã %xx, gộp "//".

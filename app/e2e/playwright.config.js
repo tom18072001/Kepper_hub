@@ -15,6 +15,11 @@ if (process.env.TEST_WORKER_INDEX === undefined) { // chỉ tiến trình chính
   require('node:fs').mkdirSync(NAS_ROOT, { recursive: true });
 }
 const PORT = Number(process.env.E2E_PORT || 4173);
+// E2E là test CHỨC NĂNG chạy cả bộ bằng vài tài khoản giả trong vài phút: nâng giới hạn tần suất API để không nhận 429 giả.
+// Một nguồn duy nhất: truyền vào máy chủ (webServer.env) và process.env (worker nạp lại tệp này → test đọc được, vd. 01-core test 8).
+// Bản thật giữ mặc định 600 yêu cầu / phút / tài khoản — ghim bằng unit test app/server/src/lib/rate-limit.test.js. Không thử lại khi 429.
+const API_RATE_LIMIT = '100000';
+process.env.E2E_API_RATE_LIMIT = API_RATE_LIMIT;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 module.exports = defineConfig({
@@ -46,6 +51,7 @@ module.exports = defineConfig({
     env: {
       DATABASE_URL, PORT: String(PORT), JWT_SECRET: 'e2e-secret-' + 'x'.repeat(32), APP_ORIGIN: BASE_URL, NODE_ENV: 'test',
       ROOT_ADMIN_USERNAME: 'admin', ROOT_ADMIN_PASSWORD: 'Admin@2026', SEED_DEMO: 'true', ENABLE_CRON: 'false', MODULES: 'crm,hrm,vanthu',
+      API_RATE_LIMIT, // xem chú thích ở hằng API_RATE_LIMIT phía trên
       STORAGE_DRIVER: 'local', NAS_ROOT, UPLOAD_DIR: require('node:path').join(require('node:os').tmpdir(), 'workhub-e2e-uploads'),
       // Như docker-compose: cổng NAS giữ tối đa NAS_MAX_INFLIGHT (4) < UV_THREADPOOL_SIZE luồng; hạn chờ rộng hơn để máy chạy test đang tải
       // (nhiều trình duyệt mở cùng lúc) không làm cầu dao NAS mở → các spec sau nhận 503 (16-tai-lieu-du-an T3 chập chờn).
@@ -55,3 +61,4 @@ module.exports = defineConfig({
 });
 module.exports.BASE_URL = BASE_URL;
 module.exports.NAS_ROOT = NAS_ROOT;
+module.exports.API_RATE_LIMIT = API_RATE_LIMIT;

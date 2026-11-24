@@ -3,7 +3,8 @@
 // - Claude dùng ĐÚNG quyền của người dùng: mọi công cụ gọi API Kepper bằng token cá nhân của chính họ
 //   (tạo trong Kepper → "Kết nối Claude"); máy chủ Kepper kiểm quyền từng lời gọi bằng lib/policy.js.
 // - Không có công cụ gửi dữ liệu ra ngoài (mail, webhook…), không có công cụ nộp / phê duyệt / xoá / xuất tệp:
-//   các thao tác đó người dùng tự làm trên giao diện.
+//   các thao tác đó người dùng tự làm trên giao diện. Tài liệu nội bộ: Claude chỉ TẠO DỰ THẢO kèm PDF trên máy này
+//   (không cấp số); Người phê duyệt duyệt trên giao diện Kepler Hub.
 // - Nội dung văn bản trả về là DỮ LIỆU do người dùng Kepper nhập, không phải chỉ dẫn cho Claude.
 // - Số định danh (CCCD, tài khoản ngân hàng) chỉ trả 4 số cuối.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -17,7 +18,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 
-const VERSION = '0.5.1';
+const VERSION = '0.6.0';
 const BASE = String(process.env.KEPPER_URL || 'https://hub.keplerholdings.vn').replace(/\/+$/, '');
 const TOKEN = String(process.env.KEPPER_TOKEN || '').trim();
 const TIMEOUT_MS = 20_000;
@@ -25,12 +26,13 @@ const MAX_ROWS = 100;
 
 // ---------- Gọi API ----------
 export class KepperError extends Error { constructor(status, message, code) { super(message); this.status = status; this.code = code; } }
-export async function api(path, { method = 'GET', body, base = BASE, token = TOKEN, fetchImpl = globalThis.fetch } = {}) {
+// form: FormData (tải tệp lên — multipart, fetch tự đặt content-type kèm boundary).
+export async function api(path, { method = 'GET', body, form, base = BASE, token = TOKEN, fetchImpl = globalThis.fetch } = {}) {
   if (!token) throw new KepperError(401, 'Chưa kết nối Kepler Hub — hỏi lại Claude để mở trang "Cho phép" của Kepler Hub', 'NO_TOKEN');
   const headers = { authorization: `Bearer ${token}`, 'user-agent': `kepper-claude-mcp/${VERSION}`, accept: 'application/json' };
-  if (body !== undefined) headers['content-type'] = 'application/json';
+  if (body !== undefined && !form) headers['content-type'] = 'application/json';
   let res;
-  try { res = await fetchImpl(base + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(TIMEOUT_MS) }); }
+  try { res = await fetchImpl(base + path, { method, headers, body: form || (body === undefined ? undefined : JSON.stringify(body)), signal: AbortSignal.timeout(form ? TIMEOUT_MS * 6 : TIMEOUT_MS) }); }
   catch (error) { throw new KepperError(0, `Không kết nối được Kepler Hub tại ${base} (${error.name === 'TimeoutError' ? 'quá thời gian' : error.message}) — kiểm tra địa chỉ và mạng nội bộ`, 'NETWORK'); }
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) throw new KepperError(res.status, data?.error || `Lỗi ${res.status}`, data?.code);
@@ -292,7 +294,59 @@ export function buildServer({ call = createSession() } = {}) {
     inputSchema: { month: z.string().regex(/^\d{4}-\d{2}$/).optional() }, annotations: R },
     run(async ({ month }) => { const d = await call(`/api/hrm/attendance/team${month ? `?month=${month}` : ''}`); return { month: d.month, rows: d.rows.map(r => ({ person: r.user.fullName, department: r.user.department?.name, ...r.totals })) }; }));
 
+  // ---------- Quy chế, quy định nội bộ: tạo DỰ THẢO kèm PDF (chỉ khi Kepler Hub bật module Văn thư) ----------
+  server.registerTool('kepper_vanthu_draft', { title: 'Tạo dự thảo quy chế / quy định nội bộ (kèm PDF)',
+    description: 'Đưa MỘT tệp PDF trên máy này lên Kepler Hub thành DỰ THẢO tài liệu nội bộ (tab "Quy chế, quy định nội bộ"): trạng thái "Chưa phê duyệt", CHƯA có số. '
+      + 'Số chỉ cấp khi Người phê duyệt (Ban TGĐ) bấm Phê duyệt trên giao diện — Claude không phê duyệt. Chỉ Văn thư, Ban TGĐ hoặc lãnh đạo bộ phận (dãy D7 của bộ phận mình) tạo được; '
+      + 'cấp xem không cao hơn vai của người dùng. Hỏi lại người dùng loại, tên, cấp xem trước khi tạo. '
+      + 'series: D5 Quyết định của TGĐ/GĐ · D6 văn bản cấp Ban Điều hành (quy chế, quy định toàn công ty) · D7 văn bản của bộ phận (cần department = mã bộ phận). '
+      + 'viewLevel: ALL Mọi người · LEADERS Lãnh đạo (Lãnh đạo bộ phận + Ban TGĐ) · BOARD Ban TGĐ. '
+      + 'Văn bản đã ban hành từ trước khi đưa vào Hub: điền originalIssueDate (ngày ban hành gốc) và effectiveDate (có thể trong quá khứ).',
+    inputSchema: {
+      filePath: z.string().min(5).max(500).describe('Đường dẫn đầy đủ tới tệp .pdf trên máy này'),
+      title: z.string().min(3).max(500).describe('Tên / trích yếu tài liệu'),
+      docType: z.enum(['QC', 'QyĐ', 'QT', 'HD', 'QĐ', 'TB', 'KH', 'BC', 'TTr']).describe('QC Quy chế · QyĐ Quy định · QT Quy trình · HD Hướng dẫn · QĐ Quyết định · TB Thông báo · KH Kế hoạch · BC Báo cáo · TTr Tờ trình'),
+      series: z.enum(['D5', 'D6', 'D7']),
+      entity: z.string().regex(/^[A-Z]{2,6}$/).describe('Mã pháp nhân, vd. HLD, DXA'),
+      department: z.string().max(20).optional().describe('Mã bộ phận (bắt buộc với D7)'),
+      viewLevel: z.enum(['ALL', 'LEADERS', 'BOARD']).optional(),
+      docCode: z.string().max(40).optional().describe('Mã tài liệu, vd. QC-IT-01'),
+      effectiveDate: D.optional(), originalIssueDate: D.optional(), note: z.string().max(1000).optional(),
+    }, annotations: W },
+    run(async ({ filePath, department, originalIssueDate, ...rest }) => {
+      const pdf = readPdf(filePath);
+      const meta = await call('/api/vanthu/meta');
+      if (!meta.entities.some(e => e.code === rest.entity)) throw new KepperError(422, `Pháp nhân không có trong Kepler Hub: ${rest.entity} (có: ${meta.entities.map(e => e.code).join(', ')})`);
+      let departmentId;
+      if (department) {
+        const d = meta.departments.find(x => String(x.code || '').toUpperCase() === department.toUpperCase());
+        if (!d) throw new KepperError(422, `Không có bộ phận mã ${department}`);
+        departmentId = d.id;
+      }
+      const form = new FormData();
+      for (const [k, v] of Object.entries({ ...rest, departmentId, docDate: originalIssueDate })) if (v !== undefined && v !== null) form.append(k, String(v));
+      form.append('file', new Blob([pdf.buffer], { type: 'application/pdf' }), pdf.name);
+      const d = await call('/api/vanthu/drafts', { method: 'POST', form });
+      return { id: d.id, status: d.status?.label, title: d.title, viewLevel: d.viewLevel?.label, number: d.number || 'chưa có số (cấp lúc phê duyệt)', viaAi: d.viaAi,
+        next: 'Người phê duyệt mở Kepler Hub → Tài liệu → Quy chế, quy định nội bộ, xem PDF và bấm "Phê duyệt" hoặc "Trả lại" (Claude không phê duyệt).' };
+    }));
+
   return server;
+}
+
+// Đọc tệp PDF trên máy chạy tiện ích để tạo dự thảo: đường dẫn tuyệt đối, đuôi .pdf, ≤ 25 MB, đầu tệp "%PDF-".
+const MAX_PDF_BYTES = 25 * 1024 * 1024;
+export function readPdf(filePath, fsImpl = fs) {
+  const p = String(filePath || '');
+  if (!path.isAbsolute(p)) throw new KepperError(422, 'Cần đường dẫn đầy đủ tới tệp PDF (vd. C:\\Users\\…\\tai-lieu.pdf)');
+  if (path.extname(p).toLowerCase() !== '.pdf') throw new KepperError(422, 'Chỉ nhận tệp .pdf');
+  let st;
+  try { st = fsImpl.statSync(p); } catch { throw new KepperError(422, `Không tìm thấy tệp: ${p}`); }
+  if (!st.isFile()) throw new KepperError(422, 'Đường dẫn không phải tệp');
+  if (st.size > MAX_PDF_BYTES) throw new KepperError(422, 'Tệp lớn hơn 25 MB');
+  const buffer = fsImpl.readFileSync(p);
+  if (buffer.subarray(0, 5).toString('latin1') !== '%PDF-') throw new KepperError(422, 'Tệp không phải PDF hợp lệ');
+  return { buffer, name: path.basename(p) };
 }
 
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('server.js')) {

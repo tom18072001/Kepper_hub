@@ -1011,8 +1011,8 @@ model DocRecord {
   series         String // D10 (đến) | D9 (đi) | D5 | D6 | D7-<mã bộ phận> (nội bộ)
   entity         String // mã pháp nhân: HLD, DXA…
   year           Int
-  seq            Int
-  number         String // số và ký hiệu đầy đủ, vd. 0123/2026/Đ-HLD — mã định danh duy nhất
+  seq            Int? // trống = dự thảo sổ nội bộ (số cấp lúc phê duyệt)
+  number         String? // số và ký hiệu đầy đủ, vd. 0123/2026/Đ-HLD — mã định danh duy nhất; trống = dự thảo
   docType        String? // tên loại viết tắt: CV, TB, QĐ, TTr…
   title          String // trích yếu
   counterpart    String? // nơi gửi (đến) / nơi nhận (đi)
@@ -1034,6 +1034,14 @@ model DocRecord {
   cancelledAt    DateTime?
   cancelReason   String?
   cancelledById  Int?
+  // Sổ nội bộ (quy chế, quy định — docs/de-xuat-quy-che-phe-duyet.md): cấp xem theo vai THAY mức mật; phê duyệt của Người phê duyệt.
+  viewLevel      String? // ALL Mọi người | LEADERS Lãnh đạo | BOARD Ban TGĐ (chỉ sổ NOIBO)
+  docCode        String? // mã tài liệu ổn định qua các phiên bản, vd. QC-IT-01
+  effectiveDate  String? // ngày hiệu lực (YYYY-MM-DD); trống = từ lúc phê duyệt
+  replacesId     Int? // văn bản được thay thế (bản cũ)
+  approvedById   Int?
+  approvedAt     DateTime?
+  viaAi          Boolean    @default(false) // dự thảo tạo qua Claude (token)
   createdById    Int
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
@@ -1043,6 +1051,7 @@ model DocRecord {
   @@unique([series, entity, year, seq])
   @@unique([number])
   @@index([book, year])
+  @@index([book, status])
   @@index([handlerId])
   @@index([dueDate])
 }
@@ -1052,7 +1061,7 @@ model DocEvent {
   docId     Int
   doc       DocRecord @relation(fields: [docId], references: [id], onDelete: Cascade)
   userId    Int?
-  action    String // CREATE | STATUS | ASSIGN | UPDATE | CANCEL | FILE | FILE_DELETED
+  action    String // CREATE | STATUS | ASSIGN | UPDATE | CANCEL | FILE | FILE_DELETED | APPROVE | RETURN | RESUBMIT | MIGRATE
   fromValue String?
   toValue   String?
   note      String?
