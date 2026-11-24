@@ -445,6 +445,16 @@ SELECT role, COUNT(*) FROM "ProjectMember" GROUP BY 1;
 | 3 | `sh deploy/vm-deploy.sh localhost` | thoát 0, healthy; image container = tag `kepper-app:vmtest` mới (`4500fcf9…` ≠ `dd88dbdf…`), build id `95d54a9a0776`; `_prisma_migrations`: 1 dòng quay lui + 1 dòng `finished_at`; kiểm lại "đã áp — bỏ qua" |
 | 4 | `sh deploy/vm-deploy.sh localhost` (kiểm giữ 2 tag) | tạo `rollback-…145256`, xoá `rollback-…144723`; còn đúng 2 tag rollback |
 
+**Không báo thành công khi bản mới chưa lên** (vòng nghiệm thu 5): `vm-deploy.sh` giữ mã thoát của `docker compose up`; mã khác 0 thì luôn thoát 1 kể cả khi app (cũ) vẫn healthy; khi healthy còn so image id của container app với `kepper-app:<APP_VERSION>` vừa build — khác thì thoát 1 "bản mới CHƯA chạy"; trùng thì in "Bản mới đang chạy: … = <image id>". `upgrade.sh` / `upgrade.ps1` cũng so image id trước khi báo OK. Chạy thử 24/11/2026, bản thử một thư mục `kepper-vmtest` (bản cũ `main`, image `0da4eba5…`; mã mới 95459cd; đã dọn sạch):
+
+| Đường | Cách gây | Kết quả thật |
+|---|---|---|
+| (i) build hỏng | **bản thử** chèn `RUN … && false` vào Dockerfile, chạy `sh deploy/vm-deploy.sh localhost` | build lỗi; `app: healthy (docker compose up: mã 1)`; "docker compose up LỖI (mã 1) — bản mới CHƯA chạy; app đang phục vụ là bản CŨ"; in image đang chạy `0da4eba5…`; thoát 1 |
+| (iii) chốt migration | tạo tài khoản director thu hẹp, **bản thử** thay precheck bằng bản giả thoát 0 | `app: unhealthy (mã 1)`; in log + 4 lệnh khôi phục kèm `kepper-app:rollback-20261124-150212`; thoát 1. Chạy đúng 4 lệnh đó → bản cũ healthy lại (`0da4eba5…`) |
+| (ii) thành công | đổi vai (API Quản trị bản cũ), precheck thật, `sh deploy/vm-deploy.sh localhost` | kiểm đạt; `app: healthy (mã 0)`; "Bản mới đang chạy: kepper-app:vmtest = sha256:2f836385…" (= image container); giữ 2 tag rollback (xoá tag cũ nhất); thoát 0 |
+
+Bản thử không cấu hình sao lưu nên dòng "Không chạy được sao lưu tay" xuất hiện ở cả ba đường (hành vi có sẵn, không đổi).
+
 **Bản Windows / NAS (`deploy/upgrade.ps1`, `deploy/upgrade.sh`)**: như trên — hai script này cũng gắn tag `kepper-app:rollback-<giờ>` và in lệnh quay lại khi app không lên.
 
 **Phụ lục — chạy thử vòng 3 (hai thư mục, `APP_VERSION` khác nhau)** —  (lần chạy đầu báo P3018 kèm câu "Còn N tài khoản vai Ban Tổng Giám đốc…"; app khởi động lại liên tục và từ lần thứ hai báo P3009). Chốt nằm ở ĐẦU migration nên dữ liệu chưa đổi. Chạy trong thư mục cài (nơi có `.env`, `docker-compose.yml`):
