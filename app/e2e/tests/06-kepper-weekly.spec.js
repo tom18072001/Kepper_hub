@@ -209,6 +209,8 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   expect(text.startsWith('BẢO MẬT – chỉ dùng nội bộ')).toBe(true);
   expect(text).toContain('Ban Pháp lý →');
   expect(text).not.toContain('Tô Minh Khoa');
+  expect(text).not.toContain('I. ĐÃ HOÀN THÀNH'); // bản gửi email = bản tóm tắt (không có danh sách việc xong / đang làm)
+  await expect(gd.getByTestId('wk-copy-full')).toBeVisible(); // bản đầy đủ: nút riêng, chỉ dùng nội bộ
 
   // 10b) Trưởng bộ phận nhận bản TÓM TẮT: không chi tiết bộ phận khác, không họ tên người nộp.
   const tcSum = await (await apiAs(tc, '/api/weekly/summary')).json();
@@ -356,7 +358,11 @@ test('21. Mục S10 — việc Giám đốc giao trưởng phòng qua sổ, nhâ
   expect(auto.auto).toBe(true); expect(auto.risk).toBe('OVERDUE');
   expect(ktRow.report.risks.some(r => r.itemId === item.id)).toBe(true);
   expect(ktRow.risk).toBeGreaterThanOrEqual(1);
-  expect(full.text).toContain(`${title} (hệ thống tự bổ sung)`);
+  expect(full.fullText).toContain(`${title} (hệ thống tự bổ sung)`); // bản đầy đủ: chỉ trong Hub, nội bộ Ban GĐ
+  // Bản gửi email (nút "Sao chép bản tổng hợp"): không nêu tên dòng tự bổ sung, không có danh sách mục I / II; số liệu vẫn đếm.
+  expect(full.text).not.toContain(title);
+  expect(full.text).not.toContain('II. ĐANG THỰC HIỆN');
+  expect(full.text).toContain(`nguy cơ chậm ${ktRow.risk}`);
   const gdRep = await json(gd, `/api/weekly/report?week=${ctx.week}&departmentId=${kt}`);
   expect(rowsOf(gdRep.report.data).some(r => r.itemId === item.id && r.auto)).toBe(true);
   const tpRep = await json(tp, `/api/weekly/report?week=${ctx.week}`);
@@ -369,6 +375,7 @@ test('21. Mục S10 — việc Giám đốc giao trưởng phòng qua sổ, nhâ
     const brief = await json(p, `/api/weekly/summary?week=${ctx.week}`);
     expect(JSON.stringify(brief).includes(title)).toBe(false);
     expect(brief.text.includes('tự bổ sung')).toBe(false);
+    expect(brief.fullText).toBeUndefined();
   }
   // Giao diện Ban GĐ: chi tiết bộ phận có nhãn "Hệ thống tự bổ sung".
   await gd.goto(`/#/tuan/tong-hop?w=${ctx.week}`);

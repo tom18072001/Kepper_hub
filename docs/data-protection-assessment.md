@@ -970,8 +970,18 @@ Việc chưa bắt đầu thì không báo cáo, trừ khi đã có nguy cơ ch�
 - Điền sẵn chỉ lấy việc thường **người lập xem được**, qua `visibleProjectsWhere` và `itemVisibleWhere`, giống bảng công việc.
   Việc thuộc bộ phận khi: bộ phận chủ trì (hoặc phòng của dự án) là bộ phận lập báo cáo, hoặc người phụ trách là thành viên bộ phận.
 - Sau khi nộp, tên việc thường của bộ phận đến người xem báo cáo tuần theo `lib/policy.js`:
-  - giao diện và API `/api/weekly/report`, `/api/weekly/summary`: Ban GĐ, thư ký, PMO xem mọi bộ phận (quyền `weekly.summary.detail`); trưởng / phó xem bộ phận mình;
-  - văn bản sao chép (`text` của `/api/weekly/summary`): cùng phạm vi trên — trưởng / phó chỉ nhận việc của bộ phận mình (có test `weekly-3phan.test.js` ca 5);
+  - báo cáo bộ phận (giao diện, `/api/weekly/report`, MCP `kepper_weekly_report`): **mọi thành viên của bộ phận** (nhân viên, trưởng / phó) xem báo cáo
+    bộ phận mình (`lib/policy.js` weekly.report · view); Ban GĐ, thư ký, PMO xem mọi bộ phận;
+  - bản tổng hợp `/api/weekly/summary`: Ban GĐ, thư ký, PMO nhận bản đầy đủ (`weekly.summary.detail`); trưởng / phó nhận bản tóm tắt (chi tiết chỉ bộ phận mình);
+    nhân viên không xem;
+  - văn bản sao chép — **bản gửi email** (`text` của `/api/weekly/summary`, nút "Sao chép bản tổng hợp", MCP `kepper_weekly_summary`): chủ dự án chọn
+    "Bản tóm tắt" (24/11/2026). Với MỌI người dùng, kể cả thư ký / Ban GĐ, gồm: tình trạng nộp, số việc xong / đang làm / nguy cơ chậm từng bộ phận,
+    Action Log, mục III nguy cơ chậm (tên việc, mức nguy cơ, hạn, giải pháp), yêu cầu hỗ trợ. **Không** có danh sách mục I (việc xong), mục II (việc đang làm);
+    dòng "Hệ thống tự bổ sung" không nêu tên, chỉ cộng vào số liệu; không có họ tên người phụ trách. Khớp QĐ-EXT (`lib/policy.js`: chỉ bản tóm tắt được gửi
+    ra ngoài; `weekly.report`, `weekly.summary.detail` thuộc NEVER_EXTERNAL). Trưởng / phó: mục III chỉ việc bộ phận mình (dựng từ bản tóm tắt).
+    Test: `weekly-3phan.test.js` ca 5, `weekly-s10.test.js`, e2e 06;
+  - **bản đầy đủ** (`fullText`, mục I, II, III mọi bộ phận): chỉ trả cho người xem đầy đủ (`weekly.summary.detail`), xem trong Hub; nút riêng
+    "Sao chép bản đầy đủ" ghi rõ "chỉ dùng nội bộ Ban GĐ — không gửi email". Nhật ký `WEEKLY_SUMMARY_COPY` ghi `kind` = email / full;
   - **kênh MCP** (Claude, token cá nhân, quyền của chính người dùng): `kepper_weekly_report`, `kepper_save_weekly_draft` (báo cáo bộ phận mình) và
     `kepper_weekly_summary` (trả `text`, `kpis`, `helps`, `rows` của `/api/weekly/summary` — cùng phạm vi theo quyền như trên). Nội dung đi vào
     phiên Claude của người dùng: là xử lý DLCN qua dịch vụ AI, cần có trong hồ sơ đánh giá tác động (PRI-04).
@@ -992,10 +1002,18 @@ Việc chưa bắt đầu thì không báo cáo, trừ khi đã có nguy cơ ch�
 
 ### 4. Khuyến nghị và rủi ro còn lại
 
-- **Khuyến nghị 1 (Nên có):** chủ dự án xác nhận việc này là chấp nhận được. Tên việc thường của dự án hạn chế đi vào báo cáo tuần bộ phận, và thư ký / PMO / Ban GĐ đọc được.
-  Theo QC-TH-01, đây là bộ phận báo cáo việc của mình lên. Nếu không chấp nhận, lọc theo `visibility` của dự án khi điền sẵn.
+- **Khuyến nghị 1 (Nên có):** chủ dự án xác nhận việc này là chấp nhận được. Tên việc thường của dự án hạn chế đi vào báo cáo tuần bộ phận. Người đọc thực tế:
+  **mọi thành viên bộ phận** (báo cáo bộ phận mình), thư ký / PMO / Ban GĐ (mọi bộ phận, bản đầy đủ và văn bản sao chép đầy đủ), người nhận email nếu bản
+  đầy đủ được dán vào email gửi các trưởng bộ phận. Theo QC-TH-01, đây là bộ phận báo cáo việc của mình lên. Nếu không chấp nhận, lọc theo `visibility`
+  của dự án khi điền sẵn. (Việc người lập không xem được thì không đến người lập — mục 5.)
 - **Khuyến nghị 2 (Bắt buộc):** cập nhật hồ sơ đánh giá tác động xử lý DLCN (PRI-04) như mục 3, gồm kênh MCP.
 - **Khuyến nghị 3 (Nên có):** soát các bản tổng hợp đã sao chép / gửi qua Claude trước bản sửa: trưởng / phó bộ phận có thể đã nhận văn bản đầy đủ của bộ phận khác.
+- **Khuyến nghị 4 (đã xử lý 24/11/2026):** bản gửi email = bản tóm tắt nói trên (chủ dự án chọn). Còn lại (Nên có): thư ký / Ban GĐ không dán
+  bản đầy đủ vào email / nhóm chat chung — giao diện đã ghi cảnh báo cạnh nút, nhật ký ghi lần sao chép bản đầy đủ.
+- **Định nghĩa "Đã đăng ký tuần trước, chưa khởi động" (nguy cơ PLAN_NOT_STARTED):** việc đã ghi ở kế hoạch tuần (Phần IV) của bản đã nộp mà vẫn chưa bắt đầu
+  → Phần III. Cờ giữ qua các tuần tới khi việc được bắt đầu, xong, hoặc bị huỷ / bỏ khỏi báo cáo. Dòng tự do bắt buộc (kế hoạch tuần trước, việc TGĐ giao)
+  ghi "Chưa bắt đầu", 0% cũng vào Phần III (nhãn "Đã đăng ký tuần trước, chưa khởi động" / "TGĐ giao, chưa khởi động"), không tính là đang thực hiện.
+  Không thêm trường cá nhân.
 - Rủi ro: "nguy cơ chậm" tính theo ngày xem / ngày nộp, không theo thứ Sáu của tuần báo cáo. Bản đã nộp giữ nguyên nhãn lúc nộp. Bản nháp mở lại sẽ được tính lại khi bấm "Làm mới".
 
 ### 5. Dòng "Hệ thống tự bổ sung" (mục S10 — chủ dự án chọn "Tự đưa vào", 24/11/2026)
@@ -1017,7 +1035,7 @@ Ví dụ: TGĐ giao trưởng phòng qua sổ giao việc, nhân viên lập bá
 | Nơi xem | Ban GĐ, thư ký, PMO (`weekly.summary.detail`) | Người vốn xem được việc (vd. trưởng phòng được giao) | Người lập, nhân viên khác | Trưởng / phó (bản tóm tắt) |
 |---|---|---|---|---|
 | `/api/weekly/report`, `/report/versions`, MCP `kepper_weekly_report` | Có | Có (kiểm quyền xem từng việc) | Không | Không, trừ việc họ xem được |
-| `/api/weekly/summary` (số liệu, `rows`, `risks`, `text`), MCP `kepper_weekly_summary` | Có, đếm vào KPI, văn bản ghi "(hệ thống tự bổ sung)" | Bản tóm tắt: không | — | Không có, **không đếm** (dựng từ báo cáo đã bỏ dòng tự bổ sung) |
+| `/api/weekly/summary` (số liệu, `rows`, `risks`, `fullText`), MCP `kepper_weekly_summary` | Có, đếm vào KPI; bản đầy đủ ghi "(hệ thống tự bổ sung)"; **bản gửi email (`text`) không nêu tên, chỉ đếm** | Bản tóm tắt: không | — | Không có, **không đếm** (dựng từ báo cáo đã bỏ dòng tự bổ sung) |
 | Thông báo "Tổng hợp giao ban" (gửi cả trưởng / phó) | Số liệu không đếm dòng tự bổ sung | | | |
 | Bản Word (Dashboard) | Đếm theo quyền xem của người xuất. Ban GĐ có `work.view` toàn hệ thống nên có cả việc này | | | |
 

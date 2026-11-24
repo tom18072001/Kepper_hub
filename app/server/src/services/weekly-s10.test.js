@@ -4,7 +4,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const WK = require('./weekly');
-const WR = require('./weekly-recompute');
+const WS = require('./weekly-submit');
 const A = require('./alerts');
 const M = require('./mtl');
 const P = require('../lib/policy');
@@ -37,13 +37,11 @@ const fill = data => { for (const r of [...data.results, ...data.ongoing, ...dat
 function submitAsStaff(prev = null) {
   const deptItems = all(), seen = deptItems.filter(i => VISIBLE_TO_STAFF.has(i.id));
   const prefill = WK.buildPrefill({ week: F, deptId: 1, items: seen, memberIds: members, prev });
-  const data = WK.adoptMandatory(fill(WK.sanitize(structuredClone(prefill), ctxOf(seen))), prefill);
-  WR.recomputeRows(data, seen, FRI);
-  const mandatory = [...prefill.results, ...prefill.ongoing, ...prefill.risks].filter(r => r.mandatory);
-  const errors = WK.validate(data, F, { mandatory });
+  // Đúng chuỗi của route (services/weekly-submit.js).
+  const { data, errors } = WS.prepareSubmit({ raw: fill(structuredClone(prefill)), ctx: { ...ctxOf(seen), items: seen }, prefill, now: FRI, week: F });
   const full = WK.buildPrefill({ week: F, deptId: 1, items: deptItems, memberIds: members, prev });
-  const auto = WK.addAutoRows(data, full, new Set(seen.map(i => i.id)), new Map(deptItems.map(i => [i.id, i.parentId])));
-  return { prefill, errors, added: auto.added, fin: WK.finalize(WK.regroup(auto.data), F) };
+  const { final, added } = WS.finishSubmit(data, F, { full, visibleIds: new Set(seen.map(i => i.id)), parentOf: new Map(deptItems.map(i => [i.id, i.parentId])) });
+  return { prefill, errors, added, fin: final };
 }
 const sumOf = (data, { auto = true } = {}) => WK.buildSummary({ week: F, depts: [{ id: 1, name: 'Ban A (giả)' }, { id: 2, name: 'Ban B (giả)' }],
   reports: [{ departmentId: 1, firstSubmittedAt: FRI_PM, submittedAt: FRI_PM, submitCount: 1, submittedById: 50, data: auto ? data : WK.withoutAuto(data) }], notices: [], now: MON });
@@ -79,8 +77,13 @@ test('S10: tổng hợp đầy đủ (Ban GĐ) có việc tự bổ sung và đ�
   // Như routes/weekly.js: người xem đầy đủ → summaryOf({auto:true}); còn lại → summaryOf({auto:false}).
   const forGd = WK.summaryView(sumOf(fin, { auto: gd.full }), { full: gd.full, departmentId: null });
   assert.equal(forGd.view.kpis.ongoing, 2); assert.equal(forGd.view.kpis.risk, 1);
-  assert.ok(forGd.text.includes('Đàm phán giá đất lô C (giả) (hệ thống tự bổ sung)'));
-  assert.ok(forGd.text.includes('Nộp hồ sơ đấu giá lô D (giả) (hệ thống tự bổ sung)'));
+  // Bản đầy đủ (chỉ trong Hub / nội bộ Ban GĐ): có tên kèm nhãn.
+  assert.ok(forGd.fullText.includes('Đàm phán giá đất lô C (giả) (hệ thống tự bổ sung)'));
+  assert.ok(forGd.fullText.includes('Nộp hồ sơ đấu giá lô D (giả) (hệ thống tự bổ sung)'));
+  // Bản gửi email (thư ký / Ban GĐ sao chép, gửi mọi trưởng bộ phận): KHÔNG nêu tên dòng tự bổ sung, nhưng số liệu vẫn đếm đủ.
+  for (const t of ['Đàm phán giá đất', 'Nộp hồ sơ đấu giá', 'tự bổ sung', 'Việc 101']) assert.equal(forGd.text.includes(t), false, t);
+  assert.ok(forGd.text.includes('2 đang thực hiện · 1 nguy cơ chậm'));
+  assert.ok(forGd.text.includes('xong 0, đang làm 2, nguy cơ chậm 1'));
   assert.equal(forGd.view.risks.find(x => x.task.startsWith('Nộp hồ sơ')).auto, true);
   for (const s of [head1, headB]) {
     const v = WK.summaryView(sumOf(fin, { auto: s.full }), { full: s.full, departmentId: s.departmentId });

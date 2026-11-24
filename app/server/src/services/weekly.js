@@ -69,11 +69,15 @@ function rowRisk(r, f) {
   if (r.status === 'Vướng') out.push('Vướng');
   else if (r.status === 'Chậm' && !r.risk) out.push('Chậm');
   if (isOverdue(r, f) && !r.risk) out.push('Quá hạn');
+  // Dòng tự do bắt buộc báo cáo (kế hoạch tuần trước, việc TGĐ giao) mà chưa làm: nguy cơ "đăng ký mà chưa làm" (Phần III).
+  if (!out.length && !r.itemId && (r.mandatory || r.planned) && !rowStarted(r)) out.push(r.source === 'TGĐ giao' ? FREE_NOT_STARTED.tgd : PLAN_NOT_STARTED.label);
   return out.join(' · ');
 }
+const FREE_NOT_STARTED = { tgd: 'TGĐ giao, chưa khởi động' };
 const allRows = data => [...(data?.results || []), ...(data?.ongoing || []), ...(data?.risks || [])].filter(r => r && r.task);
-// Dòng đã bắt đầu: máy chủ ghi `started` cho dòng gắn việc (điền sẵn / lúc nộp); dòng tự do coi là đã làm; ghi % > 0 là đã bắt đầu.
-const rowStarted = r => r.status === DONE || r.started !== false || Number(r.pct) > 0;
+// Dòng đã bắt đầu: xong, hoặc ghi % > 0, hoặc (máy chủ không ghi started = false cho dòng gắn việc) và tình trạng khác "Chưa bắt đầu".
+// Dòng tự do ghi "Chưa bắt đầu", 0% → chưa làm (không vào "đang thực hiện").
+const rowStarted = r => r.status === DONE || Number(r.pct) > 0 || (r.started !== false && r.status !== 'Chưa bắt đầu');
 // Mọi dòng có nguy cơ chậm (ở bất kỳ phần nào) — cho lãnh đạo / giao ban.
 const riskRows = (data, f) => allRows(data).filter(r => rowRisk(r, f));
 // Ba phần chủ dự án cần nắm, tính theo TÌNH TRẠNG từng dòng (không theo mảng lưu): xong trong tuần · mọi việc đã bắt đầu
@@ -122,8 +126,11 @@ function deptCandidates(items, deptId, memberIds, placeOfChild = null) {
   }
   const covered = id => {
     const w = below.get(id); if (!w) return false;
-    if (!placeOfChild || w.has('any') || w.has('ongoing') || w.has('risks')) return true;
-    return !!byId.get(id)?.done && w.has('results');
+    if (!placeOfChild || w.has('any') || w.has('ongoing')) return true;
+    const parent = byId.get(id);
+    // Con chưa bắt đầu mà có nguy cơ chỉ "báo thay" cho cha chưa bắt đầu; cha đang làm vẫn báo ở Phần II.
+    if (w.has('risks') && !parent?.started && !parent?.done) return true;
+    return !!parent?.done && w.has('results');
   };
   return mine.filter(i => !covered(i.id));
 }
@@ -147,11 +154,11 @@ function mtlRow(i, extra = {}) {
 //   xong trong tuần → I · đã bắt đầu, chưa xong → II (MỌI việc đang làm, không xét hạn) · chưa bắt đầu mà đã có nguy cơ chậm
 //   (chậm khởi động, trễ hạn, sắp hạn) → III · chưa bắt đầu, bắt đầu / đến hạn tới hết tuần sau → IV (kế hoạch) · còn lại: không báo cáo.
 // i.started / i.risk tính sẵn bằng alerts.isStarted / alerts.riskOf (một định nghĩa).
-// "Xong trong tuần" tính từ thứ Bảy tuần trước (sau hạn nộp tuần trước) đến hết Chủ nhật; việc báo cáo tuần trước ĐÃ ghi "Hoàn thành"
-// (prevDone) thì không báo lại.
+// "Xong trong tuần" tính từ thứ Hai TUẦN TRƯỚC đến hết Chủ nhật tuần này (việc xong sau giờ nộp tuần trước, kể cả khi nộp sớm, không bị sót);
+// việc báo cáo tuần trước ĐÃ ghi "Hoàn thành" (prevDone) thì không báo lại.
 function placeOf(i, S, prevDone = null) {
   if (i.cancelled) return null;
-  if (i.done) { const c = dayOf(i.completedAt); return c && c >= addDays(S.from, -2) && c <= addDays(S.to, 2) && !prevDone?.has(i.id) ? 'results' : null; }
+  if (i.done) { const c = dayOf(i.completedAt); return c && c >= addDays(S.from, -7) && c <= addDays(S.to, 2) && !prevDone?.has(i.id) ? 'results' : null; }
   if (i.started) return 'ongoing';
   if (i.risk) return 'risks';
   const s = startOf(i), e = dueOf(i);
@@ -188,10 +195,13 @@ function buildPrefill({ week: f, deptId, items = [], memberIds = new Set(), prev
     }
     for (const r of [...(prev.results || []), ...(prev.ongoing || []), ...(prev.risks || [])]) {
       if (r.status === DONE || !String(r.task || '').trim()) continue;
-      if (r.itemId) { const i = byId.get(r.itemId); if (i) put(i); continue; } // xong trong tuần → I, xong trước đó → bỏ
+      // xong trong tuần → I, xong trước đó → bỏ; "đã đăng ký mà chưa làm" giữ cờ tới khi việc được bắt đầu hoặc bị huỷ.
+      if (r.itemId) { const i = byId.get(r.itemId); if (i) put(i, r.risk === PLAN_NOT_STARTED.code); continue; }
       if (ongoing.some(o => o.key === r.key) || results.some(o => o.key === r.key)) continue;
       ongoing.push({ key: r.key || newKey('f'), itemId: null, actionRef: r.actionRef || null, task: r.task, source: r.source === MTL_SOURCE ? 'Chuyển tiếp tuần trước' : r.source || 'Chuyển tiếp tuần trước',
-        ownerIds: r.ownerIds || [], start: r.start || '', due: r.due || '', status: r.status || 'Đúng tiến độ', pct: r.pct ?? '', ...blankIssue(), next: '', mandatory: !!r.actionRef });
+        ownerIds: r.ownerIds || [], start: r.start || '', due: r.due || '', status: r.status || 'Đúng tiến độ', pct: r.pct ?? '', ...blankIssue(), next: '', mandatory: !!r.actionRef,
+        // Đã đăng ký (bắt buộc) mà vẫn chưa làm: giữ nguy cơ "đăng ký mà chưa làm" các tuần sau; người lập vẫn bỏ được khi việc bị huỷ.
+        ...(!r.actionRef && (r.mandatory || r.planned) && !rowStarted(r) ? { planned: true } : {}) });
     }
   }
   // 2) Action Log giao ban (mọi việc TGĐ giao còn mở, kể cả tuần trước bộ phận chưa nộp) → Phần I, nguồn "TGĐ giao" — bắt buộc báo cáo.
@@ -234,7 +244,7 @@ function sanitize(data, { userIds = null, deptIds = new Set(), itemIds = null, t
     return {
       key: KEY_RE.test(str(r?.key, 40)) ? str(r?.key, 40) : newKey('f'), itemId, ref: itemId ? str(r.ref, 40) : '', step: itemId ? str(r.step, 20) : '', project: itemId ? str(r.project, 20) : '',
       actionRef: str(r?.actionRef, 40) || null, task: str(r?.task, 500), ownerIds: idsOf(r?.ownerIds, userIds), due: day(r?.due),
-      mandatory: !!r?.mandatory, ownerPicked: !!r?.ownerPicked, ...(typeof r?.started === 'boolean' ? { started: r.started } : {}),
+      mandatory: !!r?.mandatory, ownerPicked: !!r?.ownerPicked, ...(r?.planned === true ? { planned: true } : {}), ...(typeof r?.started === 'boolean' ? { started: r.started } : {}),
     };
   };
   const row = (r, ongoing) => {
@@ -409,7 +419,7 @@ function buildSummary({ week: f, depts, reports, notices, meeting = null, action
     const dDone = parts.done.length, dOngoing = parts.ongoing.length, dRisk = parts.risk;
     nDone += dDone; nOngoing += dOngoing;
     for (const x of dRisk) risks.push({ departmentId: d.id, department: d.name, key: x.key, ref: x.ref || '', task: x.task, risk: rowRisk(x, f), due: x.due || '', pct: x.pct ?? '',
-      started: rowStarted(x), auto: isAuto(x) });
+      started: rowStarted(x), auto: isAuto(x), solution: x.solution || '' });
     for (const x of items) if (needsIssue(x, f) && x.helpFrom && x.helpFrom !== HELP_SELF)
       helps.push({ key: `${d.id}:${safeKey(x.key)}`, fromId: d.id, from: d.name, to: helpTarget(x.helpFrom, deptName), toKey: x.helpFrom, task: x.task, ref: x.ref || '', what: x.helpWhat, by: x.helpBy, status: issueLabel(x, f), cause: x.cause, solution: x.solution, conclusion: md.conclusions?.[`${d.id}:${safeKey(x.key)}`] || null });
     rows.push({ id: d.id, name: d.name, status: st, submittedAt: sent?.firstSubmittedAt || null, lastSubmittedAt: sent?.submittedAt || null, resubmits: sent ? Math.max(0, (sent.submitCount || 1) - 1) : 0,
@@ -445,10 +455,11 @@ function briefSummary(sum, ownDeptId) {
 }
 
 // Bản tổng hợp theo quyền người xem: có quyền chi tiết (weekly.summary.detail) → đầy đủ; còn lại (trưởng / phó) → bản tóm tắt của
-// bộ phận mình. Văn bản sao chép LUÔN dựng từ đúng bản đó (API /api/weekly/summary và MCP kepper_weekly_summary).
+// bộ phận mình. text = BẢN GỬI EMAIL (emailText, chủ dự án chọn "Bản tóm tắt" 24/11/2026) cho MỌI người dùng — nút "Sao chép bản tổng hợp",
+// API /api/weekly/summary, MCP kepper_weekly_summary. fullText (I, II, III đầy đủ) chỉ cho người xem đầy đủ, chỉ dùng nội bộ, không gửi email.
 function summaryView(sum, { full, departmentId }) {
   const view = full ? sum : briefSummary(sum, departmentId);
-  return { view, text: summaryText(view) };
+  return { view, text: emailText(view), ...(full ? { fullText: summaryText(view) } : {}) };
 }
 
 // JSON chuẩn hoá (khoá sắp xếp đệ quy): băm SHA-256 của bản nộp kiểm lại được từ bản đọc ra CSDL (JSONB sắp lại thứ tự khoá).
@@ -485,6 +496,29 @@ function summaryText(sum) {
   L.push('', 'YÊU CẦU HỖ TRỢ (xử lý 09:15 – 09:25)');
   if (!sum.helps.length) L.push('- Không có');
   for (const g of sum.helps) for (const h of g.list) L.push(`- ${h.from} → ${g.to}: ${h.what} (việc “${h.task}”)${h.by ? `, cần trước ${fmtD(h.by)}` : ''}${h.conclusion ? ` — Kết luận: ${DECISIONS[h.conclusion.decision] || ''}${h.conclusion.note ? ': ' + h.conclusion.note : ''}` : ''}`);
+  return L.join('\n');
+}
+
+// Bản gửi email sau giao ban (QĐ-EXT: chỉ bản tóm tắt được gửi ra ngoài phạm vi xem đầy đủ): tình trạng nộp + số việc xong / đang làm /
+// nguy cơ chậm từng bộ phận, Action Log, mục III nguy cơ chậm (tên việc, mức nguy cơ, hạn, giải pháp), yêu cầu hỗ trợ. KHÔNG có danh sách
+// mục I (việc xong) và mục II (việc đang làm); dòng "Hệ thống tự bổ sung" không nêu tên, chỉ cộng vào số liệu. Không có họ tên người phụ trách.
+function emailText(sum) {
+  const S = sum.schedule, f = sum.week;
+  const L = ['BẢO MẬT – chỉ dùng nội bộ', `TỔNG HỢP BÁO CÁO TUẦN ${fmtD(S.from)}–${fmtDY(f)} · Giao ban 08:30 ${WD[weekday(S.meetingDay)]} ${fmtDY(S.meetingDay)}`, '',
+    `Đã nộp ${sum.kpis.submitted}/${sum.kpis.total} bộ phận · ${sum.kpis.done ?? 0} việc xong trong tuần · ${sum.kpis.ongoing ?? 0} đang thực hiện · ${sum.kpis.risk ?? 0} nguy cơ chậm · ${sum.kpis.stuck} chậm/vướng · ${sum.kpis.overdue} quá hạn · ${sum.kpis.helps} yêu cầu hỗ trợ`, '', 'TÌNH TRẠNG NỘP'];
+  for (const r of sum.rows) L.push(`- ${r.name}: ${r.status.label}${r.submittedAt ? ` (${fmtTime(r.submittedAt)})` : ''}${r.done != null ? ` · xong ${r.done}, đang làm ${r.ongoing ?? 0}, nguy cơ chậm ${r.risk ?? 0}` : ''}${r.absent ? ` · VẮNG${r.absent.substitute || r.absent.hasSubstitute ? ', có người dự thay' : ''}` : ''}`);
+  if (sum.actionReview.length) {
+    L.push('', 'ACTION LOG ĐANG THEO DÕI');
+    for (const a of sum.actionReview) L.push(`- [${a.department}] ${a.task} — ${a.status || 'chưa báo cáo'}${a.overdue && a.status !== DONE ? ', quá hạn' : ''}`);
+  }
+  L.push('', 'NGUY CƠ CHẬM TIẾN ĐỘ (trễ hạn / chậm / vướng / sắp hạn / chậm khởi động / đăng ký mà chưa làm)');
+  const named = (sum.risks || []).filter(x => !x.auto);
+  if (!named.length) L.push('- Không có');
+  for (const x of named) L.push(`- [${x.department}] ${x.task} — ${x.risk}${x.due ? ` (hạn ${fmtD(x.due)})` : ''}${x.pct !== '' && x.pct != null ? ` · ${x.pct}%` : ''}${x.solution ? ` — Giải pháp: ${x.solution}` : ''}`);
+  L.push('', 'YÊU CẦU HỖ TRỢ (xử lý 09:15 – 09:25)');
+  if (!sum.helps.length) L.push('- Không có');
+  for (const g of sum.helps) for (const h of g.list) L.push(`- ${h.from} → ${g.to}: ${h.what} (việc “${h.task}”)${h.by ? `, cần trước ${fmtD(h.by)}` : ''}${h.conclusion ? ` — Kết luận: ${DECISIONS[h.conclusion.decision] || ''}${h.conclusion.note ? ': ' + h.conclusion.note : ''}` : ''}`);
+  L.push('', 'Danh sách đầy đủ việc đã xong và đang thực hiện của từng bộ phận: xem trong Kepler Hub (Báo cáo tuần › Tổng hợp).');
   return L.join('\n');
 }
 
@@ -530,5 +564,5 @@ module.exports = {
   SOURCES, MTL_SOURCE, TASK_SOURCE, RISK_CODES, STATUSES, DONE, HELP_BGD, HELP_SELF, REASONS, NOTICE_TYPES, ATTENDANCE, DECISIONS, POINTS, POINT_LABEL,
   isDay, addDays, dayOf, at, weekday, currentFriday, isFriday, fmtD, fmtDY, fmtTime, scheduleOf, meetingStarted,
   AUTO_LABEL, isAuto, addAutoRows, withoutAuto, isOverdue, needsIssue, issueLabel, rowRisk, riskRows, rowStarted, partsOf, regroup, adoptMandatory, PLAN_NOT_STARTED, riskNoteOf, placeOf, statusFromMtl, taskStatus, deptCandidates, buildPrefill, sanitize, validate, finalize, writeBacks,
-  submissionStatus, absenceNoticed, SUBMITTED, buildSummary, briefSummary, summaryText, summaryView, compliance, fridaysOf, stableStringify,
+  submissionStatus, absenceNoticed, SUBMITTED, buildSummary, briefSummary, summaryText, emailText, summaryView, compliance, fridaysOf, stableStringify,
 };

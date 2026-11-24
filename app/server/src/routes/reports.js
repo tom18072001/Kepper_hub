@@ -1,5 +1,5 @@
 // Báo cáo tuần / kỳ (Word): tổng quan theo phòng chủ trì, kết quả theo phòng và loại nhiệm vụ (Kế hoạch năm / Đột xuất),
-// việc quá hạn kèm khâu, khó khăn – kiến nghị (từ báo cáo tiến độ), nhiệm vụ kỳ tới. Kỳ tối đa 93 ngày (xuất theo quý).
+// việc trễ hạn kèm khâu, khó khăn – kiến nghị (từ báo cáo tiến độ), nhiệm vụ kỳ tới. Kỳ tối đa 93 ngày (xuất theo quý).
 const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, HeadingLevel, WidthType, AlignmentType, ShadingType } = require('docx');
 const { fail, optionalInt } = require('../lib/http');
 const { permissionScope } = require('../lib/permissions');
@@ -34,14 +34,16 @@ function defaultWeek(now = new Date()) {
 // from: 00:00 ngày đầu kỳ; end: 00:00 ngày sau ngày cuối kỳ.
 // dueSoonDays: số ngày "sắp đến hạn" của việc thường (thiết lập sổ giao việc). Hạng mục MTL (project.kind = 'MTL' có kế hoạch gốc):
 // trạng thái M.statusOf theo cấu hình cảnh báo của dự án — y như báo cáo tuần bộ phận (routes/weekly.js mtlItemsFor).
-function reportData(items, { from, end, now = new Date(), departments = [], dueSoonDays = A.TASK_DUE_SOON_DAYS }) {
+// rollupItems (tuỳ chọn): mọi hạng mục MTL của các dự án trong phạm vi xuất (kể cả ngoài phòng được lọc) — % việc cha MTL tính trên ĐỦ
+// việc con, như báo cáo tuần (không lệch "chậm tiến độ" khi xuất theo một phòng).
+function reportData(items, { from, end, now = new Date(), departments = [], dueSoonDays = A.TASK_DUE_SOON_DAYS, rollupItems = null }) {
   const open = S.isOpen;
   const nextEnd = new Date(end.getTime() + Math.max(7, Math.round((end - from) / DAY)) * DAY);
   const deptName = Object.fromEntries(departments.map(d => [d.id, d.name]));
   const nameOf = id => (id == null ? 'Chưa xác định phòng' : deptName[id] || `Phòng #${id}`);
   const stage = i => stageOf({ ...i, pendingApproval: (i.approvals || [])[0] || null }, i.project?.approvalSteps || []);
   const isMtl = i => i.kind === 'MTL' || i.project?.kind === 'MTL';
-  const mtlActual = M.rollup(items.filter(isMtl));
+  const mtlActual = M.rollup(rollupItems || items.filter(isMtl));
   const state = new Map(items.map(i => {
     if (!isMtl(i)) return [i.id, { started: A.isStarted(i), risk: open(i) ? A.riskOf(i, { day: now, taskDueSoonDays: dueSoonDays }) : null }];
     const cfg = M.alertConfigOf(i.project), actual = mtlActual.get(i.id) ?? i.progress ?? 0;
@@ -55,7 +57,7 @@ function reportData(items, { from, end, now = new Date(), departments = [], dueS
     done: items.filter(i => i.state.category === 'COMPLETED' && i.completedAt && i.completedAt >= from && i.completedAt < end),
     // Đang thực hiện, chưa xong: MỌI việc đã bắt đầu (đang làm, chờ duyệt, bị trả lại, đã báo tiến độ). Chưa bắt đầu: không báo cáo.
     ongoing: items.filter(i => open(i) && state.get(i.id)?.started).sort(byDue),
-    // Nguy cơ chậm tiến độ: quá hạn hoặc sắp đến hạn mà chưa xong, kể cả việc chưa bắt đầu (services/alerts.js riskOf).
+    // Nguy cơ chậm tiến độ: trễ hạn hoặc sắp đến hạn mà chưa xong, kể cả việc chưa bắt đầu (services/alerts.js riskOf).
     risk: items.filter(riskOf).sort(byDue),
     doing: items.filter(i => i.state.category === 'STARTED'),
     review: items.filter(i => i.state.category === 'REVIEW'),
@@ -69,7 +71,7 @@ function reportData(items, { from, end, now = new Date(), departments = [], dueS
   const inPeriod = new Set([...sections.done, ...sections.ongoing, ...sections.risk, ...items.filter(i => open(i) && typeOf(i) === 'PLAN' && within(i.dueDate))].map(i => i.id));
   const doneIds = new Set(sections.done.map(i => i.id)), riskIds = new Set(sections.risk.map(i => i.id));
   const rank = i => (doneIds.has(i.id) ? 0 : riskIds.has(i.id) ? 1 : 2);
-  // Tình trạng của việc trong bảng kết quả: ngày hoàn thành (đúng / trễ hạn) hoặc khâu đang xử lý (+ quá hạn / sắp đến hạn).
+  // Tình trạng của việc trong bảng kết quả: ngày hoàn thành (đúng / trễ hạn) hoặc khâu đang xử lý (+ trễ hạn / sắp đến hạn).
   const status = i => {
     if (i.state.category === 'COMPLETED') return `Hoàn thành ${vnDate(i.completedAt)}${i.dueDate ? (S.onTimeDone(i) ? ' (đúng hạn)' : ' (trễ hạn)') : ''}`;
     const k = riskOf(i), note = riskNoteOf(k);
@@ -143,7 +145,11 @@ async function buildWeekly(prisma, user, { projectId, departmentId, from, to }) 
   const personIds = [...new Set(items.flatMap(i => i.progressReports.flatMap(r => [r.authorId, r.answeredById])).filter(Boolean))];
   const names = Object.fromEntries((await prisma.user.findMany({ where: { id: { in: personIds } }, select: { id: true, fullName: true } })).map(u => [u.id, u.fullName]));
 
-  const data = reportData(items, { from, end, now, departments, dueSoonDays: (await R.getSettings(prisma)).dueSoonDays });
+  // Xuất theo một phòng: lấy thêm mọi hạng mục MTL (người xuất xem được) của các dự án MTL có trong báo cáo để tính % việc cha.
+  const mtlIds = [...new Set(items.filter(i => i.project?.kind === 'MTL').map(i => i.projectId))];
+  const rollupItems = unit != null && mtlIds.length ? await prisma.workItem.findMany({ where: { archivedAt: null, projectId: { in: mtlIds }, AND: [itemVisibleWhere(user)] },
+    select: { id: true, parentId: true, progress: true, weight: true, state: { select: { category: true } } } }) : null;
+  const data = reportData(items, { from, end, now, departments, dueSoonDays: (await R.getSettings(prisma)).dueSoonDays, rollupItems });
   const { sections } = data;
   const unitName = unit != null ? (departments.find(d => d.id === unit)?.name || 'Phòng ban') : null;
   const scopeLabel = projectId ? `Dự án ${projects[0].key} · ${projects[0].name}${unitName ? ` · ${unitName}` : ''}` : unitName || 'Toàn tổ chức';
@@ -152,10 +158,10 @@ async function buildWeekly(prisma, user, { projectId, departmentId, from, to }) 
   const title = weekly ? 'BÁO CÁO CÔNG VIỆC TUẦN' : 'BÁO CÁO TÌNH HÌNH THỰC HIỆN NHIỆM VỤ';
 
   const overview = [
-    para(`Trong kỳ: hoàn thành ${sections.done.length} việc; đang thực hiện, chưa hoàn thành ${sections.ongoing.length} (trong đó chờ duyệt ${sections.review.length}); có nguy cơ chậm tiến độ ${sections.risk.length} (quá hạn ${sections.overdue.length}); đến hạn ${weekly ? 'tuần tới' : 'kỳ tới'} ${sections.next.length}.`),
+    para(`Trong kỳ: hoàn thành ${sections.done.length} việc; đang thực hiện, chưa hoàn thành ${sections.ongoing.length} (trong đó chờ duyệt ${sections.review.length}); có nguy cơ chậm tiến độ ${sections.risk.length} (trễ hạn ${sections.overdue.length}); đến hạn ${weekly ? 'tuần tới' : 'kỳ tới'} ${sections.next.length}.`),
     para(`Kế hoạch năm: hoàn thành ${frac(data.total.plan.completed, data.total.plan.total, data.total.plan.rate)} nhiệm vụ đến hạn trong kỳ. Đột xuất: giao ${data.total.adhoc.assigned}, hoàn thành ${data.total.adhoc.completed}, đúng hạn ${data.total.adhoc.onTime}, trễ hạn ${data.total.adhoc.late}.`),
     data.byDepartment.length ? table(
-      [['Phòng chủ trì', 20], ['Hoàn thành trong kỳ', 10], ['Đang thực hiện, chưa xong', 11], ['Trong đó chờ duyệt', 9], ['Nguy cơ chậm', 9], ['Quá hạn', 8], ['Kế hoạch năm (HT/đến hạn)', 14], ['Đột xuất (giao · HT · đúng hạn)', 19]],
+      [['Phòng chủ trì', 20], ['Hoàn thành trong kỳ', 10], ['Đang thực hiện, chưa xong', 11], ['Trong đó chờ duyệt', 9], ['Nguy cơ chậm', 9], ['Trễ hạn', 8], ['Kế hoạch năm (HT/đến hạn)', 14], ['Đột xuất (giao · HT · đúng hạn)', 19]],
       [...data.byDepartment.map(d => [cell(d.name, { bold: true }), num(d.done), num(d.ongoing), num(d.review), num(d.risk), num(d.overdue), num(frac(d.plan.completed, d.plan.total, d.plan.rate)), num(`${d.adhoc.assigned} · ${d.adhoc.completed} · ${d.adhoc.onTime}`)]),
         ...(data.byDepartment.length > 1 ? [[cell('Tổng cộng', { bold: true }), num(sections.done.length), num(sections.ongoing.length), num(sections.review.length), num(sections.risk.length), num(sections.overdue.length),
           num(frac(data.total.plan.completed, data.total.plan.total, data.total.plan.rate)), num(`${data.total.adhoc.assigned} · ${data.total.adhoc.completed} · ${data.total.adhoc.onTime}`)]] : [])],

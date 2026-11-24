@@ -12,7 +12,6 @@ const bus = require('../services/bus');
 const M = require('../services/mtl');
 const MP = require('../services/mtl-project');
 const WK = require('../services/weekly');
-const WR = require('../services/weekly-recompute');
 const D = require('../services/weekly-data');
 const { setProgress } = require('../services/mtl-progress');
 const R = require('../services/register'); // thiết lập số ngày cảnh báo sắp đến hạn (dueSoonDays)
@@ -32,7 +31,9 @@ const sha256 = v => crypto.createHash('sha256').update(WK.stableStringify(v)).di
 // Một khoá cho mọi lần ghi báo cáo của một bộ phận / tuần (nháp, nộp): không có hai lần ghi chen nhau.
 const reportLock = (tx, departmentId, week) => tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'weekly:' + departmentId + ':' + week}))`;
 // Dòng có actionRef không thuộc Action Log đang mở của CHÍNH bộ phận này → bỏ liên kết (không đóng hộ việc của bộ phận khác).
-const stripForeignActions = (data, actions) => { const ok = new Set(actions.map(a => a.ref)); for (const r of [...data.results, ...data.ongoing, ...(data.risks || [])]) if (r.actionRef && !ok.has(r.actionRef)) r.actionRef = null; };
+// Chuỗi xử lý khi nộp + bỏ liên kết Action Log của bộ phận khác: services/weekly-submit.js (route và test dùng chung).
+const WS = require('../services/weekly-submit');
+const { stripForeignActions } = WS;
 const COMPLIANCE_KEY = month => `weekly.compliance.${month}`;
 // Phạm vi BỘ PHẬN (mục S10): đọc mọi việc như người xem toàn hệ thống — chỉ để tính tập việc phải báo cáo của bộ phận và dòng
 // "Hệ thống tự bổ sung" lúc nộp; không bao giờ trả thẳng cho người dùng (đầu ra lọc theo quyền xem: hideAuto bên dưới).
@@ -78,14 +79,15 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
 
   // Hạng mục MTL người dùng xem được (cùng bộ lọc hiển thị như bảng theo dõi) + cấu hình cảnh báo của dự án.
   async function mtlItemsFor(user, now) {
-    const projects = await prisma.project.findMany({ where: { kind: 'MTL', archivedAt: null, ...visibleProjectsWhere(user) } });
+    // Hạng mục MTL chưa có kế hoạch gốc: "sắp đến hạn" theo cùng thiết lập số ngày như việc thường và bản Word (dueSoonDays).
+    const [{ dueSoonDays }, projects] = await Promise.all([R.getSettings(prisma), prisma.project.findMany({ where: { kind: 'MTL', archivedAt: null, ...visibleProjectsWhere(user) } })]);
     const out = [];
     for (const p of projects) {
       const { items, cfg } = await MP.computeProject(prisma, p, user, now);
       for (const i of items) {
         const st = { code: i.status, planned: i.planned, variance: i.variance, daysLeft: i.daysLeft, lateDays: i.lateDays, startsIn: i.startsIn };
-        out.push({ ...i, kind: 'MTL', projectKey: p.key, projectId: p.id, cfg, done: M.isDone(i), cancelled: M.isCancelled(i),
-          started: A.isStarted(i), risk: A.riskOf(i, { st, cfg, day: now }) });
+        out.push({ ...i, kind: 'MTL', projectKey: p.key, projectId: p.id, cfg, dueSoonDays, done: M.isDone(i), cancelled: M.isCancelled(i),
+          started: A.isStarted(i), risk: A.riskOf(i, { st, cfg, day: now, taskDueSoonDays: dueSoonDays }) });
       }
     }
     return out;
@@ -229,20 +231,15 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     if (lockedAfterMeeting(pre)) fail(409, 'Đã qua giờ giao ban — muốn sửa báo cáo, liên hệ thư ký giao ban', 'REPORT_LOCKED');
     const ctx = await cleanCtx(req.user, now, week, departmentId);
     const { prefill, cand, actions, memberIds, prev, items: seen } = await prefillFor(req.user, departmentId, week, now);
-    // Dòng bắt buộc mà bản gửi lên còn để ở Phần IV (vd. việc kế hoạch thành sắp hạn, hạng mục làm sớm) → về đúng phần.
-    const data = WK.adoptMandatory(WK.sanitize(req.body?.data, ctx), prefill);
-    stripForeignActions(data, actions);
+    // Làm sạch → dòng bắt buộc còn ở Phần IV về đúng phần → tính lại dòng gắn việc → xếp lại phần → kiểm tra (services/weekly-submit.js).
+    const { data, errors } = WS.prepareSubmit({ raw: req.body?.data, ctx, prefill, actions, now, week });
     const candIds = new Set(cand.map(i => i.id)), byId = new Map(ctx.items.map(i => [i.id, i]));
-    // Dòng gắn hạng mục MTL / việc thường: lấy lại từ việc, tính lại tình trạng / đã bắt đầu / nguy cơ chậm (services/weekly-recompute.js).
-    WR.recomputeRows(data, ctx.items, now);
-    const mandatory = [...prefill.results, ...prefill.ongoing, ...prefill.risks].filter(r => r.mandatory);
-    const errors = WK.validate(data, week, { deptName: ctx.deptName, mandatory });
     // Trả lại dữ liệu đã tính lại (tình trạng dòng MTL) để giao diện hiện đúng khối giải trình cần điền.
     if (errors.length) return res.status(422).json({ error: `Còn ${errors.length} mục cần sửa`, code: 'REPORT_INCOMPLETE', errors, data });
     // Mục S10: việc của bộ phận người nộp không xem được → máy chủ tự bổ sung (tiến độ / hạn / nguy cơ từ hệ thống, không bắt ghi giải pháp).
     const deptItems = await workItemsFor(DEPT_SCOPE, now, doneSince(week), departmentId);
     const full = WK.buildPrefill({ week, deptId: departmentId, items: deptItems, memberIds, prev });
-    const auto = WK.addAutoRows(data, full, new Set(seen.map(i => i.id)), new Map(deptItems.map(i => [i.id, i.parentId])));
+    const autoCtx = { full, visibleIds: new Set(seen.map(i => i.id)), parentOf: new Map(deptItems.map(i => [i.id, i.parentId])) };
     if (!pre?.firstSubmittedAt && acc.onBehalf && req.body?.receivedAt) {
       const t = new Date(req.body.receivedAt);
       if (Number.isNaN(t.getTime()) || t > now || t < WK.at(WK.addDays(week, -4), 0, 0)) fail(422, 'Giờ nhận email không hợp lệ', 'INVALID_DATE');
@@ -281,19 +278,19 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
         p.row.pct0 = p.w.pct;
       }
       // Dòng gắn việc về đúng phần theo tình trạng vừa tính lại (xong → I, đã bắt đầu → II) trước khi lưu bản bất biến.
-      const final = WK.finalize(WK.regroup(auto.data), week);
+      const { final, added: autoAdded } = WS.finishSubmit(data, week, autoCtx);
       const hash = sha256(final);
       const r = existing
         ? await tx.weeklyReport.update({ where: { id: existing.id }, data: { data: final, status: 'SUBMITTED', preparerId: req.user.id, firstSubmittedAt: first, submittedAt: now, submittedById: req.user.id, submitCount: { increment: 1 } } })
         : await tx.weeklyReport.create({ data: { departmentId, week, data: final, status: 'SUBMITTED', preparerId: req.user.id, firstSubmittedAt: first, submittedAt: now, submittedById: req.user.id, submitCount: 1 } });
       await tx.weeklyReportVersion.create({ data: { reportId: r.id, n: r.submitCount, departmentId, week, data: final, sha256: hash, submittedAt: now, submittedById: req.user.id, onBehalf: acc.onBehalf } });
-      return { saved: r, final, hash, receivedAt, updated, conflicts };
+      return { saved: r, final, hash, receivedAt, updated, conflicts, autoAdded };
     }, { timeout: 60_000, maxWait: 10_000 });
-    const { saved, final, hash, receivedAt, conflicts } = done;
+    const { saved, final, hash, receivedAt, conflicts, autoAdded } = done;
     const updated = done.updated.map(p => p.w.itemId);
     for (const p of done.updated) bus.item(p.project.id, p.w.itemId, req.user.id);
     await audit(req, 'WEEKLY_REPORT_SUBMIT', 'WeeklyReport', saved.id, null, { departmentId, week, n: saved.submitCount, sha256: hash, onBehalf: acc.onBehalf, receivedAt, firstSubmittedAt: saved.firstSubmittedAt,
-      items: final.results.length + final.ongoing.length + final.risks.length, plans: final.plans.length, progressUpdated: updated.length, progressSkipped: skipped.length, progressConflicts: conflicts.length, autoAdded: auto.added });
+      items: final.results.length + final.ongoing.length + final.risks.length, plans: final.plans.length, progressUpdated: updated.length, progressSkipped: skipped.length, progressConflicts: conflicts.length, autoAdded });
     const notices = await prisma.weeklyNotice.findMany({ where: { week, departmentId } });
     res.json({ ok: true, submittedAt: saved.submittedAt, firstSubmittedAt: saved.firstSubmittedAt, submitCount: saved.submitCount, sha256: hash,
       progressUpdated: updated.length, progressSkipped: skipped.length, progressConflicts: conflicts, onBehalf: acc.onBehalf,
@@ -384,7 +381,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     // Bản tóm tắt dựng từ báo cáo đã bỏ dòng "Hệ thống tự bổ sung" (số liệu cũng không đếm) — mục S10.
     const { sum, names, all, configured } = await D.summaryOf(prisma, week, new Date(), { auto: full });
     // Trưởng / phó bộ phận: bản tóm tắt như văn bản gửi đi (không họ tên, không ghi chú vắng, không chi tiết bộ phận khác).
-    const { view, text } = WK.summaryView(sum, { full, departmentId: s.departmentId });
+    const { view, text, fullText } = WK.summaryView(sum, { full, departmentId: s.departmentId });
     let out = view;
     // Ghi chú lý do vắng / muộn (có thể là DLCN nhạy cảm): chỉ Ban GĐ, thư ký (policy weekly.notice · field note) — PMO không thấy.
     if (full && !P.can(s, 'view', 'weekly.notice', { field: 'note', departmentId: -1, createdById: -1 }))
@@ -392,15 +389,18 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     res.setHeader('Cache-Control', 'private, no-store');
     const m = await meetingOf(week);
     res.json({ ...out, names: full ? names : {}, departments: all.map(d => ({ id: d.id, name: d.name })), configured, canManage: s.manage, canDetail: full,
-      // Văn bản sao chép dựng từ đúng bản người xem được nhận (trưởng / phó: bản tóm tắt) — API và MCP kepper_weekly_summary.
-      text,
+      // text: BẢN GỬI EMAIL (không có danh sách mục I, II; không nêu tên dòng tự bổ sung) — mọi người dùng, API và MCP kepper_weekly_summary.
+      // fullText: bản đầy đủ I, II, III — chỉ người xem đầy đủ, chỉ dùng nội bộ Ban GĐ, không gửi email.
+      text, ...(fullText ? { fullText } : {}),
       ...(s.manage ? { actionsVersion: sha256(m?.data?.actions || []) } : {}) });
   });
   app.post('/api/weekly/summary/copied', auth, async (req, res) => {
     const s = await subjectOf(req);
     P.assertCan(s, 'export', 'weekly.summary');
     const week = weekParam(req.body?.week);
-    await audit(req, 'WEEKLY_SUMMARY_COPY', 'WeeklyMeeting', week, null, { week });
+    const kind = req.body?.kind === 'full' ? 'full' : 'email';
+    if (kind === 'full') P.assertCan(s, 'view', 'weekly.summary.detail');
+    await audit(req, 'WEEKLY_SUMMARY_COPY', 'WeeklyMeeting', week, null, { week, kind });
     res.status(204).end();
   });
 

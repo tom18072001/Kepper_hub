@@ -28,11 +28,12 @@ function rowRisk(r, f) {
   if (r.status === 'Vướng') out.push('Vướng');
   else if (r.status === 'Chậm' && !r.risk) out.push('Chậm');
   if (isOverdue(r, f) && !r.risk) out.push('Quá hạn');
+  if (!out.length && !r.itemId && (r.mandatory || r.planned) && !rowStarted(r)) out.push(r.source === 'TGĐ giao' ? 'TGĐ giao, chưa khởi động' : 'Đã đăng ký tuần trước, chưa khởi động');
   return out.join(' · ');
 }
 const LISTS = ['results', 'ongoing', 'risks', 'plans'];
 // Cùng quy tắc máy chủ (services/weekly.js rowStarted / partsOf): ba phần tính theo TÌNH TRẠNG dòng, không theo mảng lưu.
-const rowStarted = r => r.status === DONE || r.started !== false || Number(r.pct) > 0;
+const rowStarted = r => r.status === DONE || Number(r.pct) > 0 || (r.started !== false && r.status !== 'Chưa bắt đầu');
 function partsOf(d, f) {
   const rows = [...(d.results || []), ...(d.ongoing || []), ...(d.risks || [])].filter(r => r && r.task);
   return { done: rows.filter(r => r.status === DONE), ongoing: rows.filter(r => r.status !== DONE && rowStarted(r)), risk: rows.filter(r => rowRisk(r, f)) };
@@ -130,6 +131,12 @@ async function drawReport(body) {
   const r = await api(`/api/weekly/report?week=${st.week}&departmentId=${st.dept}`);
   st.rep = r; st.schedule = r.schedule; st.dirty = false; st.baseUpdatedAt = r.report?.updatedAt || null;
   st.form = structuredClone(r.report ? r.report.data : r.prefill);
+  // Bản nháp cũ: cờ "bắt buộc" theo điền sẵn MỚI NHẤT (máy chủ cũng chỉ kiểm theo điền sẵn) — việc nay không còn bắt buộc thì có nút "Bỏ".
+  if (r.report && r.prefill) {
+    const idOf = x => (x.itemId ? 'i' + x.itemId : x.actionRef ? 'a' + x.actionRef : 'k' + x.key);
+    const must = new Set(['results', 'ongoing', 'risks'].flatMap(k => r.prefill[k] || []).filter(x => x.mandatory).map(idOf));
+    for (const k of ['results', 'ongoing', 'risks']) for (const x of st.form[k] || []) if (x.mandatory && !must.has(idOf(x))) x.mandatory = false;
+  }
   for (const k of LISTS) st.form[k] ||= [];
   markAuto();
   st.form.other ||= '';
@@ -482,7 +489,8 @@ async function drawSummary(body) {
     ${s.canDetail ? `<section class="wk-card"><h2>Chi tiết từng bộ phận</h2><div style="display:grid;gap:10px">${s.rows.map(r => deptDetail(r, f, names)).join('')}</div></section>`
       : `<section class="wk-card"><h2>Báo cáo bộ phận mình</h2><p class="wk-note">Trưởng / phó bộ phận nhận bản tổng hợp mức tóm tắt (QC-TH-01 Điều 5); chi tiết các bộ phận khác do thư ký giao ban và Ban giám đốc xem.</p>${s.rows.filter(r => r.id === ctx.me.departmentId).map(r => deptDetail(r, f, names)).join('')}</section>`}
     <section class="wk-card"><div class="wk-actions"><button class="btn btn-primary" type="button" id="copySum" data-testid="wk-copy">Sao chép bản tổng hợp</button>
-      <span class="wk-note" id="copyMsg" role="status" aria-live="polite">Dán vào email công ty hoặc nhóm chat đã được phê duyệt gửi TGĐ và các trưởng bộ phận. Văn bản không chứa họ tên người phụ trách.</span></div>
+      <span class="wk-note" id="copyMsg" role="status" aria-live="polite">Bản gửi email (bản tóm tắt): tình trạng nộp, số việc xong / đang làm / nguy cơ chậm từng bộ phận, Action Log, việc có nguy cơ chậm và yêu cầu hỗ trợ. Dán vào email công ty hoặc nhóm chat đã được phê duyệt gửi TGĐ và các trưởng bộ phận. Không có danh sách việc xong / đang làm, không có họ tên người phụ trách.</span></div>
+      ${s.fullText ? `<div class="wk-actions" style="margin-top:8px"><button class="btn" type="button" id="copyFull" data-testid="wk-copy-full">Sao chép bản đầy đủ</button><span class="wk-note">Chỉ dùng nội bộ Ban GĐ — <b>không gửi email</b>, không dán vào nhóm chat chung (có danh sách việc của mọi bộ phận).</span></div>` : ''}
       <textarea id="copyFallback" rows="8" hidden readonly></textarea></section>
     ${M ? setupHtml(s) : ''}`;
   drawActions();
@@ -626,15 +634,16 @@ function bindSummary(body, s) {
     if (row && e.target.dataset.ak === 'task') st.actions[Number(row.dataset.ai)].task = e.target.value;
   });
   body.addEventListener('click', async e => {
-    const copy = e.target.closest('#copySum');
+    const copy = e.target.closest('#copySum, #copyFull');
     if (copy) {
-      const text = st.sum.text, msg = $('#copyMsg', body);
-      const logCopy = () => api('/api/weekly/summary/copied', { method: 'POST', body: { week: st.week } }).catch(() => {});
+      const full = copy.id === 'copyFull', label = copy.textContent;
+      const text = full ? st.sum.fullText : st.sum.text, msg = $('#copyMsg', body);
+      const logCopy = () => api('/api/weekly/summary/copied', { method: 'POST', body: { week: st.week, kind: full ? 'full' : 'email' } }).catch(() => {});
       const ok = () => {
         copy.style.minWidth = `${copy.offsetWidth}px`; // giữ bề rộng nút khi đổi chữ — không xô dòng ghi chú bên cạnh
         copy.textContent = 'Đã sao chép ✓';
-        msg.textContent = 'Đã sao chép ✓ — dán vào email công ty hoặc nhóm chat đã được phê duyệt.';
-        clearTimeout(copy._t); copy._t = setTimeout(() => { copy.textContent = 'Sao chép bản tổng hợp'; }, 2500);
+        msg.textContent = full ? 'Đã sao chép bản đầy đủ ✓ — chỉ dùng nội bộ Ban GĐ, không gửi email.' : 'Đã sao chép ✓ — dán vào email công ty hoặc nhóm chat đã được phê duyệt.';
+        clearTimeout(copy._t); copy._t = setTimeout(() => { copy.textContent = label; }, 2500);
         logCopy();
       };
       const fb = () => { const t = $('#copyFallback', body); t.hidden = false; t.value = text; t.focus(); t.select(); msg.textContent = 'Bôi đen sẵn, nhấn Ctrl+C để sao chép.'; logCopy(); };

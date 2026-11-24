@@ -183,7 +183,7 @@ export function buildServer({ call = createSession() } = {}) {
       return { week: d.week, department: d.department?.name, status: d.status, deadline: d.schedule?.deadline, canEdit: d.canEdit, savedAt: d.report?.updatedAt, submitted: !!d.report?.firstSubmittedAt, data, names: d.names };
     }));
 
-  server.registerTool('kepper_weekly_summary', { title: 'Tổng hợp giao ban', description: 'Bản tổng hợp giao ban tuần (Ban GĐ, thư ký, PMO: đầy đủ; trưởng / phó: bản tóm tắt). Không có quyền → báo lỗi.',
+  server.registerTool('kepper_weekly_summary', { title: 'Tổng hợp giao ban', description: 'Bản tổng hợp giao ban tuần theo quyền (Ban GĐ, thư ký, PMO: đầy đủ; trưởng / phó: bản tóm tắt). text là bản gửi email: số liệu, việc nguy cơ chậm, yêu cầu hỗ trợ (không có danh sách việc xong / đang làm). Không có quyền → báo lỗi.',
     inputSchema: { week: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }, annotations: R },
     run(async ({ week }) => { const d = await call(`/api/weekly/summary${week ? `?week=${week}` : ''}`); return { text: d.text, kpis: d.kpis, helps: d.helps, rows: (d.rows || []).map(r => pick(r, ['name', 'status', 'absent', 'late'])) }; }));
 

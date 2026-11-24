@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const WK = require('./weekly');
-const WR = require('./weekly-recompute');
+const WS = require('./weekly-submit');
 const M = require('./mtl');
 const A = require('./alerts');
 const P = require('../lib/policy');
@@ -37,12 +37,10 @@ const sumOf = data => WK.buildSummary({ week: F, depts: [{ id: 1, name: 'Ban A (
   reports: [{ departmentId: 1, firstSubmittedAt: FRI_PM, submittedAt: FRI_PM, submitCount: 1, submittedById: 50, data }], notices: [], now: new Date('2026-11-02T07:00:00+07:00') });
 const part = (text, a, b) => text.slice(text.indexOf(a), b ? text.indexOf(b) : undefined);
 const II = text => part(text, 'II. ĐANG', 'III. NGUY CƠ'), III = text => part(text, 'III. NGUY CƠ', 'YÊU CẦU HỖ TRỢ');
-// Nộp như routes/weekly.js: sanitize → adoptMandatory → tính lại dòng gắn việc → validate → regroup + finalize.
-function submit(draft, items, now, prefill) {
-  const data = WK.adoptMandatory(fillAll(WK.sanitize(structuredClone(draft), ctxOf(items))), prefill);
-  WR.recomputeRows(data, items, now);
-  const mandatory = [...prefill.results, ...prefill.ongoing, ...prefill.risks].filter(r => r.mandatory);
-  return { errors: WK.validate(data, F, { mandatory }), fin: WK.finalize(WK.regroup(data), F) };
+// Nộp: ĐÚNG chuỗi của routes/weekly.js (services/weekly-submit.js prepareSubmit → finishSubmit). fill: phần người lập điền trên biểu mẫu.
+function submit(draft, items, now, prefill, fill = fillAll, actions = []) {
+  const { data, errors } = WS.prepareSubmit({ raw: fill(structuredClone(draft)), ctx: { ...ctxOf(items), items }, prefill, actions, now, week: F });
+  return { errors, data, fin: WS.finishSubmit(data, F).final };
 }
 
 test('1. Dòng chưa xong ở Phần I (kế hoạch tuần trước, việc phát sinh 30%) có ở "đang thực hiện" của KPI và văn bản giao ban', () => {
@@ -105,10 +103,15 @@ test('3. Dòng còn ở Phần IV mà nay phải báo cáo (sắp hạn, làm s�
   const friItems = prep([T, { ...E, state: { category: 'STARTED' }, startedAt: FRI, progress: 10 }, other], FRI);
   const fri = WK.buildPrefill({ week: F, deptId: 1, items: friItems, memberIds: new Set([50]) });
   assert.equal(where(fri, 701), 'risks'); assert.equal(where(fri, 711), 'ongoing');
+  // Nộp bản nháp thứ Năm: không chặn "Không được bỏ"; hạng mục làm sớm vừa sang Phần II → hỏi đúng MỘT việc: "việc sẽ làm tuần tới".
   const r = submit(thu, friItems, FRI, fri);
-  assert.deepEqual(r.errors.filter(e => /Không được bỏ/.test(e)), []);
-  assert.equal(where(r.fin, 701), 'risks'); assert.equal(where(r.fin, 711), 'ongoing');
-  assert.equal(r.fin.ongoing.find(x => x.itemId === 711).status, 'Đúng tiến độ'); // làm sớm: không ghi "Chưa bắt đầu"
+  assert.deepEqual(r.errors, ['Phần II “Hạng mục 711 (giả)”: ghi việc sẽ làm tuần tới.']);
+  assert.equal(where(r.data, 701), 'risks'); assert.equal(where(r.data, 711), 'ongoing');
+  // Giao diện nhận lại bản đã xếp (422 kèm data), người lập điền bước tiếp rồi nộp lại → đạt.
+  const again = submit(r.data, friItems, FRI, fri);
+  assert.deepEqual(again.errors, []);
+  assert.equal(where(again.fin, 701), 'risks'); assert.equal(where(again.fin, 711), 'ongoing');
+  assert.equal(again.fin.ongoing.find(x => x.itemId === 711).status, 'Đúng tiến độ'); // làm sớm: không ghi "Chưa bắt đầu"
 });
 
 test('4. Việc cha đang làm có việc con chưa bắt đầu → báo việc cha; con đang làm → chỉ báo con; cha xong cùng con → chỉ con', () => {
@@ -123,6 +126,14 @@ test('4. Việc cha đang làm có việc con chưa bắt đầu → báo việc
   assert.equal(where(p3, 411), '-'); assert.equal(where(p3, 412), 'results');
   const m = WK.buildPrefill({ week: F, deptId: 1, items: prep([mtl(421, '2026-10-01', '2026-12-31', 'STARTED', 30), mtl(422, '2026-12-01', '2026-12-31', 'UNSTARTED', 0, { parentId: 421 })], FRI), memberIds: new Set([50]) });
   assert.equal(where(m, 421), 'ongoing');
+  // Vòng 2: cha đang làm có con CHƯA bắt đầu mà trễ hạn / chậm khởi động → cha vẫn ở Phần II, con ở Phần III.
+  const p4 = WK.buildPrefill({ week: F, deptId: 1, items: prep([P1, task(404, '2026-10-27', 'UNSTARTED', 0, { parentId: 401 })], FRI), memberIds: new Set([50]) });
+  assert.equal(where(p4, 401), 'ongoing'); assert.equal(where(p4, 404), 'risks');
+  const m2 = WK.buildPrefill({ week: F, deptId: 1, items: prep([mtl(411, '2026-09-01', '2026-12-31', 'STARTED', 40), mtl(412, '2026-10-01', '2026-11-30', 'UNSTARTED', 0, { parentId: 411 })], FRI), memberIds: new Set([50]) });
+  assert.equal(where(m2, 411), 'ongoing'); assert.equal(where(m2, 412), 'risks');
+  // Cha CHƯA bắt đầu, con chưa bắt đầu mà có nguy cơ → chỉ báo con (báo thay cha).
+  const p5 = WK.buildPrefill({ week: F, deptId: 1, items: prep([task(405, '2026-12-31', 'UNSTARTED', 0), task(406, '2026-10-27', 'UNSTARTED', 0, { parentId: 405 })], FRI), memberIds: new Set([50]) });
+  assert.equal(where(p5, 405), '-'); assert.equal(where(p5, 406), 'risks');
 });
 
 test('5. Văn bản tổng hợp theo quyền: trưởng / phó bộ phận khác không nhận tên việc của bộ phận khác (API + MCP dùng summaryView)', () => {
@@ -141,10 +152,16 @@ test('5. Văn bản tổng hợp theo quyền: trưởng / phó bộ phận khá
   const forHead = WK.summaryView(sum, { full: headB.full, departmentId: headB.departmentId });
   for (const t of secret) assert.equal(forHead.text.includes(t), false, t);
   assert.deepEqual(forHead.view.risks, []);
+  assert.equal(forHead.fullText, undefined); // trưởng / phó không có bản đầy đủ
   const forGd = WK.summaryView(sum, { full: gd.full, departmentId: null });
-  for (const t of secret) assert.equal(forGd.text.includes(t), true, t);
-  // Trưởng / phó của chính bộ phận: thấy việc bộ phận mình.
-  assert.ok(WK.summaryView(sum, { full: false, departmentId: 1 }).text.includes('Rà soát lương nhóm Z'));
+  for (const t of secret) assert.equal(forGd.fullText.includes(t), true, t); // bản đầy đủ: chỉ trong Hub, chỉ dùng nội bộ
+  // Bản gửi email (chủ dự án chọn "Bản tóm tắt"), kể cả khi thư ký / Ban GĐ sao chép: không có danh sách mục I, II; mục III có tên, nguy cơ, hạn, giải pháp.
+  for (const t of ['Xử lý kỷ luật nhân viên Y', 'Rà soát lương nhóm Z', 'Trình TGĐ']) assert.equal(forGd.text.includes(t), false, t);
+  assert.ok(forGd.text.includes('- [Ban A (giả)] Thanh lý HĐ ông K (giả) — Chậm khởi động (hạn 10/11) · 0% — Giải pháp: Đẩy nhanh (giả)'));
+  assert.ok(forGd.text.includes('Ban A (giả): ') && forGd.text.includes('xong 1, đang làm 1, nguy cơ chậm 1'));
+  assert.equal(forGd.text.includes('I. ĐÃ HOÀN THÀNH'), false); assert.equal(forGd.text.includes('II. ĐANG THỰC HIỆN'), false);
+  // Trưởng / phó của chính bộ phận: mục III có việc bộ phận mình.
+  assert.ok(WK.summaryView(sum, { full: false, departmentId: 1 }).text.includes('Thanh lý HĐ ông K'));
 });
 
 test('6. Bản Word: hạng mục MTL dùng trạng thái MTL (cùng định nghĩa báo cáo tuần); việc thường theo số ngày cảnh báo', () => {
@@ -165,14 +182,22 @@ test('6. Bản Word: hạng mục MTL dùng trạng thái MTL (cùng định ngh
   assert.deepEqual(rdp.byDepartment[0].types[0].items.map(i => i.id), [5]);
 });
 
-test('7. Việc xong thứ Bảy / Chủ nhật sau hạn nộp tuần trước → báo "xong" ở tuần này; đã báo xong tuần trước thì không lặp', () => {
+test('7. Việc xong sau giờ nộp tuần trước (kể cả thứ Sáu chiều, nộp sớm thứ Năm) → báo "xong" ở tuần này; đã báo xong tuần trước thì không lặp', () => {
   const X = mtl(301, '2026-10-01', '2026-11-30', 'COMPLETED', 100, { completedAt: new Date('2026-10-24T09:00:00+07:00') });
   const prev = { results: [], risks: [], plans: [], ongoing: [{ key: 'm301', itemId: 301, task: 'x', status: 'Đúng tiến độ' }] };
   assert.equal(where(WK.buildPrefill({ week: F, deptId: 1, items: prep([X], FRI), memberIds: new Set([50]), prev }), 301), 'results');
   const prevDone = { ...prev, ongoing: [{ key: 'm301', itemId: 301, task: 'x', status: 'Hoàn thành' }] };
   assert.equal(where(WK.buildPrefill({ week: F, deptId: 1, items: prep([X], FRI), memberIds: new Set([50]), prev: prevDone }), 301), '-');
   const at = iso => where(WK.buildPrefill({ week: F, deptId: 1, items: prep([mtl(302, '2026-10-01', '2026-11-30', 'COMPLETED', 100, { completedAt: new Date(iso) })], FRI), memberIds: new Set([50]) }), 302);
-  assert.equal(at('2026-10-23T23:59:00+07:00'), '-'); // thứ Sáu tuần trước: thuộc báo cáo tuần trước
+  // Cửa sổ "xong" mở từ thứ Hai tuần trước: xong T6 23/10 16:30 (sau giờ nộp), T5 22/10 18:00 (đã nộp sớm T5 17:00) không bị sót.
+  assert.equal(at('2026-10-23T16:30:00+07:00'), 'results');
+  assert.equal(at('2026-10-22T18:00:00+07:00'), 'results');
+  assert.equal(at('2026-10-19T00:00:00+07:00'), 'results');
+  assert.equal(at('2026-10-18T23:59:00+07:00'), '-'); // Chủ nhật hai tuần trước
+  // Tuần trước đã ghi "Hoàn thành" (vd. xong T4 21/10 trước giờ nộp) → không báo lại.
+  const Y = mtl(303, '2026-10-01', '2026-11-30', 'COMPLETED', 100, { completedAt: new Date('2026-10-21T09:00:00+07:00') });
+  const prevY = { results: [{ key: 'm303', itemId: 303, task: 'y', status: 'Hoàn thành' }], ongoing: [], risks: [], plans: [] };
+  assert.equal(where(WK.buildPrefill({ week: F, deptId: 1, items: prep([Y], FRI), memberIds: new Set([50]), prev: prevY }), 303), '-');
   assert.equal(at('2026-10-24T00:00:00+07:00'), 'results');
   assert.equal(at('2026-11-01T23:59:59+07:00'), 'results');
   assert.equal(at('2026-11-02T00:00:00+07:00'), '-');
@@ -194,4 +219,83 @@ test('Chữ hiển thị: đến hạn hôm nay; MTL làm sớm không ghi "Chư
   assert.equal(WK.riskNoteOf(A.riskOf({ state: { category: 'STARTED' }, dueDate: end('2026-10-30') }, { day: FRI })), 'Đến hạn hôm nay');
   const p = WK.buildPrefill({ week: F, deptId: 1, items: prep([mtl(1, '2026-11-16', '2026-12-31', 'STARTED', 10, { startedAt: FRI })], FRI), memberIds: new Set([50]) });
   assert.equal(p.ongoing[0].status, 'Đúng tiến độ');
+});
+
+test('Vòng 2 — dòng tự do ghi "Chưa bắt đầu", 0% không tính là đang thực hiện; dòng bắt buộc chưa làm → Phần III', () => {
+  const actions = [{ ref: '2026-10-26:1', task: 'Làm việc với Sở XD về GPXD (giả)', ownerId: 50, due: '2026-11-06', departmentId: 1, meetingWeek: '2026-10-23' }];
+  const prev = { results: [], ongoing: [], risks: [], plans: [{ key: 'pf', itemId: null, task: 'Khảo sát địa điểm (giả)', basis: 'KH tháng', ownerIds: [50], due: '2026-11-13' }] };
+  const p = WK.buildPrefill({ week: F, deptId: 1, items: [], memberIds: new Set([50]), prev, actions });
+  for (const r of p.results) r.status = 'Chưa bắt đầu';
+  p.results.push({ key: 'fx', itemId: null, task: 'Việc phát sinh chưa làm (giả)', source: 'Phát sinh', ownerIds: [50], due: '2026-11-20', status: 'Chưa bắt đầu', pct: 0 });
+  p.ongoing.push({ key: 'fy', itemId: null, task: 'Việc tự do đang làm (giả)', source: 'Phát sinh', ownerIds: [50], due: '2026-11-20', status: 'Đúng tiến độ', pct: '', next: 'Tiếp (giả)' });
+  const r = submit(p, [], FRI_PM, p, fillAll, actions);
+  assert.deepEqual(r.errors, []);
+  const sum = WK.buildSummary({ week: F, depts: [{ id: 1, name: 'Ban A (giả)' }], reports: [{ departmentId: 1, firstSubmittedAt: FRI_PM, submittedAt: FRI_PM, submitCount: 1, data: r.fin }], notices: [],
+    actions, actionRows: new Map([[actions[0].ref, r.fin.results.find(x => x.actionRef)]]), now: new Date('2026-11-02T07:00:00+07:00') });
+  const text = WK.summaryText(sum);
+  assert.equal(sum.kpis.ongoing, 1); assert.equal(sum.kpis.risk, 2);
+  for (const t of ['Sở XD', 'Khảo sát', 'phát sinh chưa làm']) assert.equal(II(text).includes(t), false, t);
+  assert.ok(II(text).includes('Việc tự do đang làm (giả)'));
+  assert.ok(III(text).includes('Làm việc với Sở XD về GPXD (giả) — TGĐ giao, chưa khởi động'));
+  assert.ok(III(text).includes('Khảo sát địa điểm (giả) — Đã đăng ký tuần trước, chưa khởi động'));
+  assert.equal(III(text).includes('phát sinh chưa làm'), false); // không bắt buộc, chưa làm, chưa tới hạn → không báo cáo
+  // Tuần sau: dòng tự do đã đăng ký mà vẫn chưa làm giữ cờ (Phần III), người lập vẫn bỏ được (không bắt buộc).
+  const F2 = WK.addDays(F, 7);
+  const p2 = WK.buildPrefill({ week: F2, deptId: 1, items: [], memberIds: new Set([50]), prev: r.fin });
+  const k = p2.ongoing.find(x => x.task === 'Khảo sát địa điểm (giả)');
+  assert.equal(k.planned, true); assert.equal(k.mandatory, false); assert.equal(WK.rowRisk(k, F2), 'Đã đăng ký tuần trước, chưa khởi động');
+});
+
+test('Vòng 2 — "Đã đăng ký tuần trước, chưa khởi động" giữ qua các tuần tới khi việc được bắt đầu', () => {
+  const x = task(1301, '2026-12-31', 'UNSTARTED', 0, { startDate: d('2026-10-27') });
+  const prev = { results: [], ongoing: [], risks: [], plans: [{ key: 'm1301', itemId: 1301, task: 'x', basis: 'Công việc', ownerIds: [50], due: '2026-12-31' }] };
+  const p = WK.buildPrefill({ week: F, deptId: 1, items: prep([x], FRI), memberIds: new Set([50]), prev });
+  const r1 = submit(p, prep([x], FRI), FRI_PM, p);
+  assert.equal(where(r1.fin, 1301), 'risks'); assert.equal(r1.fin.risks[0].risk, 'PLAN_NOT_STARTED');
+  const F2 = WK.addDays(F, 7), day2 = new Date('2026-11-06T10:00:00+07:00');
+  const p2 = WK.buildPrefill({ week: F2, deptId: 1, items: prep([x], day2), memberIds: new Set([50]), prev: r1.fin });
+  assert.equal(where(p2, 1301), 'risks'); assert.equal(p2.risks[0].risk, 'PLAN_NOT_STARTED');
+  // Đã bắt đầu → hết cờ, sang Phần II.
+  const p3 = WK.buildPrefill({ week: F2, deptId: 1, items: prep([{ ...x, state: { category: 'STARTED' }, progress: 10 }], day2), memberIds: new Set([50]), prev: r1.fin });
+  assert.equal(where(p3, 1301), 'ongoing'); assert.equal(p3.ongoing[0].risk, null);
+});
+
+test('Vòng 2 — dòng Phần III đã bắt đầu lúc nộp: xếp sang Phần II TRƯỚC khi kiểm tra → hỏi "việc sẽ làm tuần tới" ngay lần nộp này', () => {
+  const T = mtl(211, '2026-10-01', '2026-11-30', 'UNSTARTED', 0);
+  const items = prep([T], FRI);
+  const p = WK.buildPrefill({ week: F, deptId: 1, items, memberIds: new Set([50]) });
+  assert.equal(where(p, 211), 'risks');
+  const fill = dr => { const x = fillAll(dr); x.risks[0].pct = 30; x.risks[0].next = ''; return x; };
+  const r = submit(p, items, FRI, p, fill);
+  assert.deepEqual(r.errors, ['Phần II “Hạng mục 211 (giả)”: ghi việc sẽ làm tuần tới.']);
+  assert.equal(where(r.data, 211), 'ongoing');
+});
+
+test('Vòng 2 — bản Word xuất theo một phòng: % việc cha MTL tính trên ĐỦ việc con (rollupItems), khớp báo cáo tuần', () => {
+  const mk = (id, s, e, cat, progress, extra = {}) => ({ ...mtl(id, s, e, cat, progress, extra), number: id, project: { key: 'DA', departmentId: 1, kind: 'MTL' }, dueDate: end(e), taskType: 'PLAN', priority: 'NONE', approvals: [], progressReports: [] });
+  const parent = mk(511, '2026-09-01', '2026-11-30', 'STARTED', 0);
+  const mine = mk(512, '2026-09-01', '2026-11-30', 'STARTED', 60, { parentId: 511 });
+  const other = mk(513, '2026-09-01', '2026-11-30', 'UNSTARTED', 0, { parentId: 511, leadDepartmentId: 2 }); // con của phòng khác, ngoài phạm vi lọc
+  const all = [parent, mine, other];
+  const opt = { from: d('2026-10-26'), end: d('2026-11-02'), now: FRI, departments: [{ id: 1, name: 'Ban A (giả)' }] };
+  const scoped = [parent, mine];
+  const full = reportData(all, opt).riskOf(parent)?.code ?? null; // như báo cáo tuần: rollup trên đủ con (60% và 0% → 30%)
+  assert.equal(M.rollup(all).get(511), 30);
+  assert.equal(reportData(scoped, { ...opt, rollupItems: all }).riskOf(parent)?.code ?? null, full);
+  assert.notEqual(full, null);
+  // Không có rollupItems (cách cũ): cha thành 60% → lệch.
+  assert.equal(M.rollup(scoped).get(511), 60);
+});
+
+test('Vòng 2 — MTL chưa có kế hoạch gốc: "sắp đến hạn" theo thiết lập dueSoonDays ở cả báo cáo tuần (tính lại lúc nộp) và bản Word', () => {
+  const i = { id: 1, kind: 'MTL', state: { category: 'STARTED' }, progress: 10, dueDate: end('2026-11-04'), baselineStart: null, baselineEnd: null };
+  const opt = { day: FRI, taskDueSoonDays: 5 };
+  assert.equal(A.riskOf(i, opt).code, 'DUE_SOON');
+  // weekly-recompute dùng i.dueSoonDays (routes/weekly.js mtlItemsFor gắn thiết lập vào hạng mục).
+  const WRm = require('./weekly-recompute');
+  const row = { key: 'm1', itemId: 1, task: 'x', status: 'Đúng tiến độ', pct: 10, pct0: 10, ownerIds: [50] };
+  WRm.recomputeRows({ results: [], ongoing: [row], risks: [] }, [{ ...i, code: 'DA-1', title: 'x', cfg: M.DEFAULT_ALERTS, actual: 10, children: 0, dueSoonDays: 5, started: true }], FRI);
+  assert.equal(row.risk, 'DUE_SOON');
+  const t = { id: 1, number: 1, title: 'x', project: { key: 'DA', departmentId: 1, kind: 'MTL' }, state: { category: 'STARTED' }, progress: 10, assignees: [], dueDate: end('2026-11-04'), taskType: 'PLAN', leadDepartmentId: 1, approvals: [], progressReports: [] };
+  assert.equal(reportData([t], { from: d('2026-10-26'), end: d('2026-11-02'), now: FRI, dueSoonDays: 5 }).riskOf(t).code, 'DUE_SOON');
 });

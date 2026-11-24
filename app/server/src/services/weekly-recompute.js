@@ -35,7 +35,7 @@ function recomputeRows(data, items, now = new Date()) {
     r.status = r.status === 'Vướng' && !done ? 'Vướng' : computed;
     r.started = started;
     // Nguy cơ chậm tính lại theo % mới (cùng quy tắc cảnh báo MTL).
-    const risk = done ? null : A.riskOf({ ...i, progress: pct, actual: pct }, { st, cfg: i.cfg, day: now });
+    const risk = done ? null : A.riskOf({ ...i, progress: pct, actual: pct }, { st, cfg: i.cfg, day: now, ...(i.dueSoonDays != null ? { taskDueSoonDays: i.dueSoonDays } : {}) });
     if (!keepPlanned(started, risk)) Object.assign(r, { risk: risk?.code || null, riskNote: WK.riskNoteOf(risk) });
     if (r.status === WK.DONE) Object.assign(r, { pct: 100, risk: null, riskNote: '' });
   }
