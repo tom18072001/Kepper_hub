@@ -39,6 +39,7 @@ const items = (day = FRI_PM) => prep([
   task(970, TITLES[970], '2026-12-10', 'STARTED', 40),
   task(980, TITLES[980], '2027-06-30', 'UNSTARTED', 0, { ...HO, startDate: d('2027-03-01') }), // chưa từng vào báo cáo
   mtl(990, TITLES[990], '2026-10-01', '2026-11-30', 'STARTED', 20, HO),
+  ...(world[985] ? [task(985, 'Việc mới phát sinh sau họp (giả)', '2026-10-31', 'STARTED', 10, HO)] : []),
 ].map(i => ({ ...i, ...(world[i.id] || {}) })).filter(i => !i.archived), day);
 const VIS = { staff: new Set([101, 970]), head: new Set([101, 900, 901, 950, 960, 980, 990]), secr: new Set(), headB: new Set() };
 const EDIT_ALL = { staff: false, head: false, secr: true };
@@ -59,6 +60,12 @@ const view = (who, data) => (who === 'secr' ? structuredClone(data) : WK.viewFor
 const rowOf = (x, id) => WK.allRows(x).find(r => r.itemId === id);
 const listOf = (x, id) => ['results', 'ongoing', 'risks', 'plans'].filter(k => (x[k] || []).some(r => r.itemId === id)).join(',') || '-';
 const leaks = (who, obj) => Object.entries(TITLES).filter(([id]) => who !== 'secr' && !VIS[who].has(Number(id))).filter(([, t]) => JSON.stringify(obj).includes(t)).map(([id]) => Number(id));
+// Hạng mục MTL lá: % trên dòng là % người xem được việc ghi (ngoại lệ K1) → tình trạng / nguy cơ tính theo % đó.
+const mtlAt = (i, row) => {
+  if (i.kind !== 'MTL' || row.auto) return i;
+  const pct = Number(row.pct) || 0, done = pct >= 100, cfg = M.DEFAULT_ALERTS, st = M.statusOf({ ...i, progress: pct }, done ? 100 : pct, FRI_PM, cfg);
+  return { ...i, done, risk: done ? null : A.riskOf({ ...i, progress: pct, actual: pct }, { st, cfg, day: FRI_PM }) };
+};
 const sumOf = data => WK.buildSummary({ week: F, depts: [{ id: 1, name: 'Ban A (giả)' }, { id: 2, name: 'Ban B (giả)' }], reports: [{ departmentId: 1, firstSubmittedAt: FRI_PM, submittedAt: FRI_PM, submitCount: 1, data }], notices: [], now: MON });
 const kpis = data => { const k = sumOf(data).kpis; return { done: k.done, ongoing: k.ongoing, risk: k.risk }; };
 // Bản nộp chuẩn: trưởng phòng lập (mọi việc trừ 970 của nhân viên — nhân viên lưu nháp trước), 950 "Vướng" + đề nghị Ban GĐ.
@@ -69,6 +76,7 @@ function baseReport() {
   for (const list of ['results', 'ongoing', 'risks', 'plans']) for (const n of pf[list]) if (!(hp[list] || []).some(x => x.itemId === n.itemId)) hp[list].push(structuredClone(n));
   const h = fill(hp);
   Object.assign(rowOf(h, 950), { status: 'Vướng', cause: 'Chờ hội đồng (giả)', solution: 'Họp lại (giả)', helpFrom: 'BGD', helpWhat: 'Ban GĐ chủ trì họp (giả)', helpBy: '2026-11-05' });
+  rowOf(h, 990).pct = 60; // trưởng phòng (xem được MTL 990) ghi 60% — % thực tế trên MTL vẫn 20% (ngoại lệ K1)
   const r = submit('head', h, d0);
   assert.deepEqual(r.errors, []);
   return r.fin;
@@ -144,9 +152,12 @@ test('Vòng 6 — mục 6 (K1): tuần đã họp đóng băng — gửi lại s
   assert.equal(listOf(r.fin, 101), 'ongoing'); assert.deepEqual(kpis(r.fin), before);
   assert.equal(listOf(r.fin, 950), 'ongoing'); assert.equal(rowOf(r.fin, 950).pct, rowOf(base, 950).pct); // đóng băng theo bản nộp
   assert.equal(rowOf(r.fin, 950).solution, 'Kết luận họp (thư ký ghi)'); // trường người nhập vẫn sửa được
-  // Tuần đang mở thì dòng việc đã lưu trữ bị bỏ và có báo (removed).
+  // Tuần đang mở: dòng việc đã lưu trữ bị bỏ, có báo. Người sửa được dòng (thư ký) → "đã bỏ khỏi báo cáo" (removed); người nay không còn
+  // xem được việc (đã lưu trữ) → cùng phản hồi "không được lưu" như mọi dòng không sửa được (K3 — không xác nhận mã việc tồn tại).
   const open = submit('head', view('head', base), base);
-  assert.equal(listOf(open.fin, 101), '-'); assert.equal(open.removed, 1);
+  assert.equal(listOf(open.fin, 101), '-'); assert.equal(open.removed, 0); assert.equal(open.ignored, 1);
+  const sec = submit('secr', view('secr', base), base);
+  assert.equal(listOf(sec.fin, 101), '-'); assert.equal(sec.removed, 1);
   world = {};
 });
 
@@ -195,9 +206,9 @@ test('Vòng 6 — KHUNG: mọi vai × mọi đường × mọi kiểu gửi → 
     assert.deepEqual(leaks(who, { data: shown, errors: r.errors || [] }), [], label);
     if (who === 'staff') assert.equal((r.errors || []).some(e => /lô D|lô C|Kỷ luật|Thương lượng|công ty Z|MTL kín/.test(e)), false, label);
     // (b) trường máy tính của mọi dòng gắn việc = theo việc.
-    // (Trưởng phòng xem được hạng mục MTL 990 → % do họ ghi là hợp lệ, ghi ngược MTL; bỏ qua khi so trường máy tính.)
-    for (const row of WK.allRows(out).filter(x => x.itemId && !(who === 'head' && x.itemId === 990))) {
-      const i = all.get(row.itemId);
+    for (const row of WK.allRows(out).filter(x => x.itemId)) {
+      const i = mtlAt(all.get(row.itemId), row);
+      if (row.itemId === 990 && who !== 'head') assert.equal(row.pct, 60, `${label} · 990 % đã lưu (người không xem được việc)`);
       assert.equal(row.task, i.title, `${label} · ${row.itemId} tên`);
       assert.equal(row.due, WK.dayOf(i.baselineEnd || i.dueDate), `${label} · ${row.itemId} hạn`);
       assert.equal(row.risk || null, i.done ? null : (i.risk?.code || (row.risk === 'PLAN_NOT_STARTED' ? 'PLAN_NOT_STARTED' : null)), `${label} · ${row.itemId} nguy cơ`);
@@ -219,4 +230,93 @@ test('Vòng 6 — mục 4: nộp kiểm xung đột kể cả khi mở trang lú
   assert.equal(WS.isStale({ baseUpdatedAt: saved.updatedAt.toISOString() }, saved), false);
   assert.equal(WS.isStale({ baseUpdatedAt: '2026-10-30T02:59:00.000Z' }, saved), true);
   assert.equal(WS.isStale({}, saved), false); // không có khoá (công cụ cũ / e2e gửi thẳng): giữ cách cũ
+});
+
+test('Vòng 7 — mục 1: % MTL người XEM ĐƯỢC việc ghi (60%) giữ nguyên khi người KHÔNG xem được lưu / nộp / gửi lại; không 422', () => {
+  const base = baseReport();
+  assert.equal(rowOf(base, 990).pct, 60); assert.notEqual(rowOf(base, 990).status, 'Chậm');
+  const runs = {
+    'nhân viên lưu nháp': () => draft('staff', view('staff', base), base),
+    'nhân viên nộp': () => submit('staff', view('staff', base), base),
+    'thư ký lưu nháp (sửa giải pháp)': () => { const f = view('secr', base); rowOf(f, 950).solution = 'Thư ký ghi (giả)'; return draft('secr', f, base); },
+    'thư ký gửi lại (không sửa gì)': () => submit('secr', view('secr', base), base),
+  };
+  for (const [name, run] of Object.entries(runs)) {
+    const r = run();
+    assert.deepEqual(r.errors || [], [], name);
+    const out = r.fin || r.data;
+    assert.equal(rowOf(out, 990).pct, 60, name); assert.equal(rowOf(out, 990).status, rowOf(base, 990).status, name);
+    assert.equal(r.ignored, 0, name);
+  }
+  // Thư ký gửi % khác cho 990 → giữ 60%, có báo.
+  const f = view('secr', base); rowOf(f, 990).pct = 10;
+  const r = submit('secr', f, base);
+  assert.equal(rowOf(r.fin, 990).pct, 60); assert.equal(r.ignored, 1);
+});
+
+test('Vòng 7 — mục 2 (K4): sửa trường máy tính của việc thường (%, tình trạng) → bỏ và CÓ báo; gửi lại nguyên bản sau khi việc tiến triển → không báo nhầm', () => {
+  const base = baseReport();
+  // Như MCP kepper_save_weekly_draft edits cho 101: pct=50, status="Hoàn thành".
+  const f = view('staff', base); Object.assign(rowOf(f, 101), { pct: 50, status: 'Hoàn thành' });
+  const d1 = draft('staff', f, base);
+  assert.equal(rowOf(d1.data, 101).pct, 30); assert.equal(rowOf(d1.data, 101).status, 'Đúng tiến độ'); assert.equal(d1.ignored, 1);
+  const s1 = submit('staff', f, base); assert.equal(s1.ignored, 1);
+  // Việc 101 tiến triển lên 50% trên chính việc; giao diện gửi lại đúng bản đã nhận (30%) → máy lấy 50%, không báo nhầm.
+  world = { 101: { progress: 50 } };
+  const r = submit('staff', view('staff', base), base);
+  assert.deepEqual(r.errors, []); assert.equal(rowOf(r.fin, 101).pct, 50); assert.equal(r.ignored, 0);
+  const dd = draft('staff', view('staff', base), base); assert.equal(dd.ignored, 0);
+  world = {};
+});
+
+test('Vòng 7 — mục 3 (K3): mã việc kín đã lưu trữ, mã kín đang dùng, mã không tồn tại → phản hồi GIỐNG HỆT nhau', () => {
+  const base = baseReport();
+  world = { 950: { archived: true } }; // 950 kín, có trong bản đã lưu, nay đã lưu trữ
+  const probe = id => { const f = view('staff', base); f.ongoing.push({ key: 'g', itemId: id, task: 'x', status: 'Vướng', cause: 'c', ownerIds: [50], next: 'n' }); const r = submit('staff', f, base); return { errors: r.errors, ignored: r.ignored, removed: r.removed }; };
+  const archived = probe(950), active = probe(900), none = probe(123456);
+  assert.deepEqual(archived, none); assert.deepEqual(active, none);
+  assert.deepEqual(none, { errors: [], ignored: 1, removed: 0 });
+  world = {};
+});
+
+test('Vòng 7 — mục 4: tuần đã họp đóng băng — không dựng lại / bỏ dòng tự bổ sung, không xếp lại phần, không thêm / xoá dòng gắn việc', () => {
+  world = {};
+  const s1 = submit('staff', fill(prefillOf('staff')), null); // 900, 901, 950, 990 thành dòng tự bổ sung
+  assert.equal(rowOf(s1.fin, 900).auto, true);
+  const after = new Date('2026-11-03T10:00:00+07:00');
+  // Sau họp: 900 xong (tuần mở sẽ bỏ dòng tự bổ sung / chuyển phần), xuất hiện việc mới 985 (tuần mở sẽ tự bổ sung).
+  world = { 900: { state: { category: 'COMPLETED' }, progress: 100, completedAt: d('2026-11-02') }, 985: {} };
+  // c1: không dựng lại / không bỏ dòng tự bổ sung.
+  const c1 = submit('secr', view('secr', s1.fin), s1.fin, { day: after, frozen: true });
+  assert.deepEqual(c1.errors, []);
+  assert.equal(listOf(c1.fin, 900), listOf(s1.fin, 900)); assert.equal(rowOf(c1.fin, 900).auto, true); assert.equal(listOf(c1.fin, 985), '-');
+  // c2: không xếp lại phần — bản nộp đặt 101 ở Phần I (chưa xong) thì giữ nguyên ở Phần I.
+  const odd = structuredClone(s1.fin); const r101 = rowOf(odd, 101); odd.ongoing = odd.ongoing.filter(x => x !== r101); odd.results.push(r101);
+  const c2 = submit('secr', view('secr', odd), odd, { day: after, frozen: true });
+  assert.equal(listOf(c2.fin, 101), 'results');
+  // d: không thêm được dòng gắn việc mới (sau giờ họp chỉ thư ký còn gửi lại được — routes/weekly.js lockedAfterMeeting).
+  const fd = view('secr', s1.fin); fd.ongoing.push({ ...structuredClone(prefillOf('head').ongoing.find(x => x.itemId === 950) || { key: 'm980', itemId: 980, task: 'x', ownerIds: [60], status: 'Đúng tiến độ' }), itemId: 980, key: 'm980', next: 'n' });
+  const cd = submit('secr', fd, s1.fin, { day: after, frozen: true });
+  assert.equal(listOf(cd.fin, 980), '-'); assert.equal(cd.ignored, 1);
+  // e: không xoá được dòng (thư ký bỏ dòng 101 khỏi biểu mẫu) → giữ, có báo.
+  const fe = view('secr', s1.fin); fe.ongoing = fe.ongoing.filter(x => x.itemId !== 101);
+  const ce = submit('secr', fe, s1.fin, { day: after, frozen: true });
+  assert.equal(listOf(ce.fin, 101), 'ongoing'); assert.equal(ce.ignored, 1);
+  // d, e với người XEM ĐƯỢC việc (chính điều kiện "tuần đã họp" chặn, không phải K2): thêm 980 / bỏ 101 đều không được, có báo.
+  const hd = view('head', s1.fin); hd.ongoing.push({ key: 'm980', itemId: 980, task: TITLES[980], ownerIds: [60], status: 'Đúng tiến độ', pct: 0, next: 'n' });
+  hd.ongoing = hd.ongoing.filter(x => x.itemId !== 101);
+  const ch = submit('head', hd, s1.fin, { day: after, frozen: true });
+  assert.equal(listOf(ch.fin, 980), '-'); assert.equal(listOf(ch.fin, 101), 'ongoing'); assert.equal(ch.ignored, 2);
+  world = {};
+});
+
+test('Vòng 7 — mục 4 (M8b, M8c): MCP save_weekly_draft trả ignored / warning; GET báo cáo gắn noDelete cho dòng thư ký không xem được', () => {
+  const { draftResult } = require('../../../mcp/weekly-draft.cjs');
+  const out = draftResult({ updatedAt: 't', ignored: 2, removed: 1, warning: 'cảnh báo' }, ['k1']);
+  assert.equal(out.ignored, 2); assert.equal(out.removed, 1); assert.equal(out.warning, 'cảnh báo'); assert.deepEqual(out.missingKeys, ['k1']);
+  assert.equal(draftResult({ updatedAt: 't' }).warning, undefined);
+  const base = baseReport();
+  const marked = WK.markNoDelete(base, id => id === 101);
+  assert.equal(rowOf(marked, 101).noDelete, undefined); assert.equal(rowOf(marked, 950).noDelete, true);
+  assert.ok(marked.plans.filter(p => p.itemId).every(p => p.noDelete === true));
 });

@@ -26,8 +26,8 @@ function recomputeRows(data, items, now = new Date()) {
       if (r.status === WK.DONE) Object.assign(r, { risk: null, riskNote: '' });
       continue;
     }
-    // % do máy tính: hạng mục có việc nhánh, dòng tự bổ sung, dòng của việc người lưu không xem được (_machinePct, services/weekly-submit.js).
-    r.pctLocked = i.children > 0 || !!r.auto || !!r._machinePct;
+    // Khoá % theo MTL: hạng mục có việc nhánh, dòng tự bổ sung. (Dòng người lưu không xem được giữ % đã lưu — services/weekly-submit.js.)
+    r.pctLocked = i.children > 0 || !!r.auto;
     r.due = WK.dayOf(i.baselineEnd) || r.due;
     if (r.pctLocked) r.pct = i.done ? 100 : Math.round(i.actual || 0);
     const pct = r.pct === '' ? Math.round(i.actual || 0) : r.pct;

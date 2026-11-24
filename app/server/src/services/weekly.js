@@ -397,6 +397,8 @@ function briefFor(view, canSee, ownDeptId = null) {
     // K5: kết luận giao ban chỉ giữ cho yêu cầu hỗ trợ người xem được thấy (kết luận ghi tay có thể nhắc tên việc kín).
     meeting: { ...(view.meeting || {}), conclusions: Object.fromEntries(Object.entries(view.meeting?.conclusions || {}).filter(([k]) => (view.helps || []).some(g => g.list.some(h => h.key === k && !hideHelp(h))))) } };
 }
+// Thư ký (xem đầy đủ + sửa): dòng gắn việc họ không xem được → chỉ sửa giải trình, không bỏ được (K2) — đánh dấu noDelete để giao diện ẩn "Bỏ".
+const markNoDelete = (data, canSee) => (data ? { ...data, ...Object.fromEntries(['results', 'ongoing', 'risks', 'plans'].map(k => [k, (data[k] || []).map(r => (r.itemId && !canSee(r.itemId) ? { ...r, noDelete: true } : r))])) } : data);
 // Bản không có dòng tự bổ sung.
 const withoutAuto = (data, keep = () => false) => (data ? { ...data, results: (data.results || []).filter(r => !isAuto(r) || keep(r)),
   ongoing: (data.ongoing || []).filter(r => !isAuto(r) || keep(r)), risks: (data.risks || []).filter(r => !isAuto(r) || keep(r)) } : data);
@@ -603,6 +605,6 @@ function fridaysOf(ym, now = new Date(), startWeek = null) {
 module.exports = {
   SOURCES, MTL_SOURCE, TASK_SOURCE, RISK_CODES, STATUSES, DONE, HELP_BGD, HELP_SELF, REASONS, NOTICE_TYPES, ATTENDANCE, DECISIONS, POINTS, POINT_LABEL,
   isDay, addDays, dayOf, at, weekday, currentFriday, isFriday, fmtD, fmtDY, fmtTime, scheduleOf, meetingStarted,
-  doneSince, AUTO_LABEL, isAuto, addAutoRows, withoutAuto, viewFor, briefFor, allRows, isOverdue, needsIssue, issueLabel, rowRisk, riskRows, rowStarted, partsOf, regroup, adoptMandatory, PLAN_NOT_STARTED, riskNoteOf, placeOf, statusFromMtl, taskStatus, deptCandidates, buildPrefill, sanitize, validate, finalize, writeBacks,
+  doneSince, AUTO_LABEL, isAuto, addAutoRows, withoutAuto, markNoDelete, viewFor, briefFor, allRows, isOverdue, needsIssue, issueLabel, rowRisk, riskRows, rowStarted, partsOf, regroup, adoptMandatory, PLAN_NOT_STARTED, riskNoteOf, placeOf, statusFromMtl, taskStatus, deptCandidates, buildPrefill, sanitize, validate, finalize, writeBacks,
   submissionStatus, absenceNoticed, SUBMITTED, buildSummary, briefSummary, summaryText, emailText, summaryView, compliance, fridaysOf, stableStringify,
 };

@@ -160,8 +160,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     if (saved?.data && acc.canEdit && P.can(s, 'view', 'weekly.summary.detail')) {
       const ids = [...WK.allRows(saved.data), ...(saved.data.plans || [])].map(r => r.itemId).filter(Boolean);
       const ok = await seeWhich(req.user, ids);
-      saved.data = { ...saved.data };
-      for (const k of ['results', 'ongoing', 'risks', 'plans']) saved.data[k] = (saved.data[k] || []).map(r => (r.itemId && !ok.has(r.itemId) ? { ...r, noDelete: true } : r));
+      saved.data = WK.markNoDelete(saved.data, id => ok.has(id));
     }
     const { prefill, members, hasPrev, actions } = await prefillFor(req.user, departmentId, week, now);
     const notices = noticesRaw.filter(n => P.can(s, 'view', 'weekly.notice', { departmentId, createdById: n.createdById }));
@@ -197,7 +196,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
   // Thư ký (quyền sửa báo cáo + xem tổng hợp đầy đủ): sửa được trường do người nhập của MỌI dòng (quy chế: sửa căn cứ sau họp).
   const editsAll = (s, acc) => acc.canEdit && P.can(s, 'view', 'weekly.summary.detail');
   // K4: mọi thay đổi máy chủ bỏ qua đều báo lại (web lẫn MCP).
-  const ignoredMsg = n => `${n} thay đổi trên dòng gắn việc bạn không có quyền thêm / sửa / bỏ (hoặc % do hệ thống tính) không được lưu — máy chủ giữ theo việc và bản đã lưu`;
+  const ignoredMsg = n => `${n} thay đổi trên dòng gắn việc không được lưu: dòng bạn không có quyền thêm / sửa / bỏ, hoặc trường lấy từ chính việc (tên, hạn, %, tình trạng, phần) — cập nhật tiến độ ở việc (MCP: kepper_update_progress)`;
   const removedMsg = n => `${n} dòng của việc đã lưu trữ / huỷ đã được bỏ khỏi báo cáo`;
   const notes = (ignored, removed) => ({ ignored, removed, ...(ignored || removed ? { warning: [ignored ? ignoredMsg(ignored) : '', removed ? removedMsg(removed) : ''].filter(Boolean).join('. ') } : {}) });
   // Có khoá baseUpdatedAt mà = null trong khi máy chủ đã có báo cáo → bản đang mở đã cũ (409) — WS.baseOf / WS.isStale.

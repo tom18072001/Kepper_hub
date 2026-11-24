@@ -995,7 +995,7 @@ Việc chưa bắt đầu thì không báo cáo, trừ khi đã có nguy cơ ch�
 | Mã | Trạng thái | Ghi chú | Ưu tiên |
 |---|---|---|---|
 | GOV-01 | Không đổi | Quyền xem báo cáo tuần vẫn qua `weekly.report` / `weekly.summary(.detail)` | Bắt buộc |
-| PRE-01 | Đầy đủ | Theo khung K1–K5 (mục 5 bên dưới): trường do máy tính (kể cả phần I/II/III, % dòng tự bổ sung và dòng người lưu không xem được) do máy chủ quyết — tuần đang mở tính lại từ việc, tuần đã họp đóng băng theo bản nộp; dòng gắn việc mới chỉ người xem được việc thêm; thư ký chỉ sửa trường người nhập của dòng đã có; thay đổi bị bỏ (kể cả xoá dòng, sửa %) được báo lại (`ignored`), dòng của việc đã lưu trữ / huỷ bị bỏ khỏi tuần đang mở và được báo (`removed`). Báo cáo tuần không ghi % ngược vào việc thường | Bắt buộc |
+| PRE-01 | Đầy đủ | Theo khung K1–K5 (bên dưới). Tuần đang mở: tên, hạn, tình trạng, nguy cơ, phần I/II/III tính lại từ việc. % hạng mục MTL: khoá theo MTL với dòng tự bổ sung và hạng mục có việc nhánh; người xem được hạng mục MTL lá thì ghi % (ghi ngược MTL); dòng người lưu không xem được và tuần đã họp giữ % đã lưu. Tuần đã họp: đóng băng theo bản nộp. Dòng gắn việc mới chỉ người xem được việc thêm; thư ký chỉ sửa trường người nhập của dòng đã có. Thay đổi bị bỏ được báo lại (`ignored`), gồm: dòng không được thêm / sửa / bỏ; trường máy tính gửi lên khác cả giá trị đã lưu lẫn giá trị vừa tính. Dòng của việc đã lưu trữ / huỷ bị bỏ khỏi tuần đang mở (`removed`, chỉ với dòng người lưu sửa được). Báo cáo tuần không ghi % ngược vào việc thường | Bắt buộc |
 | PRI-01 | Một phần → tốt hơn | Việc thường mang tên việc và người phụ trách vào báo cáo Bảo mật. Nếu một việc thuộc dự án hạn chế (DEPARTMENT / thành viên), Ban GĐ, thư ký và PMO sẽ thấy **tên việc** qua báo cáo tuần. Đã chặn trưởng / phó bộ phận khác đọc văn bản đầy đủ (trước đây lộ qua trường `text`, cả API lẫn MCP) | Nên có |
 | PRI-04 | Một phần | Hồ sơ đánh giá tác động xử lý DLCN, luồng "báo cáo tuần", cần ghi thêm nguồn "việc thường của bộ phận" và kênh MCP (`kepper_weekly_report`, `kepper_weekly_summary`) | Bắt buộc |
 | DET-05 | Không đổi | Bản nộp vẫn băm SHA-256 và lưu phiên bản bất biến | Nên có |
@@ -1044,26 +1044,37 @@ Ví dụ: TGĐ giao trưởng phòng qua sổ giao việc, nhân viên lập bá
 **Ẩn / hiện theo người xem (nghiệm thu vòng 3).** Quy tắc áp cho MỌI dòng gắn việc, không chỉ dòng tự bổ sung: người không có quyền xem tổng hợp đầy đủ
 chỉ nhận dòng gắn việc họ xem được (`itemVisibleWhere` của chính người xem), kể cả dòng do trưởng phòng / thư ký nhập.
 
-**Khung nguyên tắc K1–K5 (nghiệm thu vòng 6)** — áp cho MỌI đường: web, MCP `kepper_save_weekly_draft`, lưu nháp, tự lưu, nộp, gửi lại
-(`services/weekly-submit.js`):
-- **K1 — trường do máy tính máy chủ quyết hoàn toàn.** Gồm tên, mã, hạn, người phụ trách, %, tình trạng, nguy cơ, và việc dòng nằm ở Phần I / II / III
-  (xếp mọi hướng theo tình trạng). Áp cho cả dòng tự bổ sung và hạng mục MTL. Tuần đang mở: luôn tính lại từ việc; dòng của việc đã lưu trữ / huỷ bị
-  bỏ. Tuần **đã họp** (đã có bản nộp và đã qua giờ giao ban): đóng băng theo bản nộp trước đó. Khi đó chỉ sửa được trường người nhập (thư ký); không bỏ
-  dòng vì việc bị lưu trữ về sau, không thêm dòng gắn việc mới. Ngoại lệ duy nhất: người xem được hạng mục MTL lá ghi % (ghi ngược MTL theo policy),
-  trừ dòng tự bổ sung.
+**Khung nguyên tắc K1–K5 (nghiệm thu vòng 6, chỉnh vòng 7)** — áp cho MỌI đường: web, MCP `kepper_save_weekly_draft`, lưu nháp, tự lưu, nộp,
+gửi lại (`services/weekly-submit.js`):
+- **K1 — trường do máy tính máy chủ quyết.** Gồm tên, mã, hạn, người phụ trách, tình trạng, nguy cơ, và việc dòng nằm ở Phần I / II / III (xếp mọi
+  hướng theo tình trạng). Tuần đang mở: luôn tính lại từ việc; dòng của việc đã lưu trữ / huỷ bị bỏ. Tuần **đã họp** (đã có bản nộp và đã qua giờ giao
+  ban): đóng băng theo bản nộp trước đó. Không tính lại, không xếp lại, không dựng lại / bỏ dòng tự bổ sung, không thêm hay xoá dòng gắn việc; chỉ sửa
+  được trường người nhập (thư ký).
+  - **% có hai nghĩa tách riêng.**
+    - Khoá theo MTL: dòng tự bổ sung và hạng mục có việc nhánh.
+    - Không nhận % người này gửi, giữ % ĐÃ LƯU: dòng người lưu không xem được, và tuần đã họp. Ví dụ: trưởng phòng ghi 60% cho MTL thì nhân viên /
+      thư ký lưu hay nộp vẫn giữ 60%.
+    - Người xem được hạng mục MTL lá thì ghi % (ghi ngược MTL theo policy).
 - **K2 — dòng gắn việc mới chỉ người xem được việc mới thêm được.** "Mới" xét riêng theo phần: Phần I–III và Phần IV. Thư ký (quyền sửa + xem tổng hợp
-  đầy đủ) chỉ sửa trường người nhập của những dòng đã có trong bản đã lưu; không thêm, không bỏ được. Chỉ người xem được việc bỏ được dòng; dòng tự bổ
-  sung thì không ai bỏ được.
-- **K3 — so khớp chỉ trên dòng người lưu xem được / sửa được.** Áp cho kiểm "dòng tự do trùng tên". Lỗi không tiết lộ việc người lưu không xem được:
-  gõ đúng tên một việc kín hay một tên không tồn tại cho cùng một phản hồi.
-- **K4 — mọi thay đổi bị bỏ đều báo lại.** Kể cả xoá dòng không được xoá, sửa % do máy tính, thêm dòng trái quyền. Máy chủ trả `ignored` + câu cảnh báo
-  (web hiện cảnh báo; MCP trả `ignored` / `warning`). Dòng của việc đã lưu trữ / huỷ bị bỏ được báo riêng (`removed`). Giao diện ẩn nút "Bỏ" cho
-  dòng thư ký không bỏ được (`noDelete`).
+  đầy đủ) chỉ sửa trường người nhập của dòng đã có, không thêm, không bỏ được. Chỉ người xem được việc bỏ được dòng; dòng tự bổ sung thì không ai bỏ được.
+- **K3 — không xác nhận việc người lưu không xem được.** Quyền thêm / sửa được kiểm TRƯỚC mọi thứ khác. Gửi dữ liệu cho mã việc kín đang dùng, mã việc
+  kín đã lưu trữ, hay mã không tồn tại đều nhận cùng một phản hồi: `ignored` + một câu báo chung. Kiểm "dòng tự do trùng tên" chỉ so với dòng người
+  lưu xem được / sửa được.
+- **K4 — thay đổi bị bỏ được báo lại** qua `ignored` + câu cảnh báo. Web hiện cảnh báo; MCP `kepper_save_weekly_draft` trả `ignored` / `removed` /
+  `warning`, và mô tả công cụ nói rõ: % / tình trạng cập nhật bằng `kepper_update_progress`. Được báo gồm:
+  - thêm / sửa / bỏ dòng trái quyền;
+  - trường máy tính gửi lên (tên, hạn, %, tình trạng trừ "Vướng", phần) khác CẢ giá trị đã lưu LẪN giá trị máy vừa tính. Giao diện gửi nguyên bản đã
+    nhận thì không bị báo nhầm, dù việc đã tiến triển.
+  - Dòng của việc đã lưu trữ / huỷ bị bỏ được báo riêng (`removed`), chỉ với dòng người lưu sửa được.
+  Giao diện thay nút "Bỏ" bằng chip "không bỏ được" ("Chỉ người xem được việc này mới bỏ được dòng") cho dòng `noDelete`, ở cả Phần I–III và Phần IV.
 - **K5 — hiển thị lọc theo người xem.** Gồm dòng, yêu cầu hỗ trợ, và kết luận giao ban: kết luận của yêu cầu hỗ trợ bị ẩn không đến người xem.
 - Trường **do người nhập**: tình trạng "Vướng", nguyên nhân, giải pháp, đề nghị hỗ trợ, việc tuần tới, người phụ trách tự chọn (việc chưa giao),
   toàn bộ dòng Phần IV.
-- Nộp / gửi lại kiểm xung đột như lưu nháp. Có khoá `baseUpdatedAt` (kể cả = null khi mở trang lúc chưa có báo cáo) mà bản đã lưu khác → 409
-  `REPORT_CONFLICT`.
+- **Xung đột:**
+  - Lưu nháp (PUT) luôn kiểm.
+  - Nộp (POST) kiểm khi body CÓ khoá `baseUpdatedAt`, kể cả = null khi mở trang lúc chưa có báo cáo: bản đã lưu khác thì trả 409 `REPORT_CONFLICT`.
+    Giao diện luôn gửi khoá này.
+  - POST **không** kèm khoá `baseUpdatedAt` thì không kiểm xung đột. Đây là cách cũ, giữ cho công cụ / e2e gửi thẳng.
 
 **Việc thuộc dự án KÍN** — chế độ hiển thị "Chỉ thành viên" (PRIVATE) hoặc "Sổ giao việc" (ASSIGNED). Quy tắc theo việc, không theo người lập:
 - Trong **bản gửi email** và **bản tóm tắt cho trưởng / phó bộ phận khác**, việc kín không nêu tên, chỉ đếm. Áp cho cả mục nguy cơ chậm lẫn

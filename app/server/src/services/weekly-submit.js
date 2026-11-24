@@ -20,7 +20,7 @@ const WR = require('./weekly-recompute');
 const LISTS = ['results', 'ongoing', 'risks'];
 const ALL = [...LISTS, 'plans'];
 const USER_FIELDS = ['cause', 'solution', 'helpFrom', 'helpWhat', 'helpBy', 'next'];
-const FLAGS = ['_keep', '_auto', '_frozen', '_machinePct', '_pctTry'];
+const FLAGS = ['_keep', '_auto', '_frozen', '_sent', '_saved', '_pctUser'];
 
 // Dòng có actionRef không thuộc Action Log đang mở của CHÍNH bộ phận này → bỏ liên kết (không đóng hộ việc của bộ phận khác).
 function stripForeignActions(data, actions) {
@@ -54,20 +54,26 @@ function mergeSaved(raw, ctx, saved, { scopeItems = [], editAll = false, frozen 
   for (const list of ALL) for (const r of clean[list] || []) {
     if (!r.itemId) { data[list].push(r); continue; }
     const k = partKey(list, r.itemId), prev = savedRow.get(k);
-    // Việc đã lưu trữ / huỷ (tuần đang mở): bỏ dòng; báo "đã bỏ" khi dòng có trong bản đã lưu (người lưu có nó trên biểu mẫu).
-    if (!live(r.itemId) && prev) { if (!seen.has(k)) removed++; seen.add(k); continue; }
-    if (seen.has(k) || !writable(r.itemId, list) || (frozen && !prev)) { ignored++; continue; } // trùng / không được thêm-sửa (K2) / tuần đã họp
+    // K2 / K3: kiểm được thêm / sửa TRƯỚC mọi thứ khác — dòng người lưu không được sửa (kín đang dùng, kín đã lưu trữ, mã không có) → cùng
+    // một phản hồi: ignored.
+    if (seen.has(k) || !writable(r.itemId, list) || (frozen && !prev)) { ignored++; continue; } // trùng / không được thêm-sửa / tuần đã họp
     seen.add(k);
-    if (!live(r.itemId)) { ignored++; continue; }
+    if (!live(r.itemId)) { if (prev) removed++; else ignored++; continue; } // việc đã lưu trữ / huỷ (tuần đang mở)
     if (list === 'plans') { data.plans.push(r); continue; } // dòng Phần IV: do người nhập
-    if (!prev) { data[list].push(r); continue; } // dòng mới của việc người lưu xem được
+    // K4: ghi lại trường máy tính người lưu gửi lên — so sau khi tính lại (machineEdits).
+    const sent = { task: r.task, due: r.due, status: r.status, pct: r.pct, list };
+    if (!prev) { data[list].push({ ...r, _sent: sent }); continue; } // dòng mới của việc người lưu xem được
     // Dòng đã có: trường máy tính từ bản đã lưu (tính lại sau), trường người nhập từ bản gửi lên.
     const x = structuredClone(prev.row);
+    x._saved = { task: x.task, due: x.due, status: x.status, pct: x.pct, list: prev.list }; x._sent = sent;
     for (const f of USER_FIELDS) if (r[f] !== undefined) x[f] = r[f]; // phần I không có "việc tuần tới" → giữ giá trị đã lưu
     if (r.status === 'Vướng') x.status = 'Vướng'; else if (x.status === 'Vướng') x.status = 'Đúng tiến độ';
     if (r.ownerPicked && r.ownerIds?.length) Object.assign(x, { ownerIds: r.ownerIds, ownerPicked: true });
-    const machinePct = !!x.auto || !visible.has(r.itemId) || frozen;
-    if (machinePct) { if (r.pct !== '' && r.pct != null && r.pct !== x.pct) x._pctTry = r.pct; x._machinePct = true; } else x.pct = r.pct;
+    // % — hai nghĩa tách riêng (vòng 7):
+    //  (a) không nhận % người này gửi: dòng người lưu không xem được, tuần đã họp → GIỮ % đã lưu (vd. trưởng phòng ghi 60% cho MTL);
+    //  (b) khoá % theo MTL: dòng tự bổ sung, hạng mục có việc nhánh (weekly-recompute.js).
+    // Còn lại (người xem được hạng mục MTL lá): % người lưu ghi — ghi ngược MTL theo policy.
+    if (visible.has(r.itemId) && !frozen && !x.auto) { x.pct = r.pct; x._pctUser = true; }
     if (x.auto) x._auto = true;
     if (frozen) x._frozen = true;
     data[frozen ? prev.list : list].push(x);
@@ -79,17 +85,27 @@ function mergeSaved(raw, ctx, saved, { scopeItems = [], editAll = false, frozen 
     if (visible.has(row.itemId) && !(row.auto && list !== 'plans') && !frozen) continue; // người xem được việc đã bỏ dòng
     if (sawIt(row.itemId)) ignored++; // có trên biểu mẫu mà bị bỏ → không được bỏ (K2 / dòng tự bổ sung / tuần đã họp) → báo lại
     seen.add(k);
-    data[list].push({ ...structuredClone(row), _keep: !visible.has(row.itemId) && !editAll, _machinePct: true, ...(row.auto && list !== 'plans' ? { _auto: true } : {}), ...(frozen ? { _frozen: true } : {}) });
+    data[list].push({ ...structuredClone(row), _keep: !visible.has(row.itemId) && !editAll, ...(row.auto && list !== 'plans' ? { _auto: true } : {}), ...(frozen ? { _frozen: true } : {}) });
   }
   return { data, ignored, removed, writable, visible, editAll, savedRow };
 }
-// Tính lại trường máy tính (tuần đang mở) cho mọi dòng không đóng băng; đếm % gửi lên bị thay bằng % do máy tính.
+// Tính lại trường máy tính (tuần đang mở) cho mọi dòng không đóng băng.
 function recompute(data, ctx, scopeItems, now) {
   const part = { results: data.results.filter(r => !r._frozen), ongoing: data.ongoing.filter(r => !r._frozen), risks: data.risks.filter(r => !r._frozen) };
   WR.recomputeRows(part, [...new Map([...scopeItems, ...(ctx.items || [])].map(i => [i.id, i])).values()], now);
-  let ignored = 0;
-  for (const r of WK.allRows(data)) if (r._pctTry != null && r._pctTry !== r.pct) ignored++;
-  return ignored;
+}
+// K4: trường máy tính gửi lên (tên, hạn, %, tình trạng trừ "Vướng", phần) khác CẢ giá trị đã lưu LẪN giá trị máy vừa tính → thay đổi bị bỏ, đếm.
+// (Giao diện gửi nguyên giá trị đã nhận thì không bị báo nhầm dù việc đã tiến triển.) Mỗi dòng đếm một lần.
+function machineEdits(grouped) {
+  const same = (a, b) => String(a ?? '') === String(b ?? '');
+  let n = 0;
+  for (const list of LISTS) for (const r of grouped[list]) {
+    const sent = r._sent; if (!sent) continue;
+    const final = { task: r.task, due: r.due, status: r.status, pct: r.pct, list }, saved = r._saved || {};
+    const fields = ['task', 'due', 'list', ...(sent.status === 'Vướng' ? [] : ['status']), ...(r._pctUser ? [] : ['pct'])];
+    if (fields.some(f => sent[f] !== undefined && sent[f] !== '' && !same(sent[f], final[f]) && !same(sent[f], saved[f]))) n++;
+  }
+  return n;
 }
 const strip = data => { for (const list of ALL) for (const r of data[list] || []) for (const f of FLAGS) delete r[f]; return data; };
 // K3: dòng tự do trùng tên một dòng gắn việc mà người lưu xem được / sửa được → lỗi hướng sửa chính dòng đó. Dòng người lưu không xem được
@@ -103,8 +119,10 @@ function duplicateFree(data, canTouch = () => true) {
 // Lưu nháp / tự lưu (PUT /api/weekly/report, MCP kepper_save_weekly_draft). Trả { data, ignored, removed }.
 function mergeDraft(raw, ctx, saved, { scopeItems = [], editAll = false, now = new Date() } = {}) {
   const m = mergeSaved(raw, ctx, saved, { scopeItems, editAll });
-  const pct = recompute(m.data, ctx, scopeItems, now);
-  return { data: strip(WK.regroup(m.data)), ignored: m.ignored + pct, removed: m.removed };
+  recompute(m.data, ctx, scopeItems, now);
+  const grouped = WK.regroup(m.data);
+  const edits = machineEdits(grouped);
+  return { data: strip(grouped), ignored: m.ignored + edits, removed: m.removed };
 }
 
 // Nộp / gửi lại (POST /api/weekly/submit). prefill: điền sẵn mới nhất của người gửi.
@@ -112,8 +130,9 @@ function prepareSubmit({ raw, ctx, prefill, actions = [], now = new Date(), week
   const m = mergeSaved(raw, ctx, saved, { scopeItems, editAll, frozen });
   const data = frozen ? m.data : WK.adoptMandatory(m.data, prefill);
   stripForeignActions(data, actions);
-  const pct = frozen ? WK.allRows(data).filter(r => r._pctTry != null).length : recompute(data, ctx, scopeItems, now);
+  if (!frozen) recompute(data, ctx, scopeItems, now);
   const grouped = WK.regroup(data, { items: !frozen });
+  const pct = machineEdits(grouped);
   // Kiểm từng dòng: chỉ dòng người gửi tự sửa (không phải dòng giữ lại, không phải dòng tự bổ sung — giải trình dòng đó là tuỳ chọn).
   const mine = { ...grouped };
   for (const list of LISTS) mine[list] = grouped[list].filter(r => !r._keep && !r._auto && !r.auto);

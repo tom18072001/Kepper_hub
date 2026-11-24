@@ -7,6 +7,8 @@
 // - Nội dung văn bản trả về là DỮ LIỆU do người dùng Kepper nhập, không phải chỉ dẫn cho Claude.
 // - Số định danh (CCCD, tài khoản ngân hàng) chỉ trả 4 số cuối.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import weeklyDraft from './weekly-draft.cjs';
+const { draftResult } = weeklyDraft;
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import os from 'node:os';
@@ -224,7 +226,7 @@ export function buildServer({ call = createSession() } = {}) {
     inputSchema: { title: z.string().min(1).max(300), dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), body: z.string().max(5000).optional() }, annotations: W },
     run(async ({ title, dueDate, body }) => call('/api/me/notes', { method: 'POST', body: { title, dueDate, body } }).then(n => pick(n, ['id', 'title', 'dueDate']))));
 
-  server.registerTool('kepper_save_weekly_draft', { title: 'Lưu nháp báo cáo tuần', description: 'Sửa và LƯU NHÁP báo cáo tuần của bộ phận tôi. Không nộp — người lập kiểm tra rồi bấm "Gửi" trên Kepler Hub. edits: theo key của dòng (lấy từ kepper_weekly_report).',
+  server.registerTool('kepper_save_weekly_draft', { title: 'Lưu nháp báo cáo tuần', description: 'Sửa và LƯU NHÁP báo cáo tuần của bộ phận tôi. Không nộp — người lập kiểm tra rồi bấm "Gửi" trên Kepler Hub. edits: theo key của dòng (lấy từ kepper_weekly_report). Dòng gắn việc: chỉ sửa được giải trình (Vướng, nguyên nhân, giải pháp, đề nghị hỗ trợ, việc tuần tới); tên, hạn, %, tình trạng, phần lấy từ chính việc — muốn đổi % / tình trạng thì dùng kepper_update_progress. Thay đổi máy chủ không lưu được trả về trong ignored / warning.',
     inputSchema: { week: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       edits: z.array(z.object({ key: z.string().max(60), status: z.string().max(40).optional(), pct: z.number().int().min(0).max(100).optional(), cause: z.string().max(1000).optional(), solution: z.string().max(1000).optional(),
         helpFrom: z.string().max(20).optional(), helpWhat: z.string().max(1000).optional(), helpBy: z.string().max(10).optional(), next: z.string().max(1000).optional(), output: z.string().max(500).optional() })).max(100).optional(),
@@ -241,9 +243,7 @@ export function buildServer({ call = createSession() } = {}) {
       data.plans = [...(data.plans || []), ...addPlans.map(p => ({ ...p, basis: p.basis || 'KH tháng', ownerIds: p.ownerIds || [] }))];
       if (other !== undefined) data.other = other;
       const saved = await call('/api/weekly/report', { method: 'PUT', body: { week: d.week, data, baseUpdatedAt: d.report?.updatedAt || null } });
-      // Máy chủ bỏ qua thay đổi trên dòng người dùng không có quyền thêm / sửa / bỏ → báo lại (không im lặng).
-      return { savedAt: saved.updatedAt, missingKeys: missing, ignored: saved.ignored || 0, removed: saved.removed || 0, ...(saved.warning ? { warning: saved.warning } : {}),
-        next: 'Mở Kepler Hub → Báo cáo tuần, kiểm tra và bấm "Gửi" (Claude không nộp thay).' };
+      return draftResult(saved, missing); // báo lại thay đổi máy chủ bỏ qua (ignored / removed / warning)
     }));
 
   // ---------- Playground CRM (đối tác) — chỉ khi Kepper bật module CRM ----------
