@@ -9,6 +9,7 @@ set -eu
 cd "$(dirname "$0")/.."
 if docker compose version >/dev/null 2>&1; then DC="docker compose"; else DC="docker-compose"; fi
 if [ -z "$($DC ps -q postgres 2>/dev/null || true)" ]; then
-  echo "!! DỪNG nâng cấp: không đọc được CSDL (container postgres không chạy). Bật postgres rồi chạy lại."; exit 2
+  echo "!! DỪNG nâng cấp: không đọc được CSDL (container postgres không chạy). Bật postgres rồi chạy lại:"
+  echo "     $DC up -d postgres   &&   sh deploy/precheck-roles.sh"; exit 2
 fi
 $DC exec -T postgres sh -s < deploy/precheck-roles-db.sh

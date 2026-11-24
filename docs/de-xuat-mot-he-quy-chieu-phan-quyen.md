@@ -421,7 +421,20 @@ SELECT role, COUNT(*) FROM "ProjectMember" GROUP BY 1;
 - **Lần nâng cấp LÊN bản này** từ bản cũ: `upgrade.sh` / `upgrade.ps1` của bản CŨ chưa có bước kiểm này (và bước 0 nằm trước bước "Lấy mã mới"). Vì vậy phải: (1) lấy mã mới trước (`git fetch` rồi `git pull --ff-only` trong thư mục cài), (2) chạy `sh deploy/precheck-roles.sh` (Windows: chạy `deploy\upgrade.ps1` của mã MỚI — bước 0/5 kiểm trước khi build), (3) đạt thì mới nâng cấp.
 - `deploy/vm-deploy.sh` (máy chạy thật) **tự kiểm**: mã mới được kéo về thư mục trước khi chạy script, nên script mới chạy bước kiểm trước sao lưu và build.
 
-**Khôi phục nếu migration vẫn dừng lúc triển khai** (lần chạy đầu báo P3018 kèm câu "Còn N tài khoản vai Ban Tổng Giám đốc…"; app khởi động lại liên tục và từ lần thứ hai báo P3009). Chốt nằm ở ĐẦU migration nên dữ liệu chưa đổi. Chạy trong thư mục cài (nơi có `.env`, `docker-compose.yml`):
+**Bản thật (máy ảo, `deploy/vm-deploy.sh`, một thư mục cài, cùng `APP_VERSION`)** — quy trình chuẩn, đã chạy thử nguyên văn (bảng dưới):
+- Triển khai: `git pull --ff-only` → `sh deploy/vm-deploy.sh <tên-máy>`. Script: kiểm phân quyền (dừng ở đây thì app cũ vẫn chạy) → sao lưu → gắn tag image app đang chạy thành `kepper-app:rollback-<giờ>` (in ra; chỉ giữ 2 tag rollback gần nhất) → build và chạy → chờ healthy; không healthy thì in log và đúng các lệnh khôi phục dưới đây (kèm tên tag).
+- Nếu migration vẫn dừng ở chốt (log app: P3018 "Còn N tài khoản…", sau đó P3009):
+  0. `docker compose stop app` — dừng TRƯỚC, nếu không app đang khởi động lại sẽ chạy migration lần nữa và ghi thêm bản ghi lỗi.
+  1. `docker compose run --rm --no-deps --entrypoint npx app prisma migrate resolve --rolled-back 20261124064031_mot_truc_vai` (mỗi bản ghi lỗi một lần).
+  2. `docker image tag kepper-app:rollback-<giờ> kepper-app:<APP_VERSION>` rồi `docker compose up -d --no-build app` — bản cũ lên lại ("No pending migrations to apply").
+     Kiểm: `docker inspect -f '{{.Image}}' $(docker compose ps -q app)` phải trùng `docker image inspect -f '{{.Id}}' kepper-app:rollback-<giờ>`.
+  3. Đổi vai các tài khoản bị liệt kê trên màn Quản trị (bản cũ); `sh deploy/precheck-roles.sh` phải thoát 0.
+  4. Chạy lại `sh deploy/vm-deploy.sh <tên-máy>` — script build lại (tag `kepper-app:<APP_VERSION>` lấy lại image mới; KHÔNG dùng `docker compose up -d app` không có `--build`, vì sau bước 2 tag đó đang trỏ về image cũ).
+     Kiểm bản MỚI: image id của container app khác image id của tag rollback; `_prisma_migrations` có dòng `…_mot_truc_vai` với `finished_at`; `sh deploy/precheck-roles.sh` báo "đã áp — bỏ qua".
+
+**Bản Windows / NAS (`deploy/upgrade.ps1`, `deploy/upgrade.sh`)**: như trên — hai script này cũng gắn tag `kepper-app:rollback-<giờ>` và in lệnh quay lại khi app không lên.
+
+**Phụ lục — chạy thử vòng 3 (hai thư mục, `APP_VERSION` khác nhau)** —  (lần chạy đầu báo P3018 kèm câu "Còn N tài khoản vai Ban Tổng Giám đốc…"; app khởi động lại liên tục và từ lần thứ hai báo P3009). Chốt nằm ở ĐẦU migration nên dữ liệu chưa đổi. Chạy trong thư mục cài (nơi có `.env`, `docker-compose.yml`):
 0. **Dừng app TRƯỚC** — app mới đang khởi động lại liên tục; nếu không dừng, nó chạy migration lần nữa ngay sau bước 1 và tạo thêm một bản ghi lỗi (đã gặp khi chạy thử):
    `docker compose stop app`
 1. Đánh dấu migration lỗi là đã quay lui, chạy MỘT LẦN bằng image mới, bỏ qua entrypoint (entrypoint tự chạy migrate):

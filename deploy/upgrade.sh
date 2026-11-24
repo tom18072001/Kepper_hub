@@ -10,7 +10,9 @@ stamp="$(date +%Y%m%d-%H%M)"
 if docker compose version >/dev/null 2>&1; then DC="docker compose"; else DC="docker-compose"; fi
 
 echo "==> 0/5 Kiểm phân quyền trên CSDL đang chạy (dừng ở đây thì app cũ vẫn chạy)"
-sh deploy/precheck-roles.sh || { echo "!! Kiểm phân quyền chưa đạt — DỪNG nâng cấp."; exit 1; }
+rc=0; sh deploy/precheck-roles.sh || rc=$?
+if [ "$rc" = 1 ]; then echo "!! Kiểm phân quyền chưa đạt — DỪNG nâng cấp (đổi vai các tài khoản được liệt kê trên màn Quản trị rồi chạy lại)."; exit 1; fi
+if [ "$rc" != 0 ]; then echo "!! Không đọc được CSDL khi kiểm phân quyền (mã $rc) — DỪNG nâng cấp."; exit 1; fi
 
 echo "==> 1/5 Sao lưu CSDL + tệp đính kèm trước khi nâng cấp"
 $DC build backup >/dev/null || { echo "!! Build image sao lưu lỗi — DỪNG nâng cấp."; exit 1; }

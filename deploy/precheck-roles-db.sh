@@ -27,10 +27,10 @@ if [ "$has_mig" = "t" ]; then
   applied="$(q "SELECT EXISTS (SELECT 1 FROM _prisma_migrations WHERE migration_name = '$MIGRATION' AND finished_at IS NOT NULL AND rolled_back_at IS NULL)")" || exit 2
   if [ "$applied" = "t" ]; then echo "    (kiểm phân quyền) migration $MIGRATION đã áp — bỏ qua"; exit 0; fi
 fi
-rows="$(q "SELECT u.id, u.username, CASE WHEN u.\"isActive\" THEN 'đang hoạt động' ELSE 'đã khoá' END FROM \"User\" u
-  WHERE u.role = 'director' AND u.\"isRootAdmin\" = false
-    AND NOT EXISTS (SELECT 1 FROM \"UserPermission\" p WHERE p.\"userId\" = u.id AND p.\"permissionKey\" = 'work.view' AND p.scope = 'SYSTEM')
-  ORDER BY u.id")" || exit 2
+rows="$(q "SELECT u.\"id\", u.\"username\", CASE WHEN u.\"isActive\" THEN 'đang hoạt động' ELSE 'đã khoá' END FROM \"User\" u
+  WHERE u.\"role\" = 'director' AND u.\"isRootAdmin\" = false
+    AND NOT EXISTS (SELECT 1 FROM \"UserPermission\" p WHERE p.\"userId\" = u.\"id\" AND p.\"permissionKey\" = 'work.view' AND p.\"scope\" = 'SYSTEM')
+  ORDER BY u.\"id\"")" || exit 2
 if [ -n "$rows" ]; then
   echo "!! DỪNG nâng cấp: các tài khoản vai Ban Tổng Giám đốc dưới đây có bộ quyền đã thu hẹp (id | tài khoản | trạng thái):"
   echo "$rows" | sed 's/^/     /'

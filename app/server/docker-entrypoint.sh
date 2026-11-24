@@ -22,9 +22,11 @@ done
 
 echo "==> Áp migration (prisma migrate deploy)"
 if ! npx prisma migrate deploy; then
-  echo "!! LỖI migration — ứng dụng KHÔNG khởi động để không chạy trên CSDL dở dang."
-  echo "!! Quay lại:  1) đặt lại image cũ (deploy/upgrade.ps1 in sẵn lệnh)  2) khôi phục bản sao lưu vừa tạo trước khi nâng cấp (deploy/restore.sh)."
-  echo "!! Hoặc sửa migration lỗi rồi đánh dấu:  npx prisma migrate resolve --rolled-back <tên migration>"
+  echo "!! LỖI migration — ứng dụng KHÔNG khởi động để không chạy trên CSDL dở dang (dữ liệu chưa đổi nếu migration dừng ở chốt đầu)."
+  echo "!! Khôi phục, chạy trên máy (thư mục cài) — docs/de-xuat-mot-he-quy-chieu-phan-quyen.md, mục 11:"
+  echo "!!   1) docker compose stop app                      (dừng app TRƯỚC — nếu không nó tự chạy lại migration và ghi thêm bản ghi lỗi)"
+  echo "!!   2) docker compose run --rm --no-deps --entrypoint npx app prisma migrate resolve --rolled-back <tên migration lỗi ở trên>"
+  echo "!!   3) chạy lại image cũ (tag kepper-app:rollback-<giờ> do deploy/vm-deploy.sh / upgrade.sh in ra), sửa nguyên nhân, triển khai lại."
   exit 1
 fi
 
