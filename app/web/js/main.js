@@ -20,6 +20,7 @@ import { renderTrash } from './views/trash.js';
 import { renderClaude } from './views/claude.js';
 import { renderCrm } from './views/crm.js';
 import { renderVanthu } from './views/vanthu.js';
+import { renderDocuments } from './views/tai-lieu.js';
 import { renderHrm } from './views/hrm.js';
 import { renderCatalog } from './views/catalog.js';
 import { renderWork } from './views/work.js';
@@ -308,6 +309,7 @@ export async function route({ background = false } = {}) {
     else if (parts[0] === 'trash') { closeItem(); await renderTrash(view, setCrumbs); }
     else if (parts[0] === 'claude') { closeItem(); await renderClaude(view, setCrumbs, params); }
     else if (parts[0] === 'me') { closeItem(); await renderProfile(view, setCrumbs); }
+    else if (parts[0] === 'tai-lieu') { closeItem(); await renderDocuments(view, params, setCrumbs); }
     else if (parts[0] === 'vanthu') { closeItem(); await renderVanthu(view, parts[1] || null, params, setCrumbs); }
     else if (parts[0] === 'crm') { closeItem(); await renderCrm(view, parts[1] || null, params, setCrumbs); }
     else if (parts[0] === 'hrm') { closeItem(); await renderHrm(view, parts, params, setCrumbs); }

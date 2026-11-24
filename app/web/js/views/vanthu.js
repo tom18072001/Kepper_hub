@@ -2,6 +2,7 @@
 // Quyền do máy chủ quyết (routes/vanthu.js) — giao diện chỉ ẩn nút theo cờ "can" / "canRegister".
 import { api, download } from '../api.js';
 import { store, deptName } from '../store.js';
+import { docTabs } from './tai-lieu.js';
 import { esc, fmtDate, fmtDateTime, toast, openModal, closeModal, confirmDialog, errorMessage, debounce, replaceHashParams } from '../util.js';
 
 let meta = null;
@@ -15,14 +16,17 @@ const dmy = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '�
 const TONE = { HOA_TOC: 'danger', THUONG_KHAN: 'danger', KHAN: 'warn', THUONG: '' };
 const SEC_TONE = { HAN_CHE: 'warn', BAO_MAT_CAO: 'danger' };
 const statusPill = d => d.cancelled ? '<span class="pill">Đã hủy</span>' : `<span class="pill ${d.closed ? 'ok' : d.overdue ? 'danger' : 'info'}">${esc(d.status.label)}</span>`;
+// Trong mục "Tài liệu": tab "Văn thư" gồm sổ đến / đi / việc tôi xử lý; sổ nội bộ (D5–D7: quyết định, quy chế, quy định…) là tab riêng
+// "Quy chế, quy định nội bộ" (docTabs). Dữ liệu và luồng vào sổ, cấp số không đổi.
 const TABS = [['DEN', 'Văn bản đến'], ['DI', 'Văn bản đi'], ['NOIBO', 'Nội bộ'], ['mine', 'Tôi xử lý']];
+const crumbHome = '<a href="#/tai-lieu">Tài liệu</a>';
 
 export async function renderVanthu(root, id, params, setCrumbs) {
   const m = await getMeta();
   if (id === 'thiet-lap') return renderSettings(root, setCrumbs, m);
   if (id) return renderDoc(root, Number(id), setCrumbs, m);
-  setCrumbs('Văn thư');
   const tab = TABS.some(t => t[0] === params.get('book')) ? params.get('book') : 'DEN';
+  setCrumbs(`${crumbHome} / ${tab === 'NOIBO' ? 'Quy chế, quy định nội bộ' : 'Văn thư'}`);
   const thisYear = String(new Date().getFullYear());
   const init = { year: params.get('year') || thisYear, q: params.get('q') || '', overdue: params.get('overdue') === '1', entity: params.get('entity') || '' };
   const fetchRows = f => api('/api/vanthu/docs?' + new URLSearchParams({ year: f.year, ...(tab === 'mine' ? { mine: '1' } : { book: tab }), ...(f.q && { q: f.q }), ...(f.overdue && { overdue: '1' }), ...(f.entity && { entity: f.entity }) }));
@@ -41,10 +45,11 @@ export async function renderVanthu(root, id, params, setCrumbs) {
         <td>${esc((tab === 'NOIBO' ? d.signerName : d.counterpart) || '—')}</td>
         ${isIn ? `<td>${esc(d.handler?.fullName || '—')}</td><td class="nowrap">${d.overdue ? `<b class="danger-text">${dmy(d.dueDate)}</b>` : dmy(d.dueDate)}</td>` : `<td class="nowrap">${dmy(d.docDate || vnDay(d.registeredAt))}</td>`}
         <td>${statusPill(d)}</td></tr>`).join('')}</tbody></table></div>` : emptyHtml(f));
-  root.innerHTML = `<div class="page-head"><h1>Văn thư</h1><span class="muted sm">Vào sổ là có số ngay, theo đúng dãy của từng pháp nhân. Văn bản đến tự tính hạn theo độ khẩn.</span>
+  root.innerHTML = `<div class="page-head"><h1>Tài liệu</h1><span class="muted sm">${tab === 'NOIBO' ? 'Quyết định, quy chế, quy định, văn bản nội bộ (D5–D7) — vào sổ là có số ngay.' : 'Vào sổ là có số ngay, theo đúng dãy của từng pháp nhân. Văn bản đến tự tính hạn theo độ khẩn.'}</span>
       ${m.me.director ? '<a class="btn btn-ghost" href="#/vanthu/thiet-lap" data-testid="vt-settings">Thiết lập</a>' : ''}
       ${series.length ? `<button class="btn btn-primary" id="vtNew" data-testid="vt-new">Vào sổ</button>` : ''}</div>
-    <div class="seg vt-tabs" role="tablist">${TABS.map(([k, l]) => `<a role="tab" href="#/vanthu?book=${k}" class="${k === tab ? 'on' : ''}" data-testid="vt-tab-${k}">${l}</a>`).join('')}</div>
+    ${docTabs(tab === 'NOIBO' ? 'noibo' : 'vanthu')}
+    ${tab === 'NOIBO' ? '' : `<div class="seg vt-tabs" role="tablist">${TABS.filter(t => t[0] !== 'NOIBO').map(([k, l]) => `<a role="tab" href="#/vanthu?book=${k}" class="${k === tab ? 'on' : ''}" data-testid="vt-tab-${k}">${l}</a>`).join('')}</div>`}
     <form class="row pg-filters" id="vtFilter" role="search" aria-label="Lọc văn bản">
       <input name="q" type="search" value="${esc(init.q)}" placeholder="Số, trích yếu, nơi gửi / nhận" class="grow" aria-label="Tìm văn bản" data-testid="vt-q">
       <select name="year" aria-label="Năm" data-testid="vt-year">${[0, 1, 2].map(i => String(new Date().getFullYear() - i)).map(y => `<option${y === init.year ? ' selected' : ''}>${y}</option>`).join('')}</select>
@@ -131,7 +136,7 @@ function openRegister(m, series, tab, done) {
 
 async function renderDoc(root, id, setCrumbs, m) {
   const d = await api('/api/vanthu/docs/' + id);
-  setCrumbs(`<a href="#/vanthu?book=${d.book.code}">Văn thư</a> / ${esc(d.number)}`);
+  setCrumbs(`${crumbHome} / <a href="#/vanthu?book=${d.book.code}">${d.book.code === 'NOIBO' ? 'Quy chế, quy định nội bộ' : 'Văn thư'}</a> / ${esc(d.number)}`);
   const row = (k, v) => (v ? `<div class="kv"><span class="muted">${k}</span><span>${v}</span></div>` : '');
   const STEP_LABEL = { PROCESSING: 'Bắt đầu xử lý', DONE: 'Báo xong', FILED: 'Lập hồ sơ', SUBMITTED: 'Đã trình', ASSIGNED: 'Đã giao', SENT: 'Đã gửi', CONFIRMED: 'Bên nhận đã xác nhận', REPLIED: 'Đã có phản hồi', EFFECTIVE: 'Có hiệu lực', EXPIRED: 'Hết hiệu lực', RECEIVED: 'Về "Đã tiếp nhận"', NUMBERED: 'Về "Đã cấp số"', ISSUED: 'Về "Đã ban hành"' };
   const ACT = { CREATE: 'Vào sổ', STATUS: 'Đổi trạng thái', ASSIGN: 'Giao xử lý', UPDATE: 'Sửa thông tin', CANCEL: 'Hủy số', FILE: 'Thêm tệp', FILE_DELETED: 'Gỡ tệp' };

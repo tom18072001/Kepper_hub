@@ -104,7 +104,7 @@ function createApp({ prisma, config }) {
     require('./routes/attachments'), require('./routes/approvals'), require('./routes/me'), require('./routes/notes'), require('./routes/dashboard'), require('./routes/kpi'), require('./routes/register'), require('./routes/dispatch'), require('./routes/excel'),
     require('./routes/cycles'), require('./routes/recurring'), require('./routes/views'), require('./routes/reports'), require('./routes/work'), require('./routes/search'),
     require('./routes/mtl'), require('./routes/sprint'), require('./routes/weekly'), require('./routes/viber'), require('./routes/realtime'), require('./routes/tokens'),
-    require('./routes/profile'),
+    require('./routes/profile'), require('./routes/documents'),
     require('./routes/crm'), require('./routes/hrm'), require('./routes/vanthu'), // chỉ gắn khi bật trong MODULES
   ]) mount(app, ctx);
 

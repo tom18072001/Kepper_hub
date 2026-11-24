@@ -15,7 +15,7 @@ const isToken = s => typeof s === 'string' && s.startsWith(PREFIX) && s.length >
 
 // GET bị chặn với token: xuất tệp, tải / xem tệp đính kèm gốc, luồng realtime (AI không cần), quản trị, token, mã liên kết Viber.
 // Số định danh đầy đủ (CCCD): không bao giờ qua Claude — route cũng tự chặn (hai lớp).
-const READ_DENY = [/\.(xlsx|docx|pdf|csv|zip)$/, /^\/api\/stream$/, /^\/api\/attachments\/\d+\/(download|preview)$/, /^\/api\/admin(\/|$)/, /^\/api\/me\/tokens(\/|$)/,
+const READ_DENY = [/\.(xlsx|docx|pdf|csv|zip)$/, /^\/api\/stream$/, /^\/api\/attachments\/\d+\/(download|preview)$/, /^\/api\/documents\/(files\/\d+|projects\/\d+\/nas\/file)$/, /^\/api\/admin(\/|$)/, /^\/api\/me\/tokens(\/|$)/,
   /^\/api\/me\/viber(\/|$)/, /^\/api\/hrm\/people\/\d+\/identity$/, /^\/api\/claude\/connect(\/|$)/];
 // Ghi cho phép với phạm vi write (khớp method + đường dẫn). Mọi đường khác → 403 "làm trên giao diện".
 const WRITE_ALLOW = [

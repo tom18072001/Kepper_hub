@@ -283,3 +283,15 @@ tr.sub-row td{background:color-mix(in srgb,var(--border) 25%,transparent)}
 .rating-opt.rating-NEEDS_IMPROVEMENT:has(input:checked){background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
 .rating-opt.rating-POOR:has(input:checked){background:var(--danger-soft);border-color:var(--danger);color:var(--danger)}
 b.rating-NEEDS_IMPROVEMENT{color:var(--warn)} b.rating-POOR{color:var(--danger)}
+/* Tài liệu — kho tài liệu theo dự án (views/tai-lieu.js) */
+.doc-tabs{margin:4px 0 8px;display:flex;width:max-content}
+.doc-path{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-wrap:wrap;gap:4px;font-size:.88rem}
+.doc-path li+li::before{content:"/";color:var(--text-3,var(--text-2));margin-right:4px}
+.doc-path a{text-decoration:none}
+.doc-list td:first-child{overflow-wrap:anywhere}
+.doc-list td:first-child svg{width:16px;height:16px;vertical-align:-3px;color:var(--text-2)}
+.doc-list .doc-dir td:first-child svg{color:#B28A33}
+.doc-list .num{text-align:right}
+.doc-acts{text-align:right}
+.doc-h{font-size:.95rem;margin:14px 0 6px}
+.doc-open{margin:0 0 8px}
