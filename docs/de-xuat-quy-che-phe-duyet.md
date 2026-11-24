@@ -171,3 +171,14 @@ dựa trên tài khoản + nhật ký. Giai đoạn 2 cập nhật `docs/data-pr
 - API mới: `POST /api/vanthu/docs/:id/approve`, `/return`, `/resubmit`; cấp số chuyển từ lúc tạo sang lúc approve (cùng khoá `pg_advisory_xact_lock`).
 - Test: ma trận 3 cấp xem × 4 vai (+ người soạn, Văn thư vai Nhân viên) cho danh sách / chi tiết / tệp / tìm / gắn việc;
   luồng phê duyệt (không phải Người phê duyệt → 403; qua token → 403; không có PDF → 422; số liên tục khi trả lại / huỷ dự thảo); e2e một vòng.
+
+## 12. Giai đoạn 2 — đã làm (nhánh `kepper/quy-che-phe-duyet-ma`)
+
+- Máy chủ: `routes/vanthu.js`, `services/vanthu.js` (hàm quyền thuần: `canViewNoibo`, `aiHidden`, `canEditDraft`, `approveCheck`, `isApprover`),
+  migration `20261125100000_quy_che_phe_duyet` (chỉ thêm cột / nới NOT NULL; văn bản NOIBO cũ giữ số, coi là đã phê duyệt, cấp xem theo mức mật cũ).
+  API mới: `POST /api/vanthu/docs/:id/approve | return | resubmit`, `POST /api/vanthu/drafts` (multipart, dùng cho Claude).
+  Vai lấy từ `roleRank` / `isBoard` của PR #41, không so chuỗi vai.
+- Giao diện: tab Quy chế, quy định nội bộ (Tạo dự thảo, Phê duyệt, Trả lại, Gửi lại, Sửa, Huỷ dự thảo), Thiết lập văn thư → Người phê duyệt.
+- Claude: công cụ MCP `kepper_vanthu_draft` (bản 0.6.0) đọc PDF trên máy, tạo dự thảo; không có công cụ phê duyệt.
+- Ngày hiệu lực / ngày ban hành gốc trong quá khứ (theo nghiệm thu đề xuất): phê duyệt xong chuyển thẳng Hiệu lực; ngày phê duyệt vẫn là ngày bấm.
+- Test: `services/quy-che-phe-duyet.test.js` (ma trận 3 cấp × vai, luồng), `mcp/test/vanthu-draft.test.mjs`, e2e `18-quy-che-phe-duyet.spec.js`.
