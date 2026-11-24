@@ -158,10 +158,12 @@ test('T4. Văn thư vẫn chạy như cũ, nằm trong "Tài liệu": tab Văn t
   await page.getByTestId('doc-tab-noibo').click();
   await expect(page.getByTestId('doc-tab-noibo')).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('#crumbs')).toContainText('Quy chế, quy định nội bộ');
-  // Vào sổ văn bản nội bộ (D5 quyết định) vẫn cấp số như cũ.
-  const r = await apiAs(page, '/api/vanthu/docs', { method: 'POST', data: { series: 'D5', entity: 'HLD', title: 'Quyết định ban hành quy chế (giả)' } });
+  // Sổ nội bộ (D5 quyết định): tạo là DỰ THẢO chưa có số — số cấp lúc Người phê duyệt phê duyệt (18-quy-che-phe-duyet).
+  const r = await apiAs(page, '/api/vanthu/docs', { method: 'POST', data: { series: 'D5', entity: 'HLD', docType: 'QĐ', title: 'Quyết định ban hành quy chế (giả)' } });
   expect(r.status(), await r.text()).toBe(201);
-  expect((await r.json()).number).toMatch(/^\d{3}\/\d{4}\/QĐ-HLD$/);
+  const d = await r.json();
+  expect(d.number).toBeNull();
+  expect(d.status.code).toBe('DRAFT');
 });
 
 test('T5. Người không thuộc dự án nào (vd. văn thư HCNS) bấm "Tài liệu" → vào thẳng tab Văn thư; tab "Tài liệu dự án" vẫn mở được', async ({ page, browser }) => {

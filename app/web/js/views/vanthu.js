@@ -15,7 +15,13 @@ const vnDay = d => new Date(new Date(d).getTime() + 7 * 3600e3).toISOString().sl
 const dmy = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '—');
 const TONE = { HOA_TOC: 'danger', THUONG_KHAN: 'danger', KHAN: 'warn', THUONG: '' };
 const SEC_TONE = { HAN_CHE: 'warn', BAO_MAT_CAO: 'danger' };
-const statusPill = d => d.cancelled ? '<span class="pill">Đã hủy</span>' : `<span class="pill ${d.closed ? 'ok' : d.overdue ? 'danger' : 'info'}">${esc(d.status.label)}</span>`;
+const NOIBO_TONE = { DRAFT: 'warn', RETURNED: 'danger', APPROVED: 'info', EFFECTIVE: 'ok', EXPIRED: '' };
+const statusPill = d => d.cancelled ? '<span class="pill">Đã hủy</span>'
+  : d.book.code === 'NOIBO' ? `<span class="pill ${NOIBO_TONE[d.status.code] ?? 'info'}" data-testid="vt-status">${esc(d.status.label)}</span>`
+    : `<span class="pill ${d.closed ? 'ok' : d.overdue ? 'danger' : 'info'}">${esc(d.status.label)}</span>`;
+// Sổ nội bộ: dự thảo chưa có số (cấp lúc phê duyệt).
+const numOf = d => (d.number ? esc(d.number) : '<i class="muted">Dự thảo</i>');
+const LEVEL_TONE = { LEADERS: 'warn', BOARD: 'danger' };
 // Trong mục "Tài liệu": tab "Văn thư" gồm sổ đến / đi / việc tôi xử lý; sổ nội bộ (D5–D7: quyết định, quy chế, quy định…) là tab riêng
 // "Quy chế, quy định nội bộ" (docTabs). Dữ liệu và luồng vào sổ, cấp số không đổi.
 const TABS = [['DEN', 'Văn bản đến'], ['DI', 'Văn bản đi'], ['NOIBO', 'Nội bộ'], ['mine', 'Tôi xử lý']];
@@ -31,23 +37,29 @@ export async function renderVanthu(root, id, params, setCrumbs) {
   const init = { year: params.get('year') || thisYear, q: params.get('q') || '', overdue: params.get('overdue') === '1', entity: params.get('entity') || '' };
   const fetchRows = f => api('/api/vanthu/docs?' + new URLSearchParams({ year: f.year, ...(tab === 'mine' ? { mine: '1' } : { book: tab }), ...(f.q && { q: f.q }), ...(f.overdue && { overdue: '1' }), ...(f.entity && { entity: f.entity }) }));
   const rows = await fetchRows(init);
-  const series = Object.entries(m.series).filter(([k, s]) => (tab === 'mine' || s.book === tab) && m.canRegister[k]);
+  const series = Object.entries(m.series).filter(([k, s]) => (tab === 'mine' ? s.book !== 'NOIBO' : s.book === tab) && m.canRegister[k]);
   const isIn = tab === 'DEN' || tab === 'mine';
-  const register = () => openRegister(m, series, tab, d => { location.hash = `#/vanthu/${d.id}`; });
+  const register = () => (tab === 'NOIBO' ? openDraft : openRegister)(m, series, tab, d => { location.hash = `#/vanthu/${d.id}`; });
   // Trang trống: sổ năm hiện tại chưa có văn bản → mời vào sổ (chỉ người được vào sổ dãy của sổ này); đang lọc → gợi ý xoá bộ lọc.
   const emptyHtml = f => (f.q || f.overdue || f.entity
     ? '<div class="empty" data-testid="vt-empty"><p>Không có văn bản khớp bộ lọc.</p><button type="button" class="btn btn-ghost btn-sm" data-act="vt-clear" data-testid="vt-clear">Xoá bộ lọc</button></div>'
     : tab === 'mine' ? '<div class="empty" data-testid="vt-empty">Không có văn bản nào giao bạn xử lý.</div>'
-      : `<div class="empty" data-testid="vt-empty"><p>Chưa có văn bản trong sổ năm này.</p>${series.length && f.year === thisYear ? '<button type="button" class="btn btn-primary" data-act="vt-new-first" data-testid="vt-new-first">Vào sổ văn bản đầu tiên</button>' : ''}</div>`);
-  const listHtml = (list, f) => (list.length ? `<div class="tbl-scroll"><table class="table" data-testid="vt-list"><thead><tr><th>Số</th><th>Trích yếu</th><th>${tab === 'DI' ? 'Nơi nhận' : tab === 'NOIBO' ? 'Người ký' : 'Nơi gửi'}</th>${isIn ? '<th>Người xử lý</th><th>Hạn</th>' : '<th>Ngày</th>'}<th>Trạng thái</th></tr></thead><tbody>
-      ${list.map(d => `<tr class="clickable" data-href="#/vanthu/${d.id}"><td class="code nowrap"><a href="#/vanthu/${d.id}">${esc(d.number)}</a></td>
-        <td>${esc(d.title)}${d.urgency.code !== 'THUONG' ? ` <span class="pill ${TONE[d.urgency.code]}">${esc(d.urgency.label)}</span>` : ''}${SEC_TONE[d.security.code] ? ` <span class="pill ${SEC_TONE[d.security.code]}">${esc(d.security.label)}</span>` : ''}</td>
-        <td>${esc((tab === 'NOIBO' ? d.signerName : d.counterpart) || '—')}</td>
+      : `<div class="empty" data-testid="vt-empty"><p>Chưa có văn bản trong sổ năm này.</p>${series.length && f.year === thisYear ? `<button type="button" class="btn btn-primary" data-act="vt-new-first" data-testid="vt-new-first">${tab === 'NOIBO' ? 'Tạo dự thảo đầu tiên' : 'Vào sổ văn bản đầu tiên'}</button>` : ''}</div>`);
+  const noiboRow = d => `<tr class="clickable" data-href="#/vanthu/${d.id}"><td class="code nowrap"><a href="#/vanthu/${d.id}">${numOf(d)}</a></td>
+        <td>${esc(d.title)}${d.docCode ? ` <span class="muted xs">${esc(d.docCode)}</span>` : ''}</td><td>${esc(m.noiboTypes[d.docType] || d.docType || '—')}</td>
+        <td>${LEVEL_TONE[d.viewLevel.code] ? `<span class="pill ${LEVEL_TONE[d.viewLevel.code]}">${esc(d.viewLevel.label)}</span>` : esc(d.viewLevel.label)}</td>
+        <td class="nowrap">${d.issueDate ? dmy(d.issueDate) : '—'}</td><td>${statusPill(d)}</td></tr>`;
+  const listHtml = (list, f) => (!list.length ? emptyHtml(f) : tab === 'NOIBO'
+    ? `<div class="tbl-scroll"><table class="table" data-testid="vt-list"><thead><tr><th>Số</th><th>Tên tài liệu</th><th>Loại</th><th>Cấp xem</th><th>Ngày ban hành</th><th>Trạng thái</th></tr></thead><tbody>${list.map(noiboRow).join('')}</tbody></table></div>`
+    : `<div class="tbl-scroll"><table class="table" data-testid="vt-list"><thead><tr><th>Số</th><th>Trích yếu</th><th>${tab === 'DI' ? 'Nơi nhận' : 'Nơi gửi'}</th>${isIn ? '<th>Người xử lý</th><th>Hạn</th>' : '<th>Ngày</th>'}<th>Trạng thái</th></tr></thead><tbody>
+      ${list.map(d => `<tr class="clickable" data-href="#/vanthu/${d.id}"><td class="code nowrap"><a href="#/vanthu/${d.id}">${numOf(d)}</a></td>
+        <td>${esc(d.title)}${d.urgency.code !== 'THUONG' ? ` <span class="pill ${TONE[d.urgency.code]}">${esc(d.urgency.label)}</span>` : ''}${d.security && SEC_TONE[d.security.code] ? ` <span class="pill ${SEC_TONE[d.security.code]}">${esc(d.security.label)}</span>` : ''}</td>
+        <td>${esc((d.book.code === 'NOIBO' ? m.noiboTypes[d.docType] : d.counterpart) || '—')}</td>
         ${isIn ? `<td>${esc(d.handler?.fullName || '—')}</td><td class="nowrap">${d.overdue ? `<b class="danger-text">${dmy(d.dueDate)}</b>` : dmy(d.dueDate)}</td>` : `<td class="nowrap">${dmy(d.docDate || vnDay(d.registeredAt))}</td>`}
-        <td>${statusPill(d)}</td></tr>`).join('')}</tbody></table></div>` : emptyHtml(f));
-  root.innerHTML = `<div class="page-head"><h1>Tài liệu</h1><span class="muted sm">${tab === 'NOIBO' ? 'Quyết định, quy chế, quy định, văn bản nội bộ (D5–D7) — vào sổ là có số ngay.' : 'Vào sổ là có số ngay, theo đúng dãy của từng pháp nhân. Văn bản đến tự tính hạn theo độ khẩn.'}</span>
+        <td>${statusPill(d)}</td></tr>`).join('')}</tbody></table></div>`);
+  root.innerHTML = `<div class="page-head"><h1>Tài liệu</h1><span class="muted sm">${tab === 'NOIBO' ? 'Quy chế, quy định, quyết định nội bộ (D5–D7). Tạo là dự thảo "Chưa phê duyệt"; số cấp khi Người phê duyệt bấm Phê duyệt. Mỗi tài liệu có cấp xem: Mọi người / Lãnh đạo / Ban TGĐ.' : 'Vào sổ là có số ngay, theo đúng dãy của từng pháp nhân. Văn bản đến tự tính hạn theo độ khẩn.'}</span>
       ${m.me.director ? '<a class="btn btn-ghost" href="#/vanthu/thiet-lap" data-testid="vt-settings">Thiết lập</a>' : ''}
-      ${series.length ? `<button class="btn btn-primary" id="vtNew" data-testid="vt-new">Vào sổ</button>` : ''}</div>
+      ${series.length ? `<button class="btn btn-primary" id="vtNew" data-testid="vt-new">${tab === 'NOIBO' ? 'Tạo dự thảo' : 'Vào sổ'}</button>` : ''}</div>
     ${docTabs(tab === 'NOIBO' ? 'noibo' : 'vanthu')}
     ${tab === 'NOIBO' ? '' : `<div class="seg vt-tabs" role="tablist">${TABS.filter(t => t[0] !== 'NOIBO').map(([k, l]) => `<a role="tab" href="#/vanthu?book=${k}" class="${k === tab ? 'on' : ''}" data-testid="vt-tab-${k}">${l}</a>`).join('')}</div>`}
     <form class="row pg-filters" id="vtFilter" role="search" aria-label="Lọc văn bản">
@@ -86,7 +98,52 @@ export async function renderVanthu(root, id, params, setCrumbs) {
   root.querySelector('#vtNew')?.addEventListener('click', register);
 }
 
+// Sổ nội bộ: tạo DỰ THẢO (chưa có số). Cấp xem chỉ hiện các cấp không cao hơn vai người tạo; tệp PDF tải lên ngay sau khi tạo.
+async function openDraft(m, series, tab, done) {
+  const first = series[0][0];
+  const olds = (await api('/api/vanthu/docs?book=NOIBO').catch(() => [])).filter(d => d.number && !d.cancelled && !d.draft);
+  const modal = openModal(`<h2>Tạo dự thảo tài liệu nội bộ</h2>
+    <p class="muted sm">Tài liệu ở trạng thái <b>Chưa phê duyệt</b>, chưa có số. Người phê duyệt xem tệp PDF rồi bấm Phê duyệt — lúc đó hệ thống cấp số.</p>
+    <form class="pg-grid" data-testid="vt-draft-form">
+    <label class="field span2">Dãy số<select name="series" id="vtSeries">${series.map(([k, s]) => `<option value="${k}"${k === first ? ' selected' : ''}>${esc(s.label)}</option>`).join('')}</select></label>
+    <label class="field">Pháp nhân<select name="entity">${m.entities.map(e => `<option value="${e.code}">${esc(e.code)} · ${esc(e.name)}</option>`).join('')}</select></label>
+    <label class="field">Loại<select name="docType" required data-testid="vt-d-type"><option value="">— chọn —</option>${opts(m.noiboTypes, '')}</select></label>
+    <label class="field span2">Tên / trích yếu<input name="title" required maxlength="500" data-testid="vt-d-title"></label>
+    <label class="field">Cấp xem<select name="viewLevel" data-testid="vt-d-level">${m.myViewLevels.map(k => `<option value="${k}">${esc(m.viewLevels[k])}</option>`).join('')}</select></label>
+    <label class="field">Mã tài liệu <span class="muted xs">(nếu có)</span><input name="docCode" maxlength="40" placeholder="vd. QC-IT-01"></label>
+    <label class="field" data-d7>Bộ phận<select name="departmentId"><option value="">—</option>${m.departments.map(d => `<option value="${d.id}"${d.id === m.me.departmentId ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>
+    <label class="field">Ngày hiệu lực <span class="muted xs">(trống: từ lúc phê duyệt)</span><input name="effectiveDate" type="date"></label>
+    <label class="field">Ngày ban hành gốc <span class="muted xs">(chỉ văn bản đã ban hành trước khi đưa vào Hub)</span><input name="docDate" type="date"></label>
+    <label class="field span2">Thay thế văn bản <span class="muted xs">(nếu là bản mới của tài liệu đã có)</span><select name="replacesId"><option value="">—</option>${olds.map(d => `<option value="${d.id}">${esc(d.number)} · ${esc(d.title.slice(0, 80))}</option>`).join('')}</select></label>
+    <label class="field span2">Tệp PDF <span class="muted xs">(bắt buộc trước khi phê duyệt)</span><input name="pdf" type="file" accept="application/pdf,.pdf" data-testid="vt-d-file"></label>
+    <label class="field span2">Ghi chú<textarea name="note" maxlength="1000" rows="2"></textarea></label>
+    <p class="error span2" id="vtErr"></p>
+    <div class="modal-actions span2"><button type="button" class="btn btn-ghost" data-close>Huỷ</button><button class="btn btn-primary" data-testid="vt-d-save">Tạo dự thảo</button></div></form>`, { wide: true });
+  const form = modal.querySelector('form');
+  const sync = () => { const d7 = form.series.value === 'D7'; form.querySelector('[data-d7]').hidden = !d7; form.departmentId.required = d7; };
+  form.series.onchange = sync; sync();
+  modal.querySelector('[data-close]').onclick = () => closeModal();
+  form.onsubmit = async e => {
+    e.preventDefault();
+    const b = formObj(form), pdf = form.pdf.files[0];
+    delete b.pdf;
+    b.departmentId = b.series === 'D7' && b.departmentId ? Number(b.departmentId) : null;
+    b.replacesId = b.replacesId ? Number(b.replacesId) : null;
+    for (const k of ['docDate', 'effectiveDate', 'docCode', 'note']) if (!b[k]) delete b[k];
+    try {
+      const r = await api('/api/vanthu/docs', { method: 'POST', body: b });
+      if (pdf) {
+        const fd = new FormData(); fd.append('files', pdf);
+        try { await api(`/api/vanthu/docs/${r.id}/files`, { method: 'POST', form: fd }); }
+        catch (error) { toast(`Đã tạo dự thảo nhưng chưa tải được tệp: ${errorMessage(error)}`, 'error'); }
+      }
+      closeModal(); toast('Đã tạo dự thảo — chờ phê duyệt', 'ok'); done(r);
+    } catch (error) { modal.querySelector('#vtErr').textContent = errorMessage(error); }
+  };
+}
+
 function openRegister(m, series, tab, done) {
+
   const first = series[0][0];
   const modal = openModal(`<h2>Vào sổ văn bản</h2><form class="pg-grid" data-testid="vt-form">
     <label class="field span2">Dãy số<select name="series" id="vtSeries">${series.map(([k, s]) => `<option value="${k}"${k === first ? ' selected' : ''}>${esc(s.label)}</option>`).join('')}</select></label>
@@ -136,16 +193,40 @@ function openRegister(m, series, tab, done) {
 
 async function renderDoc(root, id, setCrumbs, m) {
   const d = await api('/api/vanthu/docs/' + id);
-  setCrumbs(`${crumbHome} / <a href="#/vanthu?book=${d.book.code}">${d.book.code === 'NOIBO' ? 'Quy chế, quy định nội bộ' : 'Văn thư'}</a> / ${esc(d.number)}`);
+  const noibo = d.book.code === 'NOIBO';
+  setCrumbs(`${crumbHome} / <a href="#/vanthu?book=${d.book.code}">${noibo ? 'Quy chế, quy định nội bộ' : 'Văn thư'}</a> / ${d.number ? esc(d.number) : 'Dự thảo'}`);
   const row = (k, v) => (v ? `<div class="kv"><span class="muted">${k}</span><span>${v}</span></div>` : '');
   const STEP_LABEL = { PROCESSING: 'Bắt đầu xử lý', DONE: 'Báo xong', FILED: 'Lập hồ sơ', SUBMITTED: 'Đã trình', ASSIGNED: 'Đã giao', SENT: 'Đã gửi', CONFIRMED: 'Bên nhận đã xác nhận', REPLIED: 'Đã có phản hồi', EFFECTIVE: 'Có hiệu lực', EXPIRED: 'Hết hiệu lực', RECEIVED: 'Về "Đã tiếp nhận"', NUMBERED: 'Về "Đã cấp số"', ISSUED: 'Về "Đã ban hành"' };
-  const ACT = { CREATE: 'Vào sổ', STATUS: 'Đổi trạng thái', ASSIGN: 'Giao xử lý', UPDATE: 'Sửa thông tin', CANCEL: 'Hủy số', FILE: 'Thêm tệp', FILE_DELETED: 'Gỡ tệp' };
+  const ACT = { CREATE: noibo ? 'Tạo dự thảo' : 'Vào sổ', STATUS: 'Đổi trạng thái', ASSIGN: 'Giao xử lý', UPDATE: 'Sửa thông tin', CANCEL: noibo && !d.number ? 'Huỷ dự thảo' : 'Hủy số', FILE: 'Thêm tệp', FILE_DELETED: 'Gỡ tệp',
+    APPROVE: 'Phê duyệt', RETURN: 'Trả lại', RESUBMIT: 'Gửi lại', MIGRATE: 'Chuyển sang luồng phê duyệt (văn bản có từ trước)' };
   const st = m.status[d.book.code];
-  root.innerHTML = `<div class="page-head"><h1>${esc(d.number)}</h1>${statusPill(d)}
-      ${d.can.edit ? '<button class="btn btn-ghost" id="vtEdit" data-testid="vt-edit">Sửa / giao xử lý</button><button class="btn btn-ghost danger" id="vtCancel" data-testid="vt-cancel">Hủy số</button>' : ''}</div>
+  const hasPdf = d.files.some(f => f.mimeType === 'application/pdf');
+  const lastReturn = noibo && d.status.code === 'RETURNED' ? [...d.events].reverse().find(e => e.action === 'RETURN') : null;
+  const noiboKv = () => `
+        ${row('Loại', esc(m.noiboTypes[d.docType] || d.docType || ''))}
+        ${row('Mã tài liệu', esc(d.docCode || ''))}
+        ${row('Cấp xem', `<span data-testid="vt-level">${esc(d.viewLevel.label)}</span>`)}
+        ${row('Sổ', esc(d.series) + ' · ' + esc(d.entity))}
+        ${row('Bộ phận', esc(d.department?.name || ''))}
+        ${row('Người soạn', esc(d.createdBy.fullName || '') + ' · ' + fmtDateTime(d.events.find(e => e.action === 'CREATE')?.createdAt || d.registeredAt) + (d.viaAi ? ' · <span class="pill">tạo qua Claude</span>' : ''))}
+        ${row('Người phê duyệt', d.approvedBy ? `${esc(d.approvedBy.fullName || '')} · ${fmtDateTime(d.approvedAt)}` : '')}
+        ${row('Ngày ban hành', d.issueDate ? dmy(d.issueDate) + (d.docDate ? ' <span class="muted xs">(ngày ban hành gốc)</span>' : '') : '')}
+        ${row('Ngày hiệu lực', d.effectiveDate ? dmy(d.effectiveDate) : d.approvedAt ? 'Từ lúc phê duyệt' : '')}
+        ${row('Thay thế văn bản', d.replacesId ? `<a href="#/vanthu/${d.replacesId}">xem bản cũ</a>` : '')}
+        ${row('Ghi chú', esc(d.note || ''))}`;
+  const noiboBtns = () => [
+    d.can.approve ? `<button class="btn btn-primary" id="vtApprove" data-testid="vt-approve"${hasPdf ? '' : ' disabled title="Chưa có tệp PDF"'}>Phê duyệt</button>` : '',
+    d.can.return ? '<button class="btn btn-ghost" id="vtReturn" data-testid="vt-return">Trả lại</button>' : '',
+    d.can.resubmit ? '<button class="btn btn-primary" id="vtResubmit" data-testid="vt-resubmit">Gửi lại</button>' : '',
+    d.can.edit ? '<button class="btn btn-ghost" id="vtEdit" data-testid="vt-edit">Sửa</button>' : '',
+    d.can.cancel ? `<button class="btn btn-ghost danger" id="vtCancel" data-testid="vt-cancel">${d.number ? 'Hủy số' : 'Huỷ dự thảo'}</button>` : '',
+  ].join('');
+  root.innerHTML = `<div class="page-head"><h1>${d.number ? esc(d.number) : 'Dự thảo'}</h1>${statusPill(d)}
+      ${noibo ? noiboBtns() : `${d.can.edit ? '<button class="btn btn-ghost" id="vtEdit" data-testid="vt-edit">Sửa / giao xử lý</button>' : ''}${d.can.cancel ? '<button class="btn btn-ghost danger" id="vtCancel" data-testid="vt-cancel">Hủy số</button>' : ''}`}</div>
+    ${noibo && d.draft && !d.cancelled ? `<p class="${lastReturn ? 'danger-text' : 'muted'} sm" data-testid="vt-draft-note">${lastReturn ? `Đã trả lại: ${esc(lastReturn.note || '')} — người soạn sửa rồi bấm "Gửi lại".` : `Chưa phê duyệt — chưa có số. ${hasPdf ? 'Người phê duyệt xem tệp PDF rồi bấm Phê duyệt.' : '<b>Chưa có tệp PDF</b>: tải tệp lên trước khi phê duyệt.'}`}</p>` : ''}
     <section class="card pg-section"><h2 style="margin-top:0">${esc(d.title)}</h2>
       ${d.cancelled ? `<p class="danger-text">Đã hủy ${fmtDateTime(d.cancelled.at)} — ${esc(d.cancelled.reason)}. Số này giữ nguyên trong sổ, không cấp lại.</p>` : ''}
-      <div class="vt-kv">
+      <div class="vt-kv">${noibo ? noiboKv() : `
         ${row('Sổ', esc(d.book.label) + ' · ' + esc(d.series) + ' · ' + esc(d.entity))}
         ${row(d.book.code === 'DI' ? 'Nơi nhận' : 'Nơi gửi', esc(d.counterpart || ''))}
         ${row('Số của bên gửi', esc(d.externalNumber || ''))}
@@ -159,7 +240,7 @@ async function renderDoc(root, id, setCrumbs, m) {
         ${row('Người ký', esc(d.signerName || ''))}
         ${row('Kênh / mã vận đơn', esc([d.channel, d.trackingCode].filter(Boolean).join(' · ')))}
         ${row('Pháp chế', d.toLegal ? 'Đã chuyển đồng thời' : '')}
-        ${row('Ghi chú', esc(d.note || ''))}
+        ${row('Ghi chú', esc(d.note || ''))}`}
       </div>
       ${d.can.status.length ? `<div class="row wrap" style="margin-top:14px">${d.can.status.map(k => `<button class="btn ${['DONE', 'FILED', 'SENT', 'EFFECTIVE'].includes(k) ? 'btn-primary' : 'btn-ghost'} btn-sm" data-to="${k}" data-testid="vt-to-${k}">${esc(STEP_LABEL[k] || st[k])}</button>`).join('')}</div>` : ''}
     </section>
@@ -171,7 +252,7 @@ async function renderDoc(root, id, setCrumbs, m) {
       ${d.can.upload ? '<label class="btn btn-ghost btn-sm">Tải tệp lên<input type="file" id="vtFiles" multiple hidden data-testid="vt-file-input"></label>' : ''}
     </section>
     <section class="card pg-section"><h3 style="margin-top:0">Lịch sử</h3><ol class="vt-log">
-      ${d.events.map(e => `<li><span class="muted xs">${fmtDateTime(e.createdAt)}</span> <b>${esc(e.user || '')}</b> · ${esc(ACT[e.action] || e.action)}${e.action === 'STATUS' ? `: ${esc(st[e.fromValue] || e.fromValue || '')} → ${esc(st[e.toValue] || e.toValue)}` : ''}${e.note ? ` — ${esc(e.note)}` : ''}</li>`).join('')}</ol></section>`;
+      ${d.events.map(e => `<li><span class="muted xs">${fmtDateTime(e.createdAt)}</span> <b>${esc(e.user || '')}</b> · ${esc(ACT[e.action] || e.action)}${e.action === 'STATUS' ? `: ${esc(st[e.fromValue] || e.fromValue || '')} → ${esc(st[e.toValue] || e.toValue)}` : ''}${e.note ? ` — <span style="white-space:pre-line">${esc(e.note)}</span>` : ''}</li>`).join('')}</ol></section>`;
   root.querySelectorAll('[data-to]').forEach(b => b.onclick = async () => {
     const to = b.dataset.to;
     let note = null;
@@ -194,11 +275,29 @@ async function renderDoc(root, id, setCrumbs, m) {
     catch (error) { toast(errorMessage(error), 'error'); }
   });
   root.querySelector('#vtCancel')?.addEventListener('click', async () => {
-    const reason = await confirmDialog(`Hủy số ${d.number}? Số vẫn giữ trong sổ và không cấp lại cho văn bản khác.`, { okText: 'Hủy số', danger: true, input: 'Lý do hủy' });
+    const reason = d.number
+      ? await confirmDialog(`Hủy số ${d.number}? Số vẫn giữ trong sổ và không cấp lại cho văn bản khác.`, { okText: 'Hủy số', danger: true, input: 'Lý do hủy' })
+      : await confirmDialog('Huỷ dự thảo này? Dự thảo chưa có số nên không ảnh hưởng sổ.', { okText: 'Huỷ dự thảo', danger: true, input: 'Lý do huỷ' });
     if (!reason) return;
-    try { await api(`/api/vanthu/docs/${d.id}/cancel`, { method: 'POST', body: { reason } }); toast('Đã hủy số', 'ok'); renderDoc(root, id, setCrumbs, m); }
+    try { await api(`/api/vanthu/docs/${d.id}/cancel`, { method: 'POST', body: { reason } }); toast(d.number ? 'Đã hủy số' : 'Đã huỷ dự thảo', 'ok'); renderDoc(root, id, setCrumbs, m); }
     catch (error) { toast(errorMessage(error), 'error'); }
   });
+  const act = async (path, body, msg) => {
+    try { await api(`/api/vanthu/docs/${d.id}/${path}`, { method: 'POST', body }); toast(msg, 'ok'); renderDoc(root, id, setCrumbs, m); }
+    catch (error) { toast(errorMessage(error), 'error'); }
+  };
+  root.querySelector('#vtApprove')?.addEventListener('click', async () => {
+    const note = await confirmDialog(`Phê duyệt "${d.title}"? Hệ thống cấp số ngay và khoá nội dung, tệp của tài liệu.`, { okText: 'Phê duyệt', input: 'Ý kiến (không bắt buộc)' });
+    if (note === null || note === false) return;
+    act('approve', { note: typeof note === 'string' ? note : null }, 'Đã phê duyệt và cấp số');
+  });
+  root.querySelector('#vtReturn')?.addEventListener('click', async () => {
+    const reason = await confirmDialog(`Trả lại "${d.title}" cho người soạn?`, { okText: 'Trả lại', danger: true, input: 'Lý do trả lại (bắt buộc)' });
+    if (!reason) return;
+    act('return', { reason }, 'Đã trả lại');
+  });
+  root.querySelector('#vtResubmit')?.addEventListener('click', () => act('resubmit', {}, 'Đã gửi lại chờ phê duyệt'));
+  if (noibo) { root.querySelector('#vtEdit')?.addEventListener('click', () => openNoiboEdit(d, m, () => renderDoc(root, id, setCrumbs, m))); return; }
   root.querySelector('#vtEdit')?.addEventListener('click', () => {
     const modal = openModal(`<h2>Sửa ${esc(d.number)}</h2><p class="muted sm">Số và ký hiệu không đổi được. Văn bản sai số: hủy số rồi vào sổ lại.</p><form class="pg-grid">
       <label class="field span2">Trích yếu<input name="title" required maxlength="500" value="${esc(d.title)}"></label>
@@ -224,6 +323,36 @@ async function renderDoc(root, id, setCrumbs, m) {
   });
 }
 
+// Sửa tài liệu nội bộ: dự thảo — mọi trường; đã phê duyệt — chỉ ghi chú, cấp xem, ngày hiệu lực (khi chưa hiệu lực).
+async function openNoiboEdit(d, m, done) {
+  const draft = d.draft;
+  const levels = m.myViewLevels.includes(d.viewLevel.code) ? m.myViewLevels : [...m.myViewLevels, d.viewLevel.code];
+  const olds = draft ? (await api('/api/vanthu/docs?book=NOIBO').catch(() => [])).filter(x => x.number && !x.cancelled && !x.draft && x.id !== d.id) : [];
+  const modal = openModal(`<h2>Sửa ${draft ? 'dự thảo' : esc(d.number)}</h2>
+    ${draft ? '' : '<p class="muted sm">Tài liệu đã phê duyệt: nội dung và tệp đã khoá. Muốn đổi nội dung, tạo dự thảo mới và chọn "Thay thế văn bản".</p>'}
+    <form class="pg-grid">
+    ${draft ? `<label class="field span2">Tên / trích yếu<input name="title" required maxlength="500" value="${esc(d.title)}"></label>
+      <label class="field">Loại<select name="docType" required>${opts(m.noiboTypes, d.docType)}</select></label>
+      <label class="field">Mã tài liệu<input name="docCode" maxlength="40" value="${esc(d.docCode || '')}"></label>
+      <label class="field">Ngày ban hành gốc<input name="docDate" type="date" value="${esc(d.docDate || '')}"></label>
+      <label class="field span2">Thay thế văn bản<select name="replacesId"><option value="">—</option>${olds.map(x => `<option value="${x.id}"${x.id === d.replacesId ? ' selected' : ''}>${esc(x.number)} · ${esc(x.title.slice(0, 80))}</option>`).join('')}</select></label>` : ''}
+    <label class="field">Cấp xem<select name="viewLevel" data-testid="vt-e-level">${levels.map(k => `<option value="${k}"${k === d.viewLevel.code ? ' selected' : ''}>${esc(m.viewLevels[k])}</option>`).join('')}</select></label>
+    ${draft || d.status.code === 'APPROVED' ? `<label class="field">Ngày hiệu lực<input name="effectiveDate" type="date" value="${esc(d.effectiveDate || '')}"></label>` : ''}
+    <label class="field span2">Ghi chú<textarea name="note" maxlength="1000" rows="2">${esc(d.note || '')}</textarea></label>
+    <p class="error span2" id="veErr"></p>
+    <div class="modal-actions span2"><button type="button" class="btn btn-ghost" data-close>Huỷ</button><button class="btn btn-primary" data-testid="vt-e-save">Lưu</button></div></form>`, { wide: true });
+  modal.querySelector('[data-close]').onclick = () => closeModal();
+  modal.querySelector('form').onsubmit = async e => {
+    e.preventDefault();
+    const b = formObj(e.target);
+    if ('replacesId' in b) b.replacesId = b.replacesId ? Number(b.replacesId) : null;
+    for (const k of ['effectiveDate', 'docDate']) if (k in b && !b[k]) b[k] = null;
+    if (b.viewLevel === d.viewLevel.code) delete b.viewLevel;
+    try { await api(`/api/vanthu/docs/${d.id}`, { method: 'PATCH', body: b }); closeModal(); toast('Đã lưu', 'ok'); done(); }
+    catch (error) { modal.querySelector('#veErr').textContent = errorMessage(error); }
+  };
+}
+
 async function renderSettings(root, setCrumbs, m) {
   setCrumbs('<a href="#/vanthu">Văn thư</a> / Thiết lập');
   if (!m.me.director) { root.innerHTML = '<div class="empty">Chỉ Ban Tổng Giám đốc thiết lập văn thư.</div>'; return; }
@@ -234,6 +363,8 @@ async function renderSettings(root, setCrumbs, m) {
         <textarea name="entities" rows="3" data-testid="vt-c-entities">${esc(m.entities.map(e => `${e.code} · ${e.name}`).join('\n'))}</textarea></label>
       <label class="field">Văn thư<br>${people(m.config.clerkUserIds, 'clerkUserIds')}</label>
       <label class="field">Pháp chế<br>${people(m.config.legalUserIds, 'legalUserIds')}</label>
+      <label class="field span2">Người phê duyệt tài liệu nội bộ <span class="muted xs">(chỉ vai Ban TGĐ; để trống = thành viên Ban TGĐ phụ trách "Toàn công ty")</span><br>
+        <select name="approverUserIds" multiple size="4" data-testid="vt-c-approvers">${m.config.boardUsers.map(u => `<option value="${u.id}"${m.config.approverUserIds.includes(u.id) ? ' selected' : ''}>${esc(u.fullName)}${u.boardAll ? ' · Toàn công ty' : ''}</option>`).join('')}</select></label>
       <p class="error span2" id="vcErr"></p>
       <div class="modal-actions span2"><button class="btn btn-primary" data-testid="vt-c-save">Lưu</button></div></form>`;
   root.querySelector('#vtCfg').onsubmit = async e => {
@@ -241,7 +372,7 @@ async function renderSettings(root, setCrumbs, m) {
     const f = e.target;
     const entities = f.entities.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [code, ...rest] = l.split(/\s*[·\-–|:]\s*/); return { code: (code || '').toUpperCase(), name: rest.join(' - ') }; });
     const sel = n => [...f[n].selectedOptions].map(o => Number(o.value));
-    try { await api('/api/vanthu/config', { method: 'PUT', body: { entities, clerkUserIds: sel('clerkUserIds'), legalUserIds: sel('legalUserIds') } }); await getMeta(true); toast('Đã lưu thiết lập', 'ok'); location.hash = '#/vanthu'; }
+    try { await api('/api/vanthu/config', { method: 'PUT', body: { entities, clerkUserIds: sel('clerkUserIds'), legalUserIds: sel('legalUserIds'), approverUserIds: sel('approverUserIds') } }); await getMeta(true); toast('Đã lưu thiết lập', 'ok'); location.hash = '#/vanthu'; }
     catch (error) { root.querySelector('#vcErr').textContent = errorMessage(error); }
   };
 }
