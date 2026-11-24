@@ -142,3 +142,78 @@ test('NAS lỗi kết nối → 503 "Kho file đang không truy cập được";
     assert.equal(PD.nasError(Object.assign(new Error('x'), { code: 'ENOTDIR' })).status, 404);
   } finally { restore(); }
 });
+
+const waitFor = async (cond, ms = 2000) => { const end = Date.now() + ms; while (!cond()) { if (Date.now() > end) throw new Error('hết giờ chờ'); await new Promise(r => setTimeout(r, 5)); } };
+
+test('NAS treo vĩnh viễn: cổng toàn cục giữ số thao tác fs đang chạy ≤ giới hạn dù nhiều request; cầu dao trả 503 ngay; chỗ chỉ nhả khi thao tác thật xong', async () => {
+  const b = (await base()).abs;
+  const saved = { ...PD.cfg };
+  Object.assign(PD.cfg, { timeoutMs: 100, maxInflight: 3, breakerMs: 60000 });
+  // Thao tác fs "kẹt trên CIFS": promise không bao giờ xong cho tới khi test thả ra.
+  const hung = [];
+  let started = 0, running = 0, peak = 0;
+  const hang = realFn => (...a) => { started++; running++; peak = Math.max(peak, running); return new Promise((res, rej) => hung.push(() => { running--; realFn(...a).then(res, rej); })); };
+  PD.fsp.readdir = hang(real.readdir); PD.fsp.realpath = hang(real.realpath); PD.fsp.stat = hang(real.stat); PD.fsp.open = hang(real.open);
+  try {
+    // 20 request đồng thời: liệt kê, đọc gốc NAS, tìm kiếm.
+    const reqs = [
+      ...Array.from({ length: 10 }, () => PD.listDir(b, '')),
+      ...Array.from({ length: 5 }, () => PD.rootFolders()),
+      ...Array.from({ length: 5 }, () => PD.search(b, 'ban')),
+    ];
+    const t0 = Date.now();
+    const results = await Promise.allSettled(reqs);
+    assert.ok(Date.now() - t0 < 1000, 'hạn chờ tính cả lúc xếp hàng: không ai chờ quá lâu');
+    for (const r of results) assert.ok(r.status === 'rejected' && r.reason.status === 503 && r.reason.code === 'NAS_UNAVAILABLE', String(r.reason?.message));
+    assert.ok(peak <= 3, `tối đa 3 thao tác fs cùng lúc (thực tế ${peak})`);
+    assert.equal(started, 3, 'cầu dao mở: người đang xếp hàng không phát thêm thao tác xuống NAS');
+    // Hết hạn chờ KHÔNG nhả chỗ: 3 thao tác vẫn kẹt (≤ giới hạn luồng có thể bị giữ).
+    assert.deepEqual(PD.gateStats(), { inflight: 3, queued: 0, tripped: true });
+
+    // Cầu dao đang mở: request mới nhận 503 ngay, không chạm NAS.
+    const t1 = Date.now();
+    await rejects(PD.listDir(b, ''), e => e.status === 503 && /không truy cập được/.test(e.message));
+    await rejects(PD.rootFolders(), e => e.status === 503);
+    await rejects(PD.openRead(path.join(b, '01.PhapLy', 'Quyết định giao đất.pdf')), e => e.status === 503);
+    assert.ok(Date.now() - t1 < 50, `503 ngay (${Date.now() - t1} ms)`);
+    assert.equal(started, 3);
+
+    // NAS trả lời lại: thao tác thật kết thúc → chỗ mới được nhả.
+    for (const f of hung.splice(0)) f();
+    await waitFor(() => PD.gateStats().inflight === 0);
+  } finally { restore(); Object.assign(PD.cfg, saved); PD.resetGate(); }
+  // Hết thời gian cầu dao (ở đây: đặt lại) → hoạt động bình thường.
+  assert.ok((await PD.listDir(b, '')).entries.length >= 2);
+});
+
+test('hết ngân sách tìm kiếm không mở cầu dao (không phải NAS treo)', async () => {
+  const b = (await base()).abs;
+  PD.fsp.readdir = async (p, o) => { if (p !== b) await new Promise(r => setTimeout(r, 300)); return real.readdir(p, o); };
+  try {
+    assert.equal((await PD.search(b, 'ban', { budgetMs: 50 })).truncated, true);
+    assert.equal(PD.gateStats().tripped, false);
+  } finally { restore(); }
+  await waitFor(() => PD.gateStats().inflight === 0);
+});
+
+test('tải tệp NAS qua cổng: nội dung + kích thước đúng; thư mục → 400; không có → 404; ngắt giữa chừng đóng file', async () => {
+  const b = (await base()).abs;
+  const big = path.join(PROJ, 'lon.bin');
+  const data = Buffer.alloc(600 * 1024, 7); // > 2 khối 256 KB
+  fs.writeFileSync(big, data);
+  try {
+    const { stream, size } = await PD.openRead(big);
+    assert.equal(size, data.length);
+    const before = PD.gateStats().inflight;
+    const chunks = [];
+    for await (const c of stream) chunks.push(c);
+    assert.ok(Buffer.concat(chunks).equals(data));
+    assert.equal(before, 0);
+    await rejects(PD.openRead(path.join(b, '01.PhapLy')), e => e.status === 400);
+    await rejects(PD.openRead(path.join(b, 'khong-co.pdf')), e => e.status === 404);
+    // Người dùng ngắt giữa chừng: file handle được đóng, không giữ chỗ.
+    const r2 = await PD.openRead(big);
+    r2.stream.destroy();
+    await waitFor(() => PD.gateStats().inflight === 0);
+  } finally { fs.rmSync(big); }
+});

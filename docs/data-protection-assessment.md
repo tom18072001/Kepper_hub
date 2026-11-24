@@ -1001,7 +1001,12 @@ kho dự án (đã có từ trước) cần quyền ghi — giữ như hiện t�
   không phát hiện được thư mục đó trỏ ra ngoài `#10.DuAn`. Đề nghị IT **không tạo junction / liên kết tượng trưng trong thư mục dự án `#10.DuAn`**.
 - NAS chậm / mất kết nối: mọi thao tác đọc là bất đồng bộ (không khoá Hub), mỗi thao tác chờ tối đa `NAS_OP_TIMEOUT_MS` (mặc định 8 s),
   tìm kiếm dừng sau 3 s (trả kết quả đã có, báo "nhiều kết quả"); lỗi kết nối báo 503 "Kho file đang không truy cập được" (không nhầm với thư mục bị xoá).
-  Threadpool của Node (mặc định 4 luồng) vẫn có thể bị chiếm khi CIFS treo — cân nhắc đặt `UV_THREADPOOL_SIZE` lớn hơn (vd. 16) trên production.
+  Thao tác fs bất đồng bộ không huỷ được và chiếm luồng threadpool libuv (dùng chung với zlib của nén phản hồi), nên mọi thao tác
+  trên NAS của mục Tài liệu (liệt kê, tìm, tải) đi qua **một cổng toàn cục**: tối đa `NAS_MAX_INFLIGHT` (4) thao tác cùng lúc cho cả
+  máy chủ; chỗ chỉ nhả khi thao tác thật sự xong, không nhả lúc hết hạn chờ. `docker-compose.yml` đặt `UV_THREADPOOL_SIZE=16`,
+  nên NAS treo giữ tối đa 4/16 luồng; Hub vẫn chạy. Hết hạn chờ một lần thì **cầu dao** mở 30 s (`NAS_BREAKER_MS`):
+  mọi yêu cầu tới NAS trả 503 ngay, không dồn thêm thao tác xuống kho đang treo.
+  Ngoài phạm vi (có từ trước): đường ghi / đọc tệp đính kèm cũ trong `lib/nas.js` / `lib/storage.js` vẫn đồng bộ, việc riêng sau.
 
 ## KPI & phân tích thống kê công việc (Ban giám đốc) — 24/11/2026
 

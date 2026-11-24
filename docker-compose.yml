@@ -54,6 +54,10 @@ services:
       # Kho file dự án (bản gốc tệp đính kèm, lib/nas.js): NAS_PATH = thư mục đã mount trên máy chạy (vd. /mnt/kho-duan),
       # NAS_ROOT=/data/nas để bật. Trống = tắt, giữ cách lưu cũ.
       NAS_ROOT: ${NAS_ROOT:-}
+      # Threadpool libuv lớn hơn cổng NAS (lib/project-docs.js: tối đa NAS_MAX_INFLIGHT=4 thao tác fs trên NAS cùng lúc) — NAS treo
+      # chỉ giữ tối đa 4 luồng, còn luồng cho zlib (compression), crypto và fs khác; Hub không đứng theo NAS.
+      UV_THREADPOOL_SIZE: ${UV_THREADPOOL_SIZE:-16}
+      NAS_MAX_INFLIGHT: ${NAS_MAX_INFLIGHT:-4}
       # Thư mục mảng theo phòng chủ trì hạng mục (mã phòng=tên thư mục trong thư mục dự án); phòng không có trong bảng → thư mục dự án.
       NAS_DEPT_FOLDERS: ${NAS_DEPT_FOLDERS:-BTGD=00.MTL-KeHoach,PC=01.PhapLy,TCKT=02.TaiChinh,TKKT=03.ThietKe,KTXD=04.XayDung}
       # Kho văn thư (lib/vanthu-files.js): VANTHU_NAS_PATH = share DATA đã mount trên máy chạy (vd. /mnt/kho-data),

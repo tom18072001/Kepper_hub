@@ -2,7 +2,6 @@
 // (2) mọi tệp có sẵn trong thư mục dự án trên kho file NAS (duyệt CHỈ ĐỌC, kể cả tệp không tải qua Hub).
 // Quyền: chỉ thành viên dự án và Ban Giám đốc (lib/project-docs.js canViewDocs) — kiểm ở máy chủ cho mọi API dưới đây;
 // dự án không được xem trả 404 (không lộ sự tồn tại). Tải tệp ghi nhật ký (audit DOWNLOAD); Claude (token) không tải nội dung tệp.
-const fs = require('node:fs');
 const { pipeline } = require('node:stream');
 const storage = require('../lib/storage');
 const nas = require('../lib/nas');
@@ -74,15 +73,21 @@ module.exports = function mountDocuments(app, { prisma, auth, audit }) {
     if (!a || a.workItem.archivedAt) fail(404, 'Không tìm thấy tệp', 'NOT_FOUND');
     req.params.id = String(a.workItem.projectId);
     const project = await loadProject(req).catch(() => fail(404, 'Không tìm thấy tệp', 'NOT_FOUND'));
-    if (!(await storage.stat(a.objectKey))) fail(404, 'Tệp không còn trong kho lưu trữ', 'NOT_FOUND');
+    // Tệp nằm trên NAS: mở + đọc qua cổng toàn cục của PD (không chiếm threadpool khi NAS treo); còn lại theo storage như cũ.
+    let file = null;
+    if (nas.isNasKey(a.objectKey)) {
+      try { file = await PD.openRead(nas.absOf(a.objectKey)); }
+      catch (e) { if (e.status === 404) fail(404, 'Tệp không còn trong kho lưu trữ', 'NOT_FOUND'); throw e; }
+    } else if (!(await storage.stat(a.objectKey))) fail(404, 'Tệp không còn trong kho lưu trữ', 'NOT_FOUND');
     const inline = req.query.inline === '1' && /\.(pdf|png|jpe?g|gif|webp)$/i.test(a.fileName);
     res.setHeader('Content-Type', (typeOf(a.fileName) || {}).mime || 'application/octet-stream');
     res.setHeader('Content-Disposition', contentDisposition(inline ? 'inline' : 'attachment', a.fileName));
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'private, no-store');
-    await audit(req, inline ? 'PREVIEW' : 'DOWNLOAD', 'Attachment', a.id, null, { workItemId: a.workItemId, projectKey: project.key, fileName: a.fileName, via: 'documents' });
-    const stream = await storage.getStream(a.objectKey);
-    send(stream, res);
+    if (file) res.setHeader('Content-Length', String(file.size));
+    try { await audit(req, inline ? 'PREVIEW' : 'DOWNLOAD', 'Attachment', a.id, null, { workItemId: a.workItemId, projectKey: project.key, fileName: a.fileName, via: 'documents' }); }
+    catch (e) { if (file) file.stream.destroy(); throw e; }
+    send(file ? file.stream : await storage.getStream(a.objectKey), res);
   });
 
   // Một thư mục trong thư mục dự án trên NAS (?path= tương đối, trống = gốc). Tệp đã tải qua Hub được đánh dấu kèm mã việc.
@@ -106,8 +111,8 @@ module.exports = function mountDocuments(app, { prisma, auth, audit }) {
     const project = await loadProject(req);
     const base = await nasRoot(project);
     const { abs, rel } = await PD.resolveIn(base.abs, req.query.path);
-    const st = await PD.statOf(abs);
-    if (!st.isFile()) fail(400, 'Không phải tệp', 'INVALID_PATH');
+    const { stream, size } = await PD.openRead(abs); // mở + stat trước header; đọc từng khối qua cổng NAS toàn cục
+    const st = { size };
     const name = rel.split('/').pop();
     const inline = req.query.inline === '1' && /\.(pdf|png|jpe?g|gif|webp)$/i.test(name); // xem nhanh trên trình duyệt: chỉ PDF / ảnh
     res.setHeader('Content-Type', (typeOf(name) || {}).mime || 'application/octet-stream');
@@ -115,7 +120,8 @@ module.exports = function mountDocuments(app, { prisma, auth, audit }) {
     res.setHeader('Content-Length', String(st.size));
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'private, no-store');
-    await audit(req, 'DOWNLOAD', 'ProjectNasFile', project.id, null, { projectKey: project.key, path: `${base.folder}/${rel}`, size: st.size });
-    send(fs.createReadStream(abs), res);
+    try { await audit(req, 'DOWNLOAD', 'ProjectNasFile', project.id, null, { projectKey: project.key, path: `${base.folder}/${rel}`, size: st.size }); }
+    catch (e) { stream.destroy(); throw e; }
+    send(stream, res);
   });
 };
