@@ -424,7 +424,7 @@ SELECT role, COUNT(*) FROM "ProjectMember" GROUP BY 1;
 - `deploy/vm-deploy.sh` (máy chạy thật) **tự kiểm**: mã mới được kéo về thư mục trước khi chạy script, nên script mới chạy bước kiểm trước sao lưu và build.
 
 **Bản thật (máy ảo, `deploy/vm-deploy.sh`, một thư mục cài, cùng `APP_VERSION`)** — quy trình chuẩn, đã chạy thử nguyên văn (bảng dưới):
-- Triển khai: `git pull --ff-only` → `sh deploy/vm-deploy.sh <tên-máy>`. Script: kiểm phân quyền (dừng ở đây thì app cũ vẫn chạy) → sao lưu → gắn tag image app đang chạy thành `kepper-app:rollback-<giờ>` (in ra; chỉ giữ 2 tag rollback gần nhất) → build và chạy → chờ healthy; không healthy thì in log và đúng các lệnh khôi phục dưới đây (kèm tên tag).
+- Triển khai: `git pull --ff-only` → `sh deploy/vm-deploy.sh <tên-máy>`. Script: kiểm phân quyền (dừng ở đây thì app cũ vẫn chạy) → sao lưu → gắn tag image app đang chạy thành `kepper-app:rollback-<giờ>` (in ra; chỉ giữ 2 tag `rollback-<giờ>` gần nhất do script tạo, tag đặt tay như `rollback-pr40-…` không bị xoá — `deploy/prune-rollback-tags.sh`) → build và chạy → chờ healthy; không healthy thì in log và đúng các lệnh khôi phục dưới đây (kèm tên tag).
 - Nếu migration vẫn dừng ở chốt (log app: P3018 "Còn N tài khoản…", sau đó P3009):
   0. `docker compose stop app` — dừng TRƯỚC, nếu không app đang khởi động lại sẽ chạy migration lần nữa và ghi thêm bản ghi lỗi.
   1. `docker compose run --rm --no-deps --entrypoint npx app prisma migrate resolve --rolled-back 20261124064031_mot_truc_vai` (mỗi bản ghi lỗi một lần).
