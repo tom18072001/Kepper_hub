@@ -45,7 +45,7 @@ không có bước duyệt. Quyền xem theo **mức mật** (Công khai / Nội
 |---|---|---|---|
 | **Chưa phê duyệt** (dự thảo) | Không — hiện "Dự thảo" | Người soạn, Người phê duyệt, Văn thư | Sửa được; người phê duyệt nhận thông báo "có tài liệu chờ phê duyệt" |
 | **Đã trả lại** | Không | Như trên | Bắt buộc ghi lý do; người soạn nhận thông báo |
-| **Đã phê duyệt** | Có — cấp lúc bấm | Theo cấp xem (mục 4) | Khoá nội dung và tệp. Ngày ban hành = ngày phê duyệt |
+| **Đã phê duyệt** | Có — cấp lúc bấm | Theo cấp xem (mục 4) | Khoá nội dung và tệp. Ngày ban hành = ngày phê duyệt, trừ khi có "Ngày ban hành gốc" (văn bản có từ trước khi đưa vào Hub — mục 5) |
 | **Hiệu lực** | Có | Theo cấp xem | Tự chuyển khi đến "Ngày hiệu lực" (trống = ngay khi phê duyệt) |
 | **Hết hiệu lực / thay thế** | Có | Theo cấp xem | Tự chuyển khi văn bản thay thế được phê duyệt; hoặc Văn thư đánh dấu |
 
@@ -94,7 +94,8 @@ phạm vi đề xuất này). Danh sách "được xem đích danh" của mức 
 | **Cấp xem** | ✔ | ✔ | Mục 4. Mặc định "Mọi người" |
 | **Tệp PDF** | ✔ | ✔ trước khi phê duyệt | Có sẵn. Không có tệp thì nút Phê duyệt bị khoá — TGĐ phải thấy đúng bản mình duyệt |
 | **Mã tài liệu** | ✔ | — | Mã quản lý ổn định qua các phiên bản, vd. QC-IT-01, QyĐ-GA-01 |
-| **Ngày hiệu lực** | ✔ | — | Trống = hiệu lực ngay khi phê duyệt |
+| **Ngày hiệu lực** | ✔ | — | Trống = hiệu lực ngay khi phê duyệt. **Được nhập ngày trong quá khứ** cho văn bản đã ban hành / có hiệu lực trước khi đưa vào Hub (vd. quy trình ngày 22/10/2026) — khi đó phê duyệt xong chuyển thẳng sang **Hiệu lực** |
+| **Ngày ban hành gốc** | ✔ | — | Chỉ cho văn bản ban hành trước khi đưa vào Hub (dùng cột "ngày văn bản" sẵn có); hiển thị cạnh ngày phê duyệt. Ngày phê duyệt trong nhật ký vẫn là ngày bấm |
 | **Thay thế văn bản** | ✔ | — | Chọn từ sổ. Phiên bản tự suy: bản đầu là 1, mỗi lần thay thế +1 |
 | Số hiệu | tự động | | Cấp lúc phê duyệt |
 | Người soạn | tự động | | = người tạo |
