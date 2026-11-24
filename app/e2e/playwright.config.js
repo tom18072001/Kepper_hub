@@ -7,6 +7,13 @@ const dbName = DATABASE_URL.split('/').pop().split('?')[0];
 if (!/_(e2e|test)$/.test(dbName)) {
   throw new Error('Đặt E2E_DATABASE_URL tới CSDL test có tên kết thúc bằng _e2e hoặc _test (CSDL này sẽ bị reset). Ví dụ: postgresql://workhub:workhub@127.0.0.1:5434/workhub_e2e');
 }
+// Kho file dự án GIẢ (NAS_ROOT) cho kịch bản Tài liệu (16-tai-lieu-du-an): thư mục trống, kịch bản tự tạo thư mục dự án của mình.
+// Dự án khác không có thư mục ở đây nên tệp đính kèm của chúng vẫn lưu như cũ (UPLOAD_DIR).
+const NAS_ROOT = require('node:path').join(require('node:os').tmpdir(), 'workhub-e2e-nas');
+if (process.env.TEST_WORKER_INDEX === undefined) { // chỉ tiến trình chính dọn (worker cũng nạp lại tệp cấu hình này)
+  require('node:fs').rmSync(NAS_ROOT, { recursive: true, force: true });
+  require('node:fs').mkdirSync(NAS_ROOT, { recursive: true });
+}
 const PORT = Number(process.env.E2E_PORT || 4173);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
@@ -39,8 +46,9 @@ module.exports = defineConfig({
     env: {
       DATABASE_URL, PORT: String(PORT), JWT_SECRET: 'e2e-secret-' + 'x'.repeat(32), APP_ORIGIN: BASE_URL, NODE_ENV: 'test',
       ROOT_ADMIN_USERNAME: 'admin', ROOT_ADMIN_PASSWORD: 'Admin@2026', SEED_DEMO: 'true', ENABLE_CRON: 'false', MODULES: 'crm,hrm,vanthu',
-      STORAGE_DRIVER: 'local', UPLOAD_DIR: require('node:path').join(require('node:os').tmpdir(), 'workhub-e2e-uploads'),
+      STORAGE_DRIVER: 'local', NAS_ROOT, UPLOAD_DIR: require('node:path').join(require('node:os').tmpdir(), 'workhub-e2e-uploads'),
     },
   },
 });
 module.exports.BASE_URL = BASE_URL;
+module.exports.NAS_ROOT = NAS_ROOT;
