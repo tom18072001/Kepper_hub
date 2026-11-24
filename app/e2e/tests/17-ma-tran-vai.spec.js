@@ -33,7 +33,7 @@ const MATRIX = [
     expect: { giamdoc: 403, 'tp.kinhdoanh': 403, 'nv.kinhdoanh1': 403, admin: 410 } },
   { label: 'Phạm vi phụ trách: chỉ cho tài khoản vai BTGĐ', method: 'PUT', data: { all: true, departmentIds: [] }, url: () => `/api/admin/users/${U('tp.kinhdoanh').id}/scope`,
     expect: { giamdoc: 403, 'tp.kinhdoanh': 403, 'nv.kinhdoanh1': 403, admin: 422 } },
-  { label: 'Tài liệu dự án: danh sách', url: () => '/api/documents/projects', expect: { giamdoc: 200, 'tp.kinhdoanh': 200, 'nv.kinhdoanh1': 200, admin: [403, 404] } },
+  { label: 'Tài liệu dự án: danh sách (quản trị nhận danh sách rỗng)', url: () => '/api/documents/projects', expect: { giamdoc: 200, 'tp.kinhdoanh': 200, 'nv.kinhdoanh1': 200, admin: 200 } },
 ];
 
 for (const row of MATRIX) {
@@ -58,9 +58,10 @@ test('vai hiện đúng một tên trên hồ sơ; quản trị không thấy d�
   const all = await projects('giamdoc'), staff = await projects('nv.kinhdoanh1');
   expect(all.length).toBeGreaterThanOrEqual(staff.length);
   // Tài liệu dự án: BTGĐ thấy mọi dự án; nhân viên chỉ dự án mình là thành viên.
-  const docs = name => apiAs(pages[name], '/api/documents/projects').then(r => r.json());
+  const docs = name => apiAs(pages[name], '/api/documents/projects').then(r => r.json()).then(b => b.projects);
   const [dAll, dStaff] = [await docs('giamdoc'), await docs('nv.kinhdoanh1')];
   expect(dAll.length).toBeGreaterThanOrEqual(dStaff.length);
+  expect(await docs('admin')).toEqual([]);
 });
 
 test('quản trị: vai BTGĐ ngoài bộ phận Ban Tổng Giám đốc phải xác nhận; đổi vai ghi nhật ký; bỏ vai BTGĐ thì bỏ phạm vi phụ trách', async () => {
