@@ -38,10 +38,10 @@ const fill = data => { for (const r of [...data.results, ...data.ongoing, ...dat
 function submitAs(visible, raw, saved = null, prev = null) {
   const deptItems = all(), seen = deptItems.filter(i => visible.has(i.id));
   const prefill = WK.buildPrefill({ week: F, deptId: 1, items: seen, memberIds: members, prev });
-  const { data, errors, autoIds } = WS.prepareSubmit({ raw: raw(prefill), ctx: { ...ctxOf(seen), items: seen }, prefill, now: FRI, week: F, saved, scopeItems: deptItems });
+  const { data, errors } = WS.prepareSubmit({ raw: raw(prefill), ctx: { ...ctxOf(seen), items: seen }, prefill, now: FRI, week: F, saved, scopeItems: deptItems, editAll: visible === SEEN_BY_SECRETARY });
   if (errors.length) return { prefill, errors, data };
   const full = WK.buildPrefill({ week: F, deptId: 1, items: deptItems, memberIds: members, prev });
-  const { final, added } = WS.finishSubmit(data, F, { full, visibleIds: new Set(seen.map(i => i.id)), parentOf: new Map(deptItems.map(i => [i.id, i.parentId])), autoIds });
+  const { final, added } = WS.finishSubmit(data, F, { full, visibleIds: new Set(seen.map(i => i.id)), parentOf: new Map(deptItems.map(i => [i.id, i.parentId])) });
   return { prefill, errors, added, fin: final };
 }
 const submitAsStaff = (prev = null) => submitAs(VISIBLE_TO_STAFF, p => fill(structuredClone(p)), null, prev);
@@ -121,10 +121,10 @@ test('S10 hồi quy: trưởng phòng (xem được việc) bấm "Gửi lại" 
   assert.deepEqual(kpis(r.fin), before);
   assert.equal(JSON.stringify(staffView(r.fin)).includes('lô C'), false); assert.equal(JSON.stringify(staffView(r.fin)).includes('lô D'), false);
   assert.equal(WK.summaryView(sumOf(r.fin), { full: true }).text.includes('lô D'), false);
-  // Trưởng phòng sửa dòng tự bổ sung trên biểu mẫu (giao diện để chỉ đọc) → máy chủ bỏ qua.
-  const edited = () => { const x = form(); rowOf(x, 901).cause = 'Sửa tay (giả)'; rowOf(x, 901).auto = false; return x; };
+  // Vòng 5 (nới quy tắc): trưởng phòng xem được việc → nhập giải trình vào chính dòng tự bổ sung; dòng vẫn là dòng tự bổ sung (không gỡ nhãn được).
+  const edited = () => { const x = form(); Object.assign(rowOf(x, 901), { cause: 'Chờ hồ sơ (giả)', auto: false }); return x; };
   const r2 = submitAs(SEEN_BY_HEAD, edited, s1.fin);
-  assert.deepEqual(r2.errors, []); assert.equal(rowOf(r2.fin, 901).auto, true); assert.equal(rowOf(r2.fin, 901).cause, '');
+  assert.deepEqual(r2.errors, []); assert.equal(rowOf(r2.fin, 901).auto, true); assert.equal(rowOf(r2.fin, 901).cause, 'Chờ hồ sơ (giả)');
 });
 
 test('S10 hồi quy: thư ký (không xem được việc) "Gửi lại" — bỏ dòng hoặc điền rồi gửi: không trùng dòng, KPI không đổi, không lộ tên', () => {
@@ -146,10 +146,11 @@ test('S10 hồi quy: thư ký (không xem được việc) "Gửi lại" — b�
   check(submitAs(SEEN_BY_SECRETARY, base, s1.fin));
   // Cách 1: bỏ các dòng không sửa được.
   check(submitAs(SEEN_BY_SECRETARY, () => { const x = base(); for (const k of ['results', 'ongoing', 'risks']) x[k] = x[k].filter(r => !/lô C|lô D|Việc 101/.test(r.task)); return x; }, s1.fin));
-  // Cách 2: điền thay rồi gửi — quy tắc gốc (vòng 4): thư ký không xem được việc nào → mọi dòng gắn việc giữ NGUYÊN, kể cả giải trình.
+  // Cách 2: điền thay rồi gửi — vòng 5 (a): thư ký (quyền sửa + xem tổng hợp đầy đủ) sửa được trường do người nhập; trường máy tính vẫn tính lại.
   const r3 = submitAs(SEEN_BY_SECRETARY, () => { const x = base(); for (const r of WK.allRows(x)) Object.assign(r, { next: 'Theo dõi (giả)', cause: 'Theo báo cáo (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF' }); return x; }, s1.fin);
   check(r3);
-  assert.deepEqual(rowOf(r3.fin, 101), rowOf(s1.fin, 101)); assert.equal(rowOf(r3.fin, 901).solution, '');
+  assert.equal(rowOf(r3.fin, 101).next, 'Theo dõi (giả)'); assert.equal(rowOf(r3.fin, 101).task, rowOf(s1.fin, 101).task);
+  assert.equal(rowOf(r3.fin, 901).solution, 'Đôn đốc (giả)'); assert.equal(rowOf(r3.fin, 901).auto, true); // giải trình vào chính dòng tự bổ sung
 });
 
 test('S10: tuần sau người lập dựng biểu mẫu từ bản đã nộp (có dòng tự bổ sung) — không lộ việc họ không xem được', () => {

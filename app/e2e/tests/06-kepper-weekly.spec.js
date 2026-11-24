@@ -402,16 +402,34 @@ test('21. Mục S10 — việc Giám đốc giao trưởng phòng qua sổ, nhâ
   await post(hc, '/api/weekly/submit', { week: ctx.week, departmentId: kt, data: filled });
   await stable('thư ký gửi lại — điền rồi gửi');
   // Vòng 4 — quy tắc gốc: người KHÔNG xem được việc gửi dữ liệu sửa dòng của việc đó (đoán itemId) → bản lưu không đổi, không sinh yêu cầu hỗ trợ.
+  const beforeFake = rowsOf((await json(gd, `/api/weekly/report?week=${ctx.week}&departmentId=${kt}`)).report.data).find(r => r.itemId === item.id);
   const nvForm = (await json(nv, `/api/weekly/report?week=${ctx.week}`)).report.data;
   nvForm.risks.push({ key: 'gia', itemId: item.id, task: 'Giả mạo (giả)', status: 'Vướng', cause: 'Nhân viên ghi đè (giả)', solution: 'x', helpFrom: 'BGD', helpWhat: 'Xin hỗ trợ (giả)', helpBy: vnDate(5), ownerIds: [me.id], due: vnDate(5) });
   nvForm.plans.push({ key: 'giap', itemId: item.id, task: 'Giả mạo IV (giả)', basis: 'KH tháng', ownerIds: [me.id], due: vnDate(6), output: 'x' });
-  await post(nv, '/api/weekly/submit', { week: ctx.week, data: nvForm });
+  const fakeRes = await post(nv, '/api/weekly/submit', { week: ctx.week, data: nvForm });
+  expect(fakeRes.ignored).toBe(2); expect(fakeRes.warning).toContain('không có quyền sửa'); // báo lại, không im lặng
   await stable('nhân viên gửi dòng của việc không xem được');
   const afterFake = await json(gd, `/api/weekly/summary?week=${ctx.week}`);
   const fakeRow = rowsOf(afterFake.rows.find(r => r.id === kt).report).find(r => r.itemId === item.id);
-  expect(fakeRow.cause).toBe(''); expect(fakeRow.status).not.toBe('Vướng');
+  expect(fakeRow.cause).toBe(beforeFake.cause); expect(fakeRow.status).toBe(beforeFake.status); expect(fakeRow.helpFrom).toBe(beforeFake.helpFrom);
   expect(afterFake.rows.find(r => r.id === kt).report.plans.some(p => p.itemId === item.id)).toBe(false);
   expect(JSON.stringify(afterFake.helps)).not.toContain('Xin hỗ trợ (giả)');
+  // Vòng 5 — thư ký (quyền sửa + xem tổng hợp đầy đủ) ghi giải pháp vào chính dòng tự bổ sung → được lưu; dòng vẫn là dòng tự bổ sung.
+  const secForm2 = await secForm();
+  Object.assign(rowsOf(secForm2).find(r => r.itemId === item.id), { solution: 'Thư ký ghi theo email (giả)', cause: 'Chờ chủ đầu tư (giả)' });
+  const secRes = await post(hc, '/api/weekly/submit', { week: ctx.week, departmentId: kt, data: secForm2 });
+  expect(secRes.ignored).toBe(0);
+  const afterSec = rowsOf((await json(gd, `/api/weekly/report?week=${ctx.week}&departmentId=${kt}`)).report.data).find(r => r.itemId === item.id);
+  expect(afterSec.auto).toBe(true); expect(afterSec.solution).toBe('Thư ký ghi theo email (giả)');
+  await stable('thư ký ghi giải trình vào dòng tự bổ sung');
+  // Vòng 5 — nộp kiểm xung đột như lưu nháp: nhân viên mở trang, trưởng phòng gửi lại, nhân viên nộp bằng bản cũ → 409.
+  const nvOld = (await json(nv, `/api/weekly/report?week=${ctx.week}`)).report;
+  const tpNow = (await json(tp, `/api/weekly/report?week=${ctx.week}`)).report;
+  tpNow.data.other = 'Trưởng phòng vừa sửa (giả)';
+  await post(tp, '/api/weekly/submit', { week: ctx.week, data: tpNow.data, baseUpdatedAt: tpNow.updatedAt });
+  const late = await apiAs(nv, '/api/weekly/submit', { method: 'POST', headers: { 'content-type': 'application/json' }, data: { week: ctx.week, data: nvOld.data, baseUpdatedAt: nvOld.updatedAt } });
+  expect(late.status()).toBe(409); expect((await late.json()).code).toBe('REPORT_CONFLICT');
+  expect((await json(gd, `/api/weekly/report?week=${ctx.week}&departmentId=${kt}`)).report.data.other).toBe('Trưởng phòng vừa sửa (giả)');
   // Vòng 4 — bản NHÁP hai người cùng sửa (tuần sau): trưởng phòng nháp có dòng việc trong sổ (Vướng + giải pháp) và Phần IV gắn việc đó;
   // nhân viên (không xem được việc) tự lưu → dòng và Phần IV của trưởng phòng giữ NGUYÊN.
   const w2 = addDays(ctx.week, 7);

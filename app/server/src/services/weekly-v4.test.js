@@ -33,13 +33,14 @@ const fill = x => { for (const r of WK.allRows(x)) Object.assign(r, { ownerIds: 
   for (const p of x.plans) Object.assign(p, { ownerIds: p.ownerIds?.length ? p.ownerIds : [60], output: p.output || 'Đầu ra (giả)' }); return x; };
 const prefillOf = visible => WK.buildPrefill({ week: F, deptId: 1, items: ITEMS().filter(i => visible.has(i.id)), memberIds: members });
 // Lưu nháp như PUT /api/weekly/report; nộp / gửi lại như POST /api/weekly/submit.
-const saveDraft = (visible, raw, saved) => WS.mergeDraft(raw, ctxOf(ITEMS().filter(i => visible.has(i.id))), saved);
-function submit(visible, raw, saved) {
+// editAll: thư ký (quyền sửa báo cáo + xem tổng hợp đầy đủ) — routes/weekly.js editsAll.
+const saveDraft = (visible, raw, saved, editAll = false) => WS.mergeDraft(raw, ctxOf(ITEMS().filter(i => visible.has(i.id))), saved, { scopeItems: ITEMS(), editAll, now: FRI_PM }).data;
+function submit(visible, raw, saved, editAll = visible === SECRETARY) {
   const items = ITEMS(), seen = items.filter(i => visible.has(i.id)), prefill = prefillOf(visible);
-  const { data, errors, autoIds, held } = WS.prepareSubmit({ raw, ctx: ctxOf(seen), prefill, now: FRI_PM, week: F, saved, scopeItems: items });
+  const { data, errors } = WS.prepareSubmit({ raw, ctx: ctxOf(seen), prefill, now: FRI_PM, week: F, saved, scopeItems: items, editAll });
   if (errors.length) return { errors, data };
   const full = WK.buildPrefill({ week: F, deptId: 1, items, memberIds: members });
-  return { errors, fin: WS.finishSubmit(data, F, { full, visibleIds: new Set(seen.map(i => i.id)), parentOf: new Map(items.map(i => [i.id, i.parentId])), autoIds }, held).final };
+  return { errors, fin: WS.finishSubmit(data, F, { full, visibleIds: new Set(seen.map(i => i.id)), parentOf: new Map(items.map(i => [i.id, i.parentId])) }).final };
 }
 const view = (data, visible) => WK.viewFor(structuredClone(data), id => visible.has(id)); // trang báo cáo của người xem (không phải người xem đầy đủ)
 const rowOf = (x, id) => WK.allRows(x).find(r => r.itemId === id);
@@ -101,7 +102,7 @@ test('Vòng 4 — C + quy tắc gốc: người KHÔNG xem được việc gửi
     'việc ngoài báo cáo (đoán id)': x => x.ongoing.push({ key: 'g', itemId: 777, task: 'Đoán (giả)', status: 'Vướng', cause: 'c', solution: 's', helpFrom: 'BGD', helpWhat: 'w', helpBy: '2026-11-04', ownerIds: [50] }),
   };
   for (const [name, attack] of Object.entries(attacks)) {
-    for (const [who, vis] of [['nhân viên', STAFF], ['thư ký', SECRETARY]]) {
+    for (const [who, vis] of [['nhân viên', STAFF]]) { // thư ký được sửa trường người nhập (vòng 5) — xem test riêng
       const form = view(h1, vis); attack(form);
       const r = submit(vis, form, h1);
       assert.deepEqual(r.errors.filter(e => /Kỷ luật|lô D|Thương lượng|Đoán/.test(e)), [], `${who} · ${name}: lỗi không nêu tên`);

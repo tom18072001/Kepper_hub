@@ -995,7 +995,7 @@ Việc chưa bắt đầu thì không báo cáo, trừ khi đã có nguy cơ ch�
 | Mã | Trạng thái | Ghi chú | Ưu tiên |
 |---|---|---|---|
 | GOV-01 | Không đổi | Quyền xem báo cáo tuần vẫn qua `weekly.report` / `weekly.summary(.detail)` | Bắt buộc |
-| PRE-01 | Đầy đủ | Máy chủ chỉ nhận `itemId` mà người lập xem được (`sanitize` + `itemIds`). Lúc nộp, tên, mã, hạn, người phụ trách, %, tình trạng và nguy cơ của dòng việc thường đều lấy lại từ việc. Báo cáo tuần không ghi % ngược vào việc thường | Bắt buộc |
+| PRE-01 | Đầy đủ | Máy chủ chỉ nhận thay đổi trường do người nhập cho dòng mà người lưu được sửa (xem được việc; thư ký: quyền sửa + xem tổng hợp đầy đủ). Thay đổi khác bị bỏ và báo lại (`ignored`). Ở MỌI lần lưu nháp / nộp, trường do máy tính (tên, mã, hạn, người phụ trách, %, tình trạng hệ thống, nguy cơ, phần I/II/III) của MỌI dòng được tính lại từ việc; dòng của việc đã lưu trữ / huỷ bị bỏ. Báo cáo tuần không ghi % ngược vào việc thường | Bắt buộc |
 | PRI-01 | Một phần → tốt hơn | Việc thường mang tên việc và người phụ trách vào báo cáo Bảo mật. Nếu một việc thuộc dự án hạn chế (DEPARTMENT / thành viên), Ban GĐ, thư ký và PMO sẽ thấy **tên việc** qua báo cáo tuần. Đã chặn trưởng / phó bộ phận khác đọc văn bản đầy đủ (trước đây lộ qua trường `text`, cả API lẫn MCP) | Nên có |
 | PRI-04 | Một phần | Hồ sơ đánh giá tác động xử lý DLCN, luồng "báo cáo tuần", cần ghi thêm nguồn "việc thường của bộ phận" và kênh MCP (`kepper_weekly_report`, `kepper_weekly_summary`) | Bắt buộc |
 | DET-05 | Không đổi | Bản nộp vẫn băm SHA-256 và lưu phiên bản bất biến | Nên có |
@@ -1044,17 +1044,29 @@ Ví dụ: TGĐ giao trưởng phòng qua sổ giao việc, nhân viên lập bá
 **Ẩn / hiện theo người xem (nghiệm thu vòng 3).** Quy tắc áp cho MỌI dòng gắn việc, không chỉ dòng tự bổ sung: người không có quyền xem tổng hợp đầy đủ
 chỉ nhận dòng gắn việc họ xem được (`itemVisibleWhere` của chính người xem), kể cả dòng do trưởng phòng / thư ký nhập.
 
-**Quy tắc gốc cho mọi đường lưu (nghiệm thu vòng 4)** — lưu nháp, tự lưu, nộp, gửi lại, MCP `kepper_save_weekly_draft`
+**Quy tắc gốc cho mọi đường lưu (nghiệm thu vòng 4, làm rõ vòng 5)** — lưu nháp, tự lưu, nộp, gửi lại, MCP `kepper_save_weekly_draft`
 (`services/weekly-submit.js` `mergeSaved` / `mergeDraft` / `prepareSubmit`):
-> Một dòng gắn việc chỉ được THÊM / SỬA / XOÁ bởi người xem được việc đó. Mọi lần lưu đều GỘP theo `itemId` với bản đã lưu (nháp hoặc đã nộp):
-> dòng của việc mà người thao tác không xem được được giữ NGUYÊN — mọi phần I–IV, mọi trường, đúng phần cũ. Hiển thị thì lọc theo NGƯỜI XEM.
+- **Trường do người nhập**: tình trạng "Vướng", nguyên nhân, giải pháp, đề nghị hỗ trợ, việc tuần tới, % người lập ghi, dòng Phần IV. Chỉ người
+  ĐƯỢC SỬA dòng đó mới thêm / sửa / xoá:
+  - người xem được việc;
+  - thư ký — người có quyền sửa báo cáo theo `lib/policy.js` và xem tổng hợp đầy đủ (vốn đã thấy nội dung mọi dòng). Thư ký sửa được trường do
+    người nhập, nhưng không bỏ được dòng của việc mình không xem được.
+- **Trường do máy tính**: tên, mã, hạn, người phụ trách, %, tình trạng theo hệ thống, nguy cơ, dòng thuộc Phần I / II / III. Luôn tính lại từ việc
+  ở MỌI lần lưu nháp và nộp, với MỌI dòng, kể cả dòng của việc người lưu không xem được và dòng tự bổ sung. Dòng của việc đã lưu trữ / huỷ bị bỏ.
+- Mọi lần lưu GỘP theo `itemId` với bản đã lưu (nháp hoặc đã nộp). Một việc là một dòng ở Phần I–III, và một dòng ở Phần IV.
+- Hiển thị lọc theo NGƯỜI XEM.
 
 Hệ quả:
-- Dữ liệu gửi lên cho dòng của việc người gửi không xem được (giải trình, tình trạng, đề nghị hỗ trợ, Phần IV, chuyển phần, giả cờ tự bổ sung,
-  đoán `itemId`) bị bỏ qua hết. Không ghi đè, không sinh yêu cầu hỗ trợ.
+- Người không được sửa gửi dữ liệu cho dòng của việc đó (giải trình, "Vướng", đề nghị hỗ trợ, Phần IV, chuyển phần, giả cờ tự bổ sung, đoán
+  `itemId`): máy chủ giữ nguyên, không sinh yêu cầu hỗ trợ, và **báo lại**. Phản hồi lưu nháp / nộp trả `ignored` cùng câu cảnh báo; giao diện
+  hiện câu cảnh báo, không im lặng.
 - Hai người cùng sửa bản nháp: người xem được ít hơn tự lưu không xoá dòng của người kia.
-- Dòng "Hệ thống tự bổ sung" chỉ đọc với mọi người, kể cả người xem được việc. Khi nộp, máy chủ luôn dựng lại dòng này từ phạm vi bộ phận.
-- Một việc là một dòng. Lỗi kiểm tra chỉ nêu dòng người gửi sửa được.
+- **Nộp / gửi lại kiểm xung đột như lưu nháp:** bản đang mở đã cũ (có người vừa lưu / nộp) → 409 `REPORT_CONFLICT`; giao diện báo "có người
+  vừa sửa — tải lại".
+- Dòng "Hệ thống tự bổ sung" (nới quy tắc vòng 5): không ai bỏ được, vì máy chủ quyết theo phạm vi bộ phận. Người được sửa nhập được các trường do
+  người nhập vào chính dòng đó. Dòng vẫn mang nhãn và vẫn ẩn tên với người không xem được.
+- Không tạo dòng tự do trùng tên một việc đã có dòng. Máy chủ báo lỗi, hướng người dùng ghi vào chính dòng gắn việc.
+- Lỗi kiểm tra chỉ nêu dòng người gửi tự sửa; giải trình của dòng tự bổ sung là tuỳ chọn.
 
 **Việc thuộc dự án KÍN** — chế độ hiển thị "Chỉ thành viên" (PRIVATE) hoặc "Sổ giao việc" (ASSIGNED). Quy tắc theo việc, không theo người lập:
 - Trong **bản gửi email** và **bản tóm tắt cho trưởng / phó bộ phận khác**, việc kín không nêu tên, chỉ đếm. Áp cho cả mục nguy cơ chậm lẫn
@@ -1065,8 +1077,10 @@ Hệ quả:
 - Mục nguy cơ bị ẩn tên không giữ `key` / mã việc.
 
 **Gửi lại.** Mã việc và cờ tự bổ sung là dữ liệu của máy chủ, không phụ thuộc người bấm gửi:
-- Dòng tự bổ sung đã lưu luôn được máy chủ dựng lại từ phạm vi bộ phận, kể cả khi trưởng phòng (xem được việc) bấm "Gửi lại". Trên biểu mẫu, dòng này chỉ đọc.
-- Dòng gắn việc mà người gửi không xem được (vd. thư ký nhập thay) được giữ từ bản đã lưu. Máy chủ chỉ nhận phần giải trình người gửi sửa.
+- Dòng tự bổ sung: máy chủ quyết dòng có hay không, theo phạm vi bộ phận. Giải trình đã nhập được giữ và trường máy tính được tính lại, kể cả khi
+  trưởng phòng (xem được việc) bấm "Gửi lại".
+- Dòng gắn việc mà người gửi không xem được: trường do người nhập giữ từ bản đã lưu, trường do máy tính tính lại. Thư ký sửa được trường do người
+  nhập (quyết định (a) vòng 5); người khác gửi thay đổi thì bị bỏ và được báo lại.
 - Mọi lần nộp / gửi lại đều tính lại phạm vi bộ phận và gộp theo `itemId`: một việc là một dòng.
 - Dòng gắn việc không hợp lệ bị bỏ, không thành dòng tự do giữ nguyên tên việc.
 - Lỗi kiểm tra không nêu dòng người gửi không sửa được.
@@ -1080,7 +1094,7 @@ Bản nộp vẫn băm SHA-256 trên bản đầy đủ (có dòng tự bổ sun
 | Mã | Trạng thái | Ghi chú |
 |---|---|---|
 | GOV-01 | Đầy đủ | Không đổi ma trận quyền. Lọc đầu ra theo `weekly.summary.detail` + quyền xem việc (`itemVisibleWhere`) |
-| PRE-01 | Đầy đủ | Máy chủ tự sinh dòng tự bổ sung; người dùng không chèn hay giả cờ `auto` được |
+| PRE-01 | Đầy đủ | Máy chủ tự sinh / bỏ dòng tự bổ sung; người dùng không chèn hay giả cờ `auto` được; người được sửa chỉ nhập trường do người nhập |
 | PRI-01 | Một phần | **Tên việc hạn chế** (sổ giao việc) nay vào báo cáo Bảo mật của bộ phận và đến Ban GĐ / thư ký / PMO, đúng quyết định chủ dự án. Không đến người lập, nhân viên, trưởng / phó bộ phận khác |
 | PRI-04 | Một phần | Hồ sơ đánh giá tác động (luồng báo cáo tuần) cần ghi: nguồn "việc của bộ phận người lập không xem được", người nhận như bảng trên, kênh MCP |
 | DET-05 | Đầy đủ | Nhật ký `WEEKLY_REPORT_SUBMIT` ghi thêm `autoAdded` (số dòng tự bổ sung) |

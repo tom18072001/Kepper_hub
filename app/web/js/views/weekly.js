@@ -217,8 +217,8 @@ const testKey = r => esc(r.ref || r.key);
 const autoChip = r => (r.auto ? ` <span class="wk-chip c-idle" title="Việc của bộ phận mà người lập không xem được — tiến độ, hạn, nguy cơ lấy từ hệ thống" data-testid="wk-auto-${testKey(r)}">Hệ thống tự bổ sung</span>` : '');
 
 function rowHtml(list, r, i) {
-  // Dòng "Hệ thống tự bổ sung": máy chủ dựng lại ở mỗi lần nộp — chỉ đọc trên biểu mẫu.
-  const f = st.week, ed = st.rep.canEdit && !r.auto, linked = !!r.itemId;
+  // Dòng "Hệ thống tự bổ sung": tiến độ / hạn / nguy cơ do máy tính; người được sửa nhập được giải trình (không bỏ được dòng).
+  const f = st.week, ed = st.rep.canEdit, linked = !!r.itemId;
   const dis = ed ? '' : 'disabled';
   const pct = r.pctLocked
     ? `<label class="wk-f">% hoàn thành<input type="number" value="${esc(r.pct)}" readonly title="Tự tính từ việc nhánh của hạng mục"><span class="wk-note">tự tính từ việc nhánh</span></label>`
@@ -230,7 +230,7 @@ function rowHtml(list, r, i) {
     <div class="wk-row-head">${linked ? `<span class="code">${esc(r.ref)}</span>${r.step ? `<span>Bước ${esc(r.step)}</span>` : ''}${r.critical ? '<span class="crit" title="Đường găng"><svg class="gl gl-crit" viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="4.5" fill="currentColor"/></svg> găng</span>' : ''}${r.milestone ? '<span title="Mốc"><svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg> mốc</span>' : ''}<span class="wk-chip c-idle">${srcLabel}</span>${list === 'risks' ? '<span class="wk-chip c-warn">chưa khởi động</span>' : ''}${autoChip(r)}`
       : `<span>${list === 'results' ? 'Hạng mục' : 'Việc'} ${i + 1}</span>${r.source === 'TGĐ giao' ? '<span class="wk-chip c-gold">TGĐ giao</span>' : ''}`}
       ${risk ? `<span class="wk-chip c-bad" data-testid="wk-riskchip-${testKey(r)}">${esc(risk)}</span>` : ''}
-      ${ed ? `<span class="x">${list === 'results' && r.status !== DONE && !r.itemId ? `<button class="btn x" type="button" data-move="${i}" title="Chuyển sang Phần II (đang thực hiện, chưa hoàn thành)">→ Đang thực hiện</button>` : ''}${r.mandatory ? '<span class="wk-chip c-idle" title="Hạng mục bắt buộc báo cáo (QC-TH-01 Điều 4) — cập nhật tình trạng, không bỏ">bắt buộc</span>' : `<button class="btn x" type="button" data-del="${list}" data-i="${i}" title="Bỏ khỏi báo cáo tuần này">Bỏ</button>`}</span>` : ''}</div>
+      ${ed ? `<span class="x">${list === 'results' && r.status !== DONE && !r.itemId ? `<button class="btn x" type="button" data-move="${i}" title="Chuyển sang Phần II (đang thực hiện, chưa hoàn thành)">→ Đang thực hiện</button>` : ''}${r.mandatory || r.auto ? '<span class="wk-chip c-idle" title="Hạng mục bắt buộc báo cáo (QC-TH-01 Điều 4) — cập nhật tình trạng, không bỏ">bắt buộc</span>' : `<button class="btn x" type="button" data-del="${list}" data-i="${i}" title="Bỏ khỏi báo cáo tuần này">Bỏ</button>`}</span>` : ''}</div>
     ${linked ? `<div class="wk-title">${esc(r.task)}</div>
       <p class="wk-note">Phụ trách: ${!r.ownerIds?.length && ed ? `<span style="display:inline-block;min-width:220px">${ownerSelect(r)}</span>` : ownersText(r.ownerIds)} · Deadline <b>${fmtDY(r.due)}</b>${list !== 'results' && r.start ? ` · Bắt đầu ${fmtDY(r.start)}` : ''}</p>
       <div class="r-meta m3">${status}${pct}${list === 'ongoing' ? `<label class="wk-f">Việc sẽ làm tuần tới<input data-k="next" value="${esc(r.next)}" placeholder="Bước tiếp theo cụ thể" ${dis} data-testid="wk-next-${testKey(r)}"></label>` : '<span></span>'}</div>`
@@ -331,7 +331,7 @@ async function saveDraft() {
   const { week, dept, form: data } = p;
   try {
     const r = await api('/api/weekly/report', { method: 'PUT', body: { week, departmentId: dept, data, baseUpdatedAt: st.baseUpdatedAt } });
-    if (week === st.week && dept === st.dept) { st.baseUpdatedAt = r.updatedAt; const m = $('#wkSaveMsg'); if (m) m.textContent = `Bản nháp lưu lúc ${fmtTime(r.updatedAt)}`; st.dirty = false; }
+    if (week === st.week && dept === st.dept) { st.baseUpdatedAt = r.updatedAt; const m = $('#wkSaveMsg'); if (m) m.textContent = `Bản nháp lưu lúc ${fmtTime(r.updatedAt)}${r.warning ? ` · ${r.warning}` : ''}`; st.dirty = false; }
   } catch (error) {
     const m = $('#wkSaveMsg');
     if (error.code === 'DRAFT_CONFLICT') { if (m) m.innerHTML = `<b class="danger-t">${esc(errorMessage(error))}</b> <button type="button" class="btn x" id="wkReload" data-testid="wk-reload">Tải lại</button>`; $('#wkReload')?.addEventListener('click', () => drawReport(freshBody())); }
@@ -374,16 +374,23 @@ async function submit(btn) {
   const errs = $('#wkErrs');
   btn.disabled = true; clearTimeout(st.saveTimer); st.saveTimer = null; st.pending = null;
   try {
-    const body = { week: st.week, departmentId: st.dept, data: st.form };
+    const body = { week: st.week, departmentId: st.dept, data: st.form, baseUpdatedAt: st.baseUpdatedAt }; // có người vừa sửa → 409
     const rec = $('#wkReceived')?.value; if (rec) body.receivedAt = fromLocal(rec);
     const r = await api('/api/weekly/submit', { method: 'POST', body });
     errs.hidden = true;
     toast(`Đã gửi báo cáo — ${r.status.label}${r.progressUpdated ? ` · cập nhật % ${r.progressUpdated} hạng mục MTL` : ''}${r.onBehalf ? ' · nhập thay: không ghi % vào MTL' : ''}`, 'ok');
+    if (r.warning) toast(r.warning, '', { ms: 9000 }); // máy chủ giữ nguyên dòng bạn không có quyền sửa — báo lại, không im lặng
     if (r.progressSkipped || r.progressConflicts?.length) toast(`${r.progressConflicts?.length ? `Không ghi % ${r.progressConflicts.join(', ')} vì MTL vừa được người phụ trách cập nhật. ` : ''}${r.progressSkipped ? `${r.progressSkipped} hạng mục chỉ người được giao / lãnh đạo bộ phận chủ trì cập nhật %.` : ''}`, '', { ms: 9000 });
     await drawReport(freshBody()); drawDeadline();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (error) {
     btn.disabled = false;
+    if (error.code === 'REPORT_CONFLICT') {
+      errs.hidden = false; errs.innerHTML = `<li>${esc(errorMessage(error))} <button type="button" class="btn x" id="wkReloadSubmit" data-testid="wk-reload-submit">Tải lại</button></li>`;
+      $('#wkReloadSubmit')?.addEventListener('click', () => drawReport(freshBody()));
+      errs.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     const list = error.body?.errors || [errorMessage(error)];
     if (error.body?.data) { st.form = error.body.data; markAuto(); drawLists(); } // tình trạng dòng MTL đã được máy chủ tính lại
     errs.hidden = false; errs.innerHTML = list.map(x => `<li>${esc(x)}</li>`).join('');

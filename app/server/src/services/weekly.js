@@ -385,7 +385,7 @@ const viewFor = (data, canSee) => (data ? { ...data, results: (data.results || [
 // Bản tóm tắt theo người xem: báo cáo bộ phận mình chỉ còn dòng họ xem được; danh sách nguy cơ: dòng không xem được giữ để ĐẾM, bỏ tên.
 // Số liệu (kpis, rows[].done / ongoing / risk) không đổi — giống nhau với mọi người xem.
 // Yêu cầu hỗ trợ: ẩn tên việc / nội dung khi việc thuộc dự án kín của bộ phận khác (x.secret), hoặc việc của bộ phận mình mà người xem không xem được.
-const hiddenHelp = h => ({ fromId: h.fromId, from: h.from, to: h.to, toKey: h.toKey, by: h.by, status: h.status, conclusion: h.conclusion, hidden: true, task: '', what: '', ref: '', itemId: null });
+const hiddenHelp = h => ({ fromId: h.fromId, from: h.from, to: h.to, toKey: h.toKey, by: h.by, status: h.status, conclusion: null, hidden: true, task: '', what: '', ref: '', itemId: null });
 function briefFor(view, canSee, ownDeptId = null) {
   const hideHelp = h => h.itemId && (h.fromId === ownDeptId ? !canSee(h.itemId) : !!h.secret);
   return { ...view, rows: view.rows.map(r => (r.report ? { ...r, report: viewFor(r.report, canSee) } : r)),
