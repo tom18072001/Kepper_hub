@@ -184,7 +184,7 @@ async function search(base, q, { limit = 200, maxVisited = 20000, maxDepth = 12,
       const ms = Math.max(1, Math.min(cfg.timeoutMs, deadline - Date.now()));
       try { list = await op(() => fsp.readdir(dir.abs, { withFileTypes: true }), { ms, trip: ms >= cfg.timeoutMs }); }
       catch (e) {
-        if (e.code === 'ETIMEDOUT' && Date.now() >= deadline) { truncated = true; return; }
+        if (e.code === 'ETIMEDOUT' && (ms < cfg.timeoutMs || Date.now() >= deadline)) { truncated = true; return; } // hết ngân sách (bộ hẹn giờ có thể nổ sớm vài ms)
         if (dir.rel === '' || e.code === 'NAS_TRIPPED' || e.code === 'ETIMEDOUT') throw nasError(e); // kho treo → 503
         return; // thư mục con không đọc được (quyền, vừa bị xoá): bỏ qua
       }

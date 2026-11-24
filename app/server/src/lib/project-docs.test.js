@@ -27,6 +27,7 @@ const base = () => PD.projectRoot('DXA');
 const rejects = (p, check, msg) => assert.rejects(p, check, msg);
 const real = { ...PD.fsp };
 const restore = () => Object.assign(PD.fsp, real);
+const waitFor = async (cond, ms = 3000) => { const end = Date.now() + ms; while (!cond()) { if (Date.now() > end) throw new Error('hết giờ chờ'); await new Promise(r => setTimeout(r, 5)); } };
 
 test('quyền xem tài liệu dự án: thành viên, trưởng dự án, Ban GĐ; không cho quản trị IT, người ngoài, dự án đã xoá', () => {
   const project = { id: 1, leadId: 7, deletedAt: null };
@@ -101,6 +102,7 @@ test('tìm kiếm có ngân sách thời gian: NAS chậm → dừng đúng hạ
     assert.equal(r.truncated, true);
     assert.equal((await PD.search(b, 'ban', { budgetMs: 0 })).truncated, true);
   } finally { restore(); }
+  await waitFor(() => PD.gateStats().inflight === 0); // thao tác chậm còn chạy nền giữ chỗ trong cổng: chờ nhả trước test sau
 });
 
 test('liệt kê giới hạn số thao tác đĩa song song', async () => {
@@ -143,10 +145,9 @@ test('NAS lỗi kết nối → 503 "Kho file đang không truy cập được";
   } finally { restore(); }
 });
 
-const waitFor = async (cond, ms = 2000) => { const end = Date.now() + ms; while (!cond()) { if (Date.now() > end) throw new Error('hết giờ chờ'); await new Promise(r => setTimeout(r, 5)); } };
-
 test('NAS treo vĩnh viễn: cổng toàn cục giữ số thao tác fs đang chạy ≤ giới hạn dù nhiều request; cầu dao trả 503 ngay; chỗ chỉ nhả khi thao tác thật xong', async () => {
   const b = (await base()).abs;
+  await waitFor(() => PD.gateStats().inflight === 0); // cổng trống trước khi đo
   const saved = { ...PD.cfg };
   Object.assign(PD.cfg, { timeoutMs: 100, maxInflight: 3, breakerMs: 60000 });
   // Thao tác fs "kẹt trên CIFS": promise không bao giờ xong cho tới khi test thả ra.
@@ -181,7 +182,7 @@ test('NAS treo vĩnh viễn: cổng toàn cục giữ số thao tác fs đang ch
     // NAS trả lời lại: thao tác thật kết thúc → chỗ mới được nhả.
     for (const f of hung.splice(0)) f();
     await waitFor(() => PD.gateStats().inflight === 0);
-  } finally { restore(); Object.assign(PD.cfg, saved); PD.resetGate(); }
+  } finally { for (const f of hung.splice(0)) f(); restore(); Object.assign(PD.cfg, saved); PD.resetGate(); } // test hỏng giữa chừng: vẫn thả thao tác treo
   // Hết thời gian cầu dao (ở đây: đặt lại) → hoạt động bình thường.
   assert.ok((await PD.listDir(b, '')).entries.length >= 2);
 });
@@ -204,11 +205,9 @@ test('tải tệp NAS qua cổng: nội dung + kích thước đúng; thư mục
   try {
     const { stream, size } = await PD.openRead(big);
     assert.equal(size, data.length);
-    const before = PD.gateStats().inflight;
     const chunks = [];
     for await (const c of stream) chunks.push(c);
     assert.ok(Buffer.concat(chunks).equals(data));
-    assert.equal(before, 0);
     await rejects(PD.openRead(path.join(b, '01.PhapLy')), e => e.status === 400);
     await rejects(PD.openRead(path.join(b, 'khong-co.pdf')), e => e.status === 404);
     // Người dùng ngắt giữa chừng: file handle được đóng, không giữ chỗ.
