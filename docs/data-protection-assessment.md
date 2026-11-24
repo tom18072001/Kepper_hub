@@ -977,8 +977,8 @@ Việc chưa bắt đầu thì không báo cáo, trừ khi đã có nguy cơ ch�
     phiên Claude của người dùng: là xử lý DLCN qua dịch vụ AI, cần có trong hồ sơ đánh giá tác động (PRI-04).
   Không đổi ma trận quyền. Trước đây chỉ hạng mục MTL đi theo luồng này.
 - Không có kênh mới ra ngoài. MCP gọi cùng endpoint; định dạng chỉ thêm trường (`risks`, `risk`, `riskNote`, `started`, `kpis.done/ongoing/risk`), không bỏ trường nào.
-- Điền sẵn chỉ đọc việc thường của MỘT bộ phận (chủ trì / phòng của dự án / người phụ trách thuộc bộ phận). Phạm vi vẫn phụ thuộc quyền xem của người lập
-  (nhân viên lập có thể không thấy việc giao riêng trưởng phòng qua sổ giao việc) — chờ chủ dự án quyết hướng xử lý.
+- Điền sẵn chỉ đọc việc thường của MỘT bộ phận (chủ trì / phòng của dự án / người phụ trách thuộc bộ phận). Việc người lập không xem được:
+  xem mục "Dòng Hệ thống tự bổ sung" bên dưới (chủ dự án quyết 24/11/2026).
 
 ### 3. Rà năng lực (thay đổi)
 
@@ -997,6 +997,44 @@ Việc chưa bắt đầu thì không báo cáo, trừ khi đã có nguy cơ ch�
 - **Khuyến nghị 2 (Bắt buộc):** cập nhật hồ sơ đánh giá tác động xử lý DLCN (PRI-04) như mục 3, gồm kênh MCP.
 - **Khuyến nghị 3 (Nên có):** soát các bản tổng hợp đã sao chép / gửi qua Claude trước bản sửa: trưởng / phó bộ phận có thể đã nhận văn bản đầy đủ của bộ phận khác.
 - Rủi ro: "nguy cơ chậm" tính theo ngày xem / ngày nộp, không theo thứ Sáu của tuần báo cáo. Bản đã nộp giữ nguyên nhãn lúc nộp. Bản nháp mở lại sẽ được tính lại khi bấm "Làm mới".
+
+### 5. Dòng "Hệ thống tự bổ sung" (mục S10 — chủ dự án chọn "Tự đưa vào", 24/11/2026)
+
+**Là gì.** Tập việc phải báo cáo của một bộ phận (xong trong tuần / đang làm / nguy cơ chậm) nay tính theo **phạm vi bộ phận**, không theo quyền xem
+của người lập. Quy tắc chọn việc giống điền sẵn (`deptCandidates`). Biểu mẫu của người lập vẫn chỉ có việc họ được xem.
+Lúc nộp (`POST /api/weekly/submit`), máy chủ đọc mọi việc của bộ phận bằng phạm vi nội bộ `DEPT_SCOPE` (chỉ dùng trong máy chủ, không trả thẳng cho ai).
+Việc người nộp không xem được thì máy chủ thêm vào bản nộp, có cờ `auto: true`, nhãn "Hệ thống tự bổ sung":
+- tên, mã, hạn, người phụ trách, %, tình trạng, nguy cơ lấy từ hệ thống;
+- không có nguyên nhân / giải pháp / đề nghị hỗ trợ, không bắt người lập ghi;
+- không ghi % ngược vào việc;
+- không thêm khi việc cha đã có trong báo cáo (không đếm hai lần);
+- dữ liệu gửi lên không tự gắn được cờ này (`sanitize` bỏ).
+
+Ví dụ: TGĐ giao trưởng phòng qua sổ giao việc, nhân viên lập báo cáo. Bản nộp có việc đó, nhân viên vẫn không thấy.
+
+**Ai thấy.**
+
+| Nơi xem | Ban GĐ, thư ký, PMO (`weekly.summary.detail`) | Người vốn xem được việc (vd. trưởng phòng được giao) | Người lập, nhân viên khác | Trưởng / phó (bản tóm tắt) |
+|---|---|---|---|---|
+| `/api/weekly/report`, `/report/versions`, MCP `kepper_weekly_report` | Có | Có (kiểm quyền xem từng việc) | Không | Không, trừ việc họ xem được |
+| `/api/weekly/summary` (số liệu, `rows`, `risks`, `text`), MCP `kepper_weekly_summary` | Có, đếm vào KPI, văn bản ghi "(hệ thống tự bổ sung)" | Bản tóm tắt: không | — | Không có, **không đếm** (dựng từ báo cáo đã bỏ dòng tự bổ sung) |
+| Thông báo "Tổng hợp giao ban" (gửi cả trưởng / phó) | Số liệu không đếm dòng tự bổ sung | | | |
+| Bản Word (Dashboard) | Đếm theo quyền xem của người xuất. Ban GĐ có `work.view` toàn hệ thống nên có cả việc này | | | |
+
+Bản nộp vẫn băm SHA-256 trên bản đầy đủ (có dòng tự bổ sung). Bản người không có quyền nhận là bản đã lọc. Mã băm vẫn là của bản đầy đủ.
+
+**Rà năng lực.**
+
+| Mã | Trạng thái | Ghi chú |
+|---|---|---|
+| GOV-01 | Đầy đủ | Không đổi ma trận quyền. Lọc đầu ra theo `weekly.summary.detail` + quyền xem việc (`itemVisibleWhere`) |
+| PRE-01 | Đầy đủ | Máy chủ tự sinh dòng tự bổ sung; người dùng không chèn hay giả cờ `auto` được |
+| PRI-01 | Một phần | **Tên việc hạn chế** (sổ giao việc) nay vào báo cáo Bảo mật của bộ phận và đến Ban GĐ / thư ký / PMO, đúng quyết định chủ dự án. Không đến người lập, nhân viên, trưởng / phó bộ phận khác |
+| PRI-04 | Một phần | Hồ sơ đánh giá tác động (luồng báo cáo tuần) cần ghi: nguồn "việc của bộ phận người lập không xem được", người nhận như bảng trên, kênh MCP |
+| DET-05 | Đầy đủ | Nhật ký `WEEKLY_REPORT_SUBMIT` ghi thêm `autoAdded` (số dòng tự bổ sung) |
+
+**Khuyến nghị.** (Bắt buộc) bổ sung PRI-04 như trên. (Nên có) thư ký / PMO lưu ý: dòng tự bổ sung không có giải pháp của bộ phận.
+Việc chậm cần giải trình thì hỏi người phụ trách trực tiếp tại giao ban.
 
 ## KPI & phân tích thống kê công việc (Ban giám đốc) — 24/11/2026
 

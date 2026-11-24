@@ -325,3 +325,53 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   expect(await audit('WEEKLY_SUMMARY_COPY')).toBeGreaterThanOrEqual(1);
   expect(await audit('WEEKLY_MEETING_PUBLISH')).toBe(1);
 });
+
+test('21. Mục S10 — việc Giám đốc giao trưởng phòng qua sổ, nhân viên lập báo cáo: hệ thống tự bổ sung, chỉ người được xem thấy', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const as = async u => { const p = await (await browser.newContext()).newPage(); await login(p, u); return p; };
+  const json = async (p, path, init) => { const r = await apiAs(p, path, init); expect(r.status(), await r.text()).toBeLessThan(300); return r.json(); };
+  const post = (p, path, data) => json(p, path, { method: 'POST', headers: { 'content-type': 'application/json' }, data });
+  const [gd, nv, tp, tc] = [await as('giamdoc'), await as('nv.kythuat'), await as('tp.kythuat'), await as('tb.taichinh')];
+  const tpUser = await json(tp, '/api/me'), kt = tpUser.departmentId;
+  // Sổ giao việc (mỗi người chỉ thấy việc liên quan đến mình); Giám đốc giao trưởng phòng Kỹ thuật, đã quá hạn, chưa khởi động.
+  const reg = await post(gd, '/api/projects', { key: 'SGV', name: 'Sổ giao việc Ban GĐ (giả)', visibility: 'ASSIGNED' });
+  const title = 'Đàm phán giá đất lô C (giả)';
+  const item = await post(gd, `/api/projects/${reg.id}/items`, { title, assigneeIds: [tpUser.id], leadDepartmentId: kt, dueDate: vnDate(-3) });
+  // Nhân viên không xem được việc → biểu mẫu không có.
+  expect((await apiAs(nv, `/api/items/${item.id}`)).status()).toBeGreaterThanOrEqual(403);
+  const ctx = await json(nv, '/api/weekly/context');
+  const rep = await json(nv, '/api/weekly/report');
+  const pre = rep.prefill;
+  expect(JSON.stringify(pre).includes(title)).toBe(false);
+  const me = await json(nv, '/api/me');
+  for (const x of [...pre.results, ...pre.ongoing, ...pre.risks]) Object.assign(x, { ownerIds: x.ownerIds.length ? x.ownerIds : [me.id], cause: 'Chờ (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF', next: x.next || 'Tiếp tục (giả)' });
+  pre.ongoing.push({ task: 'Kiểm tra hồ sơ kỹ thuật (giả)', source: 'Phát sinh', ownerIds: [me.id], due: vnDate(5), status: 'Đúng tiến độ', pct: 30, next: 'Hoàn thiện (giả)' });
+  for (const p of pre.plans) Object.assign(p, { ownerIds: p.ownerIds?.length ? p.ownerIds : [me.id], output: 'Biên bản (giả)' });
+  await post(nv, '/api/weekly/submit', { week: ctx.week, data: pre });
+  const rowsOf = d => [...d.results, ...d.ongoing, ...d.risks];
+  // Ban GĐ (tổng hợp đầy đủ): có việc, nhãn tự bổ sung, ở Phần III (trễ hạn), đếm vào KPI; trưởng phòng (vốn xem được việc) thấy trong báo cáo bộ phận.
+  const full = await json(gd, `/api/weekly/summary?week=${ctx.week}`);
+  const ktRow = full.rows.find(r => r.id === kt);
+  const auto = rowsOf(ktRow.report).find(r => r.itemId === item.id);
+  expect(auto.auto).toBe(true); expect(auto.risk).toBe('OVERDUE');
+  expect(ktRow.report.risks.some(r => r.itemId === item.id)).toBe(true);
+  expect(ktRow.risk).toBeGreaterThanOrEqual(1);
+  expect(full.text).toContain(`${title} (hệ thống tự bổ sung)`);
+  const gdRep = await json(gd, `/api/weekly/report?week=${ctx.week}&departmentId=${kt}`);
+  expect(rowsOf(gdRep.report.data).some(r => r.itemId === item.id && r.auto)).toBe(true);
+  const tpRep = await json(tp, `/api/weekly/report?week=${ctx.week}`);
+  expect(rowsOf(tpRep.report.data).some(r => r.itemId === item.id && r.auto)).toBe(true);
+  // Người lập: báo cáo đã nộp của bộ phận mình không có dòng đó.
+  const nvRep = await json(nv, `/api/weekly/report?week=${ctx.week}`);
+  expect(JSON.stringify(nvRep.report.data).includes(title)).toBe(false);
+  // Bản tóm tắt (trưởng phòng Kỹ thuật, trưởng ban Tài chính): không có việc, kể cả trường text (MCP kepper_weekly_summary dùng chung).
+  for (const p of [tp, tc]) {
+    const brief = await json(p, `/api/weekly/summary?week=${ctx.week}`);
+    expect(JSON.stringify(brief).includes(title)).toBe(false);
+    expect(brief.text.includes('tự bổ sung')).toBe(false);
+  }
+  // Giao diện Ban GĐ: chi tiết bộ phận có nhãn "Hệ thống tự bổ sung".
+  await gd.goto(`/#/tuan/tong-hop?w=${ctx.week}`);
+  await gd.getByTestId(`wk-detail-${kt}`).locator('summary').click();
+  await expect(gd.getByTestId(`wk-detail-${kt}`).getByTestId(`wk-auto-${item.code}`)).toContainText('Hệ thống tự bổ sung');
+});

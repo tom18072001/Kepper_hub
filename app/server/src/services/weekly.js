@@ -333,10 +333,35 @@ function adoptMandatory(data, prefill) {
   }
   return out;
 }
+// ---------- Dòng "Hệ thống tự bổ sung" (quyết định chủ dự án 24/11/2026, mục S10) ----------
+// Tập việc phải báo cáo của bộ phận tính theo PHẠM VI BỘ PHẬN (deptCandidates trên mọi việc của bộ phận), không theo quyền xem của
+// người lập. Việc người lập không xem được (vd. TGĐ giao trưởng phòng qua sổ giao việc, nhân viên lập báo cáo) không hiện trên biểu mẫu;
+// lúc nộp, máy chủ tự thêm vào bản nộp với tiến độ / hạn / nguy cơ lấy từ hệ thống, gắn auto: true, không bắt ghi giải pháp.
+// Ai được thấy: người xem tổng hợp đầy đủ và người vốn xem được việc đó (routes/weekly.js); bản tóm tắt và văn bản tóm tắt bỏ hẳn.
+const AUTO_LABEL = 'Hệ thống tự bổ sung';
+const isAuto = r => !!r?.auto;
+// full: buildPrefill trên MỌI việc của bộ phận (cùng tuần, cùng bản nộp tuần trước). visibleIds: việc người nộp xem được.
+// parentOf: id việc → id việc cha (bỏ dòng tự bổ sung khi việc cha / tổ tiên đã có trong báo cáo — không đếm hai lần).
+function addAutoRows(data, full, visibleIds, parentOf = new Map()) {
+  const out = { ...data, results: [...data.results], ongoing: [...data.ongoing], risks: [...(data.risks || [])] };
+  const have = new Set(allRows(out).map(r => r.itemId).filter(Boolean));
+  const covered = id => { let p = parentOf.get(id), guard = 0; while (p != null && guard++ < 20) { if (have.has(p)) return true; p = parentOf.get(p); } return false; };
+  let n = 0;
+  for (const list of ['results', 'ongoing', 'risks']) for (const r of full[list] || []) {
+    if (!r.itemId || visibleIds.has(r.itemId) || have.has(r.itemId) || covered(r.itemId)) continue;
+    have.add(r.itemId); n++;
+    out[list].push({ ...structuredClone(r), ...blankIssue(), next: '', carried: false, mandatory: false, pctLocked: true, auto: true });
+  }
+  return { data: out, added: n };
+}
+// Bản không có dòng tự bổ sung (bản tóm tắt, thông báo tổng hợp, người không xem được việc).
+const withoutAuto = (data, keep = () => false) => (data ? { ...data, results: (data.results || []).filter(r => !isAuto(r) || keep(r)),
+  ongoing: (data.ongoing || []).filter(r => !isAuto(r) || keep(r)), risks: (data.risks || []).filter(r => !isAuto(r) || keep(r)) } : data);
+
 // % đề xuất ghi ngược vào MTL: hạng mục liên kết, không tự tính từ việc nhánh, % khác lúc điền sẵn (pct0).
 // Máy chủ chỉ ghi khi % trong MTL vẫn bằng pct0 (chưa ai đổi từ lúc điền sẵn) — tránh đè số mới bằng số cũ khi gửi lại.
 const writeBacks = data => [...data.results, ...data.ongoing, ...(data.risks || [])]
-  .filter(r => r.itemId && !r.pctLocked && r.pct !== '' && r.pct !== r.pct0)
+  .filter(r => r.itemId && !r.auto && !r.pctLocked && r.pct !== '' && r.pct !== r.pct0)
   .map(r => ({ itemId: r.itemId, pct: r.pct }));
 
 // ---------- Tình trạng nộp (Điều 6) ----------
@@ -384,7 +409,7 @@ function buildSummary({ week: f, depts, reports, notices, meeting = null, action
     const dDone = parts.done.length, dOngoing = parts.ongoing.length, dRisk = parts.risk;
     nDone += dDone; nOngoing += dOngoing;
     for (const x of dRisk) risks.push({ departmentId: d.id, department: d.name, key: x.key, ref: x.ref || '', task: x.task, risk: rowRisk(x, f), due: x.due || '', pct: x.pct ?? '',
-      started: rowStarted(x) });
+      started: rowStarted(x), auto: isAuto(x) });
     for (const x of items) if (needsIssue(x, f) && x.helpFrom && x.helpFrom !== HELP_SELF)
       helps.push({ key: `${d.id}:${safeKey(x.key)}`, fromId: d.id, from: d.name, to: helpTarget(x.helpFrom, deptName), toKey: x.helpFrom, task: x.task, ref: x.ref || '', what: x.helpWhat, by: x.helpBy, status: issueLabel(x, f), cause: x.cause, solution: x.solution, conclusion: md.conclusions?.[`${d.id}:${safeKey(x.key)}`] || null });
     rows.push({ id: d.id, name: d.name, status: st, submittedAt: sent?.firstSubmittedAt || null, lastSubmittedAt: sent?.submittedAt || null, resubmits: sent ? Math.max(0, (sent.submitCount || 1) - 1) : 0,
@@ -451,11 +476,12 @@ function summaryText(sum) {
     if (!any) L.push('- Không có');
   };
   const pctOf = x => (x.pct !== '' && x.pct != null ? ` · ${x.pct}%` : '');
-  list('I. ĐÃ HOÀN THÀNH TRONG TUẦN', d => partsOf(d, f).done, (r, x) => `- [${r.name}] ${x.task}`);
+  const autoOf = x => (isAuto(x) ? ` (${AUTO_LABEL.toLowerCase()})` : '');
+  list('I. ĐÃ HOÀN THÀNH TRONG TUẦN', d => partsOf(d, f).done, (r, x) => `- [${r.name}] ${x.task}${autoOf(x)}`);
   list('II. ĐANG THỰC HIỆN, CHƯA HOÀN THÀNH (chuyển tiếp tuần sau)', d => partsOf(d, f).ongoing,
-    (r, x) => `- [${r.name}] ${x.task}${pctOf(x)}${x.due ? ` · hạn ${fmtD(x.due)}` : ''}${rowRisk(x, f) ? ` · ${rowRisk(x, f)}` : ''}${x.next ? ` — Tuần tới: ${x.next}` : ''}`);
+    (r, x) => `- [${r.name}] ${x.task}${autoOf(x)}${pctOf(x)}${x.due ? ` · hạn ${fmtD(x.due)}` : ''}${rowRisk(x, f) ? ` · ${rowRisk(x, f)}` : ''}${x.next ? ` — Tuần tới: ${x.next}` : ''}`);
   list('III. NGUY CƠ CHẬM TIẾN ĐỘ (trễ hạn / chậm / vướng / sắp hạn / chậm khởi động / đăng ký mà chưa làm)', d => partsOf(d, f).risk,
-    (r, x) => `- [${r.name}] ${x.task} — ${rowRisk(x, f)}${x.due ? ` (hạn ${fmtD(x.due)})` : ''}${pctOf(x)}${x.solution ? ` — Giải pháp: ${x.solution}` : ''}`);
+    (r, x) => `- [${r.name}] ${x.task}${autoOf(x)} — ${rowRisk(x, f)}${x.due ? ` (hạn ${fmtD(x.due)})` : ''}${pctOf(x)}${x.solution ? ` — Giải pháp: ${x.solution}` : ''}`);
   L.push('', 'YÊU CẦU HỖ TRỢ (xử lý 09:15 – 09:25)');
   if (!sum.helps.length) L.push('- Không có');
   for (const g of sum.helps) for (const h of g.list) L.push(`- ${h.from} → ${g.to}: ${h.what} (việc “${h.task}”)${h.by ? `, cần trước ${fmtD(h.by)}` : ''}${h.conclusion ? ` — Kết luận: ${DECISIONS[h.conclusion.decision] || ''}${h.conclusion.note ? ': ' + h.conclusion.note : ''}` : ''}`);
@@ -503,6 +529,6 @@ function fridaysOf(ym, now = new Date(), startWeek = null) {
 module.exports = {
   SOURCES, MTL_SOURCE, TASK_SOURCE, RISK_CODES, STATUSES, DONE, HELP_BGD, HELP_SELF, REASONS, NOTICE_TYPES, ATTENDANCE, DECISIONS, POINTS, POINT_LABEL,
   isDay, addDays, dayOf, at, weekday, currentFriday, isFriday, fmtD, fmtDY, fmtTime, scheduleOf, meetingStarted,
-  isOverdue, needsIssue, issueLabel, rowRisk, riskRows, rowStarted, partsOf, regroup, adoptMandatory, PLAN_NOT_STARTED, riskNoteOf, placeOf, statusFromMtl, taskStatus, deptCandidates, buildPrefill, sanitize, validate, finalize, writeBacks,
+  AUTO_LABEL, isAuto, addAutoRows, withoutAuto, isOverdue, needsIssue, issueLabel, rowRisk, riskRows, rowStarted, partsOf, regroup, adoptMandatory, PLAN_NOT_STARTED, riskNoteOf, placeOf, statusFromMtl, taskStatus, deptCandidates, buildPrefill, sanitize, validate, finalize, writeBacks,
   submissionStatus, absenceNoticed, SUBMITTED, buildSummary, briefSummary, summaryText, summaryView, compliance, fridaysOf, stableStringify,
 };

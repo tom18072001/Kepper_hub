@@ -91,10 +91,12 @@ async function openActions(prisma, f, departmentId = null) {
   return { actions, rows };
 }
 
-async function summaryOf(prisma, week, now = new Date()) {
+// auto: false → bỏ dòng "Hệ thống tự bổ sung" trước khi tổng hợp (bản tóm tắt cho trưởng / phó, thông báo gửi cả trưởng / phó) —
+// số liệu bản tóm tắt không để lộ việc người nhận không được xem (services/weekly.js addAutoRows).
+async function summaryOf(prisma, week, now = new Date(), { auto = true } = {}) {
   const cfg = await weeklyConfig(prisma), rd = await requiredDepartments(prisma, cfg);
   const [reports, notices, meeting] = await Promise.all([
-    prisma.weeklyReport.findMany({ where: { week } }), prisma.weeklyNotice.findMany({ where: { week }, orderBy: { id: 'asc' } }), meetingOf(prisma, week),
+    prisma.weeklyReport.findMany({ where: { week } }).then(rs => (auto ? rs : rs.map(r => ({ ...r, data: WK.withoutAuto(r.data) })))), prisma.weeklyNotice.findMany({ where: { week }, orderBy: { id: 'asc' } }), meetingOf(prisma, week),
   ]);
   const { actions, rows: actionRows } = await openActions(prisma, week);
   // Danh sách phải nộp của tuần được CHỤP lại sau hạn nộp — đổi thiết lập về sau không làm đổi điểm các tuần đã qua.
@@ -148,7 +150,7 @@ async function runSummaryNotice(prisma, now = new Date()) {
   for (const week of [cf, WK.addDays(cf, -7)]) {
     const S = WK.scheduleOf(week, await meetingOf(prisma, week));
     if (S.meetingDay !== today || S.skip) continue;
-    const { sum } = await summaryOf(prisma, week, now);
+    const { sum } = await summaryOf(prisma, week, now, { auto: false }); // người nhận gồm cả trưởng / phó (bản tóm tắt)
     const k = sum.kpis;
     const sent = await notify(prisma, await summaryViewerIds(prisma), { type: 'WEEKLY_SUMMARY', title: `Tổng hợp giao ban ${WK.fmtD(today)}: ${k.submitted}/${k.total} bộ phận đã nộp`, body: `${k.stuck} chậm/vướng · ${k.overdue} quá hạn · ${k.helps} yêu cầu hỗ trợ`, link: `#/tuan/tong-hop?w=${week}` });
     return { week, sent };
