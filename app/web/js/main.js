@@ -42,7 +42,7 @@ function show(id) {
 function logout({ keepDrafts = false, reload = keepDrafts !== true } = {}) {
   if (reload) setTimeout(() => location.reload()); // chạy sau khi các dòng dưới đã dọn phiên
   stopRealtime();
-  setToken(null); store.me = null; ready = false; document.title = 'Kepler Hub'; if (keepDrafts !== true) clearDrafts(); closeItem(); lastViewKey = ''; renderingKey = ''; shownPath = ''; $('#view').innerHTML = ''; show('loginPage'); $('#loginUser').focus();
+  setToken(null); store.me = null; ready = false; document.title = 'Kepler Hub'; if (keepDrafts !== true) clearDrafts(); closeItem(); lastViewKey = ''; renderingKey = ''; $('#view').innerHTML = ''; show('loginPage'); $('#loginUser').focus();
 }
 
 // Cập nhật thời gian thực: tải lại bảng của dự án đang xem và panel đang mở (gộp nhiều sự kiện liên tiếp).
@@ -221,18 +221,7 @@ document.addEventListener('keydown', e => {
 // Router
 // ready: đã tải xong danh mục (enter). Đổi địa chỉ trong lúc đang vào ứng dụng thì chưa vẽ — enter() vẽ một lần theo địa chỉ lúc xong.
 // renderingKey: trang đang vẽ dở; navSeq: số lượt điều hướng (lượt vẽ nền không tính) — lượt vẽ cũ không mở / đóng panel thay lượt mới.
-// shownPath: đường dẫn của lượt điều hướng gần nhất (biết đang đổi tab trong cùng một dự án).
-let renderToken = 0, lastViewKey = '', renderingKey = '', navSeq = 0, ready = false, shownPath = '';
-// Sang trang khác: thay #view bằng phần tử mới (như trong index.html), chuyển nội dung đang hiện sang để không nháy trắng.
-// Lượt vẽ cũ còn chờ dữ liệu (trang trước, vẽ nền khi có thông báo, vẽ lại sau khi bấm duyệt…) giữ phần tử cũ đã tách khỏi trang:
-// về muộn cũng chỉ ghi vào đó, không đè lên trang người dùng vừa chuyển tới. Trong trang: root.isConnected = còn là trang đang xem.
-const VIEW_SHELL = $('#view').cloneNode(false);
-function freshView() {
-  const old = $('#view'), view = VIEW_SHELL.cloneNode(false);
-  view.append(...old.childNodes);
-  old.replaceWith(view);
-  return view;
-}
+let renderToken = 0, lastViewKey = '', renderingKey = '', navSeq = 0, ready = false;
 // Tiêu đề tab đặt ngay khi đổi route (trước khi tải dữ liệu), để tab không hiện URL thô.
 function pageTitle(parts) {
   const tail = 'Kepler Hub';
@@ -285,16 +274,12 @@ export async function route({ background = false } = {}) {
   }
   lastViewKey = viewKey;
   if (!background) document.title = pageTitle(parts);
-  // Đổi tab / bộ lọc trong cùng một dự án: giữ #view — trang dự án dùng lại dữ liệu đã tải và tự bỏ lượt vẽ cũ (stillCurrent).
-  const sameProject = parts[0] === 'projects' && parts.length === 2 && path === shownPath;
-  const view = background || sameProject ? $('#view') : freshView();
-  if (!background) shownPath = path;
+  const view = $('#view');
   // Trang trước có thể đã gán trình xử lý lên #view — gỡ để không chạy nhầm ở trang sau.
   if (!background) { view.onclick = null; view.onchange = null; view.oninput = null; view.onkeydown = null; }
   const token = ++renderToken, seq = background ? navSeq : ++navSeq;
   if (!background) renderingKey = viewKey;
-  // Thanh vị trí nằm ngoài #view: lượt vẽ cũ (đã có lượt điều hướng mới) không ghi đè.
-  const setCrumbs = html => { if (seq === navSeq) $('#crumbs').innerHTML = html; };
+  const setCrumbs = html => { $('#crumbs').innerHTML = html; };
   // Mở / đóng panel theo URL lúc vẽ xong (có thể đã thêm ?item= trong lúc chờ); đã sang trang khác thì để lượt mới lo.
   const syncPanel = () => {
     if (background || seq !== navSeq) return;

@@ -38,8 +38,7 @@ export async function renderApprovals(root, params, setCrumbs) {
   const counts = { queue: queue.length, extensions: extensions.filter(x => x.canDecide).length, proposals: proposals.length, hr: hrLeaves.length + hrAtts.length, sent: sent.filter(x => x.status === 'PENDING').length };
   const tab = TABS.some(([k]) => k === params.get('tab')) ? params.get('tab')
     : counts.queue || (!counts.extensions && !counts.proposals && !counts.hr) ? 'queue' : counts.extensions ? 'extensions' : counts.proposals ? 'proposals' : 'hr';
-  // Lượt vẽ về muộn (người dùng đã sang tab / trang khác: root đã tách khỏi trang) không sửa địa chỉ của trang mới.
-  if (params.get('tab') !== tab && root.isConnected && /^#\/approvals(\?|$)/.test(location.hash)) replaceHashParams({ tab });
+  if (params.get('tab') !== tab && /^#\/approvals(\?|$)/.test(location.hash)) replaceHashParams({ tab });
   const lists = { queue, extensions, proposals, sent };
   // Tab Nhân sự vẽ riêng (không có dự án / phòng để lọc).
   const rows = tab === 'hr' ? [] : lists[tab];

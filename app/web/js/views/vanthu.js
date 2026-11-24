@@ -74,15 +74,14 @@ export async function renderVanthu(root, id, params, setCrumbs) {
   // Lọc ngay khi gõ / chọn (không có nút "Lọc"): vẽ lại riêng danh sách, ghi bộ lọc lên URL bằng replaceState để tải lại trang vẫn giữ.
   let seq = 0;
   const reload = async () => {
-    // Đã chuyển trang trong lúc chờ gõ. root (không phải form): nội dung cũ còn hiện tới khi trang mới vẽ xong nên form vẫn gắn trên trang.
-    if (!root.isConnected || !form.isConnected) return;
+    if (!form.isConnected) return; // đã chuyển trang trong lúc chờ gõ
     const b = formObj(form), my = ++seq;
     const f = { year: b.year || thisYear, q: String(b.q || '').trim(), overdue: b.overdue === '1', entity: b.entity || '' };
     replaceHashParams({ q: f.q, year: f.year, entity: f.entity, overdue: f.overdue ? '1' : null });
     listEl.setAttribute('aria-busy', 'true');
     try {
       const list = await fetchRows(f);
-      if (my !== seq || !root.isConnected || !form.isConnected) return; // kết quả cũ về muộn
+      if (my !== seq || !form.isConnected) return; // kết quả cũ về muộn
       listEl.innerHTML = listHtml(list, f); bindRows();
     } catch (error) { if (my === seq && form.isConnected) listEl.innerHTML = `<div class="empty">${esc(errorMessage(error))}</div>`; }
     finally { if (my === seq) listEl.removeAttribute('aria-busy'); }

@@ -70,8 +70,7 @@ export async function renderMyWork(root, params, setCrumbs) {
     // Kiểu xem: danh sách theo việc cần làm, hoặc lịch tuần / tháng (nhớ theo người).
     view: params.get('view') === 'cal' || (params.get('view') == null && uiPref('my:view') === 'cal') ? 'cal' : 'list',
   };
-  // Lượt vẽ về muộn (đã sang trang khác: root đã tách khỏi trang) không ghi bộ lọc lên địa chỉ của trang mới.
-  if (assigned && f.role && urlRole !== f.role && root.isConnected) replaceHashParams({ role: f.role });
+  if (assigned && f.role && urlRole !== f.role) replaceHashParams({ role: f.role });
 
   const linkParams = extra => {
     const u = new URLSearchParams();

@@ -70,9 +70,6 @@ export async function renderWeekly(root, tab, params, setCrumbs) {
   // Tab "Tiến độ dự án" cũ trùng trang Tiến độ dự án → giữ link cũ, chuyển sang trang đó (không để lại mục lịch sử).
   if (tab === 'tien-do') { location.replace('#/home'); return; }
   ctx = ctx && ctx.userId === store.me.id ? ctx : { ...(await api('/api/weekly/context')), userId: store.me.id };
-  // Lượt vẽ cũ về muộn (đã sang tuần / tab / trang khác trong lúc tải: root, body đã tách khỏi trang) dừng trước khi đổi `st` —
-  // `st` là của trang Báo cáo tuần ĐANG mở; ghi đè thì bản nháp tự lưu có thể mang nội dung tuần khác. Mỗi draw* cũng dừng sau await.
-  if (!root.isConnected) return;
   st.tab = TABS.some(t => t[0] === tab) ? tab : '';
   // Bộ phận / vai trò lấy theo tài khoản — không phải chọn. Ban TGĐ không nộp; thư ký mở báo cáo bộ phận khác chỉ để nhập thay (?d=).
   st.dept = (ctx.me.canOnBehalf && Number(params.get('d'))) || (ctx.me.mustReport ? ctx.me.departmentId : null);
@@ -132,7 +129,6 @@ const ownersText = ids => (ids || []).map(nameOf).filter(Boolean).map(esc).join(
 async function drawReport(body) {
   if (!st.dept) { body.innerHTML = '<div class="wk-empty">Tài khoản chưa thuộc bộ phận nào. Liên hệ quản trị để gán bộ phận.</div>'; return; }
   const r = await api(`/api/weekly/report?week=${st.week}&departmentId=${st.dept}`);
-  if (!body.isConnected) return; // lượt vẽ cũ: không thay st.form của báo cáo đang mở
   st.rep = r; st.schedule = r.schedule; st.dirty = false; st.baseUpdatedAt = r.report?.updatedAt || null;
   st.form = structuredClone(r.report ? r.report.data : r.prefill);
   // Bản nháp cũ: cờ "bắt buộc" theo điền sẵn MỚI NHẤT (máy chủ cũng chỉ kiểm theo điền sẵn) — việc nay không còn bắt buộc thì có nút "Bỏ".
@@ -408,7 +404,6 @@ async function submit(btn) {
 // =====================================================================
 async function drawNotices(body) {
   const list = await api(`/api/weekly/notices?week=${st.week}`);
-  if (!body.isConnected) return; // lượt vẽ cũ
   st.schedule = st.week === ctx.week ? ctx.schedule : null;
   const S = scheduleNow() || {};
   // Báo cho bộ phận của mình (theo tài khoản); thư ký / PMO báo thay được cho bộ phận khác. Ban TGĐ không phải báo.
@@ -463,7 +458,6 @@ async function drawNotices(body) {
 async function drawSummary(body) {
   clearTimeout(st.lockTimer); st.lockTimer = null;
   const s = await api(`/api/weekly/summary?week=${st.week}`);
-  if (!body.isConnected) return; // lượt vẽ cũ: không thay st.sum / st.actions (Action Log) của tuần đang mở
   st.sum = s; st.schedule = s.schedule;
   const S = s.schedule, f = st.week, M = s.canManage, md = s.meeting || {};
   const names = id => s.names?.[id] || '';
