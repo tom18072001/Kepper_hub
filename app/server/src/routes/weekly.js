@@ -4,7 +4,8 @@
 const crypto = require('node:crypto');
 const { fail, intParam } = require('../lib/http');
 const P = require('../lib/policy');
-const { visibleProjectsWhere, loadItem } = require('../services/access');
+const { visibleProjectsWhere, itemVisibleWhere, loadItem } = require('../services/access');
+const A = require('../services/alerts');
 const { notify } = require('../services/events');
 const approval = require('../services/approval');
 const bus = require('../services/bus');
@@ -13,6 +14,7 @@ const MP = require('../services/mtl-project');
 const WK = require('../services/weekly');
 const D = require('../services/weekly-data');
 const { setProgress } = require('../services/mtl-progress');
+const R = require('../services/register'); // thiết lập số ngày cảnh báo sắp đến hạn (dueSoonDays)
 
 const { weeklyConfig, requiredDepartments, userNames, rowOwnerIds, ACTIVE_USER } = D;
 const weekParam = (v, now = new Date()) => {
@@ -29,8 +31,13 @@ const sha256 = v => crypto.createHash('sha256').update(WK.stableStringify(v)).di
 // Một khoá cho mọi lần ghi báo cáo của một bộ phận / tuần (nháp, nộp): không có hai lần ghi chen nhau.
 const reportLock = (tx, departmentId, week) => tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'weekly:' + departmentId + ':' + week}))`;
 // Dòng có actionRef không thuộc Action Log đang mở của CHÍNH bộ phận này → bỏ liên kết (không đóng hộ việc của bộ phận khác).
-const stripForeignActions = (data, actions) => { const ok = new Set(actions.map(a => a.ref)); for (const r of [...data.results, ...data.ongoing]) if (r.actionRef && !ok.has(r.actionRef)) r.actionRef = null; };
+// Chuỗi xử lý khi nộp + bỏ liên kết Action Log của bộ phận khác: services/weekly-submit.js (route và test dùng chung).
+const WS = require('../services/weekly-submit');
+const { stripForeignActions } = WS;
 const COMPLIANCE_KEY = month => `weekly.compliance.${month}`;
+// Phạm vi BỘ PHẬN (mục S10): đọc mọi việc như người xem toàn hệ thống — chỉ để tính tập việc phải báo cáo của bộ phận và dòng
+// "Hệ thống tự bổ sung" lúc nộp; không bao giờ trả thẳng cho người dùng (đầu ra lọc theo quyền xem: hideUnseen bên dưới).
+const DEPT_SCOPE = Object.freeze({ id: 0, role: 'system', departmentId: null, permissions: [{ permissionKey: 'work.view', action: 'VIEW', scope: 'SYSTEM' }] });
 
 module.exports = function mountWeekly(app, { prisma, auth, audit }) {
   const subjectOf = async req => {
@@ -72,20 +79,47 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
 
   // Hạng mục MTL người dùng xem được (cùng bộ lọc hiển thị như bảng theo dõi) + cấu hình cảnh báo của dự án.
   async function mtlItemsFor(user, now) {
-    const projects = await prisma.project.findMany({ where: { kind: 'MTL', archivedAt: null, ...visibleProjectsWhere(user) } });
+    // Hạng mục MTL chưa có kế hoạch gốc: "sắp đến hạn" theo cùng thiết lập số ngày như việc thường và bản Word (dueSoonDays).
+    const [{ dueSoonDays }, projects] = await Promise.all([R.getSettings(prisma), prisma.project.findMany({ where: { kind: 'MTL', archivedAt: null, ...visibleProjectsWhere(user) } })]);
     const out = [];
     for (const p of projects) {
       const { items, cfg } = await MP.computeProject(prisma, p, user, now);
-      for (const i of items) out.push({ ...i, projectKey: p.key, projectId: p.id, cfg, done: M.isDone(i), cancelled: M.isCancelled(i) });
+      for (const i of items) {
+        const st = { code: i.status, planned: i.planned, variance: i.variance, daysLeft: i.daysLeft, lateDays: i.lateDays, startsIn: i.startsIn };
+        out.push({ ...i, kind: 'MTL', projectKey: p.key, projectId: p.id, cfg, dueSoonDays, done: M.isDone(i), cancelled: M.isCancelled(i),
+          started: A.isStarted(i), risk: A.riskOf(i, { st, cfg, day: now, taskDueSoonDays: dueSoonDays }) });
+      }
     }
     return out;
   }
+  // Việc thường (dự án bảng công việc, không phải MTL) người dùng xem được, của MỘT bộ phận (chủ trì / phòng của dự án / người phụ trách
+  // thuộc bộ phận): còn mở, hoặc xong từ ngày `since`. "Đang làm" / "nguy cơ chậm" theo services/alerts.js (isStarted, riskOf) —
+  // cùng định nghĩa với hạng mục MTL; "sắp đến hạn" theo thiết lập số ngày cảnh báo của sổ giao việc.
+  async function taskItemsFor(user, now, since, departmentId) {
+    const [{ dueSoonDays }, rows] = await Promise.all([R.getSettings(prisma), prisma.workItem.findMany({
+      where: { archivedAt: null, project: { kind: { not: 'MTL' }, archivedAt: null, ...visibleProjectsWhere(user) },
+        AND: [itemVisibleWhere(user), { OR: [{ state: { category: { notIn: ['COMPLETED', 'CANCELLED'] } } }, { completedAt: { gte: since } }] },
+          { OR: [{ leadDepartmentId: departmentId }, { leadDepartmentId: null, project: { departmentId } }, { assignees: { some: { user: { departmentId } } } }] }] },
+      select: { id: true, number: true, title: true, parentId: true, leadDepartmentId: true, startDate: true, dueDate: true, progress: true, progressAt: true,
+        startedAt: true, completedAt: true, returnedAt: true, state: { select: { category: true } }, assignees: { select: { user: { select: { id: true, fullName: true } } } },
+        project: { select: { id: true, key: true, departmentId: true } } },
+    })]);
+    return rows.map(r => {
+      const done = r.state.category === 'COMPLETED', started = A.isStarted(r), risk = done ? null : A.riskOf(r, { day: now, taskDueSoonDays: dueSoonDays });
+      return { ...r, kind: 'TASK', code: `${r.project.key}-${r.number}`, projectKey: r.project.key, projectId: r.project.id, project: undefined,
+        leadDepartmentId: r.leadDepartmentId ?? r.project.departmentId, assignees: r.assignees.map(a => a.user), actual: r.progress, children: 0,
+        done, cancelled: r.state.category === 'CANCELLED', started, risk };
+    });
+  }
+  const workItemsFor = async (user, now, since, departmentId) => [...await mtlItemsFor(user, now), ...await taskItemsFor(user, now, since, departmentId)];
+  // Việc xong được báo "xong trong tuần" từ thứ Bảy tuần trước (WK.placeOf) — lấy việc xong từ 00:00 thứ Bảy đó.
+  const doneSince = WK.doneSince; // 00:00 thứ Hai tuần trước (cùng cửa sổ WK.placeOf; loại trùng bằng prevDone)
   // Điền sẵn cho một bộ phận (dùng khi xem và khi nộp — máy chủ tự xác định hạng mục bắt buộc).
   async function prefillFor(user, departmentId, week, now) {
     const [prevRep, members, items] = await Promise.all([
       prisma.weeklyReport.findUnique({ where: { departmentId_week: { departmentId, week: WK.addDays(week, -7) } } }),
       prisma.user.findMany({ where: { departmentId, ...ACTIVE_USER }, select: { id: true, fullName: true, displayTitle: true }, orderBy: { fullName: 'asc' } }),
-      mtlItemsFor(user, now),
+      workItemsFor(user, now, doneSince(week), departmentId),
     ]);
     const memberIds = new Set(members.map(u => u.id));
     const cand = WK.deptCandidates(items, departmentId, memberIds);
@@ -93,7 +127,17 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     const { actions } = await D.openActions(prisma, week, departmentId);
     const prev = prevRep?.firstSubmittedAt ? prevRep.data : null; // chỉ bản ĐÃ NỘP tuần trước
     const prefill = WK.buildPrefill({ week, deptId: departmentId, items, memberIds, prev, actions });
-    return { prefill, members, items, cand, hasPrev: !!prev, actions };
+    return { prefill, members, memberIds, prev, items, cand, hasPrev: !!prev, actions };
+  }
+
+  // Ẩn / hiện theo NGƯỜI XEM (không theo người nộp): người xem tổng hợp đầy đủ (Ban GĐ, thư ký, PMO) thấy mọi dòng; người khác chỉ thấy
+  // dòng gắn việc họ xem được — kể cả dòng do trưởng phòng / thư ký nhập (báo cáo bộ phận mọi thành viên đều xem). API, MCP dùng chung.
+  const seeWhich = async (user, ids) => new Set(ids.length ? (await prisma.workItem.findMany({ where: { id: { in: [...new Set(ids)] }, project: visibleProjectsWhere(user), AND: [itemVisibleWhere(user)] }, select: { id: true } })).map(i => i.id) : []);
+  const seenIn = (user, data) => seeWhich(user, [...WK.allRows(data), ...(data?.plans || [])].map(r => r.itemId).filter(Boolean));
+  async function hideUnseen(s, user, data) {
+    if (!data || P.can(s, 'view', 'weekly.summary.detail')) return data;
+    const ok = await seeWhich(user, [...WK.allRows(data), ...(data.plans || [])].map(r => r.itemId).filter(Boolean));
+    return WK.viewFor(data, id => ok.has(id));
   }
 
   // ---------- Báo cáo của một bộ phận ----------
@@ -111,7 +155,14 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
       prisma.weeklyNotice.findMany({ where: { week, departmentId }, orderBy: { id: 'asc' } }),
     ]);
     // Người chỉ được XEM (Ban GĐ, PMO) không thấy nháp chưa nộp của bộ phận khác.
-    const saved = acc.canEdit || savedRaw?.firstSubmittedAt ? savedRaw : null;
+    const saved0 = acc.canEdit || savedRaw?.firstSubmittedAt ? savedRaw : null;
+    const saved = saved0 && { ...saved0, data: await hideUnseen(s, req.user, saved0.data) };
+    // Thư ký (xem đầy đủ + sửa): dòng gắn việc họ không xem được → chỉ sửa giải trình, không bỏ được (K2) — giao diện ẩn nút "Bỏ".
+    if (saved?.data && acc.canEdit && P.can(s, 'view', 'weekly.summary.detail')) {
+      const ids = [...WK.allRows(saved.data), ...(saved.data.plans || [])].map(r => r.itemId).filter(Boolean);
+      const ok = await seeWhich(req.user, ids);
+      saved.data = WK.markNoDelete(saved.data, id => ok.has(id));
+    }
     const { prefill, members, hasPrev, actions } = await prefillFor(req.user, departmentId, week, now);
     const notices = noticesRaw.filter(n => P.can(s, 'view', 'weekly.notice', { departmentId, createdById: n.createdById }));
     const names = await userNames(prisma, [...members.map(u => u.id), ...leaders, ...rowOwnerIds(prefill), ...rowOwnerIds(saved?.data), saved?.submittedById, saved?.preparerId, ...notices.flatMap(n => [n.createdById, n.substituteId])]);
@@ -133,32 +184,50 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
       canDelete: P.can(s, 'edit', 'weekly.notice', { departmentId: n.departmentId, createdById: n.createdById, op: 'delete' }) };
   };
 
-  // Ngữ cảnh làm sạch: người phụ trách hợp lệ (tài khoản đang hoạt động), bộ phận, hạng mục MTL người lập xem được.
-  async function cleanCtx(user, now) {
+  // Ngữ cảnh làm sạch: người phụ trách hợp lệ (tài khoản đang hoạt động), bộ phận, hạng mục MTL + việc thường người lập xem được.
+  async function cleanCtx(user, now, week, departmentId) {
     const [users, depts, items] = await Promise.all([
       prisma.user.findMany({ where: ACTIVE_USER, select: { id: true } }),
       prisma.department.findMany({ where: { isActive: true }, select: { id: true, name: true } }),
-      mtlItemsFor(user, now),
+      workItemsFor(user, now, WK.at(WK.addDays(week, -13), 0, 0), departmentId),
     ]);
-    return { userIds: new Set(users.map(u => u.id)), deptIds: new Set(depts.map(d => d.id)), itemIds: new Set(items.map(i => i.id)), deptName: id => depts.find(d => d.id === id)?.name || '', items };
+    return { userIds: new Set(users.map(u => u.id)), deptIds: new Set(depts.map(d => d.id)), itemIds: new Set(items.map(i => i.id)),
+      taskIds: new Set(items.filter(i => i.kind === 'TASK').map(i => i.id)), deptName: id => depts.find(d => d.id === id)?.name || '', items };
   }
+  // Thư ký (quyền sửa báo cáo + xem tổng hợp đầy đủ): sửa được trường do người nhập của MỌI dòng (quy chế: sửa căn cứ sau họp).
+  const editsAll = (s, acc) => acc.canEdit && P.can(s, 'view', 'weekly.summary.detail');
+  // K4: mọi thay đổi máy chủ bỏ qua đều báo lại (web lẫn MCP).
+  const ignoredMsg = n => `${n} thay đổi trên dòng gắn việc không được lưu: dòng bạn không có quyền thêm / sửa / bỏ, hoặc trường lấy từ chính việc (tên, hạn, tình trạng, phần; % của việc thường và hạng mục có việc nhánh) — cập nhật tiến độ ở việc (MCP: kepper_update_progress)`;
+  const removedMsg = n => `${n} dòng đã được bỏ khỏi báo cáo vì việc đã lưu trữ / huỷ`;
+  const notes = (ignored, removed) => ({ ignored, removed, ...(ignored || removed ? { warning: [ignored ? ignoredMsg(ignored) : '', removed ? removedMsg(removed) : ''].filter(Boolean).join('. ') } : {}) });
+  // Có khoá baseUpdatedAt mà = null trong khi máy chủ đã có báo cáo → bản đang mở đã cũ (409) — WS.baseOf / WS.isStale.
   const bodyDept = req => { const id = req.body?.departmentId ? intParam(req.body.departmentId, 'Bộ phận') : req.user.departmentId; if (!id) fail(422, 'Tài khoản chưa thuộc bộ phận nào', 'NO_DEPARTMENT'); return id; };
 
   // Lưu nháp (tự lưu). Hai người cùng lập: gửi kèm updatedAt đã đọc — lệch thì trả 409, không ghi đè phần người kia vừa sửa.
   app.put('/api/weekly/report', auth, async (req, res) => {
     const s = await subjectOf(req);
     const week = weekParam(req.body?.week), departmentId = bodyDept(req);
-    await deptAccess(s, departmentId, 'edit');
-    const ctx = await cleanCtx(req.user, new Date());
-    const data = WK.sanitize(req.body?.data, ctx);
-    stripForeignActions(data, (await D.openActions(prisma, week, departmentId)).actions);
+    const acc = await deptAccess(s, departmentId, 'edit');
+    const ctx = await cleanCtx(req.user, new Date(), week, departmentId);
+    // Phạm vi bộ phận: trường do máy tính của MỌI dòng tính lại ở mỗi lần lưu; dòng của việc đã lưu trữ / huỷ bị bỏ.
+    const deptItems = await workItemsFor(DEPT_SCOPE, new Date(), doneSince(week), departmentId);
+    const editAll = editsAll(s, acc);
+    // Việc người lưu xem được trong bản đã lưu, KHÔNG xét lưu trữ — báo đúng lý do khi việc bị lưu trữ (WS.mergeSaved everSeen).
+    const cur = await prisma.weeklyReport.findUnique({ where: { departmentId_week: { departmentId, week } }, select: { data: true } });
+    const everSeen = await seenIn(req.user, cur?.data);
+    const { actions } = await D.openActions(prisma, week, departmentId);
     const base = req.body?.baseUpdatedAt ? new Date(req.body.baseUpdatedAt).getTime() : null;
+    let ignoredOut = 0, removedOut = 0;
     // Đọc – kiểm – ghi trong cùng khoá: lần tự lưu chạy chậm không ghi đè được bản vừa nộp hay bản người khác vừa lưu.
     const out = await prisma.$transaction(async tx => {
       await reportLock(tx, departmentId, week);
       const existing = await tx.weeklyReport.findUnique({ where: { departmentId_week: { departmentId, week } } });
       if (existing?.status === 'SUBMITTED') fail(409, 'Báo cáo đã nộp — sửa xong bấm "Gửi lại" để cập nhật', 'ALREADY_SUBMITTED');
       if (existing && base !== existing.updatedAt.getTime()) return { conflict: existing };
+      // Quy tắc gốc: gộp theo itemId với bản nháp đã lưu — dòng của việc người lưu không xem được giữ NGUYÊN (services/weekly-submit.js).
+      const { data, ignored, removed } = WS.mergeDraft(req.body?.data, ctx, existing?.data || null, { scopeItems: deptItems, editAll, everSeen });
+      stripForeignActions(data, actions);
+      ignoredOut = ignored; removedOut = removed;
       return { saved: existing
         ? await tx.weeklyReport.update({ where: { id: existing.id }, data: { data, preparerId: req.user.id } })
         : await tx.weeklyReport.create({ data: { departmentId, week, data, preparerId: req.user.id } }) };
@@ -167,7 +236,8 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
       const who = await userNames(prisma, [out.conflict.preparerId]);
       return res.status(409).json({ error: `${who[out.conflict.preparerId] || 'Người khác'} vừa lưu bản nháp này — tải lại để không ghi đè phần đã sửa`, code: 'DRAFT_CONFLICT', updatedAt: out.conflict.updatedAt });
     }
-    res.json({ ok: true, updatedAt: out.saved.updatedAt });
+    // Thay đổi gửi cho dòng người lưu không được sửa: máy chủ bỏ qua và BÁO LẠI (giao diện hiện cảnh báo, MCP trả về).
+    res.json({ ok: true, updatedAt: out.saved.updatedAt, ...notes(ignoredOut, removedOut) });
   });
 
   // Nộp / gửi lại. Giờ nộp = lần gửi đầu (Điều 6); thư ký nhập thay ghi giờ nhận email. Mỗi lần nộp lưu một phiên bản bất biến + SHA-256.
@@ -179,35 +249,28 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     if (week > WK.currentFriday(now)) fail(422, 'Chưa đến tuần này', 'FUTURE_WEEK');
     const meeting = await meetingOf(week), S = WK.scheduleOf(week, meeting);
     if (S.skip) fail(409, 'Tuần nghỉ — không giao ban, không cần nộp', 'WEEK_SKIPPED');
-    const pre = await prisma.weeklyReport.findUnique({ where: { departmentId_week: { departmentId, week } }, select: { firstSubmittedAt: true } });
+    const pre = await prisma.weeklyReport.findUnique({ where: { departmentId_week: { departmentId, week } }, select: { firstSubmittedAt: true, data: true, updatedAt: true } });
     // Sau giờ giao ban, bản đã nộp không gửi lại được (trừ thư ký) — giữ nguyên căn cứ của buổi họp. (Kiểm lại trong khoá bên dưới.)
     const lockedAfterMeeting = r => r?.firstSubmittedAt && now > S.meetingAt && !s.secretary;
     if (lockedAfterMeeting(pre)) fail(409, 'Đã qua giờ giao ban — muốn sửa báo cáo, liên hệ thư ký giao ban', 'REPORT_LOCKED');
-    const ctx = await cleanCtx(req.user, now);
-    const data = WK.sanitize(req.body?.data, ctx);
-    const { prefill, cand, actions } = await prefillFor(req.user, departmentId, week, now);
-    stripForeignActions(data, actions);
+    // Như lưu nháp: bản đang mở đã cũ (có người vừa lưu / nộp) → 409, không ghi đè phần người kia vừa sửa.
+    const stale = r => WS.isStale(req.body, r);
+    // K1: tuần đã họp (đã có bản nộp, đã qua giờ giao ban) → đóng băng trường máy tính theo bản nộp trước đó.
+    const frozen = !!pre?.firstSubmittedAt && now > S.meetingAt;
+    const conflict = () => fail(409, 'Có người vừa sửa báo cáo này — tải lại để không ghi đè phần đã sửa', 'REPORT_CONFLICT');
+    if (stale(pre)) conflict();
+    const ctx = await cleanCtx(req.user, now, week, departmentId);
+    const { prefill, cand, actions, memberIds, prev, items: seen } = await prefillFor(req.user, departmentId, week, now);
+    // Làm sạch → dòng bắt buộc còn ở Phần IV về đúng phần → tính lại dòng gắn việc → xếp lại phần → kiểm tra (services/weekly-submit.js).
+    // Phạm vi bộ phận (mục S10) — tính ở MỌI lần nộp / gửi lại: dòng tự bổ sung, dòng của việc người gửi không xem được (giữ từ bản đã lưu).
+    const deptItems = await workItemsFor(DEPT_SCOPE, now, doneSince(week), departmentId);
+    const { data, errors, ignored, removed } = WS.prepareSubmit({ raw: req.body?.data, ctx, prefill, actions, now, week, saved: pre?.data || null, scopeItems: deptItems, editAll: editsAll(s, acc), frozen, everSeen: await seenIn(req.user, pre?.data) }); // bản đã lưu: nháp hoặc đã nộp
     const candIds = new Set(cand.map(i => i.id)), byId = new Map(ctx.items.map(i => [i.id, i]));
-    // Dòng MTL: tên, mã, bước, găng, mốc, hạn, người phụ trách, khoá % lấy từ MTL; tình trạng tính lại từ MTL theo % mới —
-    // người lập chỉ nâng lên "Vướng" (một nguồn sự thật; báo cáo không đổi được tên / mã hạng mục MTL).
-    for (const r of [...data.results, ...data.ongoing]) {
-      const i = r.itemId && byId.get(r.itemId);
-      if (!i) continue;
-      Object.assign(r, { task: i.title, ref: i.code, step: i.planCode || '', critical: !!i.critical, milestone: !!i.milestone });
-      r.pctLocked = i.children > 0;
-      if (i.assignees?.length) r.ownerIds = i.assignees.map(a => a.id);
-      r.due = WK.dayOf(i.baselineEnd) || r.due;
-      if (r.pctLocked) r.pct = i.done ? 100 : Math.round(i.actual || 0);
-      const pct = r.pct === '' ? Math.round(i.actual || 0) : r.pct;
-      const done = i.done || (!r.pctLocked && pct >= 100);
-      const computed = WK.statusFromMtl(M.statusOf({ ...i, progress: pct }, done ? 100 : pct, now, i.cfg).code, done);
-      r.status = r.status === 'Vướng' && !done ? 'Vướng' : computed;
-      if (r.status === WK.DONE) r.pct = 100;
-    }
-    const mandatory = [...prefill.results, ...prefill.ongoing].filter(r => r.mandatory);
-    const errors = WK.validate(data, week, { deptName: ctx.deptName, mandatory });
     // Trả lại dữ liệu đã tính lại (tình trạng dòng MTL) để giao diện hiện đúng khối giải trình cần điền.
-    if (errors.length) return res.status(422).json({ error: `Còn ${errors.length} mục cần sửa`, code: 'REPORT_INCOMPLETE', errors, data });
+    if (errors.length) return res.status(422).json({ error: `Còn ${errors.length} mục cần sửa`, code: 'REPORT_INCOMPLETE', errors, data: await hideUnseen(s, req.user, data), ...notes(ignored, removed) });
+    // Mục S10: việc của bộ phận người nộp không xem được → máy chủ tự bổ sung (tiến độ / hạn / nguy cơ từ hệ thống, không bắt ghi giải pháp).
+    const full = WK.buildPrefill({ week, deptId: departmentId, items: deptItems, memberIds, prev });
+    const autoCtx = { full, visibleIds: new Set(seen.map(i => i.id)), parentOf: new Map(deptItems.map(i => [i.id, i.parentId])) };
     if (!pre?.firstSubmittedAt && acc.onBehalf && req.body?.receivedAt) {
       const t = new Date(req.body.receivedAt);
       if (Number.isNaN(t.getTime()) || t > now || t < WK.at(WK.addDays(week, -4), 0, 0)) fail(422, 'Giờ nhận email không hợp lệ', 'INVALID_DATE');
@@ -223,7 +286,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
           const { project, rights } = await loadItem(prisma, req.user, w.itemId, 'edit');
           const it = byId.get(w.itemId);
           if (project.kind !== 'MTL' || !P.can(s, 'edit', 'mtl.progress', { item: { assigneeIds: (it.assignees || []).map(a => a.id) } })) { skipped.push(w.itemId); continue; }
-          plan.push({ w, project, rights, code: it.code, row: [...data.results, ...data.ongoing].find(r => r.itemId === w.itemId) });
+          plan.push({ w, project, rights, code: it.code, row: [...data.results, ...data.ongoing, ...data.risks].find(r => r.itemId === w.itemId) });
         } catch (error) { if (error.status && error.status < 500) skipped.push(w.itemId); else throw error; }
       }
     }
@@ -231,6 +294,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
       await reportLock(tx, departmentId, week);
       const existing = await tx.weeklyReport.findUnique({ where: { departmentId_week: { departmentId, week } } });
       if (lockedAfterMeeting(existing)) fail(409, 'Đã qua giờ giao ban — muốn sửa báo cáo, liên hệ thư ký giao ban', 'REPORT_LOCKED');
+      if (stale(existing) || (existing && pre && existing.updatedAt.getTime() !== pre.updatedAt.getTime())) conflict(); // có người lưu chen giữa lúc đọc và lúc ghi
       let first = existing?.firstSubmittedAt || now, receivedAt = null;
       if (!existing?.firstSubmittedAt && acc.onBehalf && req.body?.receivedAt) first = receivedAt = new Date(req.body.receivedAt);
       const updated = [], conflicts = [];
@@ -245,23 +309,24 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
         if (await setProgress(tx, { user: req.user, project: p.project, rights: p.rights, item, pct: p.w.pct, via: 'WEEKLY_REPORT' })) updated.push(p);
         p.row.pct0 = p.w.pct;
       }
-      const final = WK.finalize(data, week);
+      // Dòng gắn việc về đúng phần theo tình trạng vừa tính lại (xong → I, đã bắt đầu → II) trước khi lưu bản bất biến.
+      const { final, added: autoAdded } = WS.finishSubmit(data, week, autoCtx, { frozen });
       const hash = sha256(final);
       const r = existing
         ? await tx.weeklyReport.update({ where: { id: existing.id }, data: { data: final, status: 'SUBMITTED', preparerId: req.user.id, firstSubmittedAt: first, submittedAt: now, submittedById: req.user.id, submitCount: { increment: 1 } } })
         : await tx.weeklyReport.create({ data: { departmentId, week, data: final, status: 'SUBMITTED', preparerId: req.user.id, firstSubmittedAt: first, submittedAt: now, submittedById: req.user.id, submitCount: 1 } });
       await tx.weeklyReportVersion.create({ data: { reportId: r.id, n: r.submitCount, departmentId, week, data: final, sha256: hash, submittedAt: now, submittedById: req.user.id, onBehalf: acc.onBehalf } });
-      return { saved: r, final, hash, receivedAt, updated, conflicts };
+      return { saved: r, final, hash, receivedAt, updated, conflicts, autoAdded };
     }, { timeout: 60_000, maxWait: 10_000 });
-    const { saved, final, hash, receivedAt, conflicts } = done;
+    const { saved, final, hash, receivedAt, conflicts, autoAdded } = done;
     const updated = done.updated.map(p => p.w.itemId);
     for (const p of done.updated) bus.item(p.project.id, p.w.itemId, req.user.id);
     await audit(req, 'WEEKLY_REPORT_SUBMIT', 'WeeklyReport', saved.id, null, { departmentId, week, n: saved.submitCount, sha256: hash, onBehalf: acc.onBehalf, receivedAt, firstSubmittedAt: saved.firstSubmittedAt,
-      items: final.results.length + final.ongoing.length, plans: final.plans.length, progressUpdated: updated.length, progressSkipped: skipped.length, progressConflicts: conflicts.length });
+      items: final.results.length + final.ongoing.length + final.risks.length, plans: final.plans.length, progressUpdated: updated.length, progressSkipped: skipped.length, progressConflicts: conflicts.length, autoAdded, ignored, removed, frozen });
     const notices = await prisma.weeklyNotice.findMany({ where: { week, departmentId } });
     res.json({ ok: true, submittedAt: saved.submittedAt, firstSubmittedAt: saved.firstSubmittedAt, submitCount: saved.submitCount, sha256: hash,
-      progressUpdated: updated.length, progressSkipped: skipped.length, progressConflicts: conflicts, onBehalf: acc.onBehalf,
-      status: WK.submissionStatus(saved, notices, S, now) });
+      progressUpdated: updated.length, progressSkipped: skipped.length, progressConflicts: conflicts, onBehalf: acc.onBehalf, updatedAt: saved.updatedAt,
+      ...notes(ignored, removed), frozen, status: WK.submissionStatus(saved, notices, S, now) });
   });
 
   // Các phiên bản đã nộp (người xem đầy đủ): đối chiếu bản đúng hạn với bản sửa sau hạn.
@@ -271,6 +336,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     P.assertCan(s, 'view', 'weekly.report', { departmentId });
     const rows = await prisma.weeklyReportVersion.findMany({ where: { week, departmentId }, orderBy: { n: 'asc' } });
     const names = await userNames(prisma, rows.map(v => v.submittedById));
+    for (const v of rows) v.data = await hideUnseen(s, req.user, v.data); // bản lọc; sha256 vẫn là của bản đã nộp đầy đủ
     res.setHeader('Cache-Control', 'private, no-store');
     res.json(rows.map(v => ({ n: v.n, submittedAt: v.submittedAt, submittedBy: names[v.submittedById] || '', onBehalf: v.onBehalf, sha256: v.sha256, data: v.data })));
   });
@@ -343,23 +409,36 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     const s = await subjectOf(req);
     P.assertCan(s, 'view', 'weekly.summary');
     const week = weekParam(req.query.week);
-    const { sum, names, all, configured } = await D.summaryOf(prisma, week);
     const full = P.can(s, 'view', 'weekly.summary.detail');
-    // Trưởng / phó bộ phận: bản tóm tắt như văn bản gửi đi (không họ tên, không ghi chú vắng, không chi tiết bộ phận khác).
-    let out = full ? sum : WK.briefSummary(sum, s.departmentId);
+    // Số liệu giống nhau với MỌI người xem (dòng tự bổ sung luôn được đếm). Trưởng / phó: bản tóm tắt (không họ tên, không ghi chú vắng,
+    // không chi tiết bộ phận khác); dòng / tên việc họ không xem được bị bỏ, kể cả trong text (bản gửi email) — mục S10.
+    const { sum, names, all, configured } = await D.summaryOf(prisma, week);
+    const own = sum.rows.find(r => r.id === s.departmentId)?.report;
+    const ownHelps = (sum.helps || []).flatMap(g => g.list).filter(h => h.fromId === s.departmentId);
+    const ok = full ? null : await seeWhich(req.user, [...WK.allRows(own), ...(sum.risks || []).filter(x => x.departmentId === s.departmentId), ...ownHelps].map(r => r.itemId).filter(Boolean));
+    // Việc thuộc dự án KÍN (Chỉ thành viên / Sổ giao việc): bản email và bản tóm tắt cho bộ phận khác không nêu tên, chỉ đếm.
+    const ids = [...new Set([...(sum.risks || []), ...(sum.helps || []).flatMap(g => g.list)].map(x => x.itemId).filter(Boolean))];
+    const secret = new Set(ids.length ? (await prisma.workItem.findMany({ where: { id: { in: ids }, project: { visibility: { in: ['PRIVATE', 'ASSIGNED'] } } }, select: { id: true } })).map(i => i.id) : []);
+    const { view, text, fullText } = WK.summaryView(sum, { full, departmentId: s.departmentId, canSee: id => !!ok?.has(id), isSecret: id => secret.has(id) });
+    let out = view;
     // Ghi chú lý do vắng / muộn (có thể là DLCN nhạy cảm): chỉ Ban GĐ, thư ký (policy weekly.notice · field note) — PMO không thấy.
     if (full && !P.can(s, 'view', 'weekly.notice', { field: 'note', departmentId: -1, createdById: -1 }))
       out = { ...out, rows: out.rows.map(r => ({ ...r, absent: r.absent ? { ...r.absent, note: '' } : null, late: (r.late || []).map(l => ({ ...l, note: '' })) })) };
     res.setHeader('Cache-Control', 'private, no-store');
     const m = await meetingOf(week);
-    res.json({ ...out, names: full ? names : {}, departments: all.map(d => ({ id: d.id, name: d.name })), configured, canManage: s.manage, canDetail: full, text: WK.summaryText(sum),
+    res.json({ ...out, names: full ? names : {}, departments: all.map(d => ({ id: d.id, name: d.name })), configured, canManage: s.manage, canDetail: full,
+      // text: BẢN GỬI EMAIL (không có danh sách mục I, II; không nêu tên dòng tự bổ sung) — mọi người dùng, API và MCP kepper_weekly_summary.
+      // fullText: bản đầy đủ I, II, III — chỉ người xem đầy đủ, chỉ dùng nội bộ Ban GĐ, không gửi email.
+      text, ...(fullText ? { fullText } : {}),
       ...(s.manage ? { actionsVersion: sha256(m?.data?.actions || []) } : {}) });
   });
   app.post('/api/weekly/summary/copied', auth, async (req, res) => {
     const s = await subjectOf(req);
     P.assertCan(s, 'export', 'weekly.summary');
     const week = weekParam(req.body?.week);
-    await audit(req, 'WEEKLY_SUMMARY_COPY', 'WeeklyMeeting', week, null, { week });
+    const kind = req.body?.kind === 'full' ? 'full' : 'email';
+    if (kind === 'full') P.assertCan(s, 'view', 'weekly.summary.detail');
+    await audit(req, 'WEEKLY_SUMMARY_COPY', 'WeeklyMeeting', week, null, { week, kind });
     res.status(204).end();
   });
 

@@ -6,7 +6,7 @@ const { itemVisibleWhere } = require('./access');
 const ITEM_SELECT = {
   id: true, number: true, title: true, parentId: true, planId: true, planCode: true, planSection: true, ownerText: true, externalParty: true,
   leadDepartmentId: true, critical: true, milestone: true, milestoneNote: true, startT: true, endT: true, baselineStart: true, baselineEnd: true,
-  startDate: true, dueDate: true, forecastEnd: true, weight: true, progress: true, progressAt: true, startedAt: true, completedAt: true, stateId: true,
+  startDate: true, dueDate: true, forecastEnd: true, weight: true, progress: true, progressAt: true, startedAt: true, completedAt: true, returnedAt: true, stateId: true,
   state: { select: { id: true, name: true, category: true, color: true } }, assignees: { select: { user: { select: { id: true, fullName: true } } } },
   supportDepartments: { select: { departmentId: true } },
 };

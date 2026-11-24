@@ -18,16 +18,25 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   await expect(nv).toHaveURL(/#\/tuan/);
   await expect(nv.getByTestId('weekly')).toBeVisible();
   await expect(nv.getByTestId('wk-dept-name')).toHaveText('Ban Pháp lý');
-  await expect(nv.getByTestId('wk-prefill-note')).toContainText('hạng mục MTL của bộ phận');
+  await expect(nv.getByTestId('wk-prefill-note')).toContainText('hạng mục MTL / công việc của bộ phận');
   await expect(nv.getByTestId('wk-tab-tong-hop')).toHaveCount(0);
   await expect(nv.getByTestId('wk-tab-diem')).toHaveCount(0);
   const ctx0 = await (await apiAs(nv, '/api/weekly/context')).json();
   const week = ctx0.week;
   const addDays = (s, n) => new Date(Date.parse(s + 'T00:00:00Z') + n * 86_400_000).toISOString().slice(0, 10);
   const rep0 = await (await apiAs(nv, '/api/weekly/report')).json();
-  const linked = [...rep0.prefill.results, ...rep0.prefill.ongoing, ...rep0.prefill.plans].filter(r => r.itemId);
+  const P0 = rep0.prefill;
+  const linked = [...P0.results, ...P0.ongoing, ...P0.risks, ...P0.plans].filter(r => r.itemId);
   expect(linked.length).toBeGreaterThan(0);
-  expect(linked.every(r => r.source === 'MTL' || r.basis === 'MTL')).toBe(true);
+  expect(linked.every(r => ['MTL', 'Công việc'].includes(r.source || r.basis))).toBe(true);
+  // Báo cáo 3 phần: I chỉ có việc đã xong (dòng tự điền) · II mọi việc đang làm chưa xong · III việc chưa khởi động mà có nguy cơ chậm.
+  // Việc chưa bắt đầu (chưa tới kỳ, không có nguy cơ) không có ở I / II / III.
+  expect(P0.results.filter(r => r.itemId).every(r => r.status === 'Hoàn thành')).toBe(true);
+  expect(P0.ongoing.every(r => r.status !== 'Hoàn thành' && r.status !== 'Chưa bắt đầu')).toBe(true);
+  expect(P0.risks.every(r => r.risk && r.status !== 'Hoàn thành')).toBe(true);
+  await expect(nv.getByTestId('wk-risk-section')).toBeVisible();
+  for (const r of P0.risks) await expect(nv.getByTestId(`wk-riskchip-${r.ref}`)).toBeVisible();
+  for (const r of P0.ongoing.filter(x => x.risk)) await expect(nv.getByTestId(`wk-risk-${r.ref}`)).toBeVisible(); // đang làm có nguy cơ: liệt kê ở Phần III
 
   // 2) Thêm việc phát sinh "Vướng" → hiện khối nguyên nhân / giải pháp / đề nghị hỗ trợ.
   await nv.getByTestId('wk-add-results').click();
@@ -52,7 +61,7 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   // 5) Điền đủ: mọi khối Chậm / Vướng / Quá hạn, việc sẽ làm tuần tới, một kế hoạch tuần mới; đổi % một hạng mục MTL.
   // % của một hạng mục MTL do chính nhân viên này phụ trách (quy định: chỉ người được giao / lãnh đạo bộ phận chủ trì ghi %).
   const me = await (await apiAs(nv, '/api/me')).json();
-  const row = [...rep0.prefill.results, ...rep0.prefill.ongoing].find(r => r.itemId && r.status !== 'Hoàn thành' && !r.pctLocked && r.ownerIds.includes(me.id));
+  const row = [...rep0.prefill.results, ...rep0.prefill.ongoing, ...rep0.prefill.risks].find(r => r.itemId && r.status !== 'Hoàn thành' && !r.pctLocked && r.ownerIds.includes(me.id));
   const newPct = row.pct >= 90 ? 80 : row.pct + 5;
   const pctBox = nv.getByTestId(`wk-pct-${row.ref}`);
   await pctBox.fill(String(newPct)); await pctBox.blur();
@@ -147,6 +156,9 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
 
   // 9) Tổng hợp: KPI, tình trạng nộp, yêu cầu hỗ trợ gom theo nơi nhận.
   await expect(gd.getByTestId('wk-kpis')).toContainText('1/5');
+  await expect(gd.getByTestId('wk-kpis')).toContainText('Đang thực hiện, chưa xong');
+  await expect(gd.getByTestId('wk-kpis')).toContainText('Nguy cơ chậm tiến độ');
+  await expect(gd.getByTestId(`wk-detail-risk-${D('PL').id}`)).toHaveCount(1); // chi tiết bộ phận: phần III nguy cơ chậm
   await expect(gd.getByTestId(`wk-srow-${D('PL').id}`)).toContainText('Tô Minh Khoa');
   await expect(gd.getByTestId(`wk-srow-${D('TC').id}`)).toContainText('báo muộn');
   await expect(gd.getByTestId('wk-helps')).toContainText('Gửi Ban Giám đốc');
@@ -197,6 +209,8 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   expect(text.startsWith('BẢO MẬT – chỉ dùng nội bộ')).toBe(true);
   expect(text).toContain('Ban Pháp lý →');
   expect(text).not.toContain('Tô Minh Khoa');
+  expect(text).not.toContain('I. ĐÃ HOÀN THÀNH'); // bản gửi email = bản tóm tắt (không có danh sách việc xong / đang làm)
+  await expect(gd.getByTestId('wk-copy-full')).toBeVisible(); // bản đầy đủ: nút riêng, chỉ dùng nội bộ
 
   // 10b) Trưởng bộ phận nhận bản TÓM TẮT: không chi tiết bộ phận khác, không họ tên người nộp.
   const tcSum = await (await apiAs(tc, '/api/weekly/summary')).json();
@@ -210,7 +224,7 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   await login(hc, 'nv.hcns');
   const gr = (await (await apiAs(hc, '/api/users/directory')).json()).find(u => u.departmentId === D('GR').id);
   const pre = (await (await apiAs(hc, `/api/weekly/report?departmentId=${D('GR').id}`)).json()).prefill;
-  for (const x of [...pre.results, ...pre.ongoing]) Object.assign(x, { ownerIds: x.ownerIds.length ? x.ownerIds : [gr.id], cause: 'Chờ (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF', next: x.next || 'Tiếp tục (giả)' });
+  for (const x of [...pre.results, ...pre.ongoing, ...pre.risks]) Object.assign(x, { ownerIds: x.ownerIds.length ? x.ownerIds : [gr.id], cause: 'Chờ (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF', next: x.next || 'Tiếp tục (giả)' });
   pre.results.push({ task: 'Làm việc với phường (giả)', source: 'Phát sinh', ownerIds: [gr.id], due: vnDate(5), status: 'Đúng tiến độ', pct: 30 });
   pre.plans.push({ task: 'Họp dân (giả)', basis: 'KH tháng', ownerIds: [gr.id], due: vnDate(8) });
   for (const p of pre.plans) Object.assign(p, { ownerIds: p.ownerIds?.length ? p.ownerIds : [gr.id], output: 'Biên bản (giả)' });
@@ -228,7 +242,7 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   // vẽ ngay trên trang (Huỷ thì không phát hành); còn yêu cầu chưa kết luận thì máy chủ chặn; kết luận đủ → phát hành.
   const past = addDays(week, -14);
   const prePast = (await (await apiAs(hc, `/api/weekly/report?week=${past}&departmentId=${D('GR').id}`)).json()).prefill;
-  for (const x of [...prePast.results, ...prePast.ongoing]) Object.assign(x, { ownerIds: x.ownerIds.length ? x.ownerIds : [gr.id], cause: 'Chờ (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF', next: x.next || 'Tiếp tục (giả)' });
+  for (const x of [...prePast.results, ...prePast.ongoing, ...prePast.risks]) Object.assign(x, { ownerIds: x.ownerIds.length ? x.ownerIds : [gr.id], cause: 'Chờ (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF', next: x.next || 'Tiếp tục (giả)' });
   prePast.results.push({ task: 'Xin chủ trương GPMB (giả)', source: 'Phát sinh', ownerIds: [gr.id], due: addDays(past, 3), status: 'Vướng', pct: 20,
     cause: 'Chờ ý kiến (giả)', solution: 'Báo cáo Ban GĐ (giả)', helpFrom: 'BGD', helpWhat: 'Ban GĐ làm việc với phường (giả)', helpBy: addDays(past, 7) });
   if (!prePast.plans.length) prePast.plans.push({ task: 'Họp dân (giả)', basis: 'KH tháng', ownerIds: [gr.id], due: addDays(past, 6) });
@@ -312,4 +326,157 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   expect(await audit('WEEKLY_REPORT_SUBMIT')).toBeGreaterThanOrEqual(2);
   expect(await audit('WEEKLY_SUMMARY_COPY')).toBeGreaterThanOrEqual(1);
   expect(await audit('WEEKLY_MEETING_PUBLISH')).toBe(1);
+});
+
+test('21. Mục S10 — việc Giám đốc giao trưởng phòng qua sổ, nhân viên lập báo cáo: hệ thống tự bổ sung, chỉ người được xem thấy', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const ctxs = [];
+  const addDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86_400_000).toISOString().slice(0, 10);
+  const as = async u => { const c = await browser.newContext(); ctxs.push(c); const p = await c.newPage(); await login(p, u); return p; };
+  const json = async (p, path, init) => { const r = await apiAs(p, path, init); expect(r.status(), await r.text()).toBeLessThan(300); return r.json(); };
+  const post = (p, path, data) => json(p, path, { method: 'POST', headers: { 'content-type': 'application/json' }, data });
+  const [gd, nv, tp, tc] = [await as('giamdoc'), await as('nv.kythuat'), await as('tp.kythuat'), await as('tb.taichinh')];
+  const tpUser = await json(tp, '/api/me'), kt = tpUser.departmentId;
+  // Sổ giao việc (mỗi người chỉ thấy việc liên quan đến mình); Giám đốc giao trưởng phòng Kỹ thuật, đã quá hạn, chưa khởi động.
+  const reg = await post(gd, '/api/projects', { key: 'SGV', name: 'Sổ giao việc Ban GĐ (giả)', visibility: 'ASSIGNED' });
+  const title = 'Đàm phán giá đất lô C (giả)';
+  const item = await post(gd, `/api/projects/${reg.id}/items`, { title, assigneeIds: [tpUser.id], leadDepartmentId: kt, dueDate: vnDate(-3) });
+  // Nhân viên không xem được việc → biểu mẫu không có.
+  expect((await apiAs(nv, `/api/items/${item.id}`)).status()).toBeGreaterThanOrEqual(403);
+  const ctx = await json(nv, '/api/weekly/context');
+  const rep = await json(nv, '/api/weekly/report');
+  const pre = rep.prefill;
+  expect(JSON.stringify(pre).includes(title)).toBe(false);
+  const me = await json(nv, '/api/me');
+  for (const x of [...pre.results, ...pre.ongoing, ...pre.risks]) Object.assign(x, { ownerIds: x.ownerIds.length ? x.ownerIds : [me.id], cause: 'Chờ (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF', next: x.next || 'Tiếp tục (giả)' });
+  pre.ongoing.push({ task: 'Kiểm tra hồ sơ kỹ thuật (giả)', source: 'Phát sinh', ownerIds: [me.id], due: vnDate(5), status: 'Đúng tiến độ', pct: 30, next: 'Hoàn thiện (giả)' });
+  for (const p of pre.plans) Object.assign(p, { ownerIds: p.ownerIds?.length ? p.ownerIds : [me.id], output: 'Biên bản (giả)' });
+  await post(nv, '/api/weekly/submit', { week: ctx.week, data: pre });
+  const rowsOf = d => [...d.results, ...d.ongoing, ...d.risks];
+  // Ban GĐ (tổng hợp đầy đủ): có việc, nhãn tự bổ sung, ở Phần III (trễ hạn), đếm vào KPI; trưởng phòng (vốn xem được việc) thấy trong báo cáo bộ phận.
+  const full = await json(gd, `/api/weekly/summary?week=${ctx.week}`);
+  const ktRow = full.rows.find(r => r.id === kt);
+  const auto = rowsOf(ktRow.report).find(r => r.itemId === item.id);
+  expect(auto.auto).toBe(true); expect(auto.risk).toBe('OVERDUE');
+  expect(ktRow.report.risks.some(r => r.itemId === item.id)).toBe(true);
+  expect(ktRow.risk).toBeGreaterThanOrEqual(1);
+  expect(full.fullText).toContain(`${title} (hệ thống tự bổ sung)`); // bản đầy đủ: chỉ trong Hub, nội bộ Ban GĐ
+  // Bản gửi email (nút "Sao chép bản tổng hợp"): không nêu tên dòng tự bổ sung, không có danh sách mục I / II; số liệu vẫn đếm.
+  expect(full.text).not.toContain(title);
+  expect(full.text).not.toContain('II. ĐANG THỰC HIỆN');
+  expect(full.text).toContain(`nguy cơ chậm ${ktRow.risk}`);
+  const gdRep = await json(gd, `/api/weekly/report?week=${ctx.week}&departmentId=${kt}`);
+  expect(rowsOf(gdRep.report.data).some(r => r.itemId === item.id && r.auto)).toBe(true);
+  const tpRep = await json(tp, `/api/weekly/report?week=${ctx.week}`);
+  expect(rowsOf(tpRep.report.data).some(r => r.itemId === item.id && r.auto)).toBe(true);
+  // Người lập: báo cáo đã nộp của bộ phận mình không có dòng đó.
+  const nvRep = await json(nv, `/api/weekly/report?week=${ctx.week}`);
+  expect(JSON.stringify(nvRep.report.data).includes(title)).toBe(false);
+  // Hồi quy vòng 3: "Gửi lại" của trưởng phòng (xem được việc) và của thư ký (không xem được việc, nhập thay) — dòng tự bổ sung giữ nguyên,
+  // một việc một dòng, số liệu không đổi, nhân viên không thấy tên, bản email không nêu tên.
+  const base = { ongoing: ktRow.ongoing, risk: ktRow.risk };
+  const stable = async label => {
+    const sum = await json(gd, `/api/weekly/summary?week=${ctx.week}`);
+    const row = sum.rows.find(r => r.id === kt);
+    const mine = rowsOf(row.report).filter(r => r.itemId === item.id);
+    expect(mine.length, label).toBe(1); expect(mine[0].auto, label).toBe(true);
+    expect(rowsOf(row.report).filter(r => !r.itemId && r.task === title).length, label).toBe(0);
+    expect({ ongoing: row.ongoing, risk: row.risk }, label).toEqual(base);
+    expect(sum.text, label).not.toContain(title);
+    expect(JSON.stringify((await json(nv, `/api/weekly/report?week=${ctx.week}`)).report.data).includes(title), label).toBe(false);
+  };
+  const tpForm = (await json(tp, `/api/weekly/report?week=${ctx.week}`)).report.data;
+  expect(rowsOf(tpForm).some(r => r.itemId === item.id)).toBe(true); // trưởng phòng vốn xem được việc
+  tpForm.other = 'Trưởng phòng bổ sung (giả)';
+  await post(tp, '/api/weekly/submit', { week: ctx.week, data: tpForm });
+  await stable('trưởng phòng gửi lại');
+  const hc = await as('nv.hcns'); // thư ký giao ban: bộ phận khác, không xem được việc trong sổ
+  expect((await apiAs(hc, `/api/items/${item.id}`)).status()).toBeGreaterThanOrEqual(403);
+  const secForm = async () => (await json(hc, `/api/weekly/report?week=${ctx.week}&departmentId=${kt}`)).report.data;
+  const drop = await secForm();
+  for (const k of ['results', 'ongoing', 'risks']) drop[k] = drop[k].filter(r => r.itemId !== item.id);
+  await post(hc, '/api/weekly/submit', { week: ctx.week, departmentId: kt, data: drop });
+  await stable('thư ký gửi lại — bỏ dòng');
+  const filled = await secForm();
+  for (const r of rowsOf(filled)) Object.assign(r, { next: r.next || 'Theo dõi (giả)', cause: 'Theo báo cáo (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF' });
+  await post(hc, '/api/weekly/submit', { week: ctx.week, departmentId: kt, data: filled });
+  await stable('thư ký gửi lại — điền rồi gửi');
+  // Vòng 4 — quy tắc gốc: người KHÔNG xem được việc gửi dữ liệu sửa dòng của việc đó (đoán itemId) → bản lưu không đổi, không sinh yêu cầu hỗ trợ.
+  const beforeFake = rowsOf((await json(gd, `/api/weekly/report?week=${ctx.week}&departmentId=${kt}`)).report.data).find(r => r.itemId === item.id);
+  const nvForm = (await json(nv, `/api/weekly/report?week=${ctx.week}`)).report.data;
+  nvForm.risks.push({ key: 'gia', itemId: item.id, task: 'Giả mạo (giả)', status: 'Vướng', cause: 'Nhân viên ghi đè (giả)', solution: 'x', helpFrom: 'BGD', helpWhat: 'Xin hỗ trợ (giả)', helpBy: vnDate(5), ownerIds: [me.id], due: vnDate(5) });
+  nvForm.plans.push({ key: 'giap', itemId: item.id, task: 'Giả mạo IV (giả)', basis: 'KH tháng', ownerIds: [me.id], due: vnDate(6), output: 'x' });
+  const fakeRes = await post(nv, '/api/weekly/submit', { week: ctx.week, data: nvForm });
+  expect(fakeRes.ignored).toBe(2); expect(fakeRes.warning).toContain('không có quyền thêm / sửa / bỏ'); // báo lại, không im lặng
+  await stable('nhân viên gửi dòng của việc không xem được');
+  const afterFake = await json(gd, `/api/weekly/summary?week=${ctx.week}`);
+  const fakeRow = rowsOf(afterFake.rows.find(r => r.id === kt).report).find(r => r.itemId === item.id);
+  expect(fakeRow.cause).toBe(beforeFake.cause); expect(fakeRow.status).toBe(beforeFake.status); expect(fakeRow.helpFrom).toBe(beforeFake.helpFrom);
+  expect(afterFake.rows.find(r => r.id === kt).report.plans.some(p => p.itemId === item.id)).toBe(false);
+  expect(JSON.stringify(afterFake.helps)).not.toContain('Xin hỗ trợ (giả)');
+  // Vòng 5 — thư ký (quyền sửa + xem tổng hợp đầy đủ) ghi giải pháp vào chính dòng tự bổ sung → được lưu; dòng vẫn là dòng tự bổ sung.
+  const secForm2 = await secForm();
+  Object.assign(rowsOf(secForm2).find(r => r.itemId === item.id), { solution: 'Thư ký ghi theo email (giả)', cause: 'Chờ chủ đầu tư (giả)' });
+  const secRes = await post(hc, '/api/weekly/submit', { week: ctx.week, departmentId: kt, data: secForm2 });
+  expect(secRes.ignored).toBe(0);
+  const afterSec = rowsOf((await json(gd, `/api/weekly/report?week=${ctx.week}&departmentId=${kt}`)).report.data).find(r => r.itemId === item.id);
+  expect(afterSec.auto).toBe(true); expect(afterSec.solution).toBe('Thư ký ghi theo email (giả)');
+  await stable('thư ký ghi giải trình vào dòng tự bổ sung');
+  // Vòng 5 — nộp kiểm xung đột như lưu nháp: nhân viên mở trang, trưởng phòng gửi lại, nhân viên nộp bằng bản cũ → 409.
+  const nvOld = (await json(nv, `/api/weekly/report?week=${ctx.week}`)).report;
+  const tpNow = (await json(tp, `/api/weekly/report?week=${ctx.week}`)).report;
+  tpNow.data.other = 'Trưởng phòng vừa sửa (giả)';
+  await post(tp, '/api/weekly/submit', { week: ctx.week, data: tpNow.data, baseUpdatedAt: tpNow.updatedAt });
+  const late = await apiAs(nv, '/api/weekly/submit', { method: 'POST', headers: { 'content-type': 'application/json' }, data: { week: ctx.week, data: nvOld.data, baseUpdatedAt: nvOld.updatedAt } });
+  expect(late.status()).toBe(409); expect((await late.json()).code).toBe('REPORT_CONFLICT');
+  expect((await json(gd, `/api/weekly/report?week=${ctx.week}&departmentId=${kt}`)).report.data.other).toBe('Trưởng phòng vừa sửa (giả)');
+  // Vòng 6 — mục 4: nhân viên mở trang khi CHƯA có báo cáo (tuần cũ), trưởng phòng lưu nháp, nhân viên nộp với baseUpdatedAt = null → 409.
+  const w0 = addDays(ctx.week, -21);
+  const nvW0 = await json(nv, `/api/weekly/report?week=${w0}`);
+  expect(nvW0.report).toBe(null);
+  const tpW0 = (await json(tp, `/api/weekly/report?week=${w0}`)).prefill;
+  tpW0.other = 'Trưởng phòng lưu trước (giả)';
+  await json(tp, '/api/weekly/report', { method: 'PUT', headers: { 'content-type': 'application/json' }, data: { week: w0, data: tpW0, baseUpdatedAt: null } });
+  const nullBase = await apiAs(nv, '/api/weekly/submit', { method: 'POST', headers: { 'content-type': 'application/json' }, data: { week: w0, data: nvW0.prefill, baseUpdatedAt: null } });
+  expect(nullBase.status()).toBe(409); expect((await nullBase.json()).code).toBe('REPORT_CONFLICT');
+  // Vòng 6 — mục 8: thư ký nhận cờ noDelete cho dòng của việc mình không xem được (giao diện ẩn nút "Bỏ").
+  const secView = (await json(hc, `/api/weekly/report?week=${ctx.week}&departmentId=${kt}`)).report.data;
+  expect(rowsOf(secView).find(r => r.itemId === item.id).noDelete).toBe(true);
+  // Vòng 4 — bản NHÁP hai người cùng sửa (tuần sau): trưởng phòng nháp có dòng việc trong sổ (Vướng + giải pháp) và Phần IV gắn việc đó;
+  // nhân viên (không xem được việc) tự lưu → dòng và Phần IV của trưởng phòng giữ NGUYÊN.
+  const w2 = addDays(ctx.week, 7);
+  const tpRep2 = await json(tp, `/api/weekly/report?week=${w2}`);
+  const tpDraft = tpRep2.prefill;
+  const tpRow = rowsOf(tpDraft).find(r => r.itemId === item.id);
+  expect(tpRow).toBeTruthy();
+  Object.assign(tpRow, { status: 'Vướng', cause: 'Chờ chủ đất (giả)', solution: 'Họp lại thứ Hai (giả)', helpFrom: 'SELF' });
+  tpDraft.plans.push({ key: 'tp-iv', itemId: item.id, task: title, basis: 'Công việc', ownerIds: [tpUser.id], due: addDays(w2, 5), output: 'Biên bản (giả)' });
+  const tpSaved = await json(tp, '/api/weekly/report', { method: 'PUT', headers: { 'content-type': 'application/json' }, data: { week: w2, data: tpDraft, baseUpdatedAt: null } });
+  const nvRep2 = await json(nv, `/api/weekly/report?week=${w2}`);
+  expect(JSON.stringify(nvRep2.report.data).includes(title)).toBe(false); // nhân viên không thấy
+  nvRep2.report.data.other = 'Nhân viên tự lưu (giả)';
+  await json(nv, '/api/weekly/report', { method: 'PUT', headers: { 'content-type': 'application/json' }, data: { week: w2, data: nvRep2.report.data, baseUpdatedAt: nvRep2.report.updatedAt } });
+  const tpAgain = (await json(tp, `/api/weekly/report?week=${w2}`)).report.data;
+  const kept = rowsOf(tpAgain).find(r => r.itemId === item.id);
+  expect(kept.status).toBe('Vướng'); expect(kept.solution).toBe('Họp lại thứ Hai (giả)');
+  expect(tpAgain.plans.some(p => p.itemId === item.id)).toBe(true);
+  expect(tpAgain.other).toBe('Nhân viên tự lưu (giả)');
+  expect(tpSaved.ok).toBe(true);
+  // Trưởng phòng Kỹ thuật (vốn xem được việc) thấy dòng trên trang Tổng hợp; số liệu giống Ban GĐ.
+  const tpSum = await json(tp, `/api/weekly/summary?week=${ctx.week}`);
+  expect(rowsOf(tpSum.rows.find(r => r.id === kt).report).some(r => r.itemId === item.id)).toBe(true);
+  expect({ ongoing: tpSum.rows.find(r => r.id === kt).ongoing, risk: tpSum.rows.find(r => r.id === kt).risk }).toEqual(base);
+  expect(tpSum.text).not.toContain(title);
+  // Bản tóm tắt (trưởng phòng Kỹ thuật, trưởng ban Tài chính): trưởng ban Tài chính không có việc, kể cả trường text (MCP kepper_weekly_summary dùng chung).
+  for (const p of [tc]) {
+    const brief = await json(p, `/api/weekly/summary?week=${ctx.week}`);
+    expect(JSON.stringify(brief).includes(title)).toBe(false);
+    expect(brief.text.includes('tự bổ sung')).toBe(false);
+    expect(brief.fullText).toBeUndefined();
+  }
+  // Giao diện Ban GĐ: chi tiết bộ phận có nhãn "Hệ thống tự bổ sung".
+  await gd.goto(`/#/tuan/tong-hop?w=${ctx.week}`);
+  await gd.getByTestId(`wk-detail-${kt}`).locator('summary').click();
+  await expect(gd.getByTestId(`wk-detail-${kt}`).getByTestId(`wk-auto-${item.code}`)).toContainText('Hệ thống tự bổ sung');
+  for (const c of ctxs) await c.close();
 });

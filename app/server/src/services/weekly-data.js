@@ -59,7 +59,7 @@ async function userNames(prisma, ids) {
   const rows = await prisma.user.findMany({ where: { id: { in: list } }, select: { id: true, fullName: true } });
   return Object.fromEntries(rows.map(u => [u.id, u.fullName]));
 }
-const rowOwnerIds = data => [...(data?.results || []), ...(data?.ongoing || []), ...(data?.plans || [])].flatMap(r => r.ownerIds || []);
+const rowOwnerIds = data => [...(data?.results || []), ...(data?.ongoing || []), ...(data?.risks || []), ...(data?.plans || [])].flatMap(r => r.ownerIds || []);
 const meetingOf = (prisma, week) => prisma.weeklyMeeting.findUnique({ where: { week } });
 
 async function usersWhere(prisma, test) {
@@ -85,16 +85,18 @@ async function openActions(prisma, f, departmentId = null) {
   const reps = await prisma.weeklyReport.findMany({ where: { week: { gt: from, lte: f }, firstSubmittedAt: { not: null }, departmentId: { in: [...new Set(list.map(a => a.departmentId))] } }, orderBy: { week: 'asc' } });
   const rows = new Map(), rowWeek = new Map(), ownerDept = new Map(list.map(a => [a.ref, a.departmentId]));
   // Chỉ báo cáo của ĐÚNG bộ phận được giao mới cập nhật / đóng được việc trong Action Log (bộ phận khác gửi actionRef thì bỏ qua).
-  for (const r of reps) for (const x of [...(r.data?.results || []), ...(r.data?.ongoing || [])])
+  for (const r of reps) for (const x of [...(r.data?.results || []), ...(r.data?.ongoing || []), ...(r.data?.risks || [])])
     if (x.actionRef && ownerDept.get(x.actionRef) === r.departmentId) { rows.set(x.actionRef, x); rowWeek.set(x.actionRef, r.week); }
   const actions = list.filter(a => a.meetingWeek === prevWeek || !(rows.get(a.ref)?.status === WK.DONE && rowWeek.get(a.ref) < f));
   return { actions, rows };
 }
 
-async function summaryOf(prisma, week, now = new Date()) {
+// auto: false → bỏ dòng "Hệ thống tự bổ sung" trước khi tổng hợp (bản tóm tắt cho trưởng / phó, thông báo gửi cả trưởng / phó) —
+// số liệu bản tóm tắt không để lộ việc người nhận không được xem (services/weekly.js addAutoRows).
+async function summaryOf(prisma, week, now = new Date(), { auto = true } = {}) {
   const cfg = await weeklyConfig(prisma), rd = await requiredDepartments(prisma, cfg);
   const [reports, notices, meeting] = await Promise.all([
-    prisma.weeklyReport.findMany({ where: { week } }), prisma.weeklyNotice.findMany({ where: { week }, orderBy: { id: 'asc' } }), meetingOf(prisma, week),
+    prisma.weeklyReport.findMany({ where: { week } }).then(rs => (auto ? rs : rs.map(r => ({ ...r, data: WK.withoutAuto(r.data) })))), prisma.weeklyNotice.findMany({ where: { week }, orderBy: { id: 'asc' } }), meetingOf(prisma, week),
   ]);
   const { actions, rows: actionRows } = await openActions(prisma, week);
   // Danh sách phải nộp của tuần được CHỤP lại sau hạn nộp — đổi thiết lập về sau không làm đổi điểm các tuần đã qua.
@@ -148,7 +150,7 @@ async function runSummaryNotice(prisma, now = new Date()) {
   for (const week of [cf, WK.addDays(cf, -7)]) {
     const S = WK.scheduleOf(week, await meetingOf(prisma, week));
     if (S.meetingDay !== today || S.skip) continue;
-    const { sum } = await summaryOf(prisma, week, now);
+    const { sum } = await summaryOf(prisma, week, now); // số liệu giống nhau với mọi người nhận (dòng tự bổ sung chỉ đếm)
     const k = sum.kpis;
     const sent = await notify(prisma, await summaryViewerIds(prisma), { type: 'WEEKLY_SUMMARY', title: `Tổng hợp giao ban ${WK.fmtD(today)}: ${k.submitted}/${k.total} bộ phận đã nộp`, body: `${k.stuck} chậm/vướng · ${k.overdue} quá hạn · ${k.helps} yêu cầu hỗ trợ`, link: `#/tuan/tong-hop?w=${week}` });
     return { week, sent };

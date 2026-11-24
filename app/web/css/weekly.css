@@ -77,7 +77,7 @@
 @media (max-width:400px){.r-meta,.r-meta.m3,.wk-issue .r-meta{grid-template-columns:1fr}}
 
 /* ---------- Tổng hợp ---------- */
-.wk-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.wk-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
 @media (max-width:560px){.wk-kpis{grid-template-columns:1fr 1fr}}
 .wk-kpi{background:var(--surface-3);border-radius:8px;padding:10px 12px}
 .wk-kpi b{display:block;font-size:1.45rem;font-weight:600;line-height:1.2}

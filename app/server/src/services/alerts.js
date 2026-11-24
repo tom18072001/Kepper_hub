@@ -26,6 +26,35 @@ function kindsFor(item, st, day, cfg) {
   if (['ON_TRACK', 'BEHIND', 'AHEAD'].includes(st.code) && last && M.vnDay(day) - M.vnDay(last) >= cfg.staleDays) out.push('STALE');
   return out;
 }
+// ---------- "Đang làm" và "nguy cơ chậm tiến độ" — MỘT định nghĩa cho báo cáo tuần, giao ban, bản Word ----------
+// Đã bắt đầu (chưa xong, chưa huỷ): đang làm / chờ duyệt / bị trả lại ở bước duyệt, đã bấm bắt đầu, đã báo tiến độ hoặc % > 0.
+function isStarted(item, actual = item.actual ?? item.progress) {
+  const c = item.state?.category ?? item.category;
+  if (c === 'COMPLETED' || c === 'CANCELLED') return false;
+  return c === 'STARTED' || c === 'REVIEW' || !!item.returnedAt || !!item.startedAt || !!item.progressAt || (Number(actual) || 0) > 0;
+}
+const RISK_LABEL = { OVERDUE: 'Trễ hạn', LATE_START: 'Chậm khởi động', BEHIND: 'Chậm tiến độ', DUE_SOON: 'Sắp đến hạn' };
+// Việc thường (không có kế hoạch gốc MTL): "sắp đến hạn" khi còn ≤ N ngày — N theo thiết lập "Số ngày cảnh báo sắp đến hạn"
+// của sổ giao việc (services/register.js DEFAULT_SETTINGS.dueSoonDays, mặc định 3); nơi gọi truyền taskDueSoonDays đã đọc từ thiết lập.
+const TASK_DUE_SOON_DAYS = 3;
+// Nguy cơ chậm của một việc chưa xong hôm nay → { code, label, days } hoặc null.
+// - Hạng mục MTL có kế hoạch gốc (st = M.statusOf(...), cfg = cấu hình cảnh báo của dự án): Trễ hạn, Chậm khởi động, Chậm tiến độ
+//   theo đúng cảnh báo hằng ngày; "Sắp đến hạn" (≤ cfg.dueSoonDays) chỉ tính khi % thực tế thấp hơn % kế hoạch.
+// - Việc thường / chưa có kế hoạch gốc: quá hạn (dueDate) hoặc còn ≤ TASK_DUE_SOON_DAYS ngày.
+function riskOf(item, { st = null, cfg = M.DEFAULT_ALERTS, day = new Date(), taskDueSoonDays = TASK_DUE_SOON_DAYS } = {}) {
+  const c = item.state?.category ?? item.category;
+  if (c === 'COMPLETED' || c === 'CANCELLED') return null;
+  if (st && item.baselineStart && item.baselineEnd) {
+    const kinds = kindsFor(item, st, day, cfg).filter(k => RISK_LABEL[k] && (k !== 'DUE_SOON' || (st.variance ?? 0) < 0));
+    const k = ORDER.find(x => kinds.includes(x));
+    return k ? { code: k, label: RISK_LABEL[k], days: k === 'OVERDUE' ? st.lateDays ?? null : k === 'DUE_SOON' ? st.daysLeft ?? null : null } : null;
+  }
+  if (!item.dueDate) return null;
+  const left = M.vnDay(item.dueDate) - M.vnDay(day);
+  if (left < 0) return { code: 'OVERDUE', label: RISK_LABEL.OVERDUE, days: -left };
+  if (left <= taskDueSoonDays) return { code: 'DUE_SOON', label: RISK_LABEL.DUE_SOON, days: left };
+  return null;
+}
 // Đã nhắc gần đây chưa (theo chu kỳ của loại)?
 function shouldSend(kind, lastAt, day) {
   if (!lastAt) return true;
@@ -173,4 +202,4 @@ async function runWeeklyUpdateReminder(prisma, day = new Date(), { staleDays = 5
   return { users: count.size, sent };
 }
 
-module.exports = { KIND_LABEL, REPEAT, LEVEL, kindsFor, shouldSend, recipientsFor, detailOf, mergedMessage, runProjectAlerts, runAllAlerts, runWeeklyUpdateReminder };
+module.exports = { KIND_LABEL, REPEAT, LEVEL, kindsFor, isStarted, riskOf, RISK_LABEL, TASK_DUE_SOON_DAYS, shouldSend, recipientsFor, detailOf, mergedMessage, runProjectAlerts, runAllAlerts, runWeeklyUpdateReminder };

@@ -57,19 +57,25 @@ test('báo cáo tuần: chia theo phòng chủ trì và loại nhiệm vụ, kh�
       progressReports: [report(1, { difficulties: 'Thiếu kinh phí', proposals: 'Đề nghị bổ sung', answer: 'Đồng ý' }), report(2, { difficulties: '  ' })] }),
     item(3, 'UNSTARTED', { project: reg, leadDepartmentId: 7, dispatchStatus: 'PENDING', dueDate: new Date('2026-10-14T00:00:00+07:00') }),
     item(4, 'UNSTARTED', { project: reg, leadDepartmentId: 7, dueDate: new Date('2026-10-22T00:00:00+07:00') }),
-    // Kế hoạch năm chưa bắt đầu, đến hạn trong kỳ (chưa quá hạn) → vẫn có trong bảng kết quả của phòng.
+    // Kế hoạch năm chưa bắt đầu, còn 1 ngày tới hạn → nguy cơ chậm → có trong bảng kết quả của phòng.
     item(5, 'UNSTARTED', { project: reg, leadDepartmentId: 6, taskType: 'PLAN', dueDate: new Date('2026-10-17T00:00:00+07:00') }),
+    // Đang làm, hạn còn xa → "đang thực hiện, chưa xong" (trước đây bị sót vì không đến hạn trong kỳ).
+    item(6, 'STARTED', { project: reg, leadDepartmentId: 6, dueDate: new Date('2026-12-31T00:00:00+07:00'), progress: 20 }),
+    // Chưa bắt đầu, hạn tuần sau, không có nguy cơ → không báo cáo trong kỳ (chỉ ở "kỳ tới").
+    item(7, 'UNSTARTED', { project: reg, leadDepartmentId: 6, dueDate: new Date('2026-10-22T00:00:00+07:00') }),
   ];
   const d = reportData(items, { from, end, now, departments: [{ id: 6, name: 'Phòng KHCN' }, { id: 7, name: 'Phòng TNT' }] });
-  assert.deepEqual(d.byDepartment.map(x => [x.name, x.done, x.review, x.overdue]), [['Phòng KHCN', 1, 1, 1], ['Phòng TNT', 0, 0, 1]]);
+  assert.deepEqual(d.byDepartment.map(x => [x.name, x.done, x.review, x.overdue, x.ongoing, x.risk]), [['Phòng KHCN', 1, 1, 1, 2, 2], ['Phòng TNT', 0, 0, 1, 0, 1]]);
   const khcn = d.byDepartment[0];
-  assert.deepEqual(khcn.types.map(t => [t.type, t.items.map(i => i.id)]), [['PLAN', [1, 5]], ['ADHOC', [2]]]);
+  assert.deepEqual(khcn.types.map(t => [t.type, t.items.map(i => i.id)]), [['PLAN', [1, 5]], ['ADHOC', [2, 6]]]);
+  assert.deepEqual(d.sections.ongoing.map(i => i.id), [2, 6]); // chờ duyệt cũng là đang thực hiện
+  assert.deepEqual(d.sections.risk.map(i => i.id), [2, 3, 5]);
   assert.deepEqual(khcn.plan, { total: 2, completed: 1, rate: 50 });
-  assert.equal(d.status(items[4]), 'Chưa bắt đầu');
+  assert.equal(d.status(items[4]), 'Chưa bắt đầu · sắp đến hạn (còn 1 ngày)');
   assert.match(d.status(items[0]), /^Hoàn thành 13\/10\/2026 \(đúng hạn\)$/);
-  assert.equal(d.status(items[1]), 'Chờ BGĐ cho ý kiến · quá hạn 6 ngày');
+  assert.equal(d.status(items[1]), 'Chờ BGĐ cho ý kiến · trễ hạn 6 ngày');
   assert.deepEqual(d.sections.overdue.map(i => [i.id, d.stage(i).label]), [[2, 'Chờ BGĐ cho ý kiến'], [3, 'Chờ phòng tiếp nhận']]);
-  assert.deepEqual(d.sections.next.map(i => i.id), [4]);
+  assert.deepEqual(d.sections.next.map(i => i.id), [4, 7]);
   assert.equal(d.issues.length, 1);
   assert.equal(d.issues[0].department, 'Phòng KHCN');
   assert.equal(d.issues[0].report.answer, 'Đồng ý');

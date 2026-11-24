@@ -949,6 +949,171 @@ Kèm 3 khuyến nghị cho chủ dự án (mục 4).
 - Việc nhánh chuyển từ checklist không mang hạn riêng (nhận hạn / kế hoạch gốc của việc cha). Mục chưa xong của một việc cha đã Hoàn thành thành
   việc nhánh mở dưới việc cha đã xong (bản thật không có trường hợp này).
 
+## Báo cáo tuần / giao ban 3 phần: xong trong tuần · đang làm chưa xong · nguy cơ chậm (24/11/2026)
+
+Yêu cầu chủ dự án: báo cáo tuần bộ phận (BM-TH-01), bản tổng hợp giao ban và bản Word xuất từ Dashboard có đủ 3 phần. Phần (1) là việc xong trong tuần.
+Phần (2) là MỌI việc đã bắt đầu mà chưa xong: đang làm, chờ duyệt, bị trả lại, đã báo tiến độ. Phần này tự chuyển sang tuần sau. Phần (3) là việc có nguy cơ chậm.
+Việc chưa bắt đầu thì không báo cáo, trừ khi đã có nguy cơ chậm (chậm khởi động, trễ hạn, sắp đến hạn) hoặc đã đăng ký ở kế hoạch tuần trước.
+Định nghĩa "đang làm" và "nguy cơ chậm" chỉ ở một chỗ: `services/alerts.js` (`isStarted`, `riskOf`). Hàm này dùng chung các mức cảnh báo MTL hằng ngày;
+"sắp đến hạn" của việc thường theo thiết lập số ngày cảnh báo của sổ giao việc (`dueSoonDays`). Bản Word dùng đúng định nghĩa này cho cả hạng mục MTL.
+
+### 1. Phân loại
+
+| Tập dữ liệu | Nhãn nội bộ | Pháp lý | Thay đổi |
+|---|---|---|---|
+| Báo cáo tuần bộ phận (`WeeklyReport.data`) | **Bảo mật** (không đổi) | DLCN cơ bản (người phụ trách gắn với việc) | Thêm mảng `risks` và trường `risk` / `riskNote` mỗi dòng. Thêm dòng **việc thường** (dự án bảng công việc), nguồn "Công việc" |
+| Bản tổng hợp giao ban, văn bản sao chép (`text`) | Bảo mật | như trên | Thêm đếm xong / đang làm / nguy cơ chậm và danh sách 3 phần theo từng việc. Văn bản sao chép vẫn không có họ tên. **Sửa lỗi có từ trước:** trường `text` trước đây luôn là bản ĐẦY ĐỦ, kể cả với trưởng / phó chỉ có quyền bản tóm tắt; nay dựng từ đúng bản người xem được nhận (`WK.summaryView`) |
+| Bản Word báo cáo tuần (Dashboard) | Nội bộ / Bảo mật (như cũ) | như trên | Đổi phần III thành "nguy cơ chậm". Bảng theo phòng thêm cột đang làm và nguy cơ. Không thêm trường cá nhân |
+
+### 2. Dòng dữ liệu
+
+- Điền sẵn chỉ lấy việc thường **người lập xem được**, qua `visibleProjectsWhere` và `itemVisibleWhere`, giống bảng công việc.
+  Việc thuộc bộ phận khi: bộ phận chủ trì (hoặc phòng của dự án) là bộ phận lập báo cáo, hoặc người phụ trách là thành viên bộ phận.
+- Sau khi nộp, tên việc thường của bộ phận đến người xem báo cáo tuần theo `lib/policy.js`:
+  - báo cáo bộ phận (giao diện, `/api/weekly/report`, MCP `kepper_weekly_report`): **mọi thành viên của bộ phận** (nhân viên, trưởng / phó) xem báo cáo
+    bộ phận mình (`lib/policy.js` weekly.report · view); Ban GĐ, thư ký, PMO xem mọi bộ phận;
+  - bản tổng hợp `/api/weekly/summary`: Ban GĐ, thư ký, PMO nhận bản đầy đủ (`weekly.summary.detail`); trưởng / phó nhận bản tóm tắt (chi tiết chỉ bộ phận mình);
+    nhân viên không xem;
+  - văn bản sao chép — **bản gửi email** (`text` của `/api/weekly/summary`, nút "Sao chép bản tổng hợp", MCP `kepper_weekly_summary`): chủ dự án chọn
+    "Bản tóm tắt" (24/11/2026). Với MỌI người dùng, kể cả thư ký / Ban GĐ, gồm: tình trạng nộp, số việc xong / đang làm / nguy cơ chậm từng bộ phận,
+    Action Log, mục III nguy cơ chậm (tên việc, mức nguy cơ, hạn, giải pháp), yêu cầu hỗ trợ. **Không** có danh sách mục I (việc xong), mục II (việc đang làm);
+    dòng "Hệ thống tự bổ sung" không nêu tên, chỉ cộng vào số liệu; không có họ tên người phụ trách. Khớp QĐ-EXT (`lib/policy.js`: chỉ bản tóm tắt được gửi
+    ra ngoài; `weekly.report`, `weekly.summary.detail` thuộc NEVER_EXTERNAL). Trưởng / phó: mục III chỉ việc bộ phận mình (dựng từ bản tóm tắt).
+    Test: `weekly-3phan.test.js` ca 5, `weekly-s10.test.js`, e2e 06;
+  - **bản đầy đủ** (`fullText`, mục I, II, III mọi bộ phận): chỉ trả cho người xem đầy đủ (`weekly.summary.detail`), xem trong Hub; nút riêng
+    "Sao chép bản đầy đủ" ghi rõ "chỉ dùng nội bộ Ban GĐ — không gửi email". Nhật ký `WEEKLY_SUMMARY_COPY` ghi `kind` = email / full;
+  - **kênh MCP** (Claude, token cá nhân, quyền của chính người dùng): `kepper_weekly_report`, `kepper_save_weekly_draft` (báo cáo bộ phận mình) và
+    `kepper_weekly_summary` (trả `text`, `kpis`, `helps`, `rows` của `/api/weekly/summary` — cùng phạm vi theo quyền như trên). Nội dung đi vào
+    phiên Claude của người dùng: là xử lý DLCN qua dịch vụ AI, cần có trong hồ sơ đánh giá tác động (PRI-04).
+  Không đổi ma trận quyền. Trước đây chỉ hạng mục MTL đi theo luồng này.
+- Không có kênh mới ra ngoài. MCP gọi cùng endpoint; định dạng chỉ thêm trường (`risks`, `risk`, `riskNote`, `started`, `kpis.done/ongoing/risk`), không bỏ trường nào.
+- Điền sẵn chỉ đọc việc thường của MỘT bộ phận (chủ trì / phòng của dự án / người phụ trách thuộc bộ phận). Việc người lập không xem được:
+  xem mục "Dòng Hệ thống tự bổ sung" bên dưới (chủ dự án quyết 24/11/2026).
+
+### 3. Rà năng lực (thay đổi)
+
+| Mã | Trạng thái | Ghi chú | Ưu tiên |
+|---|---|---|---|
+| GOV-01 | Không đổi | Quyền xem báo cáo tuần vẫn qua `weekly.report` / `weekly.summary(.detail)` | Bắt buộc |
+| PRE-01 | Đầy đủ | Theo khung K1–K5 (bên dưới). Tuần đang mở: tên, hạn, tình trạng, nguy cơ, phần I/II/III tính lại từ việc. % hạng mục MTL: khoá theo MTL với dòng tự bổ sung và hạng mục có việc nhánh; người xem được hạng mục MTL lá thì ghi % (ghi ngược MTL); dòng người lưu không xem được và tuần đã họp giữ % đã lưu. Tuần đã họp: đóng băng theo bản nộp. Dòng gắn việc mới chỉ người xem được việc thêm; thư ký chỉ sửa trường người nhập của dòng đã có. Thay đổi bị bỏ được báo lại (`ignored`), gồm: dòng không được thêm / sửa / bỏ; trường máy tính gửi lên khác cả giá trị đã lưu lẫn giá trị vừa tính, so trên dữ liệu gửi lên TRƯỚC khi làm sạch. Trường máy tính gồm tên, hạn, tình trạng trừ "Vướng", phần, và % của việc thường / hạng mục có việc nhánh / dòng tự bổ sung; % hạng mục MTL lá do người xem được việc ghi thì không tính. Dòng mới (chưa có bản lưu) không so tình trạng và phần. Dòng của việc đã lưu trữ / huỷ bị bỏ khỏi tuần đang mở; chỉ người đã từng thấy dòng (xem được việc, kể cả trước khi lưu trữ, hoặc thư ký) nhận `removed` với câu "đã bỏ vì việc đã lưu trữ / huỷ". Người chưa từng thấy nhận câu chung (K3). Báo cáo tuần không ghi % ngược vào việc thường | Bắt buộc |
+| PRI-01 | Một phần → tốt hơn | Việc thường mang tên việc và người phụ trách vào báo cáo Bảo mật. Nếu một việc thuộc dự án hạn chế (DEPARTMENT / thành viên), Ban GĐ, thư ký và PMO sẽ thấy **tên việc** qua báo cáo tuần. Đã chặn trưởng / phó bộ phận khác đọc văn bản đầy đủ (trước đây lộ qua trường `text`, cả API lẫn MCP) | Nên có |
+| PRI-04 | Một phần | Hồ sơ đánh giá tác động xử lý DLCN, luồng "báo cáo tuần", cần ghi thêm nguồn "việc thường của bộ phận" và kênh MCP (`kepper_weekly_report`, `kepper_weekly_summary`) | Bắt buộc |
+| DET-05 | Không đổi | Bản nộp vẫn băm SHA-256 và lưu phiên bản bất biến | Nên có |
+
+### 4. Khuyến nghị và rủi ro còn lại
+
+- **Khuyến nghị 1 (Nên có):** chủ dự án xác nhận việc này là chấp nhận được. Tên việc thường của dự án hạn chế đi vào báo cáo tuần bộ phận. Người đọc thực tế:
+  **mọi thành viên bộ phận** (báo cáo bộ phận mình — trừ việc họ không xem được, xem mục 5), thư ký / PMO / Ban GĐ (mọi bộ phận, bản đầy đủ trong Hub),
+  và **các trưởng bộ phận nhận email sau giao ban**: bản gửi email (bản tóm tắt, chủ dự án chọn) nêu **tên việc ở mục nguy cơ chậm** của mọi bộ phận
+  (tên việc, mức nguy cơ, hạn, giải pháp) — đúng quyết định "Bản tóm tắt"; dòng "Hệ thống tự bổ sung" thì không nêu tên, chỉ đếm.
+  Theo QC-TH-01, đây là bộ phận báo cáo việc của mình lên. Nếu không chấp nhận, lọc theo `visibility` của dự án khi điền sẵn.
+- **Khuyến nghị 2 (Bắt buộc):** cập nhật hồ sơ đánh giá tác động xử lý DLCN (PRI-04) như mục 3, gồm kênh MCP.
+- **Khuyến nghị 3 (Nên có):** soát các bản tổng hợp đã sao chép / gửi qua Claude trước bản sửa: trưởng / phó bộ phận có thể đã nhận văn bản đầy đủ của bộ phận khác.
+- **Khuyến nghị 4 (đã xử lý 24/11/2026):** bản gửi email = bản tóm tắt nói trên (chủ dự án chọn). Còn lại (Nên có): thư ký / Ban GĐ không dán
+  bản đầy đủ vào email / nhóm chat chung — giao diện đã ghi cảnh báo cạnh nút, nhật ký ghi lần sao chép bản đầy đủ.
+- **Định nghĩa "Đã đăng ký tuần trước, chưa khởi động" (nguy cơ PLAN_NOT_STARTED):** việc đã ghi ở kế hoạch tuần (Phần IV) của bản đã nộp mà vẫn chưa bắt đầu
+  → Phần III. Cờ giữ qua các tuần tới khi việc được bắt đầu, xong, hoặc bị huỷ / bỏ khỏi báo cáo. Dòng tự do bắt buộc (kế hoạch tuần trước, việc TGĐ giao)
+  ghi "Chưa bắt đầu", 0% cũng vào Phần III (nhãn "Đã đăng ký tuần trước, chưa khởi động" / "TGĐ giao, chưa khởi động"), không tính là đang thực hiện.
+  Không thêm trường cá nhân.
+- Rủi ro: "nguy cơ chậm" tính theo ngày xem / ngày nộp, không theo thứ Sáu của tuần báo cáo. Bản đã nộp giữ nguyên nhãn lúc nộp. Bản nháp mở lại sẽ được tính lại khi bấm "Làm mới".
+
+### 5. Dòng "Hệ thống tự bổ sung" (mục S10 — chủ dự án chọn "Tự đưa vào", 24/11/2026)
+
+**Là gì.** Tập việc phải báo cáo của một bộ phận (xong trong tuần / đang làm / nguy cơ chậm) nay tính theo **phạm vi bộ phận**, không theo quyền xem
+của người lập. Quy tắc chọn việc giống điền sẵn (`deptCandidates`). Biểu mẫu của người lập vẫn chỉ có việc họ được xem.
+Lúc nộp (`POST /api/weekly/submit`), máy chủ đọc mọi việc của bộ phận bằng phạm vi nội bộ `DEPT_SCOPE` (chỉ dùng trong máy chủ, không trả thẳng cho ai).
+Việc người nộp không xem được thì máy chủ thêm vào bản nộp, có cờ `auto: true`, nhãn "Hệ thống tự bổ sung":
+- tên, mã, hạn, người phụ trách, %, tình trạng, nguy cơ lấy từ hệ thống;
+- không có nguyên nhân / giải pháp / đề nghị hỗ trợ, không bắt người lập ghi;
+- không ghi % ngược vào việc;
+- không thêm khi việc cha đã có trong báo cáo (không đếm hai lần);
+- dữ liệu gửi lên không tự gắn được cờ này (`sanitize` bỏ).
+
+Ví dụ: TGĐ giao trưởng phòng qua sổ giao việc, nhân viên lập báo cáo. Bản nộp có việc đó, nhân viên vẫn không thấy.
+
+**Ai thấy.**
+
+| Nơi xem | Ban GĐ, thư ký, PMO (`weekly.summary.detail`) | Người vốn xem được việc (vd. trưởng phòng được giao) | Người lập, nhân viên khác | Trưởng / phó (bản tóm tắt) |
+|---|---|---|---|---|
+| `/api/weekly/report`, `/report/versions`, MCP `kepper_weekly_report`, dữ liệu trả kèm lỗi 422 khi nộp | Có | Có (kiểm quyền xem từng việc) | Không | Không, trừ việc họ xem được |
+| `/api/weekly/summary` trang Tổng hợp (`rows`, `risks`, `fullText`) | Có; bản đầy đủ ghi "(hệ thống tự bổ sung)" | Trưởng / phó của chính bộ phận đó: **có** (dòng của việc họ xem được) | — | Không có tên (danh sách nguy cơ chỉ còn mức nguy cơ, không tên) |
+| Số liệu (KPI, xong / đang làm / nguy cơ từng bộ phận) — trang Tổng hợp, bản gửi email, thông báo | **Giống nhau với mọi người**: luôn đếm dòng tự bổ sung | như cột trái | | như cột trái |
+| Bản gửi email (`text`), MCP `kepper_weekly_summary` | Không nêu tên dòng tự bổ sung; mục nguy cơ ghi "(N việc hệ thống tự bổ sung / không nêu tên — xem trong Kepler Hub)" | như cột trái | | như cột trái, thêm: không nêu tên việc họ không xem được |
+| Bản Word (Dashboard) | Đếm theo quyền xem của người xuất. Ban GĐ có `work.view` toàn hệ thống nên có cả việc này | | | |
+
+**Ẩn / hiện theo người xem (nghiệm thu vòng 3).** Quy tắc áp cho MỌI dòng gắn việc, không chỉ dòng tự bổ sung: người không có quyền xem tổng hợp đầy đủ
+chỉ nhận dòng gắn việc họ xem được (`itemVisibleWhere` của chính người xem), kể cả dòng do trưởng phòng / thư ký nhập.
+
+**Khung nguyên tắc K1–K5 (nghiệm thu vòng 6, chỉnh vòng 7)** — áp cho MỌI đường: web, MCP `kepper_save_weekly_draft`, lưu nháp, tự lưu, nộp,
+gửi lại (`services/weekly-submit.js`):
+- **K1 — trường do máy tính máy chủ quyết.** Gồm tên, mã, hạn, người phụ trách, tình trạng, nguy cơ, và việc dòng nằm ở Phần I / II / III (xếp mọi
+  hướng theo tình trạng). Tuần đang mở: luôn tính lại từ việc; dòng của việc đã lưu trữ / huỷ bị bỏ. Tuần **đã họp** (đã có bản nộp và đã qua giờ giao
+  ban): đóng băng theo bản nộp trước đó. Không tính lại, không xếp lại, không dựng lại / bỏ dòng tự bổ sung, không thêm hay xoá dòng gắn việc; chỉ sửa
+  được trường người nhập (thư ký).
+  - **% có hai nghĩa tách riêng.**
+    - Khoá theo MTL: dòng tự bổ sung và hạng mục có việc nhánh.
+    - Không nhận % người này gửi, giữ % ĐÃ LƯU: dòng người lưu không xem được, và tuần đã họp. Ví dụ: trưởng phòng ghi 60% cho MTL thì nhân viên /
+      thư ký lưu hay nộp vẫn giữ 60%.
+    - Người xem được hạng mục MTL lá (không có việc nhánh) thì ghi % (ghi ngược MTL theo policy). Việc thường: % luôn lấy từ việc.
+- **K2 — dòng gắn việc mới chỉ người xem được việc mới thêm được.** "Mới" xét riêng theo phần: Phần I–III và Phần IV. Thư ký (quyền sửa + xem tổng hợp
+  đầy đủ) chỉ sửa trường người nhập của dòng đã có, không thêm, không bỏ được. Chỉ người xem được việc bỏ được dòng; dòng tự bổ sung thì không ai bỏ được.
+- **K3 — không xác nhận việc người lưu không xem được.** Quyền thêm / sửa được kiểm TRƯỚC mọi thứ khác. Gửi dữ liệu cho mã việc kín đang dùng, mã việc
+  kín đã lưu trữ, hay mã không tồn tại đều nhận cùng một phản hồi: `ignored` + một câu báo chung. Kiểm "dòng tự do trùng tên" chỉ so với dòng người
+  lưu xem được / sửa được.
+- **K4 — thay đổi bị bỏ được báo lại** qua `ignored` + câu cảnh báo. Web hiện cảnh báo; MCP `kepper_save_weekly_draft` trả `ignored` / `removed` /
+  `warning`. Mô tả công cụ nói rõ: % hạng mục MTL lá ghi được tại đây; % của việc thường / hạng mục có việc nhánh và tình trạng cập nhật bằng
+  `kepper_update_progress`. Được báo gồm:
+  - thêm / sửa / bỏ dòng trái quyền;
+  - trường máy tính gửi lên khác CẢ giá trị đã lưu LẪN giá trị máy vừa tính. Trường máy tính gồm tên, hạn, tình trạng trừ "Vướng", phần, và % của việc
+    thường / hạng mục có việc nhánh / dòng tự bổ sung. So trên dữ liệu gửi lên TRƯỚC khi làm sạch, vì bước làm sạch tự đổi tình trạng khi % = 100.
+    Dòng mới (lần lưu đầu) không so tình trạng và phần, vì hai trường này phụ thuộc % người lập vừa ghi. Nhờ vậy giao diện gửi nguyên bản đã nhận
+    (kể cả việc 100% đang chờ duyệt) thì không bị báo nhầm, dù việc đã tiến triển.
+  - Dòng của việc đã lưu trữ / huỷ bị bỏ được báo riêng (`removed`, câu "đã bỏ vì việc đã lưu trữ / huỷ"). Áp cho người đã từng thấy dòng: người xem được
+    việc, xét cả trước khi việc bị lưu trữ, và thư ký. Người chưa từng thấy (đoán mã) nhận câu chung như mã không tồn tại (K3).
+  Giao diện thay nút "Bỏ" bằng chip "không bỏ được" ("Chỉ người xem được việc này mới bỏ được dòng") cho dòng `noDelete`, ở cả Phần I–III và Phần IV.
+- **K5 — hiển thị lọc theo người xem.** Gồm dòng, yêu cầu hỗ trợ, và kết luận giao ban: kết luận của yêu cầu hỗ trợ bị ẩn không đến người xem.
+- Trường **do người nhập**: tình trạng "Vướng", nguyên nhân, giải pháp, đề nghị hỗ trợ, việc tuần tới, người phụ trách tự chọn (việc chưa giao),
+  toàn bộ dòng Phần IV.
+- **Xung đột:**
+  - Lưu nháp (PUT) luôn kiểm.
+  - Nộp (POST) kiểm khi body CÓ khoá `baseUpdatedAt`, kể cả = null khi mở trang lúc chưa có báo cáo: bản đã lưu khác thì trả 409 `REPORT_CONFLICT`.
+    Giao diện luôn gửi khoá này.
+  - POST **không** kèm khoá `baseUpdatedAt` thì không kiểm xung đột. Đây là cách cũ, giữ cho công cụ / e2e gửi thẳng.
+
+**Việc thuộc dự án KÍN** — chế độ hiển thị "Chỉ thành viên" (PRIVATE) hoặc "Sổ giao việc" (ASSIGNED). Quy tắc theo việc, không theo người lập:
+- Trong **bản gửi email** và **bản tóm tắt cho trưởng / phó bộ phận khác**, việc kín không nêu tên, chỉ đếm. Áp cho cả mục nguy cơ chậm lẫn
+  yêu cầu hỗ trợ: dòng email ghi "(việc không nêu tên — xem trong Kepler Hub)".
+- Việc thuộc dự án thường ("Cả phòng ban" / "Toàn công ty") vẫn nêu tên ở mục nguy cơ chậm, đúng quyết định "Bản tóm tắt".
+- Yêu cầu hỗ trợ lọc theo người xem như các dòng: trên trang Tổng hợp và qua MCP `kepper_weekly_summary` (trả `helps`), bản tóm tắt bỏ tên việc và
+  nội dung đề nghị khi việc thuộc dự án kín của bộ phận khác, hoặc khi đó là việc của bộ phận mình mà người xem không xem được.
+- Mục nguy cơ bị ẩn tên không giữ `key` / mã việc.
+
+**Gửi lại.** Mã việc và cờ tự bổ sung là dữ liệu của máy chủ, không phụ thuộc người bấm gửi:
+- Dòng tự bổ sung: máy chủ quyết dòng có hay không, theo phạm vi bộ phận. Giải trình đã nhập được giữ và trường máy tính được tính lại, kể cả khi
+  trưởng phòng (xem được việc) bấm "Gửi lại".
+- Dòng gắn việc mà người gửi không xem được: trường do người nhập giữ từ bản đã lưu, trường do máy tính theo K1. Thư ký sửa được trường do người
+  nhập của dòng đã có (K2); người khác gửi thay đổi thì bị bỏ và được báo lại (K4).
+- Mọi lần nộp / gửi lại đều tính lại phạm vi bộ phận và gộp theo `itemId`: một việc là một dòng.
+- Dòng gắn việc không hợp lệ bị bỏ, không thành dòng tự do giữ nguyên tên việc.
+- Lỗi kiểm tra không nêu dòng người gửi không sửa được.
+
+Thư ký vẫn gửi lại được sau giờ giao ban: đây là ngoại lệ có sẵn của quy chế (thư ký sửa căn cứ sau họp). Mọi phiên bản đều được lưu, bất biến và có SHA-256.
+
+Bản nộp vẫn băm SHA-256 trên bản đầy đủ (có dòng tự bổ sung). Bản người không có quyền nhận là bản đã lọc. Mã băm vẫn là của bản đầy đủ.
+
+**Rà năng lực.**
+
+| Mã | Trạng thái | Ghi chú |
+|---|---|---|
+| GOV-01 | Đầy đủ | Không đổi ma trận quyền. Lọc đầu ra theo `weekly.summary.detail` + quyền xem việc (`itemVisibleWhere`) |
+| PRE-01 | Đầy đủ | Máy chủ tự sinh / bỏ dòng tự bổ sung; người dùng không chèn hay giả cờ `auto` được; người được sửa chỉ nhập trường do người nhập |
+| PRI-01 | Một phần | **Tên việc hạn chế** (sổ giao việc) nay vào báo cáo Bảo mật của bộ phận và đến Ban GĐ / thư ký / PMO, đúng quyết định chủ dự án. Không đến người lập, nhân viên, trưởng / phó bộ phận khác |
+| PRI-04 | Một phần | Hồ sơ đánh giá tác động (luồng báo cáo tuần) cần ghi: nguồn "việc của bộ phận người lập không xem được", người nhận như bảng trên, kênh MCP |
+| DET-05 | Đầy đủ | Nhật ký `WEEKLY_REPORT_SUBMIT` ghi thêm `autoAdded` (số dòng tự bổ sung) |
+
+**Khuyến nghị.** (Bắt buộc) bổ sung PRI-04 như trên. (Nên có) thư ký / PMO lưu ý: dòng tự bổ sung không có giải pháp của bộ phận.
+Việc chậm cần giải trình thì hỏi người phụ trách trực tiếp tại giao ban.
+
 ## Tài liệu: kho tài liệu theo dự án — tệp tải lên Hub + thư mục dự án trên NAS (24/11/2026)
 
 Theo yêu cầu của chủ dự án: mục "Văn thư" trên menu đổi thành **"Tài liệu"**. Bên trong có ba tab: **Tài liệu dự án** (mới),
