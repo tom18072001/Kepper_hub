@@ -76,3 +76,7 @@ test('readPdf: đọc đúng tệp PDF', () => {
   assert.equal(r.name, 'Quy che mau (gia).pdf');
   assert.ok(r.buffer.length > 10);
 });
+
+test('readPdf: thông báo lỗi giữ nguyên dấu \\ của đường dẫn Windows (không thành ký tự TAB)', () => {
+  assert.throws(() => readPdf('tai-lieu.pdf'), e => e.message.includes('C:\\Users\\…\\tai-lieu.pdf') && !e.message.includes('\t'));
+});

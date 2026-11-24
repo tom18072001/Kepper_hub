@@ -141,7 +141,12 @@ const isApprover = (user, cfg, board) => !!board && (cfg.approverUserIds.length 
 const statusOnApprove = (effectiveDate, today) => (effectiveDate && effectiveDate > today ? 'APPROVED' : 'EFFECTIVE');
 // Sau khi phê duyệt chỉ Văn thư / Ban TGĐ đánh dấu Hiệu lực / Hết hiệu lực (đổi trạng thái tay); dự thảo không đổi trạng thái theo đường này.
 const NOIBO_MANUAL = { APPROVED: ['EFFECTIVE', 'EXPIRED'], EFFECTIVE: ['EXPIRED'] };
+// Mức mật GHI SONG SONG cho sổ nội bộ — chỉ để QUAY LẠI bản cũ (PR #41, canView theo mức mật) an toàn: mã cũ đọc cột này phải xem HẸP hơn,
+// không rộng hơn cấp xem. Mã mới không đọc nó cho sổ nội bộ (cấp xem là khái niệm duy nhất). Dự thảo / đã trả lại → Bảo mật cao
+// (mã cũ: Ban TGĐ + người soạn); đã phê duyệt: Mọi người → Nội bộ; Lãnh đạo, Ban TGĐ → Bảo mật cao. Không dùng Hạn chế (mã cũ mở cho cả
+// nhân viên cùng bộ phận). Ngoại lệ duy nhất khi quay lại: mọi thành viên Ban TGĐ (không chỉ Người phê duyệt) xem dự thảo.
+const legacySecurity = (status, viewLevel) => (DRAFT_STATES.has(status) || (viewLevel || 'ALL') !== 'ALL' ? 'BAO_MAT_CAO' : 'NOI_BO');
 
 module.exports = { CONFIG_KEY, BOOKS, SERIES, SECURITY, URGENCY, DUE_WORKDAYS, STATUS, FIRST, CLOSED, DOC_TYPES, vanthuConfig, numberOf, seriesKey,
   addWorkdays, dueFor, canView, canRegister, canStatus, isOverdue, LINKABLE_SECURITY, canLink, issuerOf,
-  VIEW_LEVELS, LEVEL_RANK, NOIBO_TYPES, isDraft, levelOk, levelsFor, canViewNoibo, aiHidden, canEditDraft, approveCheck, returnCheck, isApprover, statusOnApprove, NOIBO_MANUAL };
+  VIEW_LEVELS, LEVEL_RANK, NOIBO_TYPES, isDraft, levelOk, levelsFor, canViewNoibo, aiHidden, canEditDraft, approveCheck, returnCheck, isApprover, statusOnApprove, NOIBO_MANUAL, legacySecurity };

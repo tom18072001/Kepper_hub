@@ -1193,10 +1193,10 @@ Chủ dự án chốt: (1) thời gian xử lý có hai chỉ số: bắt đầu
 
 Khuyến nghị cho chủ dự án: ghi mục đích "phân tích KPI tham khảo cho Ban giám đốc" vào hồ sơ đánh giá tác động (PRI-04); thông báo cho nhân viên rằng thời gian xử lý và mức đánh giá được tổng hợp cho Ban giám đốc.
 
-## Quy chế, quy định nội bộ: phê duyệt của Tổng Giám đốc, cấp xem theo vai — 25/11/2026
+## Quy chế, quy định nội bộ: phê duyệt của Tổng Giám đốc, cấp xem theo vai — 24/11/2026
 
 Đề xuất chủ dự án duyệt 24/11/2026: `docs/de-xuat-quy-che-phe-duyet.md` (mục 10 là đánh giá rút gọn). Thực thi: `routes/vanthu.js`, `services/vanthu.js`,
-migration `20261125100000_quy_che_phe_duyet`, MCP `kepper_vanthu_draft`.
+migration `20261124170711_quy_che_phe_duyet`, MCP `kepper_vanthu_draft`.
 
 | Tập dữ liệu | Nhãn | Pháp lý | Ghi chú |
 |---|---|---|---|
@@ -1210,7 +1210,9 @@ migration `20261125100000_quy_che_phe_duyet`, MCP `kepper_vanthu_draft`.
 | PRE (AI) | Claude chỉ tạo dự thảo kèm PDF (`POST /api/vanthu/drafts`), cấp xem không vượt vai người dùng, đánh dấu "tạo qua Claude"; không đọc cấp Ban TGĐ, không đọc dự thảo của người khác, không tải tệp về | Bắt buộc — có |
 | DET-01 Nhật ký | Mọi lần tạo, sửa, phê duyệt, trả lại, gửi lại, huỷ, đổi cấp xem đều ghi `DocEvent` + `AuditLog`; giữ ≥ 12 tháng như nhật ký hệ thống | Bắt buộc — có |
 | RES Toàn vẹn | Phê duyệt xong khoá nội dung và tệp; đổi nội dung = bản mới "thay thế"; khoá chống trùng số (`pg_advisory_xact_lock` + cập nhật có điều kiện) | Khuyến nghị — có |
-| RES Migration | Chỉ thêm cột / nới NOT NULL của số dự thảo; văn bản nội bộ cũ giữ số, coi là đã phê duyệt, cấp xem chuyển theo mức mật cũ, có dòng nhật ký MIGRATE | Bắt buộc — có |
+| RES Migration / quay lại | Chỉ thêm cột / nới NOT NULL của số dự thảo; văn bản nội bộ cũ giữ số, coi là đã phê duyệt, cấp xem chuyển theo mức mật cũ, có dòng nhật ký MIGRATE. Quay lại bản cũ khi đã có dự thảo: PHẢI chạy `scripts/quy-che-quay-lai.sql` trước (không chạy: danh sách Văn thư lỗi), nâng lại chạy `scripts/quy-che-nang-lai.sql` — đã chạy thử 24/11/2026 với mã PR #41. Mức mật ghi song song để bản cũ chỉ xem hẹp hơn; ngoại lệ: mọi thành viên Ban TGĐ xem dự thảo khi chạy bản cũ (đề xuất mục 13) | Bắt buộc — có |
+
+Tệp dự thảo trên NAS mang tên `DuThao-<id>_…` và giữ tên đó sau khi phê duyệt (số chính thức ở Hub và nhật ký phê duyệt).
 
 Khuyến nghị: trước khi triển khai, đếm văn bản NOIBO trên bản thật (chỉ đếm); sau triển khai, Ban TGĐ chọn **Người phê duyệt** ở Thiết lập văn thư
 (để trống thì mọi thành viên Ban TGĐ phụ trách "Toàn công ty" đều phê duyệt được) và rà cấp xem của văn bản cũ (nếu có). Tệp PDF thật chỉ đưa lên trên

@@ -249,7 +249,8 @@ Tab **Tài liệu → Quy chế, quy định nội bộ** (sổ nội bộ D5, D
    cấp số ngay, khoá nội dung và tệp, ghi mã băm của tệp vào lịch sử. Hoặc bấm **Trả lại** kèm lý do; người soạn sửa rồi bấm **Gửi lại**.
 3. Ngày hiệu lực trống hoặc đã qua → **Hiệu lực** ngay; ngày trong tương lai → **Đã phê duyệt**, tới ngày tự chuyển **Hiệu lực**.
    Văn bản đã ban hành từ trước khi đưa vào Hub: điền **Ngày ban hành gốc** và ngày hiệu lực trong quá khứ.
-4. Sửa nội dung tài liệu đã phê duyệt: tạo dự thảo mới, chọn **Thay thế văn bản** — khi bản mới được phê duyệt, bản cũ chuyển **Hết hiệu lực / thay thế**.
+4. Tệp PDF của dự thảo lưu trên NAS với tên `DuThao-<id>_…` và giữ tên đó sau khi phê duyệt; số chính thức xem trên Kepler Hub.
+5. Sửa nội dung tài liệu đã phê duyệt: tạo dự thảo mới, chọn **Thay thế văn bản** — khi bản mới được phê duyệt, bản cũ chuyển **Hết hiệu lực / thay thế**.
 
 **Cấp xem** (thay cho mức bảo mật trong sổ nội bộ): **Mọi người** · **Lãnh đạo** (lãnh đạo bộ phận + Ban Tổng Giám đốc) · **Ban TGĐ**.
 Cấp cao xem được tài liệu cấp thấp. Dự thảo chỉ người soạn, Người phê duyệt và Văn thư thấy. Quản trị hệ thống không xem nội dung.

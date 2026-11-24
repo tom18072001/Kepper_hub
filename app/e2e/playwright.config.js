@@ -46,6 +46,9 @@ module.exports = defineConfig({
     env: {
       DATABASE_URL, PORT: String(PORT), JWT_SECRET: 'e2e-secret-' + 'x'.repeat(32), APP_ORIGIN: BASE_URL, NODE_ENV: 'test',
       ROOT_ADMIN_USERNAME: 'admin', ROOT_ADMIN_PASSWORD: 'Admin@2026', SEED_DEMO: 'true', ENABLE_CRON: 'false', MODULES: 'crm,hrm,vanthu',
+      // E2E là test CHỨC NĂNG chạy cả bộ bằng vài tài khoản giả trong vài phút: nâng giới hạn tần suất API để không nhận 429 giả.
+      // Bản thật giữ mặc định 600 yêu cầu / phút / tài khoản (app.js apiRateLimit). Không thử lại khi 429.
+      API_RATE_LIMIT: '100000',
       STORAGE_DRIVER: 'local', NAS_ROOT, UPLOAD_DIR: require('node:path').join(require('node:os').tmpdir(), 'workhub-e2e-uploads'),
       // Như docker-compose: cổng NAS giữ tối đa NAS_MAX_INFLIGHT (4) < UV_THREADPOOL_SIZE luồng; hạn chờ rộng hơn để máy chạy test đang tải
       // (nhiều trình duyệt mở cùng lúc) không làm cầu dao NAS mở → các spec sau nhận 503 (16-tai-lieu-du-an T3 chập chờn).

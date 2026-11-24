@@ -137,7 +137,8 @@ Theo trục vai đã duyệt. *Nghiêng* = kiêm nhiệm hoặc quan hệ với 
   Trạng thái Hiệu lực / Hết hiệu lực giữ nguyên.
 - Cấp xem chuyển một lần theo mức mật cũ: Công khai, Nội bộ → **Mọi người**; Hạn chế → **Lãnh đạo**; Bảo mật cao → **Ban TGĐ**.
   Ghi một dòng nhật ký cho mỗi văn bản. Văn thư / Ban TGĐ rà lại cấp xem sau khi chuyển (nếu có văn bản).
-- Migration chỉ thêm cột, không xoá dữ liệu; quay lại bản cũ được.
+- Migration chỉ thêm cột / nới NOT NULL, không xoá dữ liệu. **Quay lại bản cũ khi đã có dự thảo KHÔNG tự an toàn** (bản cũ đọc số dự thảo trống
+  sẽ hỏng cả danh sách Văn thư — đã chạy thử, lỗi P2032): xem mục 13.
 
 ## 9. Câu hỏi cho chủ dự án
 
@@ -157,7 +158,7 @@ Theo trục vai đã duyệt. *Nghiêng* = kiêm nhiệm hoặc quan hệ với 
 | PRE (phòng ngừa) | Quyền xem kiểm ở máy chủ (danh sách, chi tiết, tệp, tìm kiếm, "gắn vào việc"); dự thảo không lọt danh sách; Claude không phê duyệt, không đọc cấp Ban TGĐ, không tải tệp về |
 | DET (phát hiện) | Nhật ký phê duyệt / trả lại / tải tệp (sẵn có), kèm mã băm tệp lúc phê duyệt |
 | PRI (riêng tư) | Quy chế thường không chứa dữ liệu cá nhân; quyết định nhân sự (D5) có thể có → đặt cấp Lãnh đạo / Ban TGĐ. Không đổi cách lưu tệp (NAS) |
-| RES (ứng phó) | Migration chỉ thêm cột, quay lại được. Lưu nhật ký ≥ 12 tháng như quy định chung |
+| RES (ứng phó) | Migration chỉ thêm cột; quay lại bản cũ phải chạy SQL trước (mục 13). Lưu nhật ký ≥ 12 tháng như quy định chung |
 
 Pháp lý: không thay đổi việc chuyển dữ liệu ra ngoài; không ký số nên không thuộc Luật Giao dịch điện tử về chữ ký số — giá trị phê duyệt
 dựa trên tài khoản + nhật ký. Giai đoạn 2 cập nhật `docs/data-protection-assessment.md`.
@@ -175,10 +176,27 @@ dựa trên tài khoản + nhật ký. Giai đoạn 2 cập nhật `docs/data-pr
 ## 12. Giai đoạn 2 — đã làm (nhánh `kepper/quy-che-phe-duyet-ma`)
 
 - Máy chủ: `routes/vanthu.js`, `services/vanthu.js` (hàm quyền thuần: `canViewNoibo`, `aiHidden`, `canEditDraft`, `approveCheck`, `isApprover`),
-  migration `20261125100000_quy_che_phe_duyet` (chỉ thêm cột / nới NOT NULL; văn bản NOIBO cũ giữ số, coi là đã phê duyệt, cấp xem theo mức mật cũ).
+  migration `20261124170711_quy_che_phe_duyet` (chỉ thêm cột / nới NOT NULL; văn bản NOIBO cũ giữ số, coi là đã phê duyệt, cấp xem theo mức mật cũ).
   API mới: `POST /api/vanthu/docs/:id/approve | return | resubmit`, `POST /api/vanthu/drafts` (multipart, dùng cho Claude).
   Vai lấy từ `roleRank` / `isBoard` của PR #41, không so chuỗi vai.
 - Giao diện: tab Quy chế, quy định nội bộ (Tạo dự thảo, Phê duyệt, Trả lại, Gửi lại, Sửa, Huỷ dự thảo), Thiết lập văn thư → Người phê duyệt.
 - Claude: công cụ MCP `kepper_vanthu_draft` (bản 0.6.0) đọc PDF trên máy, tạo dự thảo; không có công cụ phê duyệt.
 - Ngày hiệu lực / ngày ban hành gốc trong quá khứ (theo nghiệm thu đề xuất): phê duyệt xong chuyển thẳng Hiệu lực; ngày phê duyệt vẫn là ngày bấm.
 - Test: `services/quy-che-phe-duyet.test.js` (ma trận 3 cấp × vai, luồng), `mcp/test/vanthu-draft.test.mjs`, e2e `18-quy-che-phe-duyet.spec.js`.
+- Tệp của dự thảo lưu trên NAS với tên bắt đầu bằng `DuThao-<id>_…`; sau khi phê duyệt **tên tệp giữ nguyên** (không đổi tên trên NAS),
+  số chính thức xem trên Kepler Hub và trong nhật ký phê duyệt.
+
+## 13. Quay lại bản cũ (trước tính năng này) và nâng cấp lại
+
+Đã chạy thử ngày 24/11/2026 trên CSDL thử với mã PR #41 (`1dbae60`): có 2 dự thảo, 3 tài liệu đã duyệt (Mọi người / Lãnh đạo / Ban TGĐ), 1 văn bản đến.
+
+1. **Quay lại:** dừng app → chạy `app/server/scripts/quy-che-quay-lai.sql` → bật image cũ.
+   - Không chạy SQL: bản cũ báo lỗi 500 (P2032) ở **mọi** danh sách Văn thư, vì số của dự thảo trống.
+   - Có chạy SQL: dự thảo mang số giả `DU-THAO-<id>` (thứ tự âm, không chiếm số thật), "Đã phê duyệt" về "Đã ban hành".
+   - Quyền xem trên bản cũ đọc **mức mật ghi song song** (Mọi người đã duyệt → Nội bộ; dự thảo, Lãnh đạo, Ban TGĐ → Bảo mật cao):
+     hẹp hơn hoặc bằng bản mới (test `quy-che-phe-duyet.test.js` so nguyên văn hàm cũ). **Ngoại lệ duy nhất:** mọi thành viên Ban TGĐ (không chỉ
+     Người phê duyệt) xem được dự thảo. Lãnh đạo bộ phận tạm không xem tài liệu cấp Lãnh đạo (hẹp hơn).
+   - Trong lúc chạy bản cũ: không đổi trạng thái các dự thảo `DU-THAO-…`; văn bản nội bộ vào sổ lúc đó có số ngay như bản cũ.
+2. **Nâng cấp lại:** dừng app → chạy `app/server/scripts/quy-che-nang-lai.sql` → bật image mới (migration không chạy lại).
+   Dự thảo bỏ số giả; văn bản vào sổ lúc chạy bản cũ được gán cấp xem theo mức mật, ghi nhật ký MIGRATE, coi là đã phê duyệt.
+   Chạy thử: danh sách đúng ma trận; dự thảo phê duyệt tiếp nhận số kế tiếp đúng.

@@ -162,3 +162,37 @@ test('sổ đến / đi không đổi: vẫn theo mức bảo mật', () => {
   assert.ok(!V.canView({ book: 'DEN', security: 'HAN_CHE', departmentId: 99 }, staff));
   assert.ok(V.canView({ book: 'DI', security: 'BAO_MAT_CAO', viewerIds: [U.member.id] }, staff));
 });
+
+// ---- Quay lại bản cũ (PR #41) an toàn: mã cũ đọc mức mật ghi song song (legacySecurity) phải xem HẸP hơn hoặc bằng mã mới. ----
+// Bản sao NGUYÊN VĂN canView + visible của PR #41 (services/vanthu.js, routes/vanthu.js) — không sửa theo mã mới.
+function oldCanView(doc, s) {
+  if (s.it) return false;
+  if (doc.security === 'CONG_KHAI' || doc.security === 'NOI_BO') return true;
+  if (s.director || doc.handlerId === s.userId || doc.createdById === s.userId) return true;
+  if (doc.security === 'BAO_MAT_CAO') return (doc.viewerIds || []).includes(s.userId);
+  return s.clerk || (doc.departmentId != null && doc.departmentId === s.departmentId) || (doc.toLegal && s.legal);
+}
+const oldVisible = (doc, s) => oldCanView(doc, s) && !(s.ai && doc.security === 'BAO_MAT_CAO');
+const newVisible = (doc, s) => V.canView(doc, s) && !V.aiHidden(doc, s);
+
+test('quay lại bản cũ: với mọi trạng thái × cấp xem × vai (cả Văn thư, Pháp chế, cùng bộ phận, qua Claude), mã cũ xem ⊆ mã mới — trừ đúng một ngoại lệ đã ghi', () => {
+  const who = { ...U, sameDept: { id: 20, role: 'member', departmentId: 6 }, legal: { id: 21, role: 'member', departmentId: 9 } };
+  const exceptions = [];
+  for (const status of Object.keys(V.STATUS.NOIBO)) for (const level of ['ALL', 'LEADERS', 'BOARD']) {
+    const rec = { book: 'NOIBO', status, viewLevel: level, createdById: U.author.id, departmentId: 6, viewerIds: [], toLegal: false, handlerId: null, security: V.legacySecurity(status, level) };
+    assert.notEqual(rec.security, 'HAN_CHE');
+    for (const [name, user] of Object.entries(who)) for (const flags of [{}, { clerk: true }, { ai: true }, { clerk: true, ai: true }]) {
+      const sn = { ...subj(user, flags), legal: name === 'legal', leader: roleRank(user) === 1 };
+      const so = { ...sn, director: isBoard(user) }; // chủ thể của mã cũ: Ban TGĐ = vai
+      if (oldVisible(rec, so) && !newVisible(rec, sn)) exceptions.push(`${status}/${level}/${name}${flags.clerk ? '+văn thư' : ''}${flags.ai ? '+AI' : ''}`);
+    }
+  }
+  // Ngoại lệ duy nhất: thành viên Ban TGĐ KHÔNG phải Người phê duyệt xem dự thảo trên giao diện (mã cũ: Ban TGĐ xem mọi mức mật).
+  assert.ok(exceptions.length > 0 && exceptions.every(x => /^(DRAFT|RETURNED)\/[A-Z]+\/board2(\+văn thư)?$/.test(x)), exceptions.join(', '));
+  // Mức mật ghi song song: chỉ Nội bộ (đã duyệt, Mọi người) hoặc Bảo mật cao.
+  assert.equal(V.legacySecurity('EFFECTIVE', 'ALL'), 'NOI_BO');
+  assert.equal(V.legacySecurity('APPROVED', null), 'NOI_BO');
+  for (const [st, lv] of [['DRAFT', 'ALL'], ['RETURNED', 'ALL'], ['EFFECTIVE', 'LEADERS'], ['EXPIRED', 'BOARD']]) assert.equal(V.legacySecurity(st, lv), 'BAO_MAT_CAO');
+  // "Gắn vào việc" của mã cũ (security IN Công khai, Nội bộ) chỉ nhận tài liệu đã duyệt cấp Mọi người — như mã mới.
+  assert.ok(V.canLink({ book: 'NOIBO', status: 'EFFECTIVE', viewLevel: 'ALL', security: V.legacySecurity('EFFECTIVE', 'ALL') }, subj(U.member)));
+});

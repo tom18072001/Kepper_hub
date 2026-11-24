@@ -211,7 +211,7 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
     const year = Number(WK.dayOf(new Date()).slice(0, 4));
     const doc = await prisma.$transaction(async tx => {
       const created = await tx.docRecord.create({ data: {
-        book: 'NOIBO', series: V.seriesKey(seriesIn, dept?.code), entity, year, seq: null, number: null, security: 'NOI_BO', status: 'DRAFT',
+        book: 'NOIBO', series: V.seriesKey(seriesIn, dept?.code), entity, year, seq: null, number: null, security: V.legacySecurity('DRAFT', fields.viewLevel), status: 'DRAFT',
         departmentId: dept?.id ?? null, viaAi: !!s.ai, createdById: req.user.id, ...fields,
       } });
       await tx.docEvent.create({ data: { docId: created.id, userId: req.user.id, action: 'CREATE', toValue: 'DRAFT', note: s.ai ? 'Tạo qua Claude' : null } });
@@ -353,6 +353,7 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
     }
     const data = await noiboFields(b, s, d);
     const levelChanged = data.viewLevel !== undefined && data.viewLevel !== d.viewLevel;
+    if (data.viewLevel !== undefined) data.security = V.legacySecurity(d.status, data.viewLevel);
     return prisma.$transaction(async tx => {
       const u = await tx.docRecord.update({ where: { id: d.id }, data });
       await tx.docEvent.create({ data: { docId: d.id, userId: req.user.id, action: 'UPDATE', fromValue: levelChanged ? d.viewLevel : null,
@@ -380,7 +381,7 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
       const seq = (last?.seq || 0) + 1;
       const number = V.numberOf({ series: d.series, entity: d.entity, year, seq, docType: d.docType, holding: d.entity === s.cfg.entities[0].code });
       // Chỉ dự thảo còn chờ (chưa số, chưa huỷ): hai người bấm cùng lúc → người sau nhận 409, không cấp hai số.
-      const r = await tx.docRecord.updateMany({ where: { id: d.id, status: 'DRAFT', number: null, cancelledAt: null }, data: { year, seq, number, status, approvedById: req.user.id, approvedAt: now, registeredAt: now } });
+      const r = await tx.docRecord.updateMany({ where: { id: d.id, status: 'DRAFT', number: null, cancelledAt: null }, data: { year, seq, number, status, security: V.legacySecurity(status, d.viewLevel), approvedById: req.user.id, approvedAt: now, registeredAt: now } });
       if (r.count !== 1) fail(409, 'Tài liệu vừa được xử lý ở nơi khác — tải lại trang', 'CONFLICT');
       await tx.docEvent.create({ data: { docId: d.id, userId: req.user.id, action: 'APPROVE', fromValue: 'DRAFT', toValue: status,
         note: [`Số ${number}`, note, ...hashes.map(h => `${h.name} · SHA-256 ${h.sha256}`)].filter(Boolean).join('\n').slice(0, 2000) } });
@@ -406,7 +407,7 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
     if (e) fail(...e);
     const reason = text(req.body?.reason, 'Lý do trả lại', { required: true, max: 500 });
     const u = await prisma.$transaction(async tx => {
-      const r = await tx.docRecord.updateMany({ where: { id: d.id, status: 'DRAFT', cancelledAt: null }, data: { status: 'RETURNED' } });
+      const r = await tx.docRecord.updateMany({ where: { id: d.id, status: 'DRAFT', cancelledAt: null }, data: { status: 'RETURNED', security: V.legacySecurity('RETURNED', d.viewLevel) } });
       if (r.count !== 1) fail(409, 'Tài liệu vừa được xử lý ở nơi khác — tải lại trang', 'CONFLICT');
       await tx.docEvent.create({ data: { docId: d.id, userId: req.user.id, action: 'RETURN', fromValue: 'DRAFT', toValue: 'RETURNED', note: reason } });
       await audit(req, 'RETURN', 'DocRecord', d.id, null, { reason }, tx);
@@ -422,7 +423,7 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
     if (d.status !== 'RETURNED' || !V.canEditDraft(d, s)) fail(403, 'Chỉ người soạn hoặc Văn thư gửi lại dự thảo đã bị trả lại', 'FORBIDDEN');
     const note = text(req.body?.note, 'Ghi chú', { max: 500 }) || null;
     const u = await prisma.$transaction(async tx => {
-      const r = await tx.docRecord.updateMany({ where: { id: d.id, status: 'RETURNED', cancelledAt: null }, data: { status: 'DRAFT' } });
+      const r = await tx.docRecord.updateMany({ where: { id: d.id, status: 'RETURNED', cancelledAt: null }, data: { status: 'DRAFT', security: V.legacySecurity('DRAFT', d.viewLevel) } });
       if (r.count !== 1) fail(409, 'Tài liệu vừa được xử lý ở nơi khác — tải lại trang', 'CONFLICT');
       await tx.docEvent.create({ data: { docId: d.id, userId: req.user.id, action: 'RESUBMIT', fromValue: 'RETURNED', toValue: 'DRAFT', note } });
       await audit(req, 'RESUBMIT', 'DocRecord', d.id, null, null, tx);

@@ -338,7 +338,7 @@ export function buildServer({ call = createSession() } = {}) {
 const MAX_PDF_BYTES = 25 * 1024 * 1024;
 export function readPdf(filePath, fsImpl = fs) {
   const p = String(filePath || '');
-  if (!path.isAbsolute(p)) throw new KepperError(422, 'Cần đường dẫn đầy đủ tới tệp PDF (vd. C:\Users\…\tai-lieu.pdf)');
+  if (!path.isAbsolute(p)) throw new KepperError(422, 'Cần đường dẫn đầy đủ tới tệp PDF (vd. C:\\Users\\…\\tai-lieu.pdf)');
   if (path.extname(p).toLowerCase() !== '.pdf') throw new KepperError(422, 'Chỉ nhận tệp .pdf');
   let st;
   try { st = fsImpl.statSync(p); } catch { throw new KepperError(422, `Không tìm thấy tệp: ${p}`); }
