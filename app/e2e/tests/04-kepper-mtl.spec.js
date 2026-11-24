@@ -140,7 +140,10 @@ test('18. Dự án MTL: tạo, nhập MTL tổng / bộ phận, tiến độ, c�
   expect((await apiAs(staff, `/api/projects/${project.id}/mtl-kpi?user=${leadMe.id ?? leadMe.user?.id}`)).status()).toBe(403);
   expect((await apiAs(staff, `/api/projects/${project.id}/mtl-kpi?user=${staffMe.id ?? staffMe.user?.id}`)).status()).toBe(200);
   const all = await (await apiAs(pmo, `/api/projects/${project.id}/mtl-kpi`)).json(); // pmo = giamdoc (Ban TGĐ)
-  expect(all.scope).toBe('SYSTEM'); expect(all.rows.length).toBeGreaterThan(1);
+  // Ban TGĐ thấy mọi người: gồm cả dòng của từng người (số người chủ trì phụ thuộc ngày chạy nên không so số cố định).
+  expect(all.scope).toBe('SYSTEM');
+  for (const r of [...staffK.rows, ...leadK.rows]) expect(all.rows.map(x => x.id)).toContain(r.id);
+  expect(all.rows.length).toBeGreaterThanOrEqual(Math.max(staffK.rows.length, leadK.rows.length));
   expect((await apiAs(pmo, `/api/projects/${project.id}/mtl-kpi?user=${staffMe.id ?? staffMe.user?.id}`)).status()).toBe(200);
   await pmo.goto(`/#/projects/${project.id}?view=mtl`);
   await expect(pmo.getByTestId('mtl-people')).toBeVisible();
