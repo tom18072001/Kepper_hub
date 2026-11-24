@@ -1,7 +1,6 @@
 // Việc con hiện ở mọi view (Danh sách lồng / dòng riêng, Bảng) và ràng buộc việc cha – việc con với luật người giao duyệt.
 // Dữ liệu GIẢ của dự án mẫu DA: bước 8 (DA-8) có 4 việc con của Ban Pháp lý. Chạy sau các spec khác trên cùng CSDL test.
-const { test, expect } = require('@playwright/test');
-const { login, apiAs } = require('./helpers');
+const { test, expect, login, apiAs } = require('./helpers');
 
 async function subMode(page, mode) {
   const sel = page.getByTestId('filter-subtasks');

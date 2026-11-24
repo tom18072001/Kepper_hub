@@ -1,7 +1,6 @@
 // Kepper GĐ3 — AI native: Claude (Claude Desktop + MCP trên máy người dùng) dùng ĐÚNG quyền tài khoản Kepper qua token cá nhân.
 // Giao diện "Kết nối Claude": tạo token (hiện một lần), thu hồi; token chỉ làm được thao tác thường ngày, không nộp / duyệt / xoá / xuất.
-const { test, expect } = require('@playwright/test');
-const { login, apiAs, toast } = require('./helpers');
+const { test, expect, login, apiAs, toast } = require('./helpers');
 
 test('21. Kết nối Claude: token cá nhân đúng quyền người dùng, thao tác cần người quyết định bị chặn, thu hồi ngay', async ({ browser, request }) => {
   const nv = await (await browser.newContext()).newPage();

@@ -1,8 +1,7 @@
 // Đợt C2 — UX Nhân sự (HRM) và Đối tác (CRM), MODULES=crm,hrm, dữ liệu mẫu GIẢ.
 // H6 chấm ra khi chưa chấm vào; H9 đơn nghỉ / giải trình trong "Chờ tôi duyệt" + số đếm; H8 hộp xác nhận "Giữ đơn" / "Huỷ đơn";
 // H1 / H5 / H10 / H11 trang "Của tôi", nút hiện / ẩn, tên tab, xem trước đơn nghỉ; R4 tìm không dấu; R1 lọc ngay; R6 tiêu đề tab đối tác.
-const { test, expect } = require('@playwright/test');
-const { login, apiAs, toast, vnDate, NEW_PASSWORD } = require('./helpers');
+const { test, expect, login, apiAs, toast, vnDate, NEW_PASSWORD } = require('./helpers');
 
 const weekdayAhead = n => { for (let i = n; ; i++) { const d = vnDate(i); const w = new Date(d + 'T00:00:00Z').getUTCDay(); if (w >= 1 && w <= 5) return d; } };
 const weekdayBack = n => { for (let i = n; ; i++) { const d = vnDate(-i); const w = new Date(d + 'T00:00:00Z').getUTCDay(); if (w >= 1 && w <= 5) return d; } };

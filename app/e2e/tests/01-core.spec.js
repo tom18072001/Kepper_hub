@@ -1,7 +1,6 @@
 // Kịch bản E2E chạy tuần tự trên cùng một CSDL test (dữ liệu giả từ seed).
-const { test, expect } = require('@playwright/test');
 const ExcelJS = require('../../server/node_modules/exceljs');
-const { login, apiAs, vnDate, openProject, column, card, toast } = require('./helpers');
+const { test, expect, login, apiAs, vnDate, openProject, column, card, toast } = require('./helpers');
 
 test.describe.configure({ mode: 'serial' });
 

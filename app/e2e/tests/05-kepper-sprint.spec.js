@@ -4,9 +4,8 @@
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
-const { test, expect } = require('@playwright/test');
 const ExcelJS = require(path.join(__dirname, '../../server/node_modules/exceljs'));
-const { login, apiAs, toast } = require('./helpers');
+const { test, expect, login, apiAs, toast } = require('./helpers');
 
 test.describe.configure({ mode: 'serial' });
 

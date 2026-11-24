@@ -2,10 +2,10 @@
 // docs/de-xuat-mot-he-quy-chieu-phan-quyen.md; ma trận hàm quyền đầy đủ: server/src/lib/role-matrix.test.js.
 // Vai: giamdoc = Ban Tổng Giám đốc (phụ trách Toàn công ty) · tp.kinhdoanh = Lãnh đạo bộ phận · nv.kinhdoanh1 = Nhân viên ·
 // admin = Quản trị hệ thống (quản trị gốc).
-const { test, expect } = require('@playwright/test');
-const { login, apiAs } = require('./helpers');
+const { test, expect, login, apiAs, sharedPage, closeSharedPages } = require('./helpers');
 
 test.describe.configure({ mode: 'serial' });
+test.afterAll(closeSharedPages); // trang đăng nhập từng vai dùng chung cho cả tệp
 
 const ROLES = { giamdoc: 'Ban Tổng Giám đốc', 'tp.kinhdoanh': 'Lãnh đạo bộ phận', 'nv.kinhdoanh1': 'Nhân viên', admin: 'Quản trị hệ thống' };
 const WHO = Object.keys(ROLES);
@@ -15,7 +15,7 @@ const U = name => users.find(u => u.username === name);
 
 test('chuẩn bị: đăng nhập từng vai', async ({ browser }) => {
   for (const name of WHO) {
-    pages[name] = await (await browser.newContext()).newPage();
+    pages[name] = await sharedPage(browser);
     await login(pages[name], name);
   }
   users = await (await apiAs(pages.giamdoc, '/api/users/directory')).json();

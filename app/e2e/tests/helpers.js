@@ -1,4 +1,22 @@
-const { expect } = require('@playwright/test');
+const base = require('@playwright/test');
+const { expect } = base;
+
+// Spec lấy `test` từ đây (không lấy thẳng từ @playwright/test — playwright.config.js chặn): context tự mở bằng browser.newContext()
+// được đóng khi test xong. Trước đây không ai đóng → cuối lượt chạy toàn bộ còn ~100 trang mở trên một trình duyệt, mỗi trang
+// tự hỏi số đếm 30 giây/lần và giữ luồng realtime (quá 5 luồng / người thì máy chủ cắt luồng cũ) → spec chạy sau chập chờn.
+// Trace / ảnh khi test hỏng vẫn có đủ (Playwright lưu trước khi fixture này đóng context).
+// Trang dùng chung cho nhiều test nối tiếp trong một tệp (đăng nhập một lần ở test đầu): tạo bằng sharedPage(), tệp đó tự đóng ở
+// test.afterAll(closeSharedPages).
+const sharedContexts = new Set();
+const test = base.test.extend({
+  closeOpenedContexts: [async ({ browser }, use) => {
+    const before = new Set(browser.contexts());
+    await use();
+    await Promise.all(browser.contexts().filter(c => !before.has(c) && !sharedContexts.has(c)).map(c => c.close().catch(() => {})));
+  }, { auto: true }],
+});
+async function sharedPage(browser) { const c = await browser.newContext(); sharedContexts.add(c); return c.newPage(); }
+async function closeSharedPages() { const list = [...sharedContexts]; sharedContexts.clear(); await Promise.all(list.map(c => c.close().catch(() => {}))); }
 
 const DEFAULT_PASSWORD = '12345678';
 const NEW_PASSWORD = 'Moi@2026';
@@ -49,4 +67,4 @@ function column(page, name) { return page.getByTestId(`column-${name}`); }
 function card(page, code) { return page.getByTestId(`card-${code}`); }
 async function toast(page, text) { await expect(page.locator('.toast', { hasText: text }).first()).toBeVisible(); }
 
-module.exports = { login, token, apiAs, vnDate, openProject, column, card, toast, DEFAULT_PASSWORD, NEW_PASSWORD };
+module.exports = { test, expect, sharedPage, closeSharedPages, login, token, apiAs, vnDate, openProject, column, card, toast, DEFAULT_PASSWORD, NEW_PASSWORD };

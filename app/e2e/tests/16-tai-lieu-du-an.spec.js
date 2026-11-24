@@ -4,8 +4,7 @@
 // Quyền ở máy chủ: chỉ thành viên dự án + Ban TGĐ; người ngoài nhận 404; chặn path traversal. Văn thư, Quy chế nội bộ là tab bên trong.
 const fs = require('node:fs');
 const path = require('node:path');
-const { test, expect } = require('@playwright/test');
-const { login, apiAs } = require('./helpers');
+const { test, expect, login, apiAs } = require('./helpers');
 const { NAS_ROOT } = require('../playwright.config');
 
 test.describe.configure({ mode: 'serial' });

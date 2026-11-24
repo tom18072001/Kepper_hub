@@ -3,9 +3,8 @@
 // điều chỉnh kế hoạch gốc bắt buộc lý do + nhật ký, Viber mặc định tắt.
 const path = require('node:path');
 const os = require('node:os');
-const { test, expect } = require('@playwright/test');
 const ExcelJS = require(path.join(__dirname, '../../server/node_modules/exceljs'));
-const { login, apiAs, toast, openProject } = require('./helpers');
+const { test, expect, login, apiAs, toast, openProject } = require('./helpers');
 
 test.describe.configure({ mode: 'serial' });
 const HEAD = ['Bước', 'Hạng mục công việc', 'Đầu mối', 'Bắt đầu (T)', 'Kết thúc (T)', 'Thời lượng (tháng)', 'Đường găng', 'Mốc'];

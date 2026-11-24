@@ -52,12 +52,13 @@ export async function renderCrm(root, id, params, setCrumbs) {
   const form = $('#crmFilter', root);
   let seq = 0;
   const apply = async () => {
+    if (!root.isConnected) return; // đã sang trang khác trong lúc chờ gõ: không ghi bộ lọc lên địa chỉ trang mới
     const f = formObj(form), p = new URLSearchParams(), my = ++seq;
     for (const k of FILTERS) { const v = String(f[k] || '').trim(); if (v) p.set(k, v); }
     replaceHashParams(Object.fromEntries(FILTERS.map(k => [k, p.get(k) || ''])));
     try {
       const list = await api('/api/crm/partners?' + p);
-      if (my !== seq || !form.isConnected) return; // đã gõ tiếp / đã rời trang
+      if (my !== seq || !root.isConnected || !form.isConnected) return; // đã gõ tiếp / đã rời trang
       $('#crmRows', root).innerHTML = partnerRows(list);
       $('[data-testid="crm-count"]', root).textContent = `${list.length} đối tác`;
     } catch (error) { if (my === seq) toast(errorMessage(error), 'err'); }

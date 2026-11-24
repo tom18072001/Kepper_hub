@@ -1,6 +1,5 @@
 // KPI & phân tích thống kê: chỉ Ban Tổng Giám đốc xem / xuất; nhân viên, trưởng phòng, admin IT bị 403 và không thấy menu — dữ liệu GIẢ.
-const { test, expect } = require('@playwright/test');
-const { login, apiAs } = require('./helpers');
+const { test, expect, login, apiAs } = require('./helpers');
 
 async function as(browser, username) {
   const page = await (await browser.newContext()).newPage();

@@ -112,6 +112,12 @@ cd app/e2e && npm install && npx playwright install chromium
 E2E_DATABASE_URL=postgresql://<user>:<mật khẩu>@127.0.0.1:5432/kepper_e2e npx playwright test
 ```
 
+- Chạy nhiều lượt e2e cùng lúc trên một máy: mỗi lượt một `E2E_PORT` và một CSDL `_e2e` riêng (kho NAS / tệp giả theo cổng).
+- Lượt chạy có test hỏng: trace, ảnh, `TOM-TAT.md` được chép sang `app/e2e/lan-hong/<giờ VN>/` (giữ 5 lần gần nhất) —
+  chạy lại một spec không làm mất bằng chứng của lượt chạy toàn bộ. Trên CI: tệp tải lên `playwright-report` của lượt hỏng.
+- Spec lấy `test`, `expect` từ `./helpers` (không lấy thẳng từ `@playwright/test` — cấu hình chặn): context mở bằng
+  `browser.newContext()` tự đóng khi test xong. Trang dùng chung cho cả tệp (spec nối tiếp): `sharedPage()` + `test.afterAll(closeSharedPages)`.
+
 ## Cấu trúc
 
 ```

@@ -34,6 +34,7 @@ login-admin-result.png
 # ---- Kết quả kiểm thử E2E (tạo lại mỗi lần chạy) ----
 app/e2e/test-results/
 app/e2e/playwright-report/
+app/e2e/lan-hong/
 
 # ---- Bản sao lưu (chứa dữ liệu thật) ----
 backups/
