@@ -48,10 +48,12 @@ const ctxOf = (who, day) => { const seen = items(day).filter(i => VIS[who].has(i
 const prefillOf = (who, day = FRI_PM) => WK.buildPrefill({ week: F, deptId: 1, items: items(day).filter(i => VIS[who].has(i.id)), memberIds: members });
 const fill = x => { for (const r of WK.allRows(x)) Object.assign(r, { ownerIds: r.ownerIds?.length ? r.ownerIds : [50], next: r.next || 'Tiếp tục (giả)', cause: r.cause || 'Nguyên nhân (giả)', solution: r.solution || 'Giải pháp (giả)', helpFrom: r.helpFrom || 'SELF' });
   for (const p of x.plans) Object.assign(p, { ownerIds: p.ownerIds?.length ? p.ownerIds : [60], output: p.output || 'Đầu ra (giả)' }); return x; };
-const draft = (who, raw, saved, day = FRI_PM) => WS.mergeDraft(structuredClone(raw), ctxOf(who, day), saved ? structuredClone(saved) : null, { scopeItems: items(day), editAll: EDIT_ALL[who], now: day });
+// everSeen như routes/weekly.js seenIn: việc trong bản đã lưu người lưu xem được, KHÔNG xét lưu trữ (VIS là quyền xem tĩnh, gồm việc đã lưu trữ).
+const everSeenOf = (who, saved) => new Set([...WK.allRows(saved), ...(saved?.plans || [])].map(r => r.itemId).filter(id => id && VIS[who].has(id)));
+const draft = (who, raw, saved, day = FRI_PM) => WS.mergeDraft(structuredClone(raw), ctxOf(who, day), saved ? structuredClone(saved) : null, { scopeItems: items(day), editAll: EDIT_ALL[who], now: day, everSeen: everSeenOf(who, saved) });
 function submit(who, raw, saved, { day = FRI_PM, frozen = false } = {}) {
   const all = items(day), ctx = ctxOf(who, day);
-  const r = WS.prepareSubmit({ raw: structuredClone(raw), ctx, prefill: prefillOf(who, day), now: day, week: F, saved: saved ? structuredClone(saved) : null, scopeItems: all, editAll: EDIT_ALL[who], frozen });
+  const r = WS.prepareSubmit({ raw: structuredClone(raw), ctx, prefill: prefillOf(who, day), now: day, week: F, saved: saved ? structuredClone(saved) : null, scopeItems: all, editAll: EDIT_ALL[who], frozen, everSeen: everSeenOf(who, saved) });
   if (r.errors.length) return r;
   const full = WK.buildPrefill({ week: F, deptId: 1, items: all, memberIds: members });
   return { ...r, fin: WS.finishSubmit(r.data, F, { full, visibleIds: ctx.itemIds, parentOf: new Map(all.map(i => [i.id, i.parentId])) }, { frozen }).final };
@@ -152,10 +154,9 @@ test('Vòng 6 — mục 6 (K1): tuần đã họp đóng băng — gửi lại s
   assert.equal(listOf(r.fin, 101), 'ongoing'); assert.deepEqual(kpis(r.fin), before);
   assert.equal(listOf(r.fin, 950), 'ongoing'); assert.equal(rowOf(r.fin, 950).pct, rowOf(base, 950).pct); // đóng băng theo bản nộp
   assert.equal(rowOf(r.fin, 950).solution, 'Kết luận họp (thư ký ghi)'); // trường người nhập vẫn sửa được
-  // Tuần đang mở: dòng việc đã lưu trữ bị bỏ, có báo. Người sửa được dòng (thư ký) → "đã bỏ khỏi báo cáo" (removed); người nay không còn
-  // xem được việc (đã lưu trữ) → cùng phản hồi "không được lưu" như mọi dòng không sửa được (K3 — không xác nhận mã việc tồn tại).
+  // Tuần đang mở: dòng việc đã lưu trữ bị bỏ, báo đúng lý do (removed) cho người đã từng thấy dòng (trưởng phòng, thư ký) — vòng 8.
   const open = submit('head', view('head', base), base);
-  assert.equal(listOf(open.fin, 101), '-'); assert.equal(open.removed, 0); assert.equal(open.ignored, 1);
+  assert.equal(listOf(open.fin, 101), '-'); assert.equal(open.removed, 1); assert.equal(open.ignored, 0);
   const sec = submit('secr', view('secr', base), base);
   assert.equal(listOf(sec.fin, 101), '-'); assert.equal(sec.removed, 1);
   world = {};
@@ -319,4 +320,55 @@ test('Vòng 7 — mục 4 (M8b, M8c): MCP save_weekly_draft trả ignored / warn
   const marked = WK.markNoDelete(base, id => id === 101);
   assert.equal(rowOf(marked, 101).noDelete, undefined); assert.equal(rowOf(marked, 950).noDelete, true);
   assert.ok(marked.plans.filter(p => p.itemId).every(p => p.noDelete === true));
+});
+
+test('Vòng 8 — mục 1 (K4): CHỈ sửa % việc thường (không kèm tình trạng) → bỏ và có báo; % người nhập chỉ cho hạng mục MTL lá', () => {
+  const base = baseReport();
+  const f = view('staff', base); rowOf(f, 101).pct = 50; // như MCP edits { key: m101, pct: 50 }
+  for (const r of [draft('staff', f, base), submit('staff', f, base)]) {
+    assert.equal(rowOf(r.fin || r.data, 101).pct, 30); assert.equal(r.ignored, 1);
+  }
+});
+
+test('Vòng 8 — mục 2a (K4): việc thường 100% đang chờ duyệt — lưu / nộp nguyên bản không bị báo nhầm (mọi vai)', () => {
+  const base = baseReport();
+  world = { 101: { progress: 100, state: { category: 'REVIEW' } } };
+  const settled = submit('head', view('head', base), base).fin; // bản đã lưu theo việc 100% chờ duyệt
+  assert.equal(rowOf(settled, 101).pct, 100); assert.notEqual(rowOf(settled, 101).status, 'Hoàn thành');
+  for (const who of ['staff', 'head', 'secr']) {
+    const d = draft(who, view(who, settled), settled); assert.equal(d.ignored, 0, `${who} nháp`);
+    const r = submit(who, view(who, settled), settled); assert.deepEqual(r.errors, [], who); assert.equal(r.ignored, 0, `${who} nộp`);
+  }
+  world = {};
+});
+
+test('Vòng 8 — mục 2b (K4): lần lưu ĐẦU, đổi % MTL (20 → 60) làm máy tính lại tình trạng → không báo nhầm', () => {
+  world = {};
+  const p = fill(prefillOf('head')); rowOf(p, 990).pct = 60;
+  const d = draft('head', p, null);
+  assert.equal(rowOf(d.data, 990).pct, 60); assert.equal(d.ignored, 0);
+});
+
+test('Vòng 8 — mục 3: việc bị lưu trữ trong tuần đang mở — người từng thấy dòng nhận "đã bỏ" (removed); người ngoài đoán mã → phản hồi chung (K3)', () => {
+  const base = baseReport();
+  world = { 101: { archived: true }, 950: { archived: true } };
+  for (const [who, n] of [['head', 2], ['staff', 1]]) { // trưởng phòng từng thấy cả 101 và 950; nhân viên chỉ 101
+    const r = submit(who, view(who, base), base);
+    assert.equal(listOf(r.fin, 101), '-', who); assert.equal(r.removed, n, who); assert.equal(r.ignored, 0, who);
+  }
+  // Nhân viên chưa từng thấy 950 (kín) đoán mã → giống hệt mã không tồn tại.
+  const probe = id => { const f = view('staff', base); f.ongoing.push({ key: 'g', itemId: id, task: 'x', status: 'Vướng', cause: 'c', ownerIds: [50], next: 'n' }); const r = submit('staff', f, base); return { errors: r.errors, ignored: r.ignored, removed: r.removed }; };
+  assert.deepEqual(probe(950), probe(123456));
+  world = {};
+});
+
+test('Vòng 8 — mục 4 (K4): hạng mục MTL vừa có việc nhánh — % gõ từ biểu mẫu cũ bị thay bằng % tự tính → CÓ báo; không gõ gì → không báo', () => {
+  const base = baseReport(); // 990: trưởng phòng ghi 60%
+  world = { 990: { children: 1, progress: 40 } }; // nay có việc nhánh, % tự tính 40%
+  const typed = view('head', base); rowOf(typed, 990).pct = 70;
+  const r = submit('head', typed, base);
+  assert.equal(rowOf(r.fin, 990).pct, 40); assert.equal(r.ignored, 1);
+  const untouched = submit('head', view('head', base), base);
+  assert.equal(rowOf(untouched.fin, 990).pct, 40); assert.equal(untouched.ignored, 0);
+  world = {};
 });

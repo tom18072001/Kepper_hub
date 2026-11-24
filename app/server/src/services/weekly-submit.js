@@ -35,7 +35,9 @@ const partKey = (list, id) => `${list === 'plans' ? 'p' : 'r'}${id}`;
 // raw: dữ liệu gửi lên. ctx: cleanCtx của route (itemIds = việc người lưu XEM ĐƯỢC). saved: bản đã lưu (nháp hoặc đã nộp).
 // scopeItems: mọi việc của bộ phận (DEPT_SCOPE). editAll: thư ký. frozen: tuần đã họp (K1).
 // Trả { data (còn cờ tạm), ignored, removed, writable(id, list) }.
-function mergeSaved(raw, ctx, saved, { scopeItems = [], editAll = false, frozen = false } = {}) {
+// everSeen (tuỳ chọn): việc người lưu xem được KHÔNG xét lưu trữ (routes/weekly.js seeWhich) — họ đã thấy dòng nên khi việc bị lưu trữ được báo
+// đúng lý do ("đã bỏ vì việc đã lưu trữ / huỷ"); người chưa từng thấy vẫn nhận câu chung (K3).
+function mergeSaved(raw, ctx, saved, { scopeItems = [], editAll = false, frozen = false, everSeen = new Set() } = {}) {
   const visible = ctx.itemIds || new Set();
   const scope = new Map([...scopeItems, ...(ctx.items || [])].map(i => [i.id, i]));
   const live = id => frozen || (scope.has(id) && !scope.get(id).cancelled);
@@ -43,7 +45,12 @@ function mergeSaved(raw, ctx, saved, { scopeItems = [], editAll = false, frozen 
   for (const list of ALL) for (const r of saved?.[list] || []) if (r?.itemId && !savedRow.has(partKey(list, r.itemId))) savedRow.set(partKey(list, r.itemId), { list, row: r });
   const savedIds = new Set([...savedRow.values()].map(x => x.row.itemId));
   const writable = (id, list) => visible.has(id) || (editAll && savedRow.has(partKey(list, id))); // K2
-  const sawIt = id => visible.has(id) || editAll; // dòng có trên biểu mẫu của người lưu (người xem đầy đủ thấy mọi dòng)
+  const sawIt = id => visible.has(id) || editAll || everSeen.has(id); // dòng có trên biểu mẫu của người lưu (người xem đầy đủ thấy mọi dòng)
+  // % do người nhập: CHỈ hạng mục MTL lá (ngoại lệ K1). Việc thường / hạng mục có việc nhánh: % do máy tính.
+  const mtlLeaf = id => { const i = scope.get(id); return !!i && i.kind === 'MTL' && !(i.children > 0); };
+  // K4: trường máy tính so theo dữ liệu GỬI LÊN, TRƯỚC khi làm sạch (sanitize tự đổi tình trạng thành "Hoàn thành" khi % = 100 → báo nhầm).
+  const rawSent = new Map();
+  for (const list of ALL) for (const r of (Array.isArray(raw?.[list]) ? raw[list] : [])) if (r && r.itemId != null && r.key != null) rawSent.set(`${list}:${r.key}`, r);
   const d = raw && typeof raw === 'object' ? raw : {};
   const allowed = new Set([...visible, ...savedIds]);
   let ignored = ALL.flatMap(k => (Array.isArray(d[k]) ? d[k] : [])).filter(r => r && r.itemId != null && r.itemId !== '' && !allowed.has(r.itemId)).length;
@@ -56,13 +63,16 @@ function mergeSaved(raw, ctx, saved, { scopeItems = [], editAll = false, frozen 
     const k = partKey(list, r.itemId), prev = savedRow.get(k);
     // K2 / K3: kiểm được thêm / sửa TRƯỚC mọi thứ khác — dòng người lưu không được sửa (kín đang dùng, kín đã lưu trữ, mã không có) → cùng
     // một phản hồi: ignored.
+    // Việc đã lưu trữ / huỷ mà người lưu ĐÃ TỪNG THẤY dòng → "đã bỏ", đúng lý do.
+    if (!seen.has(k) && prev && !live(r.itemId) && (writable(r.itemId, list) || everSeen.has(r.itemId))) { seen.add(k); removed++; continue; }
     if (seen.has(k) || !writable(r.itemId, list) || (frozen && !prev)) { ignored++; continue; } // trùng / không được thêm-sửa / tuần đã họp
     seen.add(k);
-    if (!live(r.itemId)) { if (prev) removed++; else ignored++; continue; } // việc đã lưu trữ / huỷ (tuần đang mở)
+    if (!live(r.itemId)) { ignored++; continue; } // dòng mới cho việc đã lưu trữ / huỷ
     if (list === 'plans') { data.plans.push(r); continue; } // dòng Phần IV: do người nhập
     // K4: ghi lại trường máy tính người lưu gửi lên — so sau khi tính lại (machineEdits).
-    const sent = { task: r.task, due: r.due, status: r.status, pct: r.pct, list };
-    if (!prev) { data[list].push({ ...r, _sent: sent }); continue; } // dòng mới của việc người lưu xem được
+    const src = rawSent.get(`${list}:${r.key}`) || r;
+    const sent = { task: src.task, due: src.due, status: src.status, pct: src.pct, list };
+    if (!prev) { data[list].push({ ...r, _sent: sent, ...(mtlLeaf(r.itemId) ? { _pctUser: true } : {}) }); continue; } // dòng mới của việc người lưu xem được
     // Dòng đã có: trường máy tính từ bản đã lưu (tính lại sau), trường người nhập từ bản gửi lên.
     const x = structuredClone(prev.row);
     x._saved = { task: x.task, due: x.due, status: x.status, pct: x.pct, list: prev.list }; x._sent = sent;
@@ -73,7 +83,7 @@ function mergeSaved(raw, ctx, saved, { scopeItems = [], editAll = false, frozen 
     //  (a) không nhận % người này gửi: dòng người lưu không xem được, tuần đã họp → GIỮ % đã lưu (vd. trưởng phòng ghi 60% cho MTL);
     //  (b) khoá % theo MTL: dòng tự bổ sung, hạng mục có việc nhánh (weekly-recompute.js).
     // Còn lại (người xem được hạng mục MTL lá): % người lưu ghi — ghi ngược MTL theo policy.
-    if (visible.has(r.itemId) && !frozen && !x.auto) { x.pct = r.pct; x._pctUser = true; }
+    if (visible.has(r.itemId) && !frozen && !x.auto && mtlLeaf(r.itemId)) { x.pct = r.pct; x._pctUser = true; }
     if (x.auto) x._auto = true;
     if (frozen) x._frozen = true;
     data[frozen ? prev.list : list].push(x);
@@ -81,7 +91,7 @@ function mergeSaved(raw, ctx, saved, { scopeItems = [], editAll = false, frozen 
   // Dòng đã lưu mà bản gửi lên không có.
   for (const [k, { list, row }] of savedRow) {
     if (seen.has(k)) continue;
-    if (!live(row.itemId)) { if (sawIt(row.itemId)) removed++; continue; }
+    if (!live(row.itemId)) { if (sawIt(row.itemId)) removed++; continue; } // (sawIt gồm everSeen)
     if (visible.has(row.itemId) && !(row.auto && list !== 'plans') && !frozen) continue; // người xem được việc đã bỏ dòng
     if (sawIt(row.itemId)) ignored++; // có trên biểu mẫu mà bị bỏ → không được bỏ (K2 / dòng tự bổ sung / tuần đã họp) → báo lại
     seen.add(k);
@@ -102,7 +112,8 @@ function machineEdits(grouped) {
   for (const list of LISTS) for (const r of grouped[list]) {
     const sent = r._sent; if (!sent) continue;
     const final = { task: r.task, due: r.due, status: r.status, pct: r.pct, list }, saved = r._saved || {};
-    const fields = ['task', 'due', 'list', ...(sent.status === 'Vướng' ? [] : ['status']), ...(r._pctUser ? [] : ['pct'])];
+    // Dòng MỚI (chưa có bản lưu): tình trạng và phần phụ thuộc % người lập vừa ghi → không so.
+    const fields = ['task', 'due', ...(r._saved ? ['list', ...(sent.status === 'Vướng' ? [] : ['status'])] : []), ...(r._pctUser ? [] : ['pct'])];
     if (fields.some(f => sent[f] !== undefined && sent[f] !== '' && !same(sent[f], final[f]) && !same(sent[f], saved[f]))) n++;
   }
   return n;
@@ -117,8 +128,8 @@ function duplicateFree(data, canTouch = () => true) {
 }
 
 // Lưu nháp / tự lưu (PUT /api/weekly/report, MCP kepper_save_weekly_draft). Trả { data, ignored, removed }.
-function mergeDraft(raw, ctx, saved, { scopeItems = [], editAll = false, now = new Date() } = {}) {
-  const m = mergeSaved(raw, ctx, saved, { scopeItems, editAll });
+function mergeDraft(raw, ctx, saved, { scopeItems = [], editAll = false, now = new Date(), everSeen = new Set() } = {}) {
+  const m = mergeSaved(raw, ctx, saved, { scopeItems, editAll, everSeen });
   recompute(m.data, ctx, scopeItems, now);
   const grouped = WK.regroup(m.data);
   const edits = machineEdits(grouped);
@@ -126,8 +137,8 @@ function mergeDraft(raw, ctx, saved, { scopeItems = [], editAll = false, now = n
 }
 
 // Nộp / gửi lại (POST /api/weekly/submit). prefill: điền sẵn mới nhất của người gửi.
-function prepareSubmit({ raw, ctx, prefill, actions = [], now = new Date(), week, saved = null, scopeItems = [], editAll = false, frozen = false }) {
-  const m = mergeSaved(raw, ctx, saved, { scopeItems, editAll, frozen });
+function prepareSubmit({ raw, ctx, prefill, actions = [], now = new Date(), week, saved = null, scopeItems = [], editAll = false, frozen = false, everSeen = new Set() }) {
+  const m = mergeSaved(raw, ctx, saved, { scopeItems, editAll, frozen, everSeen });
   const data = frozen ? m.data : WK.adoptMandatory(m.data, prefill);
   stripForeignActions(data, actions);
   if (!frozen) recompute(data, ctx, scopeItems, now);

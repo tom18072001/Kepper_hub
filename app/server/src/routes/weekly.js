@@ -133,6 +133,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
   // Ẩn / hiện theo NGƯỜI XEM (không theo người nộp): người xem tổng hợp đầy đủ (Ban GĐ, thư ký, PMO) thấy mọi dòng; người khác chỉ thấy
   // dòng gắn việc họ xem được — kể cả dòng do trưởng phòng / thư ký nhập (báo cáo bộ phận mọi thành viên đều xem). API, MCP dùng chung.
   const seeWhich = async (user, ids) => new Set(ids.length ? (await prisma.workItem.findMany({ where: { id: { in: [...new Set(ids)] }, project: visibleProjectsWhere(user), AND: [itemVisibleWhere(user)] }, select: { id: true } })).map(i => i.id) : []);
+  const seenIn = (user, data) => seeWhich(user, [...WK.allRows(data), ...(data?.plans || [])].map(r => r.itemId).filter(Boolean));
   async function hideUnseen(s, user, data) {
     if (!data || P.can(s, 'view', 'weekly.summary.detail')) return data;
     const ok = await seeWhich(user, [...WK.allRows(data), ...(data.plans || [])].map(r => r.itemId).filter(Boolean));
@@ -196,8 +197,8 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
   // Thư ký (quyền sửa báo cáo + xem tổng hợp đầy đủ): sửa được trường do người nhập của MỌI dòng (quy chế: sửa căn cứ sau họp).
   const editsAll = (s, acc) => acc.canEdit && P.can(s, 'view', 'weekly.summary.detail');
   // K4: mọi thay đổi máy chủ bỏ qua đều báo lại (web lẫn MCP).
-  const ignoredMsg = n => `${n} thay đổi trên dòng gắn việc không được lưu: dòng bạn không có quyền thêm / sửa / bỏ, hoặc trường lấy từ chính việc (tên, hạn, %, tình trạng, phần) — cập nhật tiến độ ở việc (MCP: kepper_update_progress)`;
-  const removedMsg = n => `${n} dòng của việc đã lưu trữ / huỷ đã được bỏ khỏi báo cáo`;
+  const ignoredMsg = n => `${n} thay đổi trên dòng gắn việc không được lưu: dòng bạn không có quyền thêm / sửa / bỏ, hoặc trường lấy từ chính việc (tên, hạn, tình trạng, phần; % của việc thường và hạng mục có việc nhánh) — cập nhật tiến độ ở việc (MCP: kepper_update_progress)`;
+  const removedMsg = n => `${n} dòng đã được bỏ khỏi báo cáo vì việc đã lưu trữ / huỷ`;
   const notes = (ignored, removed) => ({ ignored, removed, ...(ignored || removed ? { warning: [ignored ? ignoredMsg(ignored) : '', removed ? removedMsg(removed) : ''].filter(Boolean).join('. ') } : {}) });
   // Có khoá baseUpdatedAt mà = null trong khi máy chủ đã có báo cáo → bản đang mở đã cũ (409) — WS.baseOf / WS.isStale.
   const bodyDept = req => { const id = req.body?.departmentId ? intParam(req.body.departmentId, 'Bộ phận') : req.user.departmentId; if (!id) fail(422, 'Tài khoản chưa thuộc bộ phận nào', 'NO_DEPARTMENT'); return id; };
@@ -211,6 +212,9 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     // Phạm vi bộ phận: trường do máy tính của MỌI dòng tính lại ở mỗi lần lưu; dòng của việc đã lưu trữ / huỷ bị bỏ.
     const deptItems = await workItemsFor(DEPT_SCOPE, new Date(), doneSince(week), departmentId);
     const editAll = editsAll(s, acc);
+    // Việc người lưu xem được trong bản đã lưu, KHÔNG xét lưu trữ — báo đúng lý do khi việc bị lưu trữ (WS.mergeSaved everSeen).
+    const cur = await prisma.weeklyReport.findUnique({ where: { departmentId_week: { departmentId, week } }, select: { data: true } });
+    const everSeen = await seenIn(req.user, cur?.data);
     const { actions } = await D.openActions(prisma, week, departmentId);
     const base = req.body?.baseUpdatedAt ? new Date(req.body.baseUpdatedAt).getTime() : null;
     let ignoredOut = 0, removedOut = 0;
@@ -221,7 +225,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
       if (existing?.status === 'SUBMITTED') fail(409, 'Báo cáo đã nộp — sửa xong bấm "Gửi lại" để cập nhật', 'ALREADY_SUBMITTED');
       if (existing && base !== existing.updatedAt.getTime()) return { conflict: existing };
       // Quy tắc gốc: gộp theo itemId với bản nháp đã lưu — dòng của việc người lưu không xem được giữ NGUYÊN (services/weekly-submit.js).
-      const { data, ignored, removed } = WS.mergeDraft(req.body?.data, ctx, existing?.data || null, { scopeItems: deptItems, editAll });
+      const { data, ignored, removed } = WS.mergeDraft(req.body?.data, ctx, existing?.data || null, { scopeItems: deptItems, editAll, everSeen });
       stripForeignActions(data, actions);
       ignoredOut = ignored; removedOut = removed;
       return { saved: existing
@@ -260,7 +264,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     // Làm sạch → dòng bắt buộc còn ở Phần IV về đúng phần → tính lại dòng gắn việc → xếp lại phần → kiểm tra (services/weekly-submit.js).
     // Phạm vi bộ phận (mục S10) — tính ở MỌI lần nộp / gửi lại: dòng tự bổ sung, dòng của việc người gửi không xem được (giữ từ bản đã lưu).
     const deptItems = await workItemsFor(DEPT_SCOPE, now, doneSince(week), departmentId);
-    const { data, errors, ignored, removed } = WS.prepareSubmit({ raw: req.body?.data, ctx, prefill, actions, now, week, saved: pre?.data || null, scopeItems: deptItems, editAll: editsAll(s, acc), frozen }); // bản đã lưu: nháp hoặc đã nộp
+    const { data, errors, ignored, removed } = WS.prepareSubmit({ raw: req.body?.data, ctx, prefill, actions, now, week, saved: pre?.data || null, scopeItems: deptItems, editAll: editsAll(s, acc), frozen, everSeen: await seenIn(req.user, pre?.data) }); // bản đã lưu: nháp hoặc đã nộp
     const candIds = new Set(cand.map(i => i.id)), byId = new Map(ctx.items.map(i => [i.id, i]));
     // Trả lại dữ liệu đã tính lại (tình trạng dòng MTL) để giao diện hiện đúng khối giải trình cần điền.
     if (errors.length) return res.status(422).json({ error: `Còn ${errors.length} mục cần sửa`, code: 'REPORT_INCOMPLETE', errors, data: await hideUnseen(s, req.user, data), ...notes(ignored, removed) });
