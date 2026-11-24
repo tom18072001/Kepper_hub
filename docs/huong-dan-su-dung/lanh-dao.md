@@ -63,7 +63,7 @@ Menu **Dự án → Tiến độ dự án**: mỗi dự án một thẻ — thá
 
 ### 2.2 Tổng quan một dự án
 
-Mở dự án → tab **Tổng quan dự án**: ô số liệu bấm được, **đường cong S** kế hoạch / thực tế, theo giai đoạn, theo bộ phận, KPI theo người (chỉ Ban Tổng Giám đốc, lãnh đạo bộ phận — bộ phận mình — và PMO xem; mỗi lần xem có ghi nhật ký), mốc chính, cảnh báo gần đây.
+Mở dự án → tab **Tổng quan dự án**: ô số liệu bấm được, **đường cong S** kế hoạch / thực tế, theo giai đoạn, theo bộ phận, KPI theo người (chỉ Ban Tổng Giám đốc xem; mỗi lần xem có ghi nhật ký), mốc chính, cảnh báo gần đây.
 
 ![Tổng quan dự án](anh/20-ld-tong-quan-du-an.png)
 

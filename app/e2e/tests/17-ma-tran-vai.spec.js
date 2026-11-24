@@ -87,8 +87,7 @@ test('quản trị: vai BTGĐ ngoài bộ phận Ban Tổng Giám đốc phải 
   expect(audit).toContain('ROLE_CHANGE');
   // Mọi lần đổi vai đều báo Ban Tổng Giám đốc (không chỉ khi vai mới là BTGĐ).
   expect((await apiAs(admin, `/api/admin/users/${id}`, { method: 'PUT', data: { role: 'manager' } })).status()).toBe(200);
-  const notes = (await (await apiAs(pages.giamdoc, '/api/notifications')).json()).items.map(n => n.title).join('
-');
+  const notes = (await (await apiAs(pages.giamdoc, '/api/notifications')).json()).items.map(n => n.title).join(' | ');
   expect(notes).toContain('btgd.lech: Nhân viên → Lãnh đạo bộ phận');
   expect(notes).toContain('xác nhận lưu tài khoản lệch vai / bộ phận: btgd.lech');
   // Bộ phận không tự chọn Phó TGĐ phụ trách nữa (nhập ở tài khoản).

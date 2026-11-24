@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
 const { fail, intParam, optionalInt, optionalDate, text } = require('../lib/http');
-const { permissionScope, isItAdmin, NOT_IT_WHERE } = require('../lib/permissions');
+const { permissionScope, isItAdmin, NOT_IT_WHERE, isBoard } = require('../lib/permissions');
 const { verifyUpload } = require('../lib/files');
 const { loadProject, visibleProjectsWhere, itemVisibleWhere } = require('../services/access');
 const TA = require('../services/task-access');
@@ -19,8 +19,9 @@ const bus = require('../services/bus');
 const M = require('../services/mtl');
 const A = require('../services/alerts');
 
-// Xem KPI theo người: Ban lãnh đạo (SYSTEM) mọi người; trưởng / phó bộ phận (UNIT) bộ phận mình.
-const kpiScope = user => (isItAdmin(user) ? null : permissionScope(user, 'reports.kpi', 'VIEW') === 'SYSTEM' || permissionScope(user, 'work.approve', 'OPERATE') === 'SYSTEM' ? 'SYSTEM' : permissionScope(user, 'work.approve', 'OPERATE') === 'UNIT' ? 'UNIT' : null);
+// KPI theo người (dữ liệu cá nhân, kpi.person — chủ dự án chốt 25/11/2026 "Chỉ Ban TGĐ"): Ban Tổng Giám đốc xem mọi người; mọi người
+// khác (lãnh đạo bộ phận, PMO / chủ dự án, nhân viên) chỉ xem KPI của CHÍNH MÌNH; quản trị hệ thống không xem.
+const kpiScope = user => (isItAdmin(user) ? null : isBoard(user) ? 'SYSTEM' : 'SELF');
 
 module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
   const upload = multer({ dest: path.join(config.uploadTmpDir, 'workhub-import'), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
@@ -263,14 +264,15 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
 
   // ---------- KPI tiến độ theo người (chủ trì) ----------
   app.get('/api/projects/:id/mtl-kpi', auth, async (req, res) => {
-    const { project, rights } = await mtlProject(req);
-    // PMO (người quản lý dự án) xem KPI theo người trong dự án mình điều phối.
-    const scope = kpiScope(req.user) || (rights.canManage ? 'SYSTEM' : null);
-    if (!scope) fail(403, 'KPI theo người dành cho Ban lãnh đạo và trưởng bộ phận', 'FORBIDDEN');
+    const { project } = await mtlProject(req);
+    const scope = kpiScope(req.user);
+    const only = req.query.user === undefined ? null : intParam(req.query.user, 'Người');
+    if (!scope || (scope === 'SELF' && only != null && only !== req.user.id)) fail(403, 'KPI theo người chỉ Ban Tổng Giám đốc xem; mỗi người xem KPI của chính mình', 'FORBIDDEN');
+    const target = scope === 'SELF' ? req.user.id : only;
     const now = new Date();
     const { items, cfg, actualOf } = await computeProject(project, req.user, now);
     const leaves = M.leavesOf(items);
-    const users = await prisma.user.findMany({ where: { id: { in: [...new Set(leaves.flatMap(i => i.assignees.map(a => a.id)))] }, ...(scope === 'UNIT' ? { departmentId: req.user.departmentId } : {}) },
+    const users = await prisma.user.findMany({ where: { id: { in: [...new Set(leaves.flatMap(i => i.assignees.map(a => a.id)))] }, ...(target != null ? { AND: [{ id: target }] } : {}) },
       select: { id: true, fullName: true, displayTitle: true, departmentId: true, department: { select: { name: true } } } });
     const rows = users.map(u => ({ id: u.id, fullName: u.fullName, title: u.displayTitle, departmentId: u.departmentId, department: u.department?.name || '', ...M.kpiOf(leaves.filter(i => i.assignees.some(a => a.id === u.id)), actualOf, now, cfg) }))
       .sort((a, b) => (b.score ?? -1) - (a.score ?? -1));

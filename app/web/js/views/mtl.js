@@ -151,11 +151,11 @@ export async function drawMtlOverview(body, project) {
     <section class="card"><div class="mtl-h"><h3>Mốc chính <svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg></h3></div><div class="tbl-scroll"><table class="table" data-testid="mtl-milestones"><thead><tr><th>Bước</th><th>Mốc</th><th>Kế hoạch</th><th>Thực tế / dự báo</th><th>Trạng thái</th></tr></thead><tbody>${ms || '<tr><td colspan="5" class="muted">—</td></tr>'}</tbody></table></div></section>
   </div>`;
   body.onclick = e => { const r = e.target.closest('tr[data-href]'); if (r && !e.target.closest('a,[data-person],[data-dept-link]')) location.hash = r.dataset.href; };
-  // KPI theo người: chỉ Ban lãnh đạo / trưởng bộ phận (máy chủ chặn người khác).
-  if (project.rights.canManage || isLeadershipUser(store.me)) api(`/api/projects/${project.id}/mtl-kpi`).then(k => {
+  // KPI theo người: chỉ Ban Tổng Giám đốc (chủ dự án chốt 25/11/2026); người khác không thấy phần này (máy chủ chỉ trả KPI của chính mình).
+  if (isBoardUser(store.me)) api(`/api/projects/${project.id}/mtl-kpi`).then(k => {
     const el = $('#mtlPeople', body); if (!el || !k.rows.length) return;
     el.hidden = false;
-    el.innerHTML = `<div class="mtl-h"><h3>KPI tiến độ theo người chủ trì</h3><span class="muted xs">${k.scope === 'UNIT' ? 'bộ phận của bạn' : 'mọi bộ phận'} · chỉ để tham khảo · lần xem được ghi nhật ký</span></div>
+    el.innerHTML = `<div class="mtl-h"><h3>KPI tiến độ theo người chủ trì</h3><span class="muted xs">mọi bộ phận · chỉ Ban Tổng Giám đốc xem · chỉ để tham khảo · lần xem được ghi nhật ký</span></div>
       <div class="tbl-scroll"><table class="table" data-testid="mtl-people"><thead><tr><th>Người</th><th>Bộ phận</th><th class="num">Hạng mục</th><th class="num">SPI</th><th class="num">Đúng hạn</th><th class="num">Chậm</th><th class="num">Trễ</th><th class="num">KPI</th></tr></thead>
       <tbody>${k.rows.map(r => `<tr><td><b>${personLink({ id: r.id, fullName: r.fullName })}</b>${r.title ? `<div class="muted xs">${esc(r.title)}</div>` : ''}</td><td class="muted sm">${esc(r.department)}</td><td class="num">${r.items}</td>
         <td class="num"><span class="pill ${spiTone(r.spi)}">${r.spi == null ? '—' : num(r.spi, 2)}</span></td><td class="num">${r.onTimeRate == null ? '—' : r.onTimeRate + '%'}</td><td class="num">${r.behind}</td><td class="num">${r.overdue}</td><td class="num"><b class="${scoreTone(r.score)}-t">${r.score ?? '—'}</b></td></tr>`).join('')}</tbody></table></div>`;

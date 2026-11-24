@@ -128,12 +128,25 @@ test('18. Dự án MTL: tạo, nhập MTL tổng / bộ phận, tiến độ, c�
   await expect(pmo.getByTestId(`mtl-row-1`)).toBeVisible();
   await expect(pmo.getByTestId(`mtl-row-4`)).toHaveCount(0);
 
-  // 7) KPI theo người: Ban lãnh đạo, trưởng bộ phận (bộ phận mình); cán bộ không.
-  expect((await apiAs(staff, `/api/projects/${project.id}/mtl-kpi`)).status()).toBe(403);
-  const k = await (await apiAs(lead, `/api/projects/${project.id}/mtl-kpi`)).json();
-  expect(k.scope).toBe('UNIT'); expect(k.rows.every(r => r.departmentId === D.PL.id)).toBe(true);
+  // 7) KPI theo người (chủ dự án chốt 25/11/2026 "Chỉ Ban TGĐ"): Ban TGĐ xem mọi người; lãnh đạo bộ phận, PMO, nhân viên
+  //    chỉ xem KPI của chính mình (người khác → 403); giao diện không hiện bảng KPI người khác.
+  const meOf = async page => (await (await apiAs(page, '/api/me')).json());
+  const [staffMe, leadMe] = [await meOf(staff), await meOf(lead)];
+  const staffK = await (await apiAs(staff, `/api/projects/${project.id}/mtl-kpi`)).json();
+  expect(staffK.scope).toBe('SELF'); expect(staffK.rows.every(r => r.id === (staffMe.id ?? staffMe.user?.id))).toBe(true);
+  const leadK = await (await apiAs(lead, `/api/projects/${project.id}/mtl-kpi`)).json();
+  expect(leadK.scope).toBe('SELF'); expect(leadK.rows.every(r => r.id === (leadMe.id ?? leadMe.user?.id))).toBe(true);
+  expect((await apiAs(lead, `/api/projects/${project.id}/mtl-kpi?user=${staffMe.id ?? staffMe.user?.id}`)).status()).toBe(403);
+  expect((await apiAs(staff, `/api/projects/${project.id}/mtl-kpi?user=${leadMe.id ?? leadMe.user?.id}`)).status()).toBe(403);
+  expect((await apiAs(staff, `/api/projects/${project.id}/mtl-kpi?user=${staffMe.id ?? staffMe.user?.id}`)).status()).toBe(200);
+  const all = await (await apiAs(pmo, `/api/projects/${project.id}/mtl-kpi`)).json(); // pmo = giamdoc (Ban TGĐ)
+  expect(all.scope).toBe('SYSTEM'); expect(all.rows.length).toBeGreaterThan(1);
+  expect((await apiAs(pmo, `/api/projects/${project.id}/mtl-kpi?user=${staffMe.id ?? staffMe.user?.id}`)).status()).toBe(200);
   await pmo.goto(`/#/projects/${project.id}?view=mtl`);
   await expect(pmo.getByTestId('mtl-people')).toBeVisible();
+  await lead.goto(`/#/projects/${project.id}?view=mtl`);
+  await expect(lead.getByTestId('mtl-tile-overdue')).toBeVisible();
+  await expect(lead.getByTestId('mtl-people')).toHaveCount(0);
   // Chỉ người quản lý dự án nhập MTL / điều chỉnh kế hoạch gốc; điều chỉnh bắt buộc lý do và ghi nhật ký.
   expect((await apiAs(staff, `/api/projects/${project.id}/mtl-import`, { method: 'POST', multipart: { file: { name: 'a.xlsx', mimeType: 'application/octet-stream', buffer: Buffer.from('x') } } })).status()).toBe(403);
   expect((await apiAs(pmo, `/api/items/${step(3).id}/rebaseline`, { method: 'POST', data: { startT: 3, endT: 6 } })).status()).toBe(422);
