@@ -432,6 +432,19 @@ SELECT role, COUNT(*) FROM "ProjectMember" GROUP BY 1;
   4. Chạy lại `sh deploy/vm-deploy.sh <tên-máy>` — script build lại (tag `kepper-app:<APP_VERSION>` lấy lại image mới; KHÔNG dùng `docker compose up -d app` không có `--build`, vì sau bước 2 tag đó đang trỏ về image cũ).
      Kiểm bản MỚI: image id của container app khác image id của tag rollback; `_prisma_migrations` có dòng `…_mot_truc_vai` với `finished_at`; `sh deploy/precheck-roles.sh` báo "đã áp — bỏ qua".
 
+**Đã chạy thử nguyên văn quy trình bản thật — 24/11/2026**, bản thử một thư mục (`COMPOSE_PROJECT_NAME=kepper-vmtest`, cùng `APP_VERSION=vmtest` cho bản cũ và mới, Caddy + backup chạy như bản thật nhưng Caddy chỉ nghe 127.0.0.1:8491/8492; dữ liệu GIẢ; đã xoá container, volume, image, tag sau khi thử). Bản cũ = `main` 0a3ca5c, cài bằng chính lệnh build của `vm-deploy.sh`; tạo `btgd.thuhep` (director, chỉ `work.view` UNIT) và `btgd.khoa` (director, đã khoá); rồi `git checkout` mã mới trong cùng thư mục.
+
+| Lần | Lệnh | Kết quả thật |
+|---|---|---|
+| 1 | `sh deploy/vm-deploy.sh localhost` | dừng ở kiểm phân quyền (thoát 1), liệt kê id 17 `btgd.thuhep` đang hoạt động, 18 `btgd.khoa` đã khoá; app cũ vẫn healthy, image không đổi (`dd88dbdf…`) |
+| 2 | như lần 1 nhưng **bản thử** thay `deploy/precheck-roles.sh` bằng bản giả thoát 0 (để buộc đi tới chốt) | gắn tag `kepper-app:rollback-20261124-144723`; build; app báo P3009 (sau P3018 lần đầu), không healthy; script in log + đúng 4 lệnh khôi phục kèm tên tag, thoát 1 |
+| Khôi phục 0 | `docker compose stop app` | dừng |
+| Khôi phục 1 | `docker compose run --rm --no-deps --entrypoint npx app prisma migrate resolve --rolled-back 20261124064031_mot_truc_vai` | "marked as rolled back"; còn 0 bản ghi lỗi, 1 bản ghi quay lui |
+| Khôi phục 2 | `docker image tag kepper-app:rollback-20261124-144723 kepper-app:vmtest` → `docker compose up -d --no-build app` | healthy; image container = image tag rollback = image trước nâng cấp (`dd88dbdf…`); build id bản cũ `7b3cffea7d1d` |
+| Khôi phục 3 | đổi vai 17, 18 sang Nhân viên (API Quản trị bản cũ) → `sh deploy/precheck-roles.sh` | 200 / 200; thoát 0 |
+| 3 | `sh deploy/vm-deploy.sh localhost` | thoát 0, healthy; image container = tag `kepper-app:vmtest` mới (`4500fcf9…` ≠ `dd88dbdf…`), build id `95d54a9a0776`; `_prisma_migrations`: 1 dòng quay lui + 1 dòng `finished_at`; kiểm lại "đã áp — bỏ qua" |
+| 4 | `sh deploy/vm-deploy.sh localhost` (kiểm giữ 2 tag) | tạo `rollback-…145256`, xoá `rollback-…144723`; còn đúng 2 tag rollback |
+
 **Bản Windows / NAS (`deploy/upgrade.ps1`, `deploy/upgrade.sh`)**: như trên — hai script này cũng gắn tag `kepper-app:rollback-<giờ>` và in lệnh quay lại khi app không lên.
 
 **Phụ lục — chạy thử vòng 3 (hai thư mục, `APP_VERSION` khác nhau)** —  (lần chạy đầu báo P3018 kèm câu "Còn N tài khoản vai Ban Tổng Giám đốc…"; app khởi động lại liên tục và từ lần thứ hai báo P3009). Chốt nằm ở ĐẦU migration nên dữ liệu chưa đổi. Chạy trong thư mục cài (nơi có `.env`, `docker-compose.yml`):
