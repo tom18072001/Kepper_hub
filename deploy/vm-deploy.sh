@@ -37,16 +37,36 @@ else
   fi
 fi
 echo "==> Build và chạy (app, postgres, backup, caddy)"
-# Lỗi ở đây (vd. Caddy chờ app healthy mà app dừng vì migration) không dừng script: phần dưới kiểm sức khoẻ và in cách khôi phục.
-docker compose --profile https up -d --build || echo "!! docker compose up báo lỗi — xem trạng thái app bên dưới"
+# Giữ mã thoát (không dừng ngay: Caddy chờ app healthy nên lỗi migration cũng làm lệnh này thoát khác 0 — phần dưới in cách khôi phục).
+# Mã khác 0 thì KHÔNG BAO GIỜ báo thành công, kể cả khi app (cũ) vẫn healthy — vd. build hỏng nên container cũ chưa bị thay.
+up_rc=0
+docker compose --profile https up -d --build || up_rc=$?
+ver="$(grep '^APP_VERSION=' .env 2>/dev/null | cut -d= -f2)"; ver="${ver:-0.2.0}"
+# Image app đang chạy so với image vừa build (tag kepper-app:<APP_VERSION>).
+running_img() { docker inspect -f '{{.Image}}' "$(docker compose ps -q app)" 2>/dev/null || true; }
+built_img() { docker image inspect -f '{{.Id}}' "kepper-app:$ver" 2>/dev/null || true; }
 s=""
 for i in $(seq 1 60); do
   s="$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q app)" 2>/dev/null || true)"
   [ "$s" = healthy ] && break; sleep 3
 done
-echo "    app: ${s:-?}"
+echo "    app: ${s:-?} (docker compose up: mã $up_rc)"
+if [ "$s" = healthy ] && [ "$up_rc" != 0 ]; then
+  echo "!! docker compose up LỖI (mã $up_rc) — bản mới CHƯA chạy; app đang phục vụ là bản CŨ (healthy)."
+  echo "     image app đang chạy:  $(running_img)"
+  echo "     image kepper-app:$ver: $(built_img)"
+  [ -z "$rollback" ] || echo "     image cũ (tag): $rollback"
+  echo "!! Xem lỗi build ở trên (mạng, Dockerfile, npm ci…), sửa rồi chạy lại: sh deploy/vm-deploy.sh $HOST"
+  exit 1
+fi
+if [ "$s" = healthy ] && [ "$(running_img)" != "$(built_img)" ]; then
+  echo "!! Bản mới CHƯA chạy: container app vẫn chạy image khác image vừa build — app cũ vẫn phục vụ."
+  echo "     image app đang chạy:  $(running_img)"
+  echo "     image kepper-app:$ver: $(built_img)"
+  echo "!! Chạy lại: sh deploy/vm-deploy.sh $HOST"
+  exit 1
+fi
 if [ "$s" != healthy ]; then
-  ver="$(grep '^APP_VERSION=' .env 2>/dev/null | cut -d= -f2)"; ver="${ver:-0.2.0}"
   echo "!! App chưa sẵn sàng. 30 dòng log cuối:"; docker compose logs app --tail 30 || true
   echo "!! Nếu log báo LỖI migration (P3018 / P3009) — khôi phục (docs/de-xuat-mot-he-quy-chieu-phan-quyen.md, mục 11, \"Bản thật\"):"
   echo "     docker compose stop app"
@@ -66,5 +86,6 @@ if [ -n "$ORG" ] && [ -f "$ORG" ]; then
 fi
 echo "==> Chứng chỉ gốc nội bộ (cho máy trạm tin cậy): $DATA/caddy/caddy/pki/authorities/local/root.crt"
 [ "$first" = 1 ] && echo "    Mật khẩu quản trị gốc lần đầu nằm trong .env (ROOT_ADMIN_PASSWORD) — đổi sau khi đăng nhập."
+echo "    Bản mới đang chạy: kepper-app:$ver = $(running_img)"
 [ -n "$rollback" ] && echo "    Image cũ: $rollback (xoá khi ổn định: docker image rm $rollback)"
 docker compose ps --format 'table {{.Name}}\t{{.Status}}'

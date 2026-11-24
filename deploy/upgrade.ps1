@@ -51,6 +51,12 @@ for ($i = 0; $i -lt 36; $i++) {
   $id = docker compose ps -q app
   if ($id) { $h = docker inspect -f "{{.State.Health.Status}}" $id; if ($h -eq "healthy") { $ok = $true; break } }
 }
+if ($ok) {
+  # Healthy chưa đủ: container phải chạy đúng image vừa build (tag trong Config.Image), không phải image cũ.
+  $runImg = docker inspect -f "{{.Image}}" $id
+  $newImg = docker image inspect -f "{{.Id}}" (docker inspect -f "{{.Config.Image}}" $id)
+  if ($runImg -ne $newImg) { Write-Host "!! Bản mới CHƯA chạy: app đang chạy $runImg, image vừa build $newImg — app cũ vẫn phục vụ." -ForegroundColor Red; exit 1 }
+}
 if (-not $ok) {
   Write-Host "!! App chưa sẵn sàng sau 3 phút. 40 dòng log cuối:" -ForegroundColor Red
   docker compose logs app --tail 40
@@ -61,4 +67,4 @@ if (-not $ok) {
   Write-Host "     docker compose up -d --no-build app"
   exit 1
 }
-Write-Host "OK — Kepler Hub đã nâng cấp. Image cũ giữ ở $rollback (xoá khi ổn định: docker image rm $rollback)." -ForegroundColor Green
+Write-Host "OK — Kepler Hub đã nâng cấp. Bản mới: $runImg. Image cũ giữ ở $rollback (xoá khi ổn định: docker image rm $rollback)." -ForegroundColor Green
