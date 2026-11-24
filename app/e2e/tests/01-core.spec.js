@@ -44,16 +44,17 @@ test('2. Quản trị: tạo bộ phận, tạo tài khoản, phân quyền, nh�
   await page.getByTestId('user-save').click();
   await expect(page.getByTestId('user-nv.marketing')).toContainText('Chờ đổi mật khẩu');
 
-  // Phân quyền: cấp thêm quyền xem dashboard toàn tổ chức
+  // Quyền đi theo vai: chỉ xem, không chỉnh từng người (một hệ quy chiếu, 24/11/2026).
   await page.getByTestId('perm-nv.marketing').click();
-  await expect(page.getByTestId('grant-work.view-VIEW')).toHaveValue('UNIT');
-  await page.getByTestId('grant-reports.dashboard-VIEW').selectOption('SYSTEM');
-  await page.getByTestId('perm-save').click();
-  await toast(page, 'Đã lưu phân quyền');
+  await expect(page.getByTestId('perm-state')).toContainText('Nhân viên');
+  await expect(page.getByTestId('grant-work.view-VIEW')).toHaveText('Bộ phận mình');
+  await expect(page.getByTestId('grant-reports.kpi-VIEW')).toHaveText('—');
+  await expect(page.getByTestId('perm-save')).toHaveCount(0);
+  await page.locator('.modal [data-close]').click();
 
   await page.getByTestId('nav-admin-audit').click();
   const audit = page.getByTestId('audit-table');
-  await expect(audit).toContainText('PERMISSION_UPDATE');
+  await expect(audit).toContainText('User');
   await expect(audit).toContainText('Department');
   await expect(audit).toContainText('LOGIN');
 });

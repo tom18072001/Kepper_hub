@@ -34,7 +34,9 @@ test('Q1. Chuẩn bị: TGĐ giao việc trong dự án MTL cho tài khoản vai
   }
   const users = await json(await apiAs(admin, '/api/users/directory'));
   const U = name => users.find(u => u.username === name);
-  await json(await apiAs(admin, `/api/departments/${D('KD').id}`, { method: 'PUT', data: { supervisorId: U(PGD).id } }));
+  // Phạm vi phụ trách nhập ở tài khoản BTGĐ (không ở bộ phận).
+  expect((await apiAs(admin, `/api/departments/${D('KD').id}`, { method: 'PUT', data: { supervisorId: U(PGD).id } })).status()).toBe(422);
+  await json(await apiAs(admin, `/api/admin/users/${U(PGD).id}/scope`, { method: 'PUT', data: { all: false, departmentIds: [D('KD').id] } }));
 
   const tgd = await as(browser, 'giamdoc');
   const project = (await json(await apiAs(tgd, '/api/projects'))).find(p => p.key === 'DA');
@@ -235,11 +237,11 @@ test('Q7. BTGĐ phụ trách toàn công ty (quản trị đánh dấu riêng) s
   await expect(admin.getByTestId('perm-board-all')).not.toBeChecked();
   await admin.getByTestId('perm-board-all').check();
   await admin.getByTestId('perm-save').click();
-  await expect(admin.locator('.toast', { hasText: 'Đã lưu phân quyền' }).first()).toBeVisible();
+  await expect(admin.locator('.toast', { hasText: 'Đã lưu phạm vi phụ trách' }).first()).toBeVisible();
   await expect(admin.getByTestId(`user-${BOARD}`).getByTestId('board-all-pill')).toBeVisible();
   // Không đánh dấu được tài khoản quản trị hệ thống.
   const me = await json(await apiAs(admin, '/api/me'));
-  expect((await apiAs(admin, `/api/admin/users/${me.id ?? me.user?.id}/board`, { method: 'PUT', data: { boardAll: true } })).status()).toBeGreaterThanOrEqual(403);
+  expect((await apiAs(admin, `/api/admin/users/${me.id ?? me.user?.id}/scope`, { method: 'PUT', data: { all: true, departmentIds: [] } })).status()).toBeGreaterThanOrEqual(403);
 
   // BTGĐ phụ trách toàn công ty: sửa được việc ở mọi bộ phận (Kinh doanh, Pháp lý), duyệt gia hạn.
   for (const id of [ctx.itemId, step8.id]) {
@@ -266,9 +268,9 @@ test('Q7. BTGĐ phụ trách toàn công ty (quản trị đánh dấu riêng) s
   await expect(p2.locator('textarea#ipTitle')).toHaveCount(0);
 
   // Bỏ đánh dấu → mất quyền Ban Tổng Giám đốc ngay; thay đổi được ghi nhật ký.
-  await json(await apiAs(admin, `/api/admin/users/${boardId}/board`, { method: 'PUT', data: { boardAll: false } }));
+  await json(await apiAs(admin, `/api/admin/users/${boardId}/scope`, { method: 'PUT', data: { all: false, departmentIds: [] } }));
   expect((await apiAs(board, `/api/items/${step8.id}`, { method: 'PATCH', data: { priority: 'LOW' } })).status()).toBe(403);
-  expect(JSON.stringify(await json(await apiAs(admin, '/api/admin/audit?action=BOARD_ALL_UPDATE')))).toContain('BOARD_ALL_UPDATE');
+  expect(JSON.stringify(await json(await apiAs(admin, '/api/admin/audit?action=BOARD_SCOPE_UPDATE')))).toContain('BOARD_SCOPE_UPDATE');
 });
 
 test('Q8. Việc mốc / đường găng: BTGĐ phụ trách của việc duyệt và chấm mức thay người giao; Ban Tổng Giám đốc là người chủ trì thì Ban Tổng Giám đốc khác duyệt', async ({ browser }) => {
@@ -318,7 +320,7 @@ test('Q8. Việc mốc / đường găng: BTGĐ phụ trách của việc duyệ
   // b) Việc mốc mà BTGĐ phụ trách toàn công ty chính là người chủ trì → BTGĐ phụ trách toàn công ty khác duyệt.
   const admin = await as(browser, 'admin');
   const board = (await json(await apiAs(admin, '/api/users/directory'))).find(u => u.username === 'bgd.toanquyen');
-  await json(await apiAs(admin, `/api/admin/users/${board.id}/board`, { method: 'PUT', data: { boardAll: true } }));
+  await json(await apiAs(admin, `/api/admin/users/${board.id}/scope`, { method: 'PUT', data: { all: true, departmentIds: [] } }));
   const ms = await create({ title: 'Mốc khai trương phòng họp (giả)', leadDepartmentId: D('PL').id, assigneeIds: [U('giamdoc').id], milestone: true });
   await json(await apiAs(tgd, `/api/items/${ms.id}`, { method: 'PATCH', data: { stateId: REVIEW } }));
   const m = await json(await apiAs(pmo, `/api/items/${ms.id}`));
