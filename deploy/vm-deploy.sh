@@ -51,6 +51,11 @@ for i in $(seq 1 60); do
   [ "$s" = healthy ] && break; sleep 3
 done
 echo "    app: ${s:-?} (docker compose up: mã $up_rc)"
+if [ "$s" = healthy ] && [ "$up_rc" != 0 ] && [ -n "$(built_img)" ] && [ "$(running_img)" = "$(built_img)" ]; then
+  # App MỚI đã lên nhưng dịch vụ khác (vd. caddy) lỗi — vẫn không báo thành công.
+  echo "!! App MỚI đã chạy (kepper-app:$ver = $(running_img)) nhưng docker compose up LỖI (mã $up_rc) — vd. caddy. Xem: docker compose ps; docker compose logs caddy --tail 30"
+  exit 1
+fi
 if [ "$s" = healthy ] && [ "$up_rc" != 0 ]; then
   echo "!! docker compose up LỖI (mã $up_rc) — bản mới CHƯA chạy; app đang phục vụ là bản CŨ (healthy)."
   echo "     image app đang chạy:  $(running_img)"
