@@ -9,10 +9,12 @@ Set-Location (Split-Path $PSScriptRoot -Parent)
 $stamp = Get-Date -Format "yyyyMMdd-HHmm"
 
 Write-Host "==> 0/5 Kiểm phân quyền trên CSDL đang chạy (dừng ở đây thì app cũ vẫn chạy) — deploy/precheck-roles-db.sh"
-if (docker compose ps -q postgres) {
-  Get-Content -Raw deploy\precheck-roles-db.sh | docker compose exec -T postgres sh -s
-  if ($LASTEXITCODE -ne 0) { throw "Kiểm phân quyền chưa đạt — DỪNG nâng cấp (đổi vai các tài khoản được liệt kê trên màn Quản trị rồi chạy lại)." }
-}
+# Lần nâng cấp LÊN bản "một hệ quy chiếu" (20261124064031_mot_truc_vai): lấy mã mới TRƯỚC (git pull) rồi mới chạy script này — bản cũ chưa có bước 0.
+if (-not (docker compose ps -q postgres)) { throw "Không đọc được CSDL (container postgres không chạy) — DỪNG nâng cấp. Bật postgres rồi chạy lại." }
+# cmd /c chuyển NGUYÊN byte của tệp vào sh (PowerShell 5.1 nối ống sẽ thêm CRLF làm sh lỗi).
+cmd /c "docker compose exec -T postgres sh -s < deploy\precheck-roles-db.sh"
+if ($LASTEXITCODE -eq 1) { throw "Kiểm phân quyền chưa đạt — DỪNG nâng cấp (đổi vai các tài khoản được liệt kê trên màn Quản trị rồi chạy lại)." }
+if ($LASTEXITCODE -ne 0) { throw "Không đọc được CSDL khi kiểm phân quyền (mã $LASTEXITCODE) — DỪNG nâng cấp." }
 
 Write-Host "==> 1/5 Sao lưu CSDL + tệp đính kèm trước khi nâng cấp"
 docker compose build backup | Out-Null

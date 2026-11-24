@@ -417,13 +417,35 @@ SELECT role, COUNT(*) FROM "ProjectMember" GROUP BY 1;
 
 **Chờ PR #40 merge rồi làm NGAY** (cùng tệp với #40): `services/weekly-data.js` (`rolesOf` → hàm vai), `routes/reports.js` (xuất MTL), `services/alerts.js` (người nhận cảnh báo găng / mốc cấp Ban TGĐ đang lọc theo bảng quyền lưu riêng — bản này đã ghi lại bảng đó khi tạo tài khoản / đổi vai và trong seed nên cảnh báo vẫn tới đúng người; vẫn phải chuyển sang `BOARD_WHERE`), nhãn "Chờ BGĐ cho ý kiến" (`services/stage.js` ↔ `dashboard.test.js`), chữ trong `views/weekly.js`, `docs/data-protection-assessment.md`. Test quét mã để các tệp này trong danh sách chờ `PENDING_PR40` (gồm `web/js/views/weekly.js`) và tự FAIL khi một tệp đã hết vi phạm. `app/mcp/server.js` (chữ "Ban GĐ" trong mô tả công cụ báo cáo tuần) sửa cùng đợt.
 
-**Kiểm trước khi triển khai** (`deploy/precheck-roles.sh`, tự gọi trong `deploy/vm-deploy.sh`, `deploy/upgrade.sh`, `deploy/upgrade.ps1` TRƯỚC sao lưu và build): chạy đúng điều kiện của chốt migration (kể cả tài khoản đã khoá) trên CSDL đang chạy; còn tài khoản thì dừng và in `id | tài khoản | trạng thái`, app cũ vẫn chạy.
+**Kiểm trước khi triển khai** (`deploy/precheck-roles.sh`; Windows: bước 0/5 của `deploy/upgrade.ps1`): chạy đúng điều kiện của chốt migration (kể cả tài khoản đã khoá) trên CSDL đang chạy, TRƯỚC sao lưu và build. Còn tài khoản → dừng (thoát 1) và in `id | tài khoản | trạng thái`; không đọc được CSDL (postgres không chạy, sai tài khoản, mất kết nối) → dừng (thoát 2) — không bao giờ coi là an toàn. App cũ vẫn chạy trong mọi trường hợp dừng.
+- **Lần nâng cấp LÊN bản này** từ bản cũ: `upgrade.sh` / `upgrade.ps1` của bản CŨ chưa có bước kiểm này (và bước 0 nằm trước bước "Lấy mã mới"). Vì vậy phải: (1) lấy mã mới trước (`git fetch` rồi `git pull --ff-only` trong thư mục cài), (2) chạy `sh deploy/precheck-roles.sh` (Windows: chạy `deploy\upgrade.ps1` của mã MỚI — bước 0/5 kiểm trước khi build), (3) đạt thì mới nâng cấp.
+- `deploy/vm-deploy.sh` (máy chạy thật) **tự kiểm**: mã mới được kéo về thư mục trước khi chạy script, nên script mới chạy bước kiểm trước sao lưu và build.
 
-**Khôi phục nếu migration vẫn dừng lúc triển khai** (app mới báo P3018, sau đó mọi lần khởi động báo P3009). Chốt nằm ở ĐẦU migration nên dữ liệu chưa đổi. **CHƯA chạy thử** — Docker trên máy làm việc đang treo; phải chạy thử trên bản thử trước khi dùng thật, rồi ghi kết quả vào đây:
-1. Đánh dấu migration lỗi là đã quay lui (entrypoint tự chạy migrate nên phải bỏ qua entrypoint):
+**Khôi phục nếu migration vẫn dừng lúc triển khai** (lần chạy đầu báo P3018 kèm câu "Còn N tài khoản vai Ban Tổng Giám đốc…"; app khởi động lại liên tục và từ lần thứ hai báo P3009). Chốt nằm ở ĐẦU migration nên dữ liệu chưa đổi. Chạy trong thư mục cài (nơi có `.env`, `docker-compose.yml`):
+0. **Dừng app TRƯỚC** — app mới đang khởi động lại liên tục; nếu không dừng, nó chạy migration lần nữa ngay sau bước 1 và tạo thêm một bản ghi lỗi (đã gặp khi chạy thử):
+   `docker compose stop app`
+1. Đánh dấu migration lỗi là đã quay lui, chạy MỘT LẦN bằng image mới, bỏ qua entrypoint (entrypoint tự chạy migrate):
    `docker compose run --rm --no-deps --entrypoint npx app prisma migrate resolve --rolled-back 20261124064031_mot_truc_vai`
-2. Chạy lại image cũ để đổi vai trên giao diện: `deploy/upgrade.sh` đã gắn tag `kepper-app:rollback-<giờ>`; gắn lại tag đó cho image app rồi `docker compose up -d app` (hoặc khôi phục bản sao lưu bằng `deploy/restore.sh` nếu muốn về đúng trạng thái trước).
-3. Đổi vai các tài khoản `deploy/precheck-roles.sh` liệt kê, chạy lại `deploy/precheck-roles.sh` cho tới khi đạt, rồi triển khai lại bản mới.
-Cần kiểm khi chạy thử: bản cũ có khởi động được khi `_prisma_migrations` còn dòng `20261124064031_mot_truc_vai` đã đánh dấu quay lui hay không.
+   (in "Migration 20261124064031_mot_truc_vai marked as rolled back."; mỗi bản ghi lỗi cần một lần chạy — xem `SELECT migration_name, rolled_back_at FROM _prisma_migrations WHERE migration_name LIKE '%mot_truc_vai'`.)
+2. Chạy lại image cũ: `deploy/upgrade.sh` / `upgrade.ps1` đã gắn tag `kepper-app:rollback-<giờ>` cho image cũ →
+   `docker image tag kepper-app:rollback-<giờ> kepper-app:<APP_VERSION trong .env>` rồi `docker compose up -d --no-build app`.
+   Bản cũ khởi động bình thường khi `_prisma_migrations` còn dòng `…_mot_truc_vai` đã đánh dấu quay lui ("No pending migrations to apply").
+3. Đổi vai các tài khoản `deploy/precheck-roles.sh` liệt kê trên màn Quản trị của bản cũ; chạy lại `sh deploy/precheck-roles.sh` tới khi đạt (thoát 0).
+4. Nâng cấp lại: `docker compose up -d app` (image mới). Migration áp lần này (thêm một dòng `finished_at` có giá trị, các dòng quay lui giữ nguyên); `precheck-roles.sh` sau đó báo "đã áp — bỏ qua".
+
+**Đã chạy thử 24/11/2026** trên bản thử riêng (`COMPOSE_PROJECT_NAME=kepper-roletest`, cổng 4290 / 5490, dữ liệu GIẢ, đã xoá sau khi thử): bản cũ = `main` 0a3ca5c (seed giả), bản mới = nhánh này. Kết quả thật:
+
+| Bước | Lệnh | Kết quả |
+|---|---|---|
+| Chuẩn bị | tạo `btgd.thuhep` (vai director, chỉ `work.view` UNIT, đang hoạt động) và `btgd.khoa` (director, không có quyền nào, đã khoá) | — |
+| Kiểm trước | `sh deploy/precheck-roles.sh` | thoát 1, liệt kê `17 \| btgd.thuhep \| đang hoạt động`, `18 \| btgd.khoa \| đã khoá` |
+| Kiểm trước, Windows | `cmd /c "docker compose exec -T postgres sh -s < deploy\precheck-roles-db.sh"` từ PowerShell 5.1 | thoát 1, liệt kê đúng 2 tài khoản |
+| Không đọc được CSDL | sai tài khoản (`PRECHECK_PGUSER=khongco`), sai CSDL, `docker compose stop postgres` | cả ba thoát 2 "không đọc được CSDL" (kèm lỗi psql) |
+| Nâng cấp bỏ qua kiểm | `docker compose up -d --build app` (image mới) | P3018 "Còn 2 tài khoản…", rồi P3009, app `Restarting`; vai / dữ liệu không đổi |
+| Khôi phục 0–2 | `stop app` → `run … migrate resolve --rolled-back …` → image cũ `up -d app` | image cũ healthy, "No pending migrations to apply" |
+| Khôi phục 3 | đổi vai 2 tài khoản sang Nhân viên qua API Quản trị bản cũ (`PUT /api/admin/users/:id`) → `precheck-roles.sh` | 200 / 200; thoát 0 |
+| Khôi phục 4 | `docker compose up -d app` (image mới) | healthy; migration áp; kiểm lại: "đã áp — bỏ qua" |
+
+Bản thử dùng thư mục mã cũ / mới riêng với `APP_VERSION` khác nhau thay cho tag `rollback-<giờ>` ở bước 2; ý nghĩa như nhau (container app chạy lại image cũ trên cùng CSDL).
 
 **Thứ tự triển khai (bắt buộc)**: trên bản đang chạy, **trước khi** deploy PR này, quản trị đổi vai tài khoản PMO (`user#6`) trên giao diện Quản trị (có nhật ký, báo BTGĐ) sang vai **Nhân viên** (chủ dự án chọn 24/11/2026), và BTGĐ thêm tài khoản này vào danh sách PMO ở Thiết lập giao ban. Nếu quên bước đổi vai, migration dừng với thông báo lỗi (chốt an toàn) — không deploy được bản này cho tới khi đổi vai.
