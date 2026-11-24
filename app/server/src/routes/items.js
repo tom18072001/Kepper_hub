@@ -2,7 +2,7 @@
 // Quyền trên từng việc: services/task-access.js (một nguồn duy nhất, bảng quyền tối thiểu theo vai 20/11/2026).
 const { fail, intParam, optionalInt, optionalDate, text, oneOf } = require('../lib/http');
 const { sanitizeHtml, htmlToText, mentions } = require('../lib/rich-text');
-const { isItAdmin } = require('../lib/permissions');
+const { isItAdmin, rolesWith } = require('../lib/permissions');
 const TA = require('../services/task-access');
 const MTL = require('../services/mtl');
 const { loadProject, projectRights, itemVisibleWhere, canSeeItem, isRegisterWriter, ITEM_ACCESS_SELECT } = require('../services/access');
@@ -182,7 +182,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
     const isLeadLeader = caps.leadLeader;
     // Đánh giá = mức chấm + nhận xét lúc duyệt (cấp người giao). Ô "Đánh giá của người giao" cũ chỉ còn hiện đọc.
     const graded = item.rating ? item.approvals.flatMap(r => r.actions).filter(a => a.decision === 'APPROVE' && a.rating).sort((a, b) => b.id - a.id)[0] : null;
-    const approverNames = Object.fromEntries((await prisma.user.findMany({ where: { isActive: true, permissions: { some: { permissionKey: 'work.approve' } } }, select: { id: true, fullName: true } })).map(u => [u.id, u.fullName]));
+    const approverNames = Object.fromEntries((await prisma.user.findMany({ where: { isActive: true, isRootAdmin: false, role: { in: rolesWith('work.approve', 'OPERATE') } }, select: { id: true, fullName: true } })).map(u => [u.id, u.fullName]));
     const depts = Object.fromEntries((await prisma.department.findMany({ where: { id: { in: [item.leadDepartmentId, ...item.supportDepartments.map(d => d.departmentId)].filter(Boolean) } }, select: { id: true, name: true } })).map(d => [d.id, d.name]));
     // Đường dẫn cha (việc con nhiều cấp): [gốc, …, cha]. Sổ giao việc của đơn vị: việc tổ tiên người dùng không thấy thì ẩn tiêu đề.
     const chain = item.parentId ? await tree.ancestors(prisma, item.parentId, { ...ITEM_ACCESS_SELECT, number: true, title: true }) : [];

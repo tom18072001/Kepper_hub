@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
 const { fail, intParam, optionalInt, optionalDate, text } = require('../lib/http');
-const { permissionScope, isItAdmin } = require('../lib/permissions');
+const { permissionScope, isItAdmin, NOT_IT_WHERE } = require('../lib/permissions');
 const { verifyUpload } = require('../lib/files');
 const { loadProject, visibleProjectsWhere, itemVisibleWhere } = require('../services/access');
 const TA = require('../services/task-access');
@@ -57,7 +57,7 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
     const aliasRow = await prisma.appSetting.findUnique({ where: { key: 'mtl.ownerAliases' } });
     const ownerAliases = Object.fromEntries(Object.entries(aliasRow?.value && typeof aliasRow.value === 'object' ? aliasRow.value : {}).map(([k, v]) => [M.norm(k), String(v)]));
     if (departmentId != null && !departments.some(d => d.id === departmentId)) fail(422, 'Bộ phận không hợp lệ', 'INVALID_DEPARTMENT');
-    const people = kind === 'DEPARTMENT' ? await prisma.user.findMany({ where: { isActive: true, role: { not: 'admin' }, isRootAdmin: false, departmentId }, select: { id: true, fullName: true, username: true } }) : [];
+    const people = kind === 'DEPARTMENT' ? await prisma.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE, departmentId }, select: { id: true, fullName: true, username: true } }) : [];
     // MTL bộ phận không ghi tên: bộ phận đã có đúng một kế hoạch → cập nhật kế hoạch đó (tải mẫu → sửa → nhập lại).
     const deptPlans = kind === 'DEPARTMENT' ? await prisma.plan.findMany({ where: { projectId: project.id, kind: 'DEPARTMENT', departmentId }, select: { name: true } }) : [];
     const planName = (!asLeader && text(req.body.planName, 'Tên kế hoạch', { max: 160 }))
@@ -138,7 +138,7 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
         { type: 'MTL_ASSIGN', title: `Bộ phận được giao chủ trì ${n} hạng mục MTL ${project.key} — cần phân công người phụ trách`, body: project.name, link: `#/projects/${project.id}?view=mtl` }, req.user.id);
       // Dự án dùng chung: cán bộ các bộ phận có hạng mục trở thành thành viên (cowork, cập nhật hạng mục của bộ phận mình).
       const deptIds = [...new Set(plan.flatMap(p => [p.leadDepartmentId, ...p.supportDepartmentIds]).filter(Boolean))];
-      const staff = await tx.user.findMany({ where: { isActive: true, role: { not: 'admin' }, isRootAdmin: false, departmentId: { in: deptIds } }, select: { id: true } });
+      const staff = await tx.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE, departmentId: { in: deptIds } }, select: { id: true } });
       await tx.projectMember.createMany({ data: staff.map(u => ({ projectId: project.id, userId: u.id, role: 'MEMBER' })), skipDuplicates: true });
       await audit(req, 'MTL_IMPORT', 'Plan', planRow.id, null, { projectId: project.id, kind, departmentId, sheet: sheet.name, fileHash, created, kept, byDepartmentLeader: asLeader }, tx);
       return { planId: planRow.id, created, kept, updated: 0, rebased: 0, members: staff.length };

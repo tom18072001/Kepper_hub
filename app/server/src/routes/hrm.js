@@ -3,6 +3,7 @@
 // Dữ liệu Hạn chế: số CCCD, lương — mã hoá theo trường gắn chủ sở hữu (lib/crypto-field.js). Xem đầy đủ: chỉ trên giao diện,
 // NHẬP LẠI MẬT KHẨU (Claude / computer use không được nhập mật khẩu), mỗi lượt ghi nhật ký; qua token Claude: 4 số cuối CCCD, không lương.
 // Qua token Claude chỉ ghi được: tạo đơn nghỉ của chính mình (lib/tokens.js). Duyệt, chấm công, giải trình, hồ sơ: trên giao diện.
+const { NOT_IT_WHERE, BOARD_WHERE } = require('../lib/permissions');
 const bcrypt = require('bcryptjs');
 const { fail, intParam, optionalInt, optionalDate, text, oneOf } = require('../lib/http');
 const P = require('../lib/policy');
@@ -12,7 +13,7 @@ const C = require('../lib/crypto-field');
 const { notify } = require('../services/events');
 const approval = require('../services/approval');
 
-const ACTIVE_USER = { isActive: true, isRootAdmin: false, role: { not: 'admin' } };
+const ACTIVE_USER = { isActive: true, ...NOT_IT_WHERE };
 const BASIC = ['employeeCode', 'startDate', 'status'];
 const PRIVATE = ['birthDate', 'gender', 'phone', 'personalEmail', 'address', 'emergencyName', 'emergencyPhone', 'education'];
 const CONTACT = ['phone', 'personalEmail', 'address', 'emergencyName', 'emergencyPhone'];
@@ -60,7 +61,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     return { cfg, s };
   };
   const target = async userId => {
-    const u = await prisma.user.findFirst({ where: { id: userId, isRootAdmin: false, role: { not: 'admin' } }, include: { permissions: true, department: { select: { id: true, name: true } } } });
+    const u = await prisma.user.findFirst({ where: { id: userId, ...NOT_IT_WHERE }, include: { permissions: true, department: { select: { id: true, name: true } } } });
     if (!u) fail(404, 'Không tìm thấy nhân sự', 'NOT_FOUND');
     return u;
   };
@@ -69,7 +70,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
   // Người duyệt đơn / giải trình: lãnh đạo bộ phận (trừ chính người đó); lãnh đạo bộ phận / bộ phận không có lãnh đạo → Ban GĐ;
   // đơn của Ban GĐ → Ban GĐ khác + người phụ trách nhân sự (ghi nhận).
   async function approverIds(u, cfg) {
-    const directors = (await prisma.user.findMany({ where: { ...ACTIVE_USER, role: 'director' }, select: { id: true } })).map(x => x.id).filter(id => id !== u.id);
+    const directors = (await prisma.user.findMany({ where: { ...ACTIVE_USER, ...BOARD_WHERE }, select: { id: true } })).map(x => x.id).filter(id => id !== u.id);
     if (H.isDirector(u)) return [...new Set([...directors, ...(await activeIds(cfg.hrUserIds))])].filter(id => id !== u.id);
     if (H.isLeader(u) || u.departmentId == null) return directors;
     const leaders = (await prisma.user.findMany({ where: { ...ACTIVE_USER, departmentId: u.departmentId, id: { not: u.id } }, include: { permissions: true } })).filter(H.isLeader).map(x => x.id);
@@ -173,7 +174,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
   app.get('/api/hrm/people', auth, async (req, res) => {
     const { cfg, s } = await ctxFor(req);
     if (!s.hr && !s.director && !s.leader) fail(403, 'Danh sách nhân sự dành cho người phụ trách nhân sự, Ban giám đốc, lãnh đạo bộ phận', 'FORBIDDEN');
-    const where = { isRootAdmin: false, role: { not: 'admin' }, ...(req.query.inactive === '1' ? {} : { isActive: true }) };
+    const where = { ...NOT_IT_WHERE, ...(req.query.inactive === '1' ? {} : { isActive: true }) };
     if (!s.hr && !s.director) where.departmentId = s.departmentId ?? -1;
     else if (req.query.departmentId) where.departmentId = optionalInt(req.query.departmentId, 'Bộ phận');
     const users = await prisma.user.findMany({ where, include: { permissions: true, department: { select: { id: true, name: true } } }, orderBy: [{ departmentId: 'asc' }, { fullName: 'asc' }] });
@@ -608,7 +609,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     if (!s.hr && !s.director && !s.leader) fail(403, 'Tổng hợp công dành cho lãnh đạo bộ phận, người phụ trách nhân sự, Ban giám đốc', 'FORBIDDEN');
     const month = monthParam(req.query.month), mr = monthRange(month);
     const withRecords = (await prisma.hrAttendance.findMany({ where: { day: { startsWith: month } }, distinct: ['userId'], select: { userId: true } })).map(r => r.userId);
-    const where = { isRootAdmin: false, role: { not: 'admin' }, OR: [{ isActive: true }, { id: { in: withRecords } }] };
+    const where = { ...NOT_IT_WHERE, OR: [{ isActive: true }, { id: { in: withRecords } }] };
     if (!s.hr && !s.director) where.departmentId = s.departmentId ?? -1;
     else if (req.query.departmentId) where.departmentId = optionalInt(req.query.departmentId, 'Bộ phận');
     const users = (await prisma.user.findMany({ where, include: { permissions: true, department: { select: { id: true, name: true } } }, orderBy: [{ departmentId: 'asc' }, { fullName: 'asc' }] }))

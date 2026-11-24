@@ -13,7 +13,7 @@
 const path = require('path');
 const { Readable } = require('stream');
 const nas = require('./nas');
-const { isItAdmin } = require('./permissions');
+const { isItAdmin, isBoard } = require('./permissions');
 
 const fsp = { ...require('fs').promises }; // bản sao: test thay readdir / stat… để giả lập NAS lỗi / chậm
 // Cấu hình cổng (test đổi trực tiếp). maxInflight phải nhỏ hơn UV_THREADPOOL_SIZE để luôn còn luồng cho zlib / fs khác.
@@ -24,11 +24,11 @@ const cfg = {
 };
 const LIST_CONCURRENCY = 8; // số việc một lần liệt kê xếp vào cổng; số thao tác fs thật chạy cùng lúc do cổng giới hạn
 
-// Quyền xem tài liệu dự án (chủ dự án quyết 24/11/2026): chỉ thành viên dự án và Ban Giám đốc. Trưởng dự án tính như thành viên.
+// Quyền xem tài liệu dự án (chủ dự án quyết 24/11/2026): chỉ thành viên dự án và Ban Tổng Giám đốc (vai). Người đứng tên dự án tính như thành viên.
 // Quản trị IT không đọc nội dung nghiệp vụ.
 function canViewDocs(user, project, member) {
   if (!user || !project || project.deletedAt || isItAdmin(user)) return false;
-  return user.role === 'director' || !!member || (project.leadId != null && project.leadId === user.id);
+  return isBoard(user) || !!member || (project.leadId != null && project.leadId === user.id);
 }
 
 // Tệp hệ thống / tạm của Windows, Synology, macOS — không hiện.
@@ -234,4 +234,4 @@ async function openRead(abs) {
   return { stream, size: st.size };
 }
 
-module.exports = { canViewDocs, openRead, cfg, gateStats, resetGate, op, hidden, cleanRel, nasError, rootFolders, folderFor, projectRoot, resolveIn, statOf, listDir, search, fold, mapLimit, fsp };
+module.exports = { canViewDocs, isBoard, openRead, cfg, gateStats, resetGate, op, hidden, cleanRel, nasError, rootFolders, folderFor, projectRoot, resolveIn, statOf, listDir, search, fold, mapLimit, fsp };

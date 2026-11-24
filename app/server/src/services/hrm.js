@@ -1,5 +1,5 @@
 // Playground HRM — thiết lập, vai trò, tính ngày nghỉ, chấm công. Quyền: lib/policy.js (hrm.*).
-const { permissionScope } = require('../lib/permissions');
+const { permissionScope, isBoard, isDeptLeader } = require('../lib/permissions');
 const P = require('../lib/policy');
 const WK = require('./weekly');
 const WD = require('./weekly-data');
@@ -33,9 +33,9 @@ async function subjectOf(prisma, user, cfg = null) {
   const c = cfg || await hrmConfig(prisma);
   return { ...s, hr: !s.it && c.hrUserIds.includes(user.id) };
 }
-// Người đó có phải lãnh đạo bộ phận (trưởng / phó: quyền "Xem tổng hợp") — đơn của họ do Ban GĐ duyệt.
-const isLeader = user => !!user && !!permissionScope(user, 'reports.summary', 'VIEW');
-const isDirector = user => user?.role === 'director';
+// Người đó có phải lãnh đạo (vai Lãnh đạo bộ phận hoặc Ban Tổng Giám đốc) — đơn của lãnh đạo bộ phận do BTGĐ duyệt.
+const isDirector = user => isBoard(user);
+const isLeader = user => isDeptLeader(user) || isBoard(user);
 
 // ---------- Ngày công ----------
 const isWorkday = (day, cfg) => cfg.workDays.includes(WK.weekday(day)) && !cfg.holidays.includes(day);

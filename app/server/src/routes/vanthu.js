@@ -2,6 +2,7 @@
 // Bật bằng MODULES=vanthu. Cấp số tự động, liên tục theo dãy / pháp nhân / năm; không giữ số, nhảy số, dùng lại số đã hủy (Điều 7.1).
 // Văn bản đến: hạn xử lý theo độ khẩn (Điều 12), theo dõi trạng thái (Điều 11), nhắc người xử lý trước hạn 1 ngày và khi quá hạn.
 // Quyền xem theo mức bảo mật (Điều 5) — services/vanthu.js canView. Claude (token): chỉ đọc, không thấy văn bản Bảo mật cao.
+const { NOT_IT_WHERE, BOARD_WHERE } = require('../lib/permissions');
 const { Prisma } = require('@prisma/client');
 const { fail, intParam, optionalInt, text, oneOf } = require('../lib/http');
 const V = require('../services/vanthu');
@@ -20,7 +21,7 @@ const { assertNotVia } = require('../lib/tokens');
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
 const LOCK = 731301; // pg_advisory_xact_lock(LOCK, hash(dãy, pháp nhân, năm)): cấp số tuần tự, không trùng / nhảy số khi vào sổ song song
-const ACTIVE_USER = { isActive: true, isRootAdmin: false, role: { not: 'admin' } };
+const ACTIVE_USER = { isActive: true, ...NOT_IT_WHERE };
 const day = v => (v == null || v === '' ? null : WK.isDay(v) ? v : fail(422, 'Ngày không hợp lệ (YYYY-MM-DD)', 'INVALID_DATE'));
 const hash32 = s => { let h = 0; for (const c of s) h = (h * 31 + c.codePointAt(0)) | 0; return h; };
 const out = (map, v) => (v ? { code: v, label: map[v] || v } : null);
@@ -390,7 +391,7 @@ module.exports.runVanthuReminders = async function runVanthuReminders(prisma, no
   if (WK.weekday(today) === 1) {
     const overdue = open.filter(d => d.dueDate < today);
     if (overdue.length) {
-      const directors = (await prisma.user.findMany({ where: { ...ACTIVE_USER, role: 'director' }, select: { id: true } })).map(u => u.id);
+      const directors = (await prisma.user.findMany({ where: { ...ACTIVE_USER, ...BOARD_WHERE }, select: { id: true } })).map(u => u.id);
       sent += await notify(prisma, directors, { type: 'DOC_WEEKLY', title: `${overdue.length} văn bản đến quá hạn xử lý`, body: overdue.slice(0, 10).map(d => d.number).join(', '), link: '#/vanthu?book=DEN&overdue=1' });
     }
   }

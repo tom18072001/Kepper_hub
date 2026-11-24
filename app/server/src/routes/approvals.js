@@ -1,6 +1,6 @@
 // Hàng chờ của lãnh đạo: phiếu trình chờ duyệt, đề nghị gia hạn chờ quyết định, kiến nghị chờ trả lời.
 const { intParam, text, fail } = require('../lib/http');
-const { permissionScope } = require('../lib/permissions');
+const { permissionScope, isBoard } = require('../lib/permissions');
 const approval = require('../services/approval');
 const rules = require('../services/task-rules');
 const W = require('../services/workitems');
@@ -13,13 +13,13 @@ const DAY = 86_400_000;
 const deptOf = item => item.leadDepartmentId ?? item.project.departmentId;
 
 // Việc mà người dùng có thẩm quyền quyết định gia hạn / trả lời kiến nghị:
-// người giao; lãnh đạo phòng chủ trì (kể cả uỷ quyền); PGĐ phụ trách phòng chủ trì.
+// người giao; lãnh đạo bộ phận chủ trì (kể cả uỷ quyền); BTGĐ phụ trách (toàn công ty / bộ phận chủ trì).
 async function decisionScope(prisma, user) {
   const now = new Date();
   const fromIds = (await prisma.delegation.findMany({ where: { toUserId: user.id, revokedAt: null, startsAt: { lte: now }, endsAt: { gte: now } }, select: { fromUserId: true } })).map(d => d.fromUserId);
   const leaderDepts = new Set();
   if (permissionScope(user, 'work.approve', 'OPERATE') === 'UNIT' && user.departmentId != null) leaderDepts.add(user.departmentId);
-  for (const u of fromIds.length ? await prisma.user.findMany({ where: { id: { in: fromIds }, isActive: true }, select: { departmentId: true, role: true } }) : []) if (u.departmentId != null && u.role !== 'director') leaderDepts.add(u.departmentId);
+  for (const u of fromIds.length ? await prisma.user.findMany({ where: { id: { in: fromIds }, isActive: true }, select: { departmentId: true, role: true, isRootAdmin: true } }) : []) if (u.departmentId != null && !isBoard(u)) leaderDepts.add(u.departmentId);
   const supervised = (await prisma.department.findMany({ where: { supervisorId: { in: [user.id, ...fromIds] } }, select: { id: true } })).map(d => d.id);
   // Ban Giám đốc của việc (services/task-access.js): TGĐ — mọi việc; PGĐ phụ trách — việc của phòng mình phụ trách.
   const org = await TA.orgContext(prisma, now);

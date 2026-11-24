@@ -1,4 +1,5 @@
 // Quy tắc dùng chung cho công việc: tạo việc, chuyển trạng thái (WIP, duyệt), thứ tự trên bảng.
+const { NOT_IT_WHERE, isBoard, isDeptLeader } = require('../lib/permissions');
 const { fail, intParam, optionalInt, optionalDate, text, oneOf } = require('../lib/http');
 const { sanitizeHtml, htmlToText } = require('../lib/rich-text');
 const { activity, notify, notifyRequesterIfDone } = require('./events');
@@ -126,7 +127,7 @@ async function canAutoSubmit(tx, item) {
 async function activeUsers(tx, ids, { strict = true } = {}) {
   if (!ids.length) return [];
   // Admin IT không nhận việc (không có quyền xem nội dung công việc).
-  const found = (await tx.user.findMany({ where: { id: { in: ids }, isActive: true, isRootAdmin: false, role: { not: 'admin' } }, select: { id: true } })).map(u => u.id);
+  const found = (await tx.user.findMany({ where: { id: { in: ids }, isActive: true, ...NOT_IT_WHERE }, select: { id: true } })).map(u => u.id);
   if (strict && found.length !== ids.length) fail(422, 'Có người nhận không tồn tại hoặc đã khoá', 'INVALID_ASSIGNEE');
   return found;
 }
@@ -151,11 +152,11 @@ async function registerFields(tx, input, ctx = null) {
   const out = {};
   if (input.assignedById !== undefined) {
     out.assignedById = optionalInt(input.assignedById, 'Người giao') ?? null;
-    const u = out.assignedById ? await tx.user.findFirst({ where: { id: out.assignedById, isActive: true, isRootAdmin: false, role: { not: 'admin' } }, select: { id: true, role: true } }) : null;
+    const u = out.assignedById ? await tx.user.findFirst({ where: { id: out.assignedById, isActive: true, ...NOT_IT_WHERE }, select: { id: true, role: true, isRootAdmin: true, departmentId: true } }) : null;
     if (out.assignedById && !u) fail(422, 'Người giao không hợp lệ', 'INVALID_ASSIGNER');
     if (u && ctx && u.id !== ctx.user.id && !ctx.rights.canManage) {
-      const roles = ctx.project?.visibility === 'ASSIGNED' ? ['director'] : ['director', 'manager', 'deputy'];
-      if (!roles.includes(u.role)) fail(403, ctx.project?.visibility === 'ASSIGNED' ? 'Chỉ ghi người giao là chính bạn hoặc một thành viên Ban Giám đốc' : 'Chỉ ghi người giao là chính bạn hoặc lãnh đạo', 'INVALID_ASSIGNER');
+      const ok = ctx.project?.visibility === 'ASSIGNED' ? isBoard(u) : isBoard(u) || isDeptLeader(u);
+      if (!ok) fail(403, ctx.project?.visibility === 'ASSIGNED' ? 'Chỉ ghi người giao là chính bạn hoặc một thành viên Ban Tổng Giám đốc' : 'Chỉ ghi người giao là chính bạn, Ban Tổng Giám đốc hoặc lãnh đạo bộ phận', 'INVALID_ASSIGNER');
     }
   }
   if (input.assignedAt !== undefined) out.assignedAt = optionalDate(input.assignedAt, 'Ngày giao');

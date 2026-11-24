@@ -2,7 +2,7 @@
 // Số liệu theo người là dữ liệu cá nhân: KPI phòng / cá nhân chỉ quyền reports.kpi (ban giám đốc); mỗi cán bộ xem được số liệu của mình.
 // Dùng để tham khảo, chưa gắn lương thưởng.
 const { fail, optionalInt, optionalDate } = require('../lib/http');
-const { permissionScope, isItAdmin } = require('../lib/permissions');
+const { permissionScope, isItAdmin, NOT_IT_WHERE } = require('../lib/permissions');
 const { visibleProjectsWhere, itemVisibleWhere } = require('../services/access');
 const { getSettings } = require('../services/register');
 const S = require('../services/stats');
@@ -74,7 +74,7 @@ module.exports = function mountKpi(app, { prisma, auth, audit }) {
     const weights = S.normalizeWeights(kpiWeights);
     // Cán bộ cùng phòng (để so khối lượng với bình quân phòng); chỉ trả về số liệu tổng hợp của phòng, không trả số liệu từng người khác.
     const peers = req.user.departmentId != null
-      ? await prisma.user.findMany({ where: { departmentId: req.user.departmentId, role: { not: 'admin' }, isRootAdmin: false }, select: USER_SELECT })
+      ? await prisma.user.findMany({ where: { departmentId: req.user.departmentId, ...NOT_IT_WHERE }, select: USER_SELECT })
       : await prisma.user.findMany({ where: { id: req.user.id }, select: USER_SELECT });
     if (!peers.some(u => u.id === req.user.id)) peers.push(...await prisma.user.findMany({ where: { id: req.user.id }, select: USER_SELECT }));
     const items = await loadItems(prisma, { from, to, where: [{ assignees: { some: { userId: { in: peers.map(u => u.id) } } } }] });

@@ -2,6 +2,7 @@
 // Bật bằng MODULES=crm. Quyền: lib/policy.js (crm.*). Mỗi đối tác thuộc MỘT bộ phận phụ trách + người phụ trách;
 // danh bạ tổ chức (tên, loại, MST, địa chỉ, tổng đài) mọi cán bộ xem; người liên hệ, nhật ký làm việc, hợp đồng chỉ bộ phận phụ trách.
 // Claude (token): xem theo đúng quyền người dùng; chỉ GHI được nhật ký làm việc và đánh dấu xong việc theo dõi (lib/tokens.js).
+const { NOT_IT_WHERE } = require('../lib/permissions');
 const { fail, intParam, optionalInt, optionalDate, text, oneOf } = require('../lib/http');
 const P = require('../lib/policy');
 const WD = require('../services/weekly-data');
@@ -16,7 +17,7 @@ const STATUSES = { PROSPECT: 'Đang tìm hiểu', ACTIVE: 'Đang hợp tác', PA
 const ITYPES = { MEETING: 'Họp', CALL: 'Gọi điện', EMAIL: 'Email', LETTER: 'Công văn', SITE_VISIT: 'Khảo sát hiện trường', OTHER: 'Khác' };
 const EKINDS = { CONTRACT: 'Hợp đồng', BID: 'Gói thầu', MOU: 'Thoả thuận / MOU', PERMIT: 'Hồ sơ / giấy phép' };
 const ESTATUS = { DRAFT: 'Đang chuẩn bị', ACTIVE: 'Đang thực hiện', DONE: 'Hoàn thành', CANCELLED: 'Huỷ' };
-const ACTIVE_USER = { isActive: true, isRootAdmin: false, role: { not: 'admin' } };
+const ACTIVE_USER = { isActive: true, ...NOT_IT_WHERE };
 
 const ctxOf = (p, me = null, extra = {}) => ({ departmentId: p.ownerDepartmentId, ownerUserId: p.ownerUserId, ...extra, participant: extra.participant === true });
 const email = (v, label) => { const s = text(v, label, { max: 120 }); if (s && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) fail(422, label + ' không hợp lệ', 'INVALID_VALUE'); return s; };
@@ -368,8 +369,8 @@ async function runCrmFollowups(prisma, now = new Date()) {
   const end = new Date(Date.parse(today + 'T00:00:00+07:00') + 86_400_000);
   const rows = await prisma.crmInteraction.findMany({ where: { followUpDone: false, nextDue: { gte: new Date(end.getTime() - 9 * 86_400_000), lt: end }, partner: { archivedAt: null } },
     include: { partner: { select: { id: true, name: true, ownerUserId: true, ownerDepartmentId: true } } } });
-  const active = new Set((await prisma.user.findMany({ where: { isActive: true, isRootAdmin: false, role: { not: 'admin' } }, select: { id: true } })).map(u => u.id));
-  const leadersOf = async dept => (await prisma.user.findMany({ where: { isActive: true, isRootAdmin: false, role: { not: 'admin' }, departmentId: dept }, include: { permissions: true } }))
+  const active = new Set((await prisma.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE }, select: { id: true } })).map(u => u.id));
+  const leadersOf = async dept => (await prisma.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE, departmentId: dept }, include: { permissions: true } }))
     .filter(u => require('../lib/permissions').permissionScope(u, 'reports.summary', 'VIEW')).map(u => u.id);
   let sent = 0;
   for (const i of rows) {

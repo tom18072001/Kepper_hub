@@ -7,7 +7,7 @@ const fs = require('node:fs/promises');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
 const { fail, intParam, optionalInt, optionalDate, text, oneOf } = require('../lib/http');
-const { permissionScope, isItAdmin } = require('../lib/permissions');
+const { permissionScope, isItAdmin, NOT_IT_WHERE } = require('../lib/permissions');
 const { loadProject, itemVisibleWhere, visibleProjectsWhere } = require('../services/access');
 const { verifyUpload } = require('../lib/files');
 const { activity, notify } = require('../services/events');
@@ -107,7 +107,7 @@ function matcher(users) {
   };
 }
 async function directory(prisma) {
-  return prisma.user.findMany({ where: { isActive: true, isRootAdmin: false, role: { not: 'admin' } }, select: { id: true, username: true, fullName: true, displayTitle: true } });
+  return prisma.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE }, select: { id: true, username: true, fullName: true, displayTitle: true } });
 }
 async function activeDepartments(prisma) {
   return prisma.department.findMany({ where: { isActive: true }, select: { id: true, name: true, code: true } });
@@ -265,14 +265,14 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
     const from = dayInput(req.query.from, 'Từ ngày'), to = dayInput(req.query.to, 'Đến ngày');
     const taskType = req.query.taskType ? oneOf(req.query.taskType, ['PLAN', 'ADHOC'], 'Loại nhiệm vụ') : null;
     const common = { archivedAt: null, project: projectWhere, ...(taskType ? { taskType } : {}), ...(from || to ? { assignedAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: new Date(to.getTime() + 86_400_000 - 1) } : {}) } } : {}) };
-    const people = departmentId ? (await prisma.user.findMany({ where: { departmentId, isRootAdmin: false, role: { not: 'admin' } }, select: { id: true } })).map(u => u.id) : null;
+    const people = departmentId ? (await prisma.user.findMany({ where: { departmentId, ...NOT_IT_WHERE }, select: { id: true } })).map(u => u.id) : null;
     const items = await prisma.workItem.findMany({
       where: { ...common, ...(people ? { OR: [{ assignees: { some: { userId: { in: people } } } }, { supporters: { some: { userId: { in: people } } } }] } : {}) },
       select: { dueDate: true, completedAt: true, state: { select: { category: true } }, assignees: { select: { userId: true } }, supporters: { select: { userId: true } } },
     });
     const leadIds = [...new Set(items.flatMap(i => [...i.assignees, ...i.supporters].map(a => a.userId)))];
     const users = await prisma.user.findMany({
-      where: { isRootAdmin: false, role: { not: 'admin' }, ...(departmentId ? { departmentId } : {}), OR: [{ id: { in: leadIds } }, { isActive: true }] },
+      where: { ...NOT_IT_WHERE, ...(departmentId ? { departmentId } : {}), OR: [{ id: { in: leadIds } }, { isActive: true }] },
       select: { id: true, fullName: true, displayTitle: true, departmentId: true, department: { select: { name: true } } }, orderBy: [{ departmentId: 'asc' }, { fullName: 'asc' }],
     });
     const opts = { dueSoonDays: settings.dueSoonDays };

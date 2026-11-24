@@ -7,7 +7,7 @@
 const ExcelJS = require('exceljs');
 const MG = require('../services/mtl-guard');
 const { fail, intParam } = require('../lib/http');
-const { isItAdmin } = require('../lib/permissions');
+const { isItAdmin, NOT_IT_WHERE } = require('../lib/permissions');
 const { Prisma } = require('@prisma/client');
 const bus = require('../services/bus');
 const { loadProject, visibleProjectsWhere } = require('../services/access');
@@ -235,7 +235,7 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
     const plans = await prisma.plan.findMany({ where: { projectId: project.id }, select: { id: true, kind: true, departmentId: true, name: true } });
     const deptPlanIds = new Set(plans.filter(p => p.kind === 'DEPARTMENT' && p.departmentId === departmentId).map(p => p.id));
     const masterPlanIds = new Set(plans.filter(p => p.kind === 'MASTER').map(p => p.id));
-    const staff = await prisma.user.findMany({ where: { isActive: true, role: { not: 'admin' }, isRootAdmin: false, departmentId }, select: { fullName: true }, orderBy: { fullName: 'asc' } });
+    const staff = await prisma.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE, departmentId }, select: { fullName: true }, orderBy: { fullName: 'asc' } });
     const own = items.filter(i => deptPlanIds.has(i.planId));
     const masterOf = i => masterPlanIds.has(i.planId) && (i.leadDepartmentId === departmentId || i.supportDepartmentIds.includes(departmentId));
     const masters = items.filter(masterOf);

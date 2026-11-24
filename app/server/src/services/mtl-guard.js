@@ -4,13 +4,13 @@
 //   • tạo việc: việc gốc (bước MTL tổng) chỉ người quản lý dự án; việc nhánh do người chủ trì tạo thì máy chủ tự đặt cấu trúc;
 //   • thao tác hàng loạt (nhập Excel, ghi chú → việc) và xuất tệp theo lib/policy.js.
 const { fail, optionalInt } = require('../lib/http');
-const { isItAdmin } = require('../lib/permissions');
+const { isItAdmin, isBoard } = require('../lib/permissions');
 const Policy = require('../lib/policy');
 
 // Trường người không phải người giao / Ban Giám đốc của việc cha không được tự đặt khi thêm việc nhánh (máy chủ tự tính / kế thừa).
 const CREATE_STRIP = ['progress', 'weight', 'critical', 'milestone', 'planCode', 'planSection', 'stateId', 'leadDepartmentId', 'supportDepartmentIds', 'approvalLevels'];
 
-const subjectOf = user => ({ userId: user.id, it: isItAdmin(user), director: user.role === 'director' });
+const subjectOf = user => ({ userId: user.id, it: isItAdmin(user), director: isBoard(user) });
 
 async function itemCtx(client, itemId) {
   const it = await client.workItem.findUnique({ where: { id: itemId }, select: { parentId: true, leadDepartmentId: true, progress: true,

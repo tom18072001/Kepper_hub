@@ -1,5 +1,12 @@
-// Danh mục quyền WorkHub. Cơ chế giữ nguyên từ bản NQ57: mỗi quyền có action (VIEW/OPERATE)
-// và phạm vi (UNIT = phòng ban của tài khoản, SYSTEM = toàn tổ chức). OPERATE bao hàm VIEW.
+// MỘT HỆ QUY CHIẾU PHÂN QUYỀN (chủ dự án duyệt 24/11/2026 — docs/de-xuat-mot-he-quy-chieu-phan-quyen.md).
+// "Người này là ai trong công ty" chỉ trả lời bằng VAI (User.role), đúng một trong 4 vai:
+//   director = Ban Tổng Giám đốc (BTGĐ) · manager = Lãnh đạo bộ phận · member = Nhân viên · admin = Quản trị hệ thống.
+// Thành viên BTGĐ có thêm PHẠM VI PHỤ TRÁCH: Toàn công ty (User.boardAll) hoặc các bộ phận (Department.supervisorId).
+// Quyền chung SUY HOÀN TOÀN TỪ VAI (ROLE_PROFILES) — không còn chỉnh quyền từng người (bảng UserPermission giữ lại, không đọc).
+// Mọi nơi khác hỏi vai qua isBoard / isDeptLeader / isItAdmin / các điều kiện *_WHERE ở đây; test quét mã (role-matrix.test.js)
+// cấm so chuỗi vai ngoài tệp này.
+// Tên quyền kỹ thuật bên dưới (work.view…) chỉ là tên ô của ma trận: mỗi quyền có action (VIEW/OPERATE) và phạm vi
+// (UNIT = bộ phận của tài khoản, SYSTEM = toàn công ty). OPERATE bao hàm VIEW.
 const ACTIONS = ['VIEW', 'OPERATE'];
 const SCOPES = ['UNIT', 'SYSTEM'];
 const P = (group, key, label, description, actions = ACTIONS, scopes = SCOPES) => ({ group, key, label, description, actions, scopes });
@@ -25,17 +32,40 @@ const BY_KEY = Object.fromEntries(PERMISSIONS.map(p => [p.key, p]));
 // KHÔNG bao giờ có các quyền này — tách quản trị kỹ thuật khỏi nội dung nghiệp vụ (quyết định của chủ dự án 16/10/2026).
 const isBusinessKey = key => /^(work|projects|reports)\./.test(key);
 const isItAdmin = user => !!user && (user.isRootAdmin || user.role === 'admin');
+// Vai cũ "Phó phòng" (deputy) đã gộp vào Lãnh đạo bộ phận (migration); vẫn đọc như manager nếu còn sót.
+const roleOf = user => (user?.role === 'deputy' ? 'manager' : user?.role) || null;
+// Ban Tổng Giám đốc (vai). Phạm vi phụ trách xem services/task-access.js (Toàn công ty / bộ phận).
+const isBoard = user => !!user && !isItAdmin(user) && roleOf(user) === 'director';
+// Lãnh đạo bộ phận (vai) của MỘT bộ phận: phải thuộc một bộ phận.
+const isDeptLeader = user => !!user && !isItAdmin(user) && roleOf(user) === 'manager' && user.departmentId != null;
+// Thứ bậc trên cây tổ chức: 0 Ban Tổng Giám đốc, 1 Lãnh đạo bộ phận, 2 Nhân viên (quản trị hệ thống: null).
+const roleRank = user => (isItAdmin(user) ? null : isBoard(user) ? 0 : roleOf(user) === 'manager' ? 1 : 2);
+// Điều kiện Prisma theo vai (thay cho so chuỗi rải rác).
+const IT_WHERE = Object.freeze({ OR: [{ isRootAdmin: true }, { role: 'admin' }] });
+const NOT_IT_WHERE = Object.freeze({ isRootAdmin: false, role: { not: 'admin' } });
+const BOARD_WHERE = Object.freeze({ isRootAdmin: false, role: 'director' });
+const LEADER_WHERE = Object.freeze({ isRootAdmin: false, role: { in: ['manager', 'deputy'] } });
+// Bộ phận Ban Tổng Giám đốc (theo mã): vai BTGĐ nên trùng đúng thành viên bộ phận này — lệch thì quản trị được cảnh báo.
+const BOARD_DEPT_CODES = ['BTGD', 'BGD'];
+const isBoardDept = dept => !!dept && BOARD_DEPT_CODES.includes(String(dept.code || '').toUpperCase());
+// Cảnh báo khi vai BTGĐ và bộ phận BTGĐ không khớp (không chặn cứng — cơ cấu có thể đổi).
+function boardDeptMismatch(role, dept) {
+  if (role === 'admin') return null;
+  const inBoardDept = isBoardDept(dept);
+  if (role === 'director' && !inBoardDept) return 'Vai Ban Tổng Giám đốc nhưng không thuộc bộ phận Ban Tổng Giám đốc';
+  if (role !== 'director' && inBoardDept) return 'Thuộc bộ phận Ban Tổng Giám đốc nhưng không có vai Ban Tổng Giám đốc';
+  return null;
+}
 const grant = (permissionKey, action, scope) => ({ permissionKey, action, scope });
 const allOf = scope => PERMISSIONS.flatMap(p => p.actions.filter(a => p.scopes.includes(scope)).map(a => grant(p.key, a, scope)));
 
 const ROLES = {
-  admin: { label: 'Quản trị hệ thống' },
-  director: { label: 'Ban giám đốc' },
-  manager: { label: 'Trưởng phòng' },
-  deputy: { label: 'Phó phòng' },
+  director: { label: 'Ban Tổng Giám đốc' },
+  manager: { label: 'Lãnh đạo bộ phận' },
   member: { label: 'Nhân viên' },
+  admin: { label: 'Quản trị hệ thống' },
 };
-// Profile chỉ áp khi tạo tài khoản; runtime luôn dùng grants của từng tài khoản.
+// Bảng quyền của từng vai — nguồn quyền DUY NHẤT lúc chạy (permissionScope đọc bảng này, không đọc quyền lưu riêng từng người).
 const ROLE_PROFILES = {
   admin: allOf('SYSTEM').filter(g => !isBusinessKey(g.permissionKey)),
   director: [
@@ -44,12 +74,6 @@ const ROLE_PROFILES = {
     grant('reports.kpi', 'VIEW', 'SYSTEM'), grant('reports.summary', 'VIEW', 'SYSTEM'),
   ],
   manager: [
-    grant('work.view', 'VIEW', 'UNIT'), grant('work.edit', 'OPERATE', 'UNIT'), grant('work.delete', 'OPERATE', 'UNIT'),
-    grant('work.approve', 'OPERATE', 'UNIT'), grant('projects.manage', 'OPERATE', 'UNIT'),
-    grant('reports.dashboard', 'VIEW', 'UNIT'), grant('reports.export', 'OPERATE', 'UNIT'), grant('reports.summary', 'VIEW', 'UNIT'),
-  ],
-  // Phó phòng (và Phó Chánh Văn phòng): quyền như trưởng phòng, chịu sự phân công của trưởng phòng (quyết định 16/10/2026).
-  deputy: [
     grant('work.view', 'VIEW', 'UNIT'), grant('work.edit', 'OPERATE', 'UNIT'), grant('work.delete', 'OPERATE', 'UNIT'),
     grant('work.approve', 'OPERATE', 'UNIT'), grant('projects.manage', 'OPERATE', 'UNIT'),
     grant('reports.dashboard', 'VIEW', 'UNIT'), grant('reports.export', 'OPERATE', 'UNIT'), grant('reports.summary', 'VIEW', 'UNIT'),
@@ -72,11 +96,16 @@ function permissionScope(user, key, action = 'VIEW') {
   if (!supported || !user) return null;
   if (isItAdmin(user) && isBusinessKey(key)) return null;
   if (user.isRootAdmin) return 'SYSTEM';
-  const grants = Array.isArray(user.permissions) ? user.permissions : [];
+  const grants = ROLE_PROFILES[roleOf(user)] || [];
   const allowed = grants.filter(g => g.permissionKey === key && validGrant(g) && (g.action === action || (action === 'VIEW' && g.action === 'OPERATE')));
   if (allowed.some(g => g.scope === 'SYSTEM')) return 'SYSTEM';
   if (allowed.some(g => g.scope === 'UNIT')) return 'UNIT';
   return null;
+}
+// Các vai có một quyền (để lọc trong CSDL thay cho lọc theo bảng quyền từng người). Gồm cả giá trị cũ 'deputy' nếu có manager.
+function rolesWith(key, action = 'VIEW') {
+  const out = Object.keys(ROLE_PROFILES).filter(role => permissionScope({ role }, key, action));
+  return out.includes('manager') ? [...out, 'deputy'] : out;
 }
 function hasPermission(user, key, action = 'VIEW') { return !!permissionScope(user, key, action); }
 function canAccessDepartment(user, key, action, departmentId) {
@@ -86,46 +115,14 @@ function canAccessDepartment(user, key, action, departmentId) {
 function accessMap(user) {
   return Object.fromEntries(PERMISSIONS.map(p => [p.key, { view: permissionScope(user, p.key, 'VIEW'), operate: permissionScope(user, p.key, 'OPERATE') }]));
 }
-function canGrant(actor, g) {
-  if (!validGrant(g)) return false;
-  if (actor && actor.isRootAdmin) return true;
-  // Admin IT quản lý tài khoản vẫn cấp được quyền nghiệp vụ cho người khác (giữ luồng cấp quyền cũ), dù bản thân không dùng được.
-  if (isItAdmin(actor) && isBusinessKey(g.permissionKey)) return permissionScope(actor, 'admin.permissions', 'OPERATE') === 'SYSTEM';
-  const scope = permissionScope(actor, g.permissionKey, g.action);
-  return scope === 'SYSTEM' || (scope === 'UNIT' && g.scope === 'UNIT');
-}
 function canResetPassword(actor, target) {
   return !!actor && !!target && hasPermission(actor, 'admin.users', 'OPERATE') && Number(actor.id) !== Number(target.id) && !target.isRootAdmin;
-}
-function normalizeGrants(value) {
-  if (!Array.isArray(value) || value.length > 200) return null;
-  const out = new Map();
-  for (const item of value) {
-    const g = { permissionKey: String(item?.permissionKey || ''), action: String(item?.action || ''), scope: String(item?.scope || '') };
-    if (!validGrant(g)) return null;
-    out.set(g.permissionKey + '|' + g.action, g);
-  }
-  return [...out.values()];
-}
-async function replaceGrants(tx, userId, grants, grantedById) {
-  await tx.userPermission.deleteMany({ where: { userId } });
-  if (grants.length) await tx.userPermission.createMany({ data: grants.map(g => ({ ...g, userId, grantedById, source: 'CUSTOM' })) });
-  return tx.userPermission.findMany({ where: { userId }, orderBy: { id: 'asc' } });
-}
-// Giữ hành vi cũ: khi tạo tài khoản, cấp quyền theo profile của vai trò.
-async function grantInitialPermissions(tx, user, grantedById) {
-  if (!user || user.isRootAdmin) return 0;
-  const existing = await tx.userPermission.count({ where: { userId: user.id } });
-  if (existing) return 0;
-  const defaults = ROLE_PROFILES[user.role] || [];
-  if (defaults.length) await tx.userPermission.createMany({ data: defaults.map(g => ({ ...g, userId: user.id, grantedById, source: 'ROLE_PROFILE' })), skipDuplicates: true });
-  return defaults.length;
 }
 function catalog() {
   return { permissions: PERMISSIONS, actions: ACTIONS, scopes: SCOPES, roles: ROLES, roleProfiles: ROLE_PROFILES };
 }
 
 module.exports = {
-  PERMISSIONS, ROLES, ROLE_PROFILES, isBusinessKey, isItAdmin, validGrant, permissionScope, hasPermission, canAccessDepartment, accessMap,
-  canGrant, canResetPassword, normalizeGrants, replaceGrants, grantInitialPermissions, catalog,
+  PERMISSIONS, ROLES, ROLE_PROFILES, isBusinessKey, isItAdmin, isBoard, isDeptLeader, roleOf, NOT_IT_WHERE, BOARD_WHERE, LEADER_WHERE,
+  BOARD_DEPT_CODES, isBoardDept, rolesWith, IT_WHERE, roleRank, boardDeptMismatch, validGrant, permissionScope, hasPermission, canAccessDepartment, accessMap, canResetPassword, catalog,
 };

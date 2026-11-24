@@ -20,7 +20,7 @@ function stageOf(item, steps = []) {
     if (step?.approverType === 'ASSIGNER') return out('WAIT_ASSIGNER');
     if (step?.approverType === 'BOARD') return out('WAIT_BGD', 'Chờ Ban Giám đốc duyệt'); // việc mốc / đường găng
     if (step?.approverType === 'DEPARTMENT_MANAGER') return out('WAIT_DEPT');
-    if (step?.approverType === 'DIRECTOR' || step?.approverType === 'SUPERVISOR') return out('WAIT_BGD');
+    if (step?.approverType === 'DIRECTOR' || step?.approverType === 'SUPERVISOR') return out('WAIT_BGD'); // SUPERVISOR: loại cũ (đã gộp vào DIRECTOR)
     return out('WAIT_APPROVAL', step ? `Chờ duyệt: ${step.name}` : STAGES.WAIT_APPROVAL);
   }
   if (item.returnedAt) return out('RETURNED');

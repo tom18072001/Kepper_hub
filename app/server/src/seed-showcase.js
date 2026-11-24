@@ -6,7 +6,6 @@ const path = require('node:path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
-const { grantInitialPermissions } = require('./lib/permissions');
 const { DEFAULT_PASSWORD } = require('./lib/passwords');
 const { DEFAULT_STATES } = require('./routes/projects');
 const { nextOccurrence } = require('./services/recurring');
@@ -33,7 +32,6 @@ async function showcase(prisma) {
     if (await prisma.user.findUnique({ where: { username: u.username } })) continue;
     await prisma.$transaction(async tx => {
       const created = await tx.user.create({ data: { username: u.username, fullName: u.fullName, displayTitle: u.displayTitle, role: u.role, departmentId: dept[u.dept].id, passwordHash: bcrypt.hashSync(DEFAULT_PASSWORD, 10), mustChangePw: true } });
-      await grantInitialPermissions(tx, created, root.id);
     });
   }
   const U = Object.fromEntries((await prisma.user.findMany()).map(u => [u.username, u]));
@@ -294,7 +292,6 @@ async function ensureCentreStaff(prisma) {
     if (!D[u.dept] || await prisma.user.findUnique({ where: { username: u.username } })) continue;
     await prisma.$transaction(async tx => {
       const row = await tx.user.create({ data: { username: u.username, fullName: u.fullName, displayTitle: u.displayTitle, role: u.role, departmentId: D[u.dept].id, passwordHash: bcrypt.hashSync(DEFAULT_PASSWORD, 10), mustChangePw: true } });
-      await grantInitialPermissions(tx, row, root?.id ?? null);
     });
     created.push(u.username);
   }
@@ -316,8 +313,6 @@ async function centreOfficeAccess(prisma) {
     const u = await prisma.user.findUnique({ where: { username } });
     if (!u) continue;
     await prisma.projectMember.upsert({ where: { projectId_userId: { projectId: tt.id, userId: u.id } }, update: {}, create: { projectId: tt.id, userId: u.id, role: 'MEMBER' } });
-    for (const [permissionKey, action] of [['reports.summary', 'VIEW'], ['reports.export', 'OPERATE']])
-      await prisma.userPermission.upsert({ where: { userId_permissionKey_action: { userId: u.id, permissionKey, action } }, update: { scope: 'SYSTEM' }, create: { userId: u.id, permissionKey, action, scope: 'SYSTEM', source: 'CUSTOM' } });
   }
 }
 // Tạo một việc trong Sổ giao việc Trung tâm (giao về phòng, tiếp nhận, báo cáo, gia hạn, phiếu trình…). Dùng cho dữ liệu mẫu.

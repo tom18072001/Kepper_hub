@@ -41,7 +41,7 @@ test('nhắc cập nhật hằng tuần: mỗi người một thông báo, chỉ
   const prisma = {
     project: { findMany: async () => [{ id: 1, t0Date: t0 }] },
     workItem: { findMany: async () => rows },
-    user: { findMany: async () => [{ id: 20, departmentId: 9, isActive: true, permissions: [{ permissionKey: 'work.approve', action: 'OPERATE', scope: 'UNIT' }] }] },
+    user: { findMany: async () => [{ id: 20, departmentId: 9, isActive: true, role: 'manager', permissions: [{ permissionKey: 'work.approve', action: 'OPERATE', scope: 'UNIT' }] }] },
     delegation: { findMany: async () => [] },
     notification: { createMany: async ({ data }) => { sent.push(...data); return { count: data.length }; } },
   };

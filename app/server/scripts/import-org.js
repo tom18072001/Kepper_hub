@@ -15,7 +15,7 @@
 const fs = require('node:fs');
 const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
-const { ROLES, grantInitialPermissions } = require('../src/lib/permissions');
+const { ROLES } = require('../src/lib/permissions');
 const { DEFAULT_PASSWORD } = require('../src/lib/passwords');
 
 const args = process.argv.slice(2);
@@ -55,9 +55,8 @@ async function main() {
         username, fullName: clean(u.fullName, 120) || username, displayTitle: clean(u.displayTitle, 120), email: clean(u.email, 160),
         phone: clean(u.phone, 30), role: u.role || 'member', departmentId: dept?.id ?? null, passwordHash: hash, mustChangePw: true,
       } });
-      const granted = await grantInitialPermissions(tx, created, root?.id ?? null);
       await tx.auditLog.create({ data: { userId: root?.id ?? null, action: 'CREATE', entity: 'User', entityId: String(created.id),
-        newValue: JSON.stringify({ username, role: created.role, departmentId: created.departmentId, granted, via: 'import-org' }) } });
+        newValue: JSON.stringify({ username, role: created.role, departmentId: created.departmentId, via: 'import-org' }) } });
       report.users.created++;
     }
     for (const d of depts) { // PGĐ phụ trách — sau khi tài khoản đã có

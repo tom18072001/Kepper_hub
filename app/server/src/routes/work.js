@@ -1,6 +1,7 @@
 // Tổng thể công việc trên mọi dự án theo một người (chủ trì / phối hợp / người giao) hoặc một phòng (chủ trì, phối hợp,
 // có cán bộ tham gia). Phạm vi: Ban Giám đốc — mọi người, mọi phòng; lãnh đạo phòng — phòng mình; cán bộ — chính mình.
 // Luôn giao với quyền xem từng việc của người xem. Xem việc của người khác là thao tác trên dữ liệu cá nhân → ghi nhật ký.
+const { NOT_IT_WHERE, isItAdmin } = require('../lib/permissions');
 const { fail, optionalInt, optionalDate } = require('../lib/http');
 const { visibleProjectsWhere, itemVisibleWhere } = require('../services/access');
 const { BOARD_INCLUDE, boardItem } = require('../services/workitems');
@@ -27,7 +28,7 @@ module.exports = function mountWork(app, { prisma, auth, audit }) {
     let subject;
     if (userId != null) {
       const u = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, fullName: true, displayTitle: true, departmentId: true, role: true, isRootAdmin: true } });
-      if (!u || u.role === 'admin' || u.isRootAdmin) fail(404, 'Không tìm thấy người này', 'NOT_FOUND');
+      if (!u || isItAdmin(u)) fail(404, 'Không tìm thấy người này', 'NOT_FOUND');
       subject = { type: 'user', id: u.id, name: u.fullName, title: u.displayTitle || '', departmentId: u.departmentId, departmentName: deptName[u.departmentId] || '' };
     } else if (deptId != null) {
       if (!deptName[deptId]) fail(404, 'Không tìm thấy phòng', 'NOT_FOUND');
@@ -77,7 +78,7 @@ module.exports = function mountWork(app, { prisma, auth, audit }) {
     list = list.slice(0, LIMIT);
 
     // Danh sách đối tượng chọn được (theo phạm vi) cho ô chọn người / phòng.
-    const userWhere = { isActive: true, role: { not: 'admin' }, isRootAdmin: false,
+    const userWhere = { isActive: true, ...NOT_IT_WHERE,
       ...(scope === 'SYSTEM' ? {} : scope === 'UNIT' ? { departmentId: req.user.departmentId } : { id: req.user.id }) };
     const people = await prisma.user.findMany({ where: userWhere, select: { id: true, fullName: true, displayTitle: true, departmentId: true }, orderBy: { fullName: 'asc' } });
     const subjects = {

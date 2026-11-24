@@ -1,5 +1,5 @@
 // Quyền ở cấp dự án = quyền hệ thống (permissions.js) giao với thành viên dự án và phạm vi phòng ban.
-const { permissionScope, hasPermission, isItAdmin } = require('../lib/permissions');
+const { permissionScope, hasPermission, isItAdmin, isDeptLeader } = require('../lib/permissions');
 const { fail } = require('../lib/http');
 const tree = require('./tree');
 const { MAX_DEPTH } = tree;
@@ -12,7 +12,9 @@ function projectRights(user, project, member) {
     || (!!viewScope && ['PUBLIC', 'ASSIGNED'].includes(project.visibility))
     || (viewScope === 'UNIT' && sameDept && project.visibility === 'DEPARTMENT');
   const editScope = permissionScope(user, 'work.edit', 'OPERATE');
-  const canEdit = canView && !project.archivedAt && (editScope === 'SYSTEM'
+  // "Người xem" (VIEWER) của dự án CHỈ XEM — vai trên dự án đặt rõ thắng quyền chung theo vai / bộ phận (24/11/2026).
+  const viewer = isMember && member.role === 'VIEWER';
+  const canEdit = canView && !viewer && !project.archivedAt && (editScope === 'SYSTEM'
     || (!!editScope && isMember && member.role !== 'VIEWER')
     // Sổ giao việc của đơn vị: ai thấy việc (theo quyền xem từng việc) thì cập nhật được việc đó.
     || (!!editScope && project.visibility === 'ASSIGNED')
@@ -21,8 +23,8 @@ function projectRights(user, project, member) {
   // Dự án MTL (kế hoạch chính thức dùng chung): người quản lý = quyền quản lý toàn công ty, chủ dự án (OWNER) hoặc trưởng dự án —
   // không mở cho mọi trưởng / phó của phòng sở hữu dự án (họ là lãnh đạo bộ phận chủ trì phần của mình, xem lib/policy.js).
   const mtl = project.kind === 'MTL';
-  const canManage = manageScope === 'SYSTEM' || (manageScope === 'UNIT' && sameDept && !mtl)
-    || (!isItAdmin(user) && ((isMember && member.role === 'OWNER') || (mtl && project.leadId === user.id)));
+  const canManage = !viewer && (manageScope === 'SYSTEM' || (manageScope === 'UNIT' && sameDept && !mtl)
+    || (!isItAdmin(user) && ((isMember && member.role === 'OWNER') || (mtl && project.leadId === user.id))));
   const deleteScope = permissionScope(user, 'work.delete', 'OPERATE');
   const canDelete = canEdit && (deleteScope === 'SYSTEM' || (deleteScope === 'UNIT' && sameDept) || canManage);
   return { canView, canEdit, canManage, canDelete, memberRole: member ? member.role : null };
@@ -41,8 +43,7 @@ async function loadProject(prisma, user, projectId, need = 'view', { allowDelete
   return { project, member, rights };
 }
 
-// Lãnh đạo phòng (trưởng / phó phòng): có quyền duyệt ở phạm vi phòng ban.
-const isDeptLeader = user => !!user && user.departmentId != null && permissionScope(user, 'work.approve', 'OPERATE') === 'UNIT';
+// Lãnh đạo bộ phận: vai Lãnh đạo bộ phận (lib/permissions.js isDeptLeader — một định nghĩa duy nhất).
 const ITEM_ACCESS_SELECT = { id: true, projectId: true, parentId: true, assignedById: true, reporterId: true, leadDepartmentId: true,
   assignees: { select: { userId: true } }, supporters: { select: { userId: true } }, supportDepartments: { select: { departmentId: true } } };
 // Sổ giao việc của đơn vị (visibility ASSIGNED): chỉ Ban Giám đốc (xem toàn tổ chức), thành viên sổ, người giao,

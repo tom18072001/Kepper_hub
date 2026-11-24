@@ -9,7 +9,7 @@ const register = { id: 1, departmentId: 1, visibility: 'ASSIGNED', archivedAt: n
 const item = (extra = {}) => ({ assignedById: 1, leadDepartmentId: 2, assignees: [{ userId: 21 }], supporters: [{ userId: 31 }], supportDepartments: [{ departmentId: 3 }], ...extra });
 
 test('Phó phòng có quyền như trưởng phòng (tiếp nhận, phân công, duyệt cấp phòng)', () => {
-  assert.deepEqual(ROLE_PROFILES.deputy, ROLE_PROFILES.manager);
+  assert.equal(ROLE_PROFILES.deputy, undefined, 'Phó phòng đã gộp vào vai Lãnh đạo bộ phận');
   assert.equal(permissionScope(as(5, 'deputy', 2), 'work.approve', 'OPERATE'), 'UNIT');
   assert.equal(isDeptLeader(as(5, 'deputy', 2)), true);
   assert.equal(isDeptLeader(as(6, 'member', 2)), false);

@@ -2,7 +2,7 @@
 // hộp "Việc phòng được giao", tiếp nhận + phân công, báo cáo tiến độ (kiến nghị), đề nghị gia hạn, văn bản liên quan,
 // nộp sản phẩm (phiếu trình), uỷ quyền có thời hạn.
 const { fail, intParam, optionalDate, text, oneOf } = require('../lib/http');
-const { permissionScope, hasPermission } = require('../lib/permissions');
+const { permissionScope, hasPermission, NOT_IT_WHERE } = require('../lib/permissions');
 const { loadProject, isDeptLeader, assertRegisterManager } = require('../services/access');
 const { activity, notify } = require('../services/events');
 const approval = require('../services/approval');
@@ -413,7 +413,7 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
     if (!hasPermission(req.user, 'work.approve', 'OPERATE')) fail(403, 'Chỉ người có quyền duyệt mới uỷ quyền được', 'FORBIDDEN');
     const toUserId = intParam(req.body?.toUserId, 'Người nhận uỷ quyền');
     if (toUserId === req.user.id) fail(422, 'Không tự uỷ quyền cho chính mình');
-    const to = await prisma.user.findFirst({ where: { id: toUserId, isActive: true, isRootAdmin: false, role: { not: 'admin' } }, include: { permissions: true } });
+    const to = await prisma.user.findFirst({ where: { id: toUserId, isActive: true, ...NOT_IT_WHERE }, include: { permissions: true } });
     if (!to || !hasPermission(to, 'work.approve', 'OPERATE')) fail(422, 'Người nhận uỷ quyền phải là lãnh đạo có quyền duyệt (trưởng / phó phòng, Ban Giám đốc)', 'INVALID_DELEGATE');
     // Không uỷ quyền bước Ban Giám đốc xuống cấp phòng.
     if (permissionScope(req.user, 'work.approve', 'OPERATE') === 'SYSTEM' && permissionScope(to, 'work.approve', 'OPERATE') !== 'SYSTEM')
