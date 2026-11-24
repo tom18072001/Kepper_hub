@@ -311,7 +311,10 @@ test('8. Bảo mật HTTP: CSP, nosniff, chống clickjacking, CORS, chống XSS
   expect(foreign.status()).toBe(403);
   const same = await request.get('/api/health', { headers: { origin: baseURL } });
   expect(same.status()).toBe(200);
-  expect(same.headers()['ratelimit-policy']).toContain('600');
+  // Bộ giới hạn tần suất gắn trên /api, hạn mức lấy từ cùng nguồn với máy chủ e2e (playwright.config.js API_RATE_LIMIT).
+  // Mặc định 600 của bản thật ghim bằng unit test app/server/src/lib/rate-limit.test.js.
+  expect(process.env.E2E_API_RATE_LIMIT).toMatch(/^\d+$/);
+  expect(same.headers()['ratelimit-policy']).toBe(`${process.env.E2E_API_RATE_LIMIT};w=60`);
   expect((await request.get('/api/projects')).status()).toBe(401);
 
   await login(page, 'nv.kinhdoanh1');
