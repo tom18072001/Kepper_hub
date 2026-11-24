@@ -510,7 +510,7 @@ function unlockMeeting(body, s) {
 function helpHtml(h, M) {
   const c = h.conclusion || {};
   return `<div class="wk-help-item" data-help="${esc(h.key)}" data-testid="wk-helpitem">
-    <div><b>${esc(h.from)}</b>: ${esc(h.what)} <span class="wk-note">— cho việc “${esc(h.task)}”${h.ref ? ` (${esc(h.ref)})` : ''} · ${esc(h.status)}${h.by ? ` · cần trước ${fmtD(h.by)}` : ''}</span>${M ? ` ${savedMark('data-testid="wk-help-saved"')}` : ''}</div>
+    <div><b>${esc(h.from)}</b>: ${h.hidden ? '<i>Việc không nêu tên (dự án kín / bạn không xem được)</i>' : esc(h.what)} <span class="wk-note">${h.hidden ? '' : `— cho việc “${esc(h.task)}”${h.ref ? ` (${esc(h.ref)})` : ''} · `}${esc(h.status)}${h.by ? ` · cần trước ${fmtD(h.by)}` : ''}</span>${M ? ` ${savedMark('data-testid="wk-help-saved"')}` : ''}</div>
     ${M ? `<div class="r-meta"><label class="wk-f">Kết luận của TGĐ<select data-hk="decision">${opts([['', '— Chưa kết luận —'], ...Object.entries(ctx.decisions)], c.decision || '')}</select></label>
       <label class="wk-f">Bộ phận phối hợp<select data-hk="departmentId" ${c.decision === 'ASSIGN' ? '' : 'disabled'}>${opts([['', '—'], ...ctx.departments.map(d => [d.id, d.name])], c.departmentId || '')}</select></label>
       <label class="wk-f">Ghi chú kết luận<input data-hk="note" value="${esc(c.note || '')}" maxlength="500"></label>

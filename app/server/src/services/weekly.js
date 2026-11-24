@@ -384,9 +384,13 @@ const viewFor = (data, canSee) => (data ? { ...data, results: (data.results || [
   plans: (data.plans || []).filter(r => !r.itemId || canSee(r.itemId)) } : data);
 // Bản tóm tắt theo người xem: báo cáo bộ phận mình chỉ còn dòng họ xem được; danh sách nguy cơ: dòng không xem được giữ để ĐẾM, bỏ tên.
 // Số liệu (kpis, rows[].done / ongoing / risk) không đổi — giống nhau với mọi người xem.
-function briefFor(view, canSee) {
+// Yêu cầu hỗ trợ: ẩn tên việc / nội dung khi việc thuộc dự án kín của bộ phận khác (x.secret), hoặc việc của bộ phận mình mà người xem không xem được.
+const hiddenHelp = h => ({ fromId: h.fromId, from: h.from, to: h.to, toKey: h.toKey, by: h.by, status: h.status, conclusion: h.conclusion, hidden: true, task: '', what: '', ref: '', itemId: null });
+function briefFor(view, canSee, ownDeptId = null) {
+  const hideHelp = h => h.itemId && (h.fromId === ownDeptId ? !canSee(h.itemId) : !!h.secret);
   return { ...view, rows: view.rows.map(r => (r.report ? { ...r, report: viewFor(r.report, canSee) } : r)),
-    risks: (view.risks || []).map(x => (x.itemId && !canSee(x.itemId) ? { departmentId: x.departmentId, department: x.department, key: x.key, risk: x.risk, hidden: true, task: '', ref: '', solution: '', due: '', pct: '', itemId: null } : x)) };
+    risks: (view.risks || []).map(x => (x.itemId && !canSee(x.itemId) ? { departmentId: x.departmentId, department: x.department, risk: x.risk, hidden: true, task: '', ref: '', solution: '', due: '', pct: '', itemId: null } : x)),
+    helps: (view.helps || []).map(g => ({ ...g, list: g.list.map(h => (hideHelp(h) ? hiddenHelp(h) : h)) })) };
 }
 // Bản không có dòng tự bổ sung.
 const withoutAuto = (data, keep = () => false) => (data ? { ...data, results: (data.results || []).filter(r => !isAuto(r) || keep(r)),
@@ -445,7 +449,7 @@ function buildSummary({ week: f, depts, reports, notices, meeting = null, action
     for (const x of dRisk) risks.push({ departmentId: d.id, department: d.name, key: x.key, ref: x.ref || '', task: x.task, risk: rowRisk(x, f), due: x.due || '', pct: x.pct ?? '',
       started: rowStarted(x), auto: isAuto(x), solution: x.solution || '', itemId: x.itemId || null });
     for (const x of items) if (needsIssue(x, f) && x.helpFrom && x.helpFrom !== HELP_SELF)
-      helps.push({ key: `${d.id}:${safeKey(x.key)}`, fromId: d.id, from: d.name, to: helpTarget(x.helpFrom, deptName), toKey: x.helpFrom, task: x.task, ref: x.ref || '', what: x.helpWhat, by: x.helpBy, status: issueLabel(x, f), cause: x.cause, solution: x.solution, conclusion: md.conclusions?.[`${d.id}:${safeKey(x.key)}`] || null });
+      helps.push({ key: `${d.id}:${safeKey(x.key)}`, itemId: x.itemId || null, fromId: d.id, from: d.name, to: helpTarget(x.helpFrom, deptName), toKey: x.helpFrom, task: x.task, ref: x.ref || '', what: x.helpWhat, by: x.helpBy, status: issueLabel(x, f), cause: x.cause, solution: x.solution, conclusion: md.conclusions?.[`${d.id}:${safeKey(x.key)}`] || null });
     rows.push({ id: d.id, name: d.name, status: st, submittedAt: sent?.firstSubmittedAt || null, lastSubmittedAt: sent?.submittedAt || null, resubmits: sent ? Math.max(0, (sent.submitCount || 1) - 1) : 0,
       submittedBy: sent ? userName(sent.submittedById) : '', items: sent ? items.length : null, stuck: sent ? nStuck : null, overdue: sent ? nOver : null,
       done: sent ? dDone : null, ongoing: sent ? dOngoing : null, risk: sent ? dRisk.length : null,
@@ -482,8 +486,13 @@ function briefSummary(sum, ownDeptId) {
 // bộ phận mình. text = BẢN GỬI EMAIL (emailText, chủ dự án chọn "Bản tóm tắt" 24/11/2026) cho MỌI người dùng — nút "Sao chép bản tổng hợp",
 // API /api/weekly/summary, MCP kepper_weekly_summary. fullText (I, II, III đầy đủ) chỉ cho người xem đầy đủ, chỉ dùng nội bộ, không gửi email.
 // canSee(itemId): người xem xem được việc (bản tóm tắt: dòng / tên việc họ không xem được bị bỏ; số liệu giữ nguyên với mọi người).
-function summaryView(sum, { full, departmentId, canSee = () => false }) {
-  const view = full ? sum : briefFor(briefSummary(sum, departmentId), canSee);
+// isSecret(itemId): việc thuộc dự án KÍN ("Chỉ thành viên" PRIVATE / "Sổ giao việc" ASSIGNED) — bản email và bản tóm tắt cho bộ phận khác
+// KHÔNG nêu tên, chỉ đếm, bất kể ai lập (quy tắc theo việc, phiên nghiệm thu chốt vòng 4). Việc dự án thường vẫn nêu tên ở mục nguy cơ chậm.
+function summaryView(sum, { full, departmentId, canSee = () => false, isSecret = () => false }) {
+  const marked = { ...sum, risks: (sum.risks || []).map(x => ({ ...x, secret: !!x.itemId && isSecret(x.itemId) })),
+    helps: (sum.helps || []).map(g => ({ ...g, list: g.list.map(h => ({ ...h, secret: !!h.itemId && isSecret(h.itemId) })) })) };
+  sum = marked;
+  const view = full ? sum : briefFor(briefSummary(sum, departmentId), canSee, departmentId);
   return { view, text: emailText(view), ...(full ? { fullText: summaryText(view) } : {}) };
 }
 
@@ -537,13 +546,13 @@ function emailText(sum) {
     for (const a of sum.actionReview) L.push(`- [${a.department}] ${a.task} — ${a.status || 'chưa báo cáo'}${a.overdue && a.status !== DONE ? ', quá hạn' : ''}`);
   }
   L.push('', 'NGUY CƠ CHẬM TIẾN ĐỘ (trễ hạn / chậm / vướng / sắp hạn / chậm khởi động / đăng ký mà chưa làm)');
-  const named = (sum.risks || []).filter(x => !x.auto && !x.hidden), unnamed = (sum.risks || []).length - named.length;
+  const named = (sum.risks || []).filter(x => !x.auto && !x.hidden && !x.secret), unnamed = (sum.risks || []).length - named.length;
   if (!named.length && !unnamed) L.push('- Không có');
-  if (unnamed) L.push(`- (${unnamed} việc hệ thống tự bổ sung / không nêu tên — xem trong Kepler Hub)`);
+  if (unnamed) L.push(`- (${unnamed} việc hệ thống tự bổ sung / dự án kín / không nêu tên — xem trong Kepler Hub)`);
   for (const x of named) L.push(`- [${x.department}] ${x.task} — ${x.risk}${x.due ? ` (hạn ${fmtD(x.due)})` : ''}${x.pct !== '' && x.pct != null ? ` · ${x.pct}%` : ''}${x.solution ? ` — Giải pháp: ${x.solution}` : ''}`);
   L.push('', 'YÊU CẦU HỖ TRỢ (xử lý 09:15 – 09:25)');
   if (!sum.helps.length) L.push('- Không có');
-  for (const g of sum.helps) for (const h of g.list) L.push(`- ${h.from} → ${g.to}: ${h.what} (việc “${h.task}”)${h.by ? `, cần trước ${fmtD(h.by)}` : ''}${h.conclusion ? ` — Kết luận: ${DECISIONS[h.conclusion.decision] || ''}${h.conclusion.note ? ': ' + h.conclusion.note : ''}` : ''}`);
+  for (const g of sum.helps) for (const h of g.list) L.push(h.hidden || h.secret ? `- ${h.from} → ${g.to}: (việc không nêu tên — xem trong Kepler Hub)${h.by ? `, cần trước ${fmtD(h.by)}` : ''}` : `- ${h.from} → ${g.to}: ${h.what} (việc “${h.task}”)${h.by ? `, cần trước ${fmtD(h.by)}` : ''}${h.conclusion ? ` — Kết luận: ${DECISIONS[h.conclusion.decision] || ''}${h.conclusion.note ? ': ' + h.conclusion.note : ''}` : ''}`);
   L.push('', 'Danh sách đầy đủ việc đã xong và đang thực hiện của từng bộ phận: xem trong Kepler Hub (Báo cáo tuần › Tổng hợp).');
   return L.join('\n');
 }

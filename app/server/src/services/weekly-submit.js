@@ -1,19 +1,21 @@
-// Báo cáo tuần — chuỗi xử lý khi NỘP / GỬI LẠI (POST /api/weekly/submit), không đụng CSDL. Route và test gọi đúng các hàm này (không chép lại chuỗi).
-//   prepareSubmit: làm sạch → giữ dòng của máy chủ (bản đã lưu) → nhận dòng bắt buộc còn ở Phần IV → bỏ liên kết Action Log của bộ phận khác
-//                  → tính lại dòng gắn việc → xếp lại phần (xong → I, đã bắt đầu → II) → kiểm tra. Xếp lại TRƯỚC kiểm tra: dòng vừa sang Phần II
-//                  được hỏi "việc sẽ làm tuần tới" ngay lần nộp này.
-//   finishSubmit:  thêm dòng "Hệ thống tự bổ sung" (mục S10) → xếp lại → làm gọn (finalize) thành bản lưu bất biến.
+// Báo cáo tuần — gộp bản lưu và chuỗi xử lý khi NỘP / GỬI LẠI, không đụng CSDL. Route và test gọi đúng các hàm này (không chép lại chuỗi).
 //
-// Dòng của máy chủ (nghiệm thu vòng 3): mã việc (itemId) và cờ tự bổ sung (auto) KHÔNG phụ thuộc người bấm gửi.
-//   - Dòng tự bổ sung đã lưu: luôn dựng lại từ phạm vi bộ phận (finishSubmit), bản gửi lên không sửa / bỏ / biến thành dòng thường được.
-//   - Dòng gắn việc mà người gửi KHÔNG xem được (vd. thư ký, Ban GĐ nhập thay; trưởng phòng gửi lại dòng nhân viên nhập): giữ từ bản đã lưu,
-//     chỉ nhận phần giải trình (nguyên nhân, giải pháp, đề nghị hỗ trợ, việc tuần tới) người gửi sửa; người gửi bỏ khỏi biểu mẫu thì vẫn giữ.
-//   - Một việc = một dòng (gộp theo itemId). Dòng gắn việc không hợp lệ bị bỏ, không thành dòng tự do giữ nguyên tên việc.
+// QUY TẮC GỐC (nghiệm thu vòng 4) — áp cho MỌI đường lưu: lưu nháp, tự lưu, nộp, gửi lại, MCP kepper_save_weekly_draft:
+//   "Một dòng gắn việc chỉ được THÊM / SỬA / XOÁ bởi người xem được việc đó. Mọi lần lưu đều GỘP theo itemId với bản đã lưu: dòng của
+//    việc mà người thao tác không xem được được giữ NGUYÊN — mọi phần I–IV, mọi trường, đúng phần cũ. Hiển thị thì lọc theo NGƯỜI XEM."
+//   - mergeSaved: bản gửi lên đã làm sạch với itemIds = việc người thao tác xem được (sanitize bỏ hẳn dòng gắn việc khác — mọi trường của
+//     dòng đó bị bỏ qua, kể cả giải trình / tình trạng / đề nghị hỗ trợ). Dòng của việc người thao tác không xem được lấy NGUYÊN từ bản đã lưu.
+//   - Dòng "Hệ thống tự bổ sung" (mục S10) là dữ liệu của máy chủ: chỉ đọc với mọi người; khi nộp luôn dựng lại từ phạm vi bộ phận.
+//   - Một việc = một dòng (gộp theo itemId).
+//
+//   prepareSubmit: làm sạch → gộp bản lưu → nhận dòng bắt buộc còn ở Phần IV → bỏ liên kết Action Log của bộ phận khác → tính lại dòng gắn
+//                  việc của người gửi → xếp lại phần → kiểm tra (chỉ dòng người gửi sửa được) → trả lại dòng giữ nguyên.
+//   finishSubmit:  thêm dòng "Hệ thống tự bổ sung" → xếp lại → làm gọn (finalize) thành bản lưu bất biến.
 const WK = require('./weekly');
 const WR = require('./weekly-recompute');
 
 const LISTS = ['results', 'ongoing', 'risks'];
-const EDITABLE = ['cause', 'solution', 'helpFrom', 'helpWhat', 'helpBy', 'next'];
+const ALL = [...LISTS, 'plans'];
 
 // Dòng có actionRef không thuộc Action Log đang mở của CHÍNH bộ phận này → bỏ liên kết (không đóng hộ việc của bộ phận khác).
 function stripForeignActions(data, actions) {
@@ -24,54 +26,68 @@ function stripForeignActions(data, actions) {
 // Mã việc của dòng tự bổ sung trong bản đã lưu.
 const autoIdsOf = saved => new Set(WK.allRows(saved).filter(r => r.auto && r.itemId).map(r => r.itemId));
 
-// ctx: như routes/weekly.js cleanCtx (userIds, deptIds, itemIds = việc người gửi xem được, taskIds, deptName, items).
-// prefill: điền sẵn mới nhất của người gửi. saved: bản đã lưu (gửi lại). scopeItems: mọi việc của bộ phận (phạm vi bộ phận, DEPT_SCOPE).
-function prepareSubmit({ raw, ctx, prefill, actions = [], now = new Date(), week, saved = null, scopeItems = [] }) {
-  const visible = ctx.itemIds || new Set(), autoIds = autoIdsOf(saved);
-  const savedRows = new Map();
-  for (const list of LISTS) for (const r of saved?.[list] || []) if (r?.itemId && !r.auto && !savedRows.has(r.itemId)) savedRows.set(r.itemId, { list, row: r });
-  const owned = id => !visible.has(id) && savedRows.has(id); // dòng gắn việc người gửi không xem được, có trong bản đã lưu
-  const scopeTasks = new Set(scopeItems.filter(i => i.kind === 'TASK').map(i => i.id));
-  const clean = WK.sanitize(raw, { ...ctx, itemIds: new Set([...visible, ...savedRows.keys(), ...autoIds]), taskIds: new Set([...(ctx.taskIds || []), ...scopeTasks]) });
-  // Một việc = một dòng; dòng tự bổ sung bỏ (dựng lại ở finishSubmit); dòng của máy chủ: bản đã lưu + phần giải trình người gửi sửa.
-  const seen = new Set();
-  for (const list of LISTS) clean[list] = clean[list].filter(r => {
+// clean: bản gửi lên đã làm sạch với itemIds = visible (việc người thao tác xem được). saved: bản đã lưu (nháp hoặc đã nộp).
+// keepAuto: lưu nháp giữ dòng tự bổ sung như đã lưu; nộp thì bỏ để dựng lại (finishSubmit).
+// Trả { data: phần người thao tác quyết, held: [{ list, row }] dòng giữ nguyên, autoIds }.
+function mergeSaved(clean, saved, visible, { keepAuto = true } = {}) {
+  // Một việc = một dòng trong Phần I–III, và = một dòng trong Phần IV (một việc vừa báo tuần này vừa có kế hoạch tuần mới là hợp lệ).
+  const autoIds = autoIdsOf(saved), seen = { report: new Set(), plans: new Set() };
+  const part = list => (list === 'plans' ? seen.plans : seen.report);
+  const data = { ...clean };
+  for (const list of ALL) data[list] = (clean[list] || []).filter(r => {
     if (!r.itemId) return true;
-    if (autoIds.has(r.itemId) || seen.has(r.itemId)) return false;
-    seen.add(r.itemId);
+    if (!visible.has(r.itemId) || autoIds.has(r.itemId) || part(list).has(r.itemId)) return false; // việc không xem được / tự bổ sung / trùng
+    part(list).add(r.itemId);
     return true;
-  }).map(r => {
-    if (!owned(r.itemId)) return r;
-    const keep = structuredClone(savedRows.get(r.itemId).row);
-    for (const k of EDITABLE) if (r[k] !== undefined) keep[k] = r[k];
-    if (r.status === 'Vướng' || keep.status === 'Vướng') keep.status = r.status === 'Vướng' ? 'Vướng' : keep.status;
-    return { ...keep, owned: true };
   });
-  clean.plans = clean.plans.filter(p => !p.itemId || (!autoIds.has(p.itemId) && !owned(p.itemId)));
-  // Dòng của máy chủ người gửi không có trên biểu mẫu (bị ẩn với họ) → giữ nguyên ở phần cũ.
-  for (const [id, { list, row }] of savedRows) if (owned(id) && !seen.has(id)) { seen.add(id); clean[list].push({ ...structuredClone(row), owned: true }); }
-  const data = WK.adoptMandatory(clean, prefill);
+  const held = [];
+  for (const list of ALL) for (const r of saved?.[list] || []) {
+    if (!r?.itemId || part(list).has(r.itemId)) continue;
+    if (r.auto ? !keepAuto : visible.has(r.itemId)) continue; // dòng của việc người thao tác xem được: họ quyết (sửa / xoá)
+    part(list).add(r.itemId);
+    held.push({ list, row: structuredClone(r) });
+  }
+  return { data, held, autoIds };
+}
+const restore = (data, held) => { for (const { list, row } of held) data[list].push(row); return data; };
+
+// Lưu nháp / tự lưu (PUT /api/weekly/report, MCP kepper_save_weekly_draft): làm sạch + gộp với bản nháp đã lưu.
+function mergeDraft(raw, ctx, saved) {
+  const visible = ctx.itemIds || new Set();
+  const { data, held } = mergeSaved(WK.sanitize(raw, ctx), saved, visible, { keepAuto: true });
+  return restore(data, held);
+}
+
+// ctx: như routes/weekly.js cleanCtx (userIds, deptIds, itemIds = việc người gửi xem được, taskIds, deptName, items).
+// prefill: điền sẵn mới nhất của người gửi. saved: bản đã lưu (nháp hoặc đã nộp). scopeItems: mọi việc của bộ phận (DEPT_SCOPE).
+function prepareSubmit({ raw, ctx, prefill, actions = [], now = new Date(), week, saved = null, scopeItems = [] }) {
+  const visible = ctx.itemIds || new Set();
+  const { data: mine0, held, autoIds } = mergeSaved(WK.sanitize(raw, ctx), saved, visible, { keepAuto: false });
+  const data = WK.adoptMandatory(mine0, prefill);
   stripForeignActions(data, actions);
   const byId = new Map([...scopeItems, ...(ctx.items || [])].map(i => [i.id, i]));
   WR.recomputeRows(data, [...byId.values()], now);
   const grouped = WK.regroup(data);
-  // Kiểm tra chỉ những dòng người gửi sửa được: dòng của máy chủ không hiện lỗi (lộ tên việc, người gửi không sửa được).
-  const mine = { ...grouped, results: grouped.results.filter(r => !r.owned), ongoing: grouped.ongoing.filter(r => !r.owned), risks: grouped.risks.filter(r => !r.owned) };
+  // Kiểm tra từng dòng: chỉ dòng người gửi sửa được (dòng giữ nguyên không hiện lỗi — lộ tên việc, người gửi không sửa được).
   const mandatory = [...prefill.results, ...prefill.ongoing, ...prefill.risks].filter(r => r.mandatory && !(r.itemId && autoIds.has(r.itemId)));
-  // Điều kiện "ít nhất 1 hạng mục / việc" xét trên TOÀN báo cáo (kể cả dòng của máy chủ); kiểm từng dòng thì chỉ dòng người gửi sửa được.
-  const whole = WK.validate({ ...grouped, results: grouped.results.map(r => ({ task: r.task, ownerIds: [0], due: 'x', status: WK.DONE })), ongoing: grouped.ongoing.map(r => ({ task: r.task, ownerIds: [0], due: 'x', status: WK.DONE })), risks: grouped.risks.map(r => ({ task: r.task, ownerIds: [0], due: 'x', status: WK.DONE })), plans: grouped.plans.map(p => ({ task: p.task, ownerIds: [0], due: 'x', output: 'x' })) }, week);
   const COUNT = /cần ít nhất 1/;
-  const errors = [...whole.filter(e => COUNT.test(e)), ...WK.validate(mine, week, { deptName: ctx.deptName || (() => ''), mandatory }).filter(e => !COUNT.test(e))];
-  for (const list of LISTS) for (const r of grouped[list]) delete r.owned;
-  return { data: grouped, errors, autoIds };
+  const rowErrors = WK.validate(grouped, week, { deptName: ctx.deptName || (() => ''), mandatory }).filter(e => !COUNT.test(e));
+  const out = restore({ ...grouped, results: [...grouped.results], ongoing: [...grouped.ongoing], risks: [...grouped.risks], plans: [...grouped.plans] }, held);
+  // "Ít nhất 1 hạng mục / việc" xét trên TOÀN báo cáo (kể cả dòng giữ nguyên).
+  const stub = r => ({ task: r.task, ownerIds: [0], due: 'x', status: WK.DONE });
+  const whole = WK.validate({ results: out.results.map(stub), ongoing: out.ongoing.map(stub), risks: out.risks.map(stub), plans: out.plans.map(p => ({ task: p.task, ownerIds: [0], due: 'x', output: 'x' })) }, week);
+  return { data: out, errors: [...whole.filter(e => COUNT.test(e)), ...rowErrors], autoIds, held: new Set(held.map(h => h.row)) };
 }
 
 // auto (tuỳ chọn): { full: buildPrefill trên mọi việc của bộ phận, visibleIds: việc người gửi xem được, parentOf: Map id → id cha,
 //   autoIds: mã việc tự bổ sung của bản đã lưu — luôn dựng lại là dòng tự bổ sung dù người gửi xem được }.
-function finishSubmit(data, week, auto = null) {
+// held: các dòng giữ nguyên (prepareSubmit) — không xếp lại, không làm gọn: giữ đúng phần cũ, mọi trường.
+function finishSubmit(data, week, auto = null, heldRows = new Set()) {
   const visibleIds = auto ? new Set([...auto.visibleIds].filter(id => !auto.autoIds?.has(id))) : null;
   const a = auto ? WK.addAutoRows(data, auto.full, visibleIds, auto.parentOf) : { data, added: 0 };
-  return { final: WK.finalize(WK.regroup(a.data), week), added: a.added };
+  const held = [], rest = { ...a.data };
+  for (const list of ALL) rest[list] = (a.data[list] || []).filter(r => (heldRows.has(r) ? (held.push({ list, row: r }), false) : true));
+  return { final: restore(WK.finalize(WK.regroup(rest), week), held), added: a.added };
 }
 
-module.exports = { stripForeignActions, prepareSubmit, finishSubmit, autoIdsOf };
+module.exports = { stripForeignActions, mergeSaved, mergeDraft, prepareSubmit, finishSubmit, autoIdsOf };

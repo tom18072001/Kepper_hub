@@ -96,7 +96,7 @@ test('S10: số liệu tổng hợp giống nhau với MỌI người xem; tên 
     assert.ok(v.text.includes('- Ban A (giả): Đúng hạn') && v.text.includes('xong 0, đang làm 2, nguy cơ chậm 1'));
     for (const t of ['Đàm phán giá đất', 'Nộp hồ sơ đấu giá', 'Việc 101']) assert.equal(v.text.includes(t), false, t);
   }
-  assert.ok(forGd.text.includes('(1 việc hệ thống tự bổ sung / không nêu tên — xem trong Kepler Hub)'));
+  assert.ok(forGd.text.includes('(1 việc hệ thống tự bổ sung / dự án kín / không nêu tên — xem trong Kepler Hub)'));
 });
 
 test('S10: xem báo cáo bộ phận — ẩn / hiện theo NGƯỜI XEM: nhân viên không thấy; trưởng phòng (vốn xem được việc) thấy', () => {
@@ -146,10 +146,10 @@ test('S10 hồi quy: thư ký (không xem được việc) "Gửi lại" — b�
   check(submitAs(SEEN_BY_SECRETARY, base, s1.fin));
   // Cách 1: bỏ các dòng không sửa được.
   check(submitAs(SEEN_BY_SECRETARY, () => { const x = base(); for (const k of ['results', 'ongoing', 'risks']) x[k] = x[k].filter(r => !/lô C|lô D|Việc 101/.test(r.task)); return x; }, s1.fin));
-  // Cách 2: điền thay rồi gửi — phần giải trình dòng thường được nhận, dòng tự bổ sung giữ nguyên.
+  // Cách 2: điền thay rồi gửi — quy tắc gốc (vòng 4): thư ký không xem được việc nào → mọi dòng gắn việc giữ NGUYÊN, kể cả giải trình.
   const r3 = submitAs(SEEN_BY_SECRETARY, () => { const x = base(); for (const r of WK.allRows(x)) Object.assign(r, { next: 'Theo dõi (giả)', cause: 'Theo báo cáo (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF' }); return x; }, s1.fin);
   check(r3);
-  assert.equal(rowOf(r3.fin, 101).next, 'Theo dõi (giả)'); assert.equal(rowOf(r3.fin, 901).solution, '');
+  assert.deepEqual(rowOf(r3.fin, 101), rowOf(s1.fin, 101)); assert.equal(rowOf(r3.fin, 901).solution, '');
 });
 
 test('S10: tuần sau người lập dựng biểu mẫu từ bản đã nộp (có dòng tự bổ sung) — không lộ việc họ không xem được', () => {

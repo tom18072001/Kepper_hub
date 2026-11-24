@@ -164,7 +164,7 @@ test('5. Văn bản tổng hợp theo quyền: trưởng / phó bộ phận khá
   assert.ok(WK.summaryView(sum, { full: false, departmentId: 1, canSee: () => true }).text.includes('Thanh lý HĐ ông K'));
   const blind = WK.summaryView(sum, { full: false, departmentId: 1, canSee: () => false });
   assert.equal(blind.text.includes('Thanh lý HĐ ông K'), false); assert.equal(JSON.stringify(blind.view).includes('Thanh lý'), false);
-  assert.ok(blind.text.includes('(1 việc hệ thống tự bổ sung / không nêu tên — xem trong Kepler Hub)'));
+  assert.ok(blind.text.includes('(1 việc hệ thống tự bổ sung / dự án kín / không nêu tên — xem trong Kepler Hub)'));
   assert.ok(blind.text.includes('xong 1, đang làm 1, nguy cơ chậm 1')); // số liệu không đổi theo người xem
 });
 

@@ -330,7 +330,9 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
 
 test('21. Mục S10 — việc Giám đốc giao trưởng phòng qua sổ, nhân viên lập báo cáo: hệ thống tự bổ sung, chỉ người được xem thấy', async ({ browser }) => {
   test.setTimeout(120_000);
-  const as = async u => { const p = await (await browser.newContext()).newPage(); await login(p, u); return p; };
+  const ctxs = [];
+  const addDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86_400_000).toISOString().slice(0, 10);
+  const as = async u => { const c = await browser.newContext(); ctxs.push(c); const p = await c.newPage(); await login(p, u); return p; };
   const json = async (p, path, init) => { const r = await apiAs(p, path, init); expect(r.status(), await r.text()).toBeLessThan(300); return r.json(); };
   const post = (p, path, data) => json(p, path, { method: 'POST', headers: { 'content-type': 'application/json' }, data });
   const [gd, nv, tp, tc] = [await as('giamdoc'), await as('nv.kythuat'), await as('tp.kythuat'), await as('tb.taichinh')];
@@ -399,6 +401,37 @@ test('21. Mục S10 — việc Giám đốc giao trưởng phòng qua sổ, nhâ
   for (const r of rowsOf(filled)) Object.assign(r, { next: r.next || 'Theo dõi (giả)', cause: 'Theo báo cáo (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF' });
   await post(hc, '/api/weekly/submit', { week: ctx.week, departmentId: kt, data: filled });
   await stable('thư ký gửi lại — điền rồi gửi');
+  // Vòng 4 — quy tắc gốc: người KHÔNG xem được việc gửi dữ liệu sửa dòng của việc đó (đoán itemId) → bản lưu không đổi, không sinh yêu cầu hỗ trợ.
+  const nvForm = (await json(nv, `/api/weekly/report?week=${ctx.week}`)).report.data;
+  nvForm.risks.push({ key: 'gia', itemId: item.id, task: 'Giả mạo (giả)', status: 'Vướng', cause: 'Nhân viên ghi đè (giả)', solution: 'x', helpFrom: 'BGD', helpWhat: 'Xin hỗ trợ (giả)', helpBy: vnDate(5), ownerIds: [me.id], due: vnDate(5) });
+  nvForm.plans.push({ key: 'giap', itemId: item.id, task: 'Giả mạo IV (giả)', basis: 'KH tháng', ownerIds: [me.id], due: vnDate(6), output: 'x' });
+  await post(nv, '/api/weekly/submit', { week: ctx.week, data: nvForm });
+  await stable('nhân viên gửi dòng của việc không xem được');
+  const afterFake = await json(gd, `/api/weekly/summary?week=${ctx.week}`);
+  const fakeRow = rowsOf(afterFake.rows.find(r => r.id === kt).report).find(r => r.itemId === item.id);
+  expect(fakeRow.cause).toBe(''); expect(fakeRow.status).not.toBe('Vướng');
+  expect(afterFake.rows.find(r => r.id === kt).report.plans.some(p => p.itemId === item.id)).toBe(false);
+  expect(JSON.stringify(afterFake.helps)).not.toContain('Xin hỗ trợ (giả)');
+  // Vòng 4 — bản NHÁP hai người cùng sửa (tuần sau): trưởng phòng nháp có dòng việc trong sổ (Vướng + giải pháp) và Phần IV gắn việc đó;
+  // nhân viên (không xem được việc) tự lưu → dòng và Phần IV của trưởng phòng giữ NGUYÊN.
+  const w2 = addDays(ctx.week, 7);
+  const tpRep2 = await json(tp, `/api/weekly/report?week=${w2}`);
+  const tpDraft = tpRep2.prefill;
+  const tpRow = rowsOf(tpDraft).find(r => r.itemId === item.id);
+  expect(tpRow).toBeTruthy();
+  Object.assign(tpRow, { status: 'Vướng', cause: 'Chờ chủ đất (giả)', solution: 'Họp lại thứ Hai (giả)', helpFrom: 'SELF' });
+  tpDraft.plans.push({ key: 'tp-iv', itemId: item.id, task: title, basis: 'Công việc', ownerIds: [tpUser.id], due: addDays(w2, 5), output: 'Biên bản (giả)' });
+  const tpSaved = await json(tp, '/api/weekly/report', { method: 'PUT', headers: { 'content-type': 'application/json' }, data: { week: w2, data: tpDraft, baseUpdatedAt: null } });
+  const nvRep2 = await json(nv, `/api/weekly/report?week=${w2}`);
+  expect(JSON.stringify(nvRep2.report.data).includes(title)).toBe(false); // nhân viên không thấy
+  nvRep2.report.data.other = 'Nhân viên tự lưu (giả)';
+  await json(nv, '/api/weekly/report', { method: 'PUT', headers: { 'content-type': 'application/json' }, data: { week: w2, data: nvRep2.report.data, baseUpdatedAt: nvRep2.report.updatedAt } });
+  const tpAgain = (await json(tp, `/api/weekly/report?week=${w2}`)).report.data;
+  const kept = rowsOf(tpAgain).find(r => r.itemId === item.id);
+  expect(kept.status).toBe('Vướng'); expect(kept.solution).toBe('Họp lại thứ Hai (giả)');
+  expect(tpAgain.plans.some(p => p.itemId === item.id)).toBe(true);
+  expect(tpAgain.other).toBe('Nhân viên tự lưu (giả)');
+  expect(tpSaved.ok).toBe(true);
   // Trưởng phòng Kỹ thuật (vốn xem được việc) thấy dòng trên trang Tổng hợp; số liệu giống Ban GĐ.
   const tpSum = await json(tp, `/api/weekly/summary?week=${ctx.week}`);
   expect(rowsOf(tpSum.rows.find(r => r.id === kt).report).some(r => r.itemId === item.id)).toBe(true);
@@ -415,4 +448,5 @@ test('21. Mục S10 — việc Giám đốc giao trưởng phòng qua sổ, nhâ
   await gd.goto(`/#/tuan/tong-hop?w=${ctx.week}`);
   await gd.getByTestId(`wk-detail-${kt}`).locator('summary').click();
   await expect(gd.getByTestId(`wk-detail-${kt}`).getByTestId(`wk-auto-${item.code}`)).toContainText('Hệ thống tự bổ sung');
+  for (const c of ctxs) await c.close();
 });

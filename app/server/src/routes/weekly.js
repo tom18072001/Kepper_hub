@@ -195,8 +195,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     const week = weekParam(req.body?.week), departmentId = bodyDept(req);
     await deptAccess(s, departmentId, 'edit');
     const ctx = await cleanCtx(req.user, new Date(), week, departmentId);
-    const data = WK.sanitize(req.body?.data, ctx);
-    stripForeignActions(data, (await D.openActions(prisma, week, departmentId)).actions);
+    const { actions } = await D.openActions(prisma, week, departmentId);
     const base = req.body?.baseUpdatedAt ? new Date(req.body.baseUpdatedAt).getTime() : null;
     // Đọc – kiểm – ghi trong cùng khoá: lần tự lưu chạy chậm không ghi đè được bản vừa nộp hay bản người khác vừa lưu.
     const out = await prisma.$transaction(async tx => {
@@ -204,6 +203,9 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
       const existing = await tx.weeklyReport.findUnique({ where: { departmentId_week: { departmentId, week } } });
       if (existing?.status === 'SUBMITTED') fail(409, 'Báo cáo đã nộp — sửa xong bấm "Gửi lại" để cập nhật', 'ALREADY_SUBMITTED');
       if (existing && base !== existing.updatedAt.getTime()) return { conflict: existing };
+      // Quy tắc gốc: gộp theo itemId với bản nháp đã lưu — dòng của việc người lưu không xem được giữ NGUYÊN (services/weekly-submit.js).
+      const data = WS.mergeDraft(req.body?.data, ctx, existing?.data || null);
+      stripForeignActions(data, actions);
       return { saved: existing
         ? await tx.weeklyReport.update({ where: { id: existing.id }, data: { data, preparerId: req.user.id } })
         : await tx.weeklyReport.create({ data: { departmentId, week, data, preparerId: req.user.id } }) };
@@ -233,7 +235,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     // Làm sạch → dòng bắt buộc còn ở Phần IV về đúng phần → tính lại dòng gắn việc → xếp lại phần → kiểm tra (services/weekly-submit.js).
     // Phạm vi bộ phận (mục S10) — tính ở MỌI lần nộp / gửi lại: dòng tự bổ sung, dòng của việc người gửi không xem được (giữ từ bản đã lưu).
     const deptItems = await workItemsFor(DEPT_SCOPE, now, doneSince(week), departmentId);
-    const { data, errors, autoIds } = WS.prepareSubmit({ raw: req.body?.data, ctx, prefill, actions, now, week, saved: pre?.firstSubmittedAt ? pre.data : null, scopeItems: deptItems });
+    const { data, errors, autoIds, held } = WS.prepareSubmit({ raw: req.body?.data, ctx, prefill, actions, now, week, saved: pre?.data || null, scopeItems: deptItems }); // bản đã lưu: nháp hoặc đã nộp
     const candIds = new Set(cand.map(i => i.id)), byId = new Map(ctx.items.map(i => [i.id, i]));
     // Trả lại dữ liệu đã tính lại (tình trạng dòng MTL) để giao diện hiện đúng khối giải trình cần điền.
     if (errors.length) return res.status(422).json({ error: `Còn ${errors.length} mục cần sửa`, code: 'REPORT_INCOMPLETE', errors, data: await hideUnseen(s, req.user, data) });
@@ -278,7 +280,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
         p.row.pct0 = p.w.pct;
       }
       // Dòng gắn việc về đúng phần theo tình trạng vừa tính lại (xong → I, đã bắt đầu → II) trước khi lưu bản bất biến.
-      const { final, added: autoAdded } = WS.finishSubmit(data, week, autoCtx);
+      const { final, added: autoAdded } = WS.finishSubmit(data, week, autoCtx, held);
       const hash = sha256(final);
       const r = existing
         ? await tx.weeklyReport.update({ where: { id: existing.id }, data: { data: final, status: 'SUBMITTED', preparerId: req.user.id, firstSubmittedAt: first, submittedAt: now, submittedById: req.user.id, submitCount: { increment: 1 } } })
@@ -382,8 +384,12 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     // không chi tiết bộ phận khác); dòng / tên việc họ không xem được bị bỏ, kể cả trong text (bản gửi email) — mục S10.
     const { sum, names, all, configured } = await D.summaryOf(prisma, week);
     const own = sum.rows.find(r => r.id === s.departmentId)?.report;
-    const ok = full ? null : await seeWhich(req.user, [...WK.allRows(own), ...(sum.risks || []).filter(x => x.departmentId === s.departmentId)].map(r => r.itemId).filter(Boolean));
-    const { view, text, fullText } = WK.summaryView(sum, { full, departmentId: s.departmentId, canSee: id => !!ok?.has(id) });
+    const ownHelps = (sum.helps || []).flatMap(g => g.list).filter(h => h.fromId === s.departmentId);
+    const ok = full ? null : await seeWhich(req.user, [...WK.allRows(own), ...(sum.risks || []).filter(x => x.departmentId === s.departmentId), ...ownHelps].map(r => r.itemId).filter(Boolean));
+    // Việc thuộc dự án KÍN (Chỉ thành viên / Sổ giao việc): bản email và bản tóm tắt cho bộ phận khác không nêu tên, chỉ đếm.
+    const ids = [...new Set([...(sum.risks || []), ...(sum.helps || []).flatMap(g => g.list)].map(x => x.itemId).filter(Boolean))];
+    const secret = new Set(ids.length ? (await prisma.workItem.findMany({ where: { id: { in: ids }, project: { visibility: { in: ['PRIVATE', 'ASSIGNED'] } } }, select: { id: true } })).map(i => i.id) : []);
+    const { view, text, fullText } = WK.summaryView(sum, { full, departmentId: s.departmentId, canSee: id => !!ok?.has(id), isSecret: id => secret.has(id) });
     let out = view;
     // Ghi chú lý do vắng / muộn (có thể là DLCN nhạy cảm): chỉ Ban GĐ, thư ký (policy weekly.notice · field note) — PMO không thấy.
     if (full && !P.can(s, 'view', 'weekly.notice', { field: 'note', departmentId: -1, createdById: -1 }))

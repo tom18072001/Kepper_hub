@@ -1044,6 +1044,26 @@ Ví dụ: TGĐ giao trưởng phòng qua sổ giao việc, nhân viên lập bá
 **Ẩn / hiện theo người xem (nghiệm thu vòng 3).** Quy tắc áp cho MỌI dòng gắn việc, không chỉ dòng tự bổ sung: người không có quyền xem tổng hợp đầy đủ
 chỉ nhận dòng gắn việc họ xem được (`itemVisibleWhere` của chính người xem), kể cả dòng do trưởng phòng / thư ký nhập.
 
+**Quy tắc gốc cho mọi đường lưu (nghiệm thu vòng 4)** — lưu nháp, tự lưu, nộp, gửi lại, MCP `kepper_save_weekly_draft`
+(`services/weekly-submit.js` `mergeSaved` / `mergeDraft` / `prepareSubmit`):
+> Một dòng gắn việc chỉ được THÊM / SỬA / XOÁ bởi người xem được việc đó. Mọi lần lưu đều GỘP theo `itemId` với bản đã lưu (nháp hoặc đã nộp):
+> dòng của việc mà người thao tác không xem được được giữ NGUYÊN — mọi phần I–IV, mọi trường, đúng phần cũ. Hiển thị thì lọc theo NGƯỜI XEM.
+
+Hệ quả:
+- Dữ liệu gửi lên cho dòng của việc người gửi không xem được (giải trình, tình trạng, đề nghị hỗ trợ, Phần IV, chuyển phần, giả cờ tự bổ sung,
+  đoán `itemId`) bị bỏ qua hết. Không ghi đè, không sinh yêu cầu hỗ trợ.
+- Hai người cùng sửa bản nháp: người xem được ít hơn tự lưu không xoá dòng của người kia.
+- Dòng "Hệ thống tự bổ sung" chỉ đọc với mọi người, kể cả người xem được việc. Khi nộp, máy chủ luôn dựng lại dòng này từ phạm vi bộ phận.
+- Một việc là một dòng. Lỗi kiểm tra chỉ nêu dòng người gửi sửa được.
+
+**Việc thuộc dự án KÍN** — chế độ hiển thị "Chỉ thành viên" (PRIVATE) hoặc "Sổ giao việc" (ASSIGNED). Quy tắc theo việc, không theo người lập:
+- Trong **bản gửi email** và **bản tóm tắt cho trưởng / phó bộ phận khác**, việc kín không nêu tên, chỉ đếm. Áp cho cả mục nguy cơ chậm lẫn
+  yêu cầu hỗ trợ: dòng email ghi "(việc không nêu tên — xem trong Kepler Hub)".
+- Việc thuộc dự án thường ("Cả phòng ban" / "Toàn công ty") vẫn nêu tên ở mục nguy cơ chậm, đúng quyết định "Bản tóm tắt".
+- Yêu cầu hỗ trợ lọc theo người xem như các dòng: trên trang Tổng hợp và qua MCP `kepper_weekly_summary` (trả `helps`), bản tóm tắt bỏ tên việc và
+  nội dung đề nghị khi việc thuộc dự án kín của bộ phận khác, hoặc khi đó là việc của bộ phận mình mà người xem không xem được.
+- Mục nguy cơ bị ẩn tên không giữ `key` / mã việc.
+
 **Gửi lại.** Mã việc và cờ tự bổ sung là dữ liệu của máy chủ, không phụ thuộc người bấm gửi:
 - Dòng tự bổ sung đã lưu luôn được máy chủ dựng lại từ phạm vi bộ phận, kể cả khi trưởng phòng (xem được việc) bấm "Gửi lại". Trên biểu mẫu, dòng này chỉ đọc.
 - Dòng gắn việc mà người gửi không xem được (vd. thư ký nhập thay) được giữ từ bản đã lưu. Máy chủ chỉ nhận phần giải trình người gửi sửa.
