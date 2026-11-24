@@ -1192,3 +1192,26 @@ Chủ dự án chốt: (1) thời gian xử lý có hai chỉ số: bắt đầu
 | PRI-04 | Hồ sơ đánh giá tác động xử lý DLCN (nhân viên, KPI) vẫn phải lập — phân tích này là thêm một mục đích xử lý của cùng dữ liệu | Bắt buộc — chưa có (giữ nguyên khuyến nghị cũ) |
 
 Khuyến nghị cho chủ dự án: ghi mục đích "phân tích KPI tham khảo cho Ban giám đốc" vào hồ sơ đánh giá tác động (PRI-04); thông báo cho nhân viên rằng thời gian xử lý và mức đánh giá được tổng hợp cho Ban giám đốc.
+
+## Quy chế, quy định nội bộ: phê duyệt của Tổng Giám đốc, cấp xem theo vai — 25/11/2026
+
+Đề xuất chủ dự án duyệt 24/11/2026: `docs/de-xuat-quy-che-phe-duyet.md` (mục 10 là đánh giá rút gọn). Thực thi: `routes/vanthu.js`, `services/vanthu.js`,
+migration `20261125100000_quy_che_phe_duyet`, MCP `kepper_vanthu_draft`.
+
+| Tập dữ liệu | Nhãn | Pháp lý | Ghi chú |
+|---|---|---|---|
+| Tài liệu sổ nội bộ (`vanthu.doc`, book NOIBO): metadata, tệp PDF, người soạn, người phê duyệt | Theo **cấp xem**: Mọi người = Nội bộ; Lãnh đạo / Ban TGĐ = Bảo mật | Quy chế thường không có DLCN; quyết định nhân sự (D5) có thể có DLCN cơ bản → đặt cấp Lãnh đạo / Ban TGĐ | Mức mật cũ không dùng trong sổ nội bộ (một khái niệm: cấp xem) |
+| Nhật ký phê duyệt (`DocEvent` APPROVE / RETURN / RESUBMIT, `AuditLog`) | Nội bộ | Chứng cứ phê duyệt thay chữ ký số | Ghi người, thời điểm, lý do trả lại, SHA-256 từng tệp lúc phê duyệt |
+
+| Năng lực | Hiện trạng | Mức |
+|---|---|---|
+| PRE-06 Kiểm soát truy cập | Cấp xem kiểm ở máy chủ cho danh sách, tìm kiếm, chi tiết, tải tệp, "gắn vào việc"; chỉ xét vai (roleRank của mô hình một hệ quy chiếu); Quản trị hệ thống không xem; dự thảo chỉ người soạn, Người phê duyệt, Văn thư (trong cấp xem theo vai); test ma trận đơn vị + e2e | Bắt buộc — có |
+| PRE (người quyết định là con người) | Phê duyệt / trả lại / cấp số chỉ trên giao diện, chỉ Người phê duyệt (vai Ban TGĐ, danh sách trong Thiết lập văn thư); token Claude bị chặn hai lớp (`WRITE_ALLOW` + kiểm `s.ai`) | Bắt buộc — có |
+| PRE (AI) | Claude chỉ tạo dự thảo kèm PDF (`POST /api/vanthu/drafts`), cấp xem không vượt vai người dùng, đánh dấu "tạo qua Claude"; không đọc cấp Ban TGĐ, không đọc dự thảo của người khác, không tải tệp về | Bắt buộc — có |
+| DET-01 Nhật ký | Mọi lần tạo, sửa, phê duyệt, trả lại, gửi lại, huỷ, đổi cấp xem đều ghi `DocEvent` + `AuditLog`; giữ ≥ 12 tháng như nhật ký hệ thống | Bắt buộc — có |
+| RES Toàn vẹn | Phê duyệt xong khoá nội dung và tệp; đổi nội dung = bản mới "thay thế"; khoá chống trùng số (`pg_advisory_xact_lock` + cập nhật có điều kiện) | Khuyến nghị — có |
+| RES Migration | Chỉ thêm cột / nới NOT NULL của số dự thảo; văn bản nội bộ cũ giữ số, coi là đã phê duyệt, cấp xem chuyển theo mức mật cũ, có dòng nhật ký MIGRATE | Bắt buộc — có |
+
+Khuyến nghị: trước khi triển khai, đếm văn bản NOIBO trên bản thật (chỉ đếm); sau triển khai, Ban TGĐ chọn **Người phê duyệt** ở Thiết lập văn thư
+(để trống thì mọi thành viên Ban TGĐ phụ trách "Toàn công ty" đều phê duyệt được) và rà cấp xem của văn bản cũ (nếu có). Tệp PDF thật chỉ đưa lên trên
+máy chủ dự án, không đưa vào git / seed / test.

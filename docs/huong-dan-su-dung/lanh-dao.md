@@ -235,9 +235,26 @@ Thiết lập bộ phận phải nộp, thứ tự, hạn nộp, ngày họp khi
 ![Văn bản nội bộ](anh/07-van-thu-noi-bo.png)
 
 - Mức **Hạn chế / Bảo mật cao**: chỉ người trong danh sách được xem; danh sách văn bản Bảo mật cao do TGĐ / Chủ tịch duyệt, Ban Tổng Giám đốc nhập.
-- **Thiết lập** (Ban Tổng Giám đốc): pháp nhân, văn thư, người nhận chuyển Pháp chế.
+- **Thiết lập** (Ban Tổng Giám đốc): pháp nhân, văn thư, người nhận chuyển Pháp chế, **Người phê duyệt** tài liệu nội bộ (mục 8.1).
 
 Claude **không** vào sổ, không tải tệp. Skill `kepler-luu-tai-lieu` chỉ chỗ lưu và cách đặt tên.
+
+### 8.1 Quy chế, quy định nội bộ — phê duyệt
+
+Tab **Tài liệu → Quy chế, quy định nội bộ** (sổ nội bộ D5, D6, D7) đi theo luồng phê duyệt, không cấp số ngay:
+
+1. **Tạo dự thảo** (Văn thư, Ban Tổng Giám đốc; lãnh đạo bộ phận với dãy D7 của bộ phận mình): chọn loại (Quy chế, Quy định, Quy trình, Hướng dẫn…),
+   tên, **cấp xem**, mã tài liệu (vd. QC-IT-01), ngày hiệu lực, tệp PDF. Tài liệu ở trạng thái **Chưa phê duyệt**, chưa có số.
+2. **Người phê duyệt** (Tổng Giám đốc — chọn ở **Thiết lập văn thư**) nhận thông báo, mở tài liệu, xem PDF rồi bấm **Phê duyệt** — hệ thống
+   cấp số ngay, khoá nội dung và tệp, ghi mã băm của tệp vào lịch sử. Hoặc bấm **Trả lại** kèm lý do; người soạn sửa rồi bấm **Gửi lại**.
+3. Ngày hiệu lực trống hoặc đã qua → **Hiệu lực** ngay; ngày trong tương lai → **Đã phê duyệt**, tới ngày tự chuyển **Hiệu lực**.
+   Văn bản đã ban hành từ trước khi đưa vào Hub: điền **Ngày ban hành gốc** và ngày hiệu lực trong quá khứ.
+4. Sửa nội dung tài liệu đã phê duyệt: tạo dự thảo mới, chọn **Thay thế văn bản** — khi bản mới được phê duyệt, bản cũ chuyển **Hết hiệu lực / thay thế**.
+
+**Cấp xem** (thay cho mức bảo mật trong sổ nội bộ): **Mọi người** · **Lãnh đạo** (lãnh đạo bộ phận + Ban Tổng Giám đốc) · **Ban TGĐ**.
+Cấp cao xem được tài liệu cấp thấp. Dự thảo chỉ người soạn, Người phê duyệt và Văn thư thấy. Quản trị hệ thống không xem nội dung.
+
+Claude có thể **tạo dự thảo** từ tệp PDF trên máy bạn (công cụ `kepper_vanthu_draft`), không cấp số, không phê duyệt.
 
 ---
 

@@ -377,6 +377,8 @@ Với nhân viên:
 
 - **Vào sổ** do văn thư (người Ban Tổng Giám đốc chỉ định), Ban Tổng Giám đốc, hoặc lãnh đạo bộ phận (văn bản nội bộ của bộ phận) làm. Bạn nhận được văn bản giấy / email: **chuyển bản scan cho văn thư HCNS**, không tự chép vào thư mục VanBanDen.
 - Văn bản **giao bạn xử lý**: bạn nhận thông báo. Menu **Nghiệp vụ → Văn thư → tab Tôi xử lý**.
+- **Quy chế, quy định nội bộ** (tab cạnh Văn thư): bạn xem các tài liệu **đã phê duyệt** có cấp xem **Mọi người**. Tài liệu cấp Lãnh đạo / Ban TGĐ
+  và dự thảo chưa phê duyệt không hiện với bạn. Nếu bạn được giao làm Văn thư: bạn tạo được dự thảo cấp Mọi người; Tổng Giám đốc phê duyệt thì mới có số.
 
 ![Văn thư — Tôi xử lý](anh/07-van-thu-toi-xu-ly.png)
 
