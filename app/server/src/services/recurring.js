@@ -70,7 +70,7 @@ async function runDue(prisma, now = new Date()) {
   let created = 0;
   for (const rule of rules) {
     try {
-      const actor = (rule.createdById && await prisma.user.findFirst({ where: { id: rule.createdById, isActive: true }, include: { permissions: true } })) || SYSTEM_ACTOR;
+      const actor = (rule.createdById && await prisma.user.findFirst({ where: { id: rule.createdById, isActive: true } })) || SYSTEM_ACTOR;
       if (await createFromRule(prisma, rule, actor, now)) created++;
     } catch (error) {
       console.error(JSON.stringify({ level: 'error', msg: 'recurring_failed', ruleId: rule.id, error: error.message }));

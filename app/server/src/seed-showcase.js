@@ -4,6 +4,7 @@
 // Chạy: npm run seed:showcase   (sau khi đã chạy seed thường với SEED_DEMO=true). Chạy lại không tạo trùng.
 const path = require('node:path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+const { syncRoleGrants } = require('./lib/permissions');
 const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
 const { DEFAULT_PASSWORD } = require('./lib/passwords');
@@ -32,6 +33,7 @@ async function showcase(prisma) {
     if (await prisma.user.findUnique({ where: { username: u.username } })) continue;
     await prisma.$transaction(async tx => {
       const created = await tx.user.create({ data: { username: u.username, fullName: u.fullName, displayTitle: u.displayTitle, role: u.role, departmentId: dept[u.dept].id, passwordHash: bcrypt.hashSync(DEFAULT_PASSWORD, 10), mustChangePw: true } });
+      await syncRoleGrants(tx, created, root.id);
     });
   }
   const U = Object.fromEntries((await prisma.user.findMany()).map(u => [u.username, u]));
@@ -270,14 +272,14 @@ if (require.main === module) {
 const CENTRE_DEPTS = [{ code: 'VP', name: 'Văn phòng' }, { code: 'KHCN', name: 'Phòng Khoa học Công nghệ' }, { code: 'TNT', name: 'Phòng Tài năng trẻ' }];
 const CENTRE_USERS = [
   { username: 'cvp', fullName: 'Hồ Minh Chánh', displayTitle: 'Chánh Văn phòng', role: 'manager', dept: 'VP' },
-  { username: 'pcvp', fullName: 'Tạ Thu Phương', displayTitle: 'Phó Chánh Văn phòng', role: 'deputy', dept: 'VP' },
+  { username: 'pcvp', fullName: 'Tạ Thu Phương', displayTitle: 'Phó Chánh Văn phòng', role: 'manager', dept: 'VP' },
   { username: 'cv.vp1', fullName: 'Lương Gia Hân', displayTitle: 'Chuyên viên Văn phòng', role: 'member', dept: 'VP' },
   { username: 'tp.khcn', fullName: 'Phan Đức Khoa', displayTitle: 'Trưởng phòng Khoa học Công nghệ', role: 'manager', dept: 'KHCN' },
-  { username: 'pp.khcn', fullName: 'Vương Bích Ngọc', displayTitle: 'Phó trưởng phòng Khoa học Công nghệ', role: 'deputy', dept: 'KHCN' },
+  { username: 'pp.khcn', fullName: 'Vương Bích Ngọc', displayTitle: 'Phó trưởng phòng Khoa học Công nghệ', role: 'manager', dept: 'KHCN' },
   { username: 'cv.khcn1', fullName: 'Đinh Quang Huy', displayTitle: 'Chuyên viên', role: 'member', dept: 'KHCN' },
   { username: 'cv.khcn2', fullName: 'Mai Anh Thư', displayTitle: 'Chuyên viên', role: 'member', dept: 'KHCN' },
   { username: 'tp.tnt', fullName: 'Kiều Văn Tài', displayTitle: 'Trưởng phòng Tài năng trẻ', role: 'manager', dept: 'TNT' },
-  { username: 'pp.tnt', fullName: 'Doãn Hải Yến', displayTitle: 'Phó trưởng phòng Tài năng trẻ', role: 'deputy', dept: 'TNT' },
+  { username: 'pp.tnt', fullName: 'Doãn Hải Yến', displayTitle: 'Phó trưởng phòng Tài năng trẻ', role: 'manager', dept: 'TNT' },
   { username: 'cv.tnt1', fullName: 'Châu Ngọc Lan', displayTitle: 'Chuyên viên', role: 'member', dept: 'TNT' },
   // Ban Tổng Giám đốc gồm Giám đốc và các Phó Giám đốc: Phó Giám đốc thứ hai phụ trách Phòng Tài năng trẻ.
   { username: 'pgd2', fullName: 'Nghiêm Thế Bảo', displayTitle: 'Phó Giám đốc', role: 'director', dept: 'BGD' },
@@ -292,6 +294,7 @@ async function ensureCentreStaff(prisma) {
     if (!D[u.dept] || await prisma.user.findUnique({ where: { username: u.username } })) continue;
     await prisma.$transaction(async tx => {
       const row = await tx.user.create({ data: { username: u.username, fullName: u.fullName, displayTitle: u.displayTitle, role: u.role, departmentId: D[u.dept].id, passwordHash: bcrypt.hashSync(DEFAULT_PASSWORD, 10), mustChangePw: true } });
+      await syncRoleGrants(tx, row, root?.id ?? null);
     });
     created.push(u.username);
   }
@@ -373,7 +376,7 @@ async function centreShowcase(prisma) {
     description: 'Ban Tổng Giám đốc giao nhiệm vụ về các phòng; mỗi người chỉ thấy việc liên quan đến mình (dữ liệu mẫu, tên giả).',
     states: { create: DEFAULT_STATES.map((st, position) => ({ ...st, position, wipLimit: null })) },
     members: { create: [[gd, 'OWNER'], [pgd, 'OWNER'], [U['cv.vp1'], 'MEMBER']].filter(([u], i, a) => a.findIndex(([x]) => x.id === u.id) === i).map(([u, role]) => ({ userId: u.id, role })) },
-    approvalSteps: { create: [{ level: 1, name: 'Lãnh đạo phòng duyệt', approverType: 'DEPARTMENT_MANAGER' }, { level: 2, name: 'Ban Tổng Giám đốc cho ý kiến', approverType: 'SUPERVISOR' }] },
+    approvalSteps: { create: [{ level: 1, name: 'Lãnh đạo phòng duyệt', approverType: 'DEPARTMENT_MANAGER' }, { level: 2, name: 'Ban Tổng Giám đốc cho ý kiến', approverType: 'DIRECTOR' }] },
   }, include: { states: true } });
   const { make, count } = centreMaker(prisma, p, D, U, gd);
   const doc = (number, summary, extra = {}) => ({ kind: 'BASIS', number, summary, issuer: 'Trung tâm (giả)', issuedOn: daysFromNow(-12), ...extra });
@@ -463,7 +466,7 @@ async function centreFinal(prisma) {
     const dept = D[b.code];
     if (await prisma.project.findFirst({ where: { departmentId: dept.id, visibility: { not: 'ASSIGNED' }, deletedAt: null, archivedAt: null } })) continue;
     const staff = await prisma.user.findMany({ where: { departmentId: dept.id, isActive: true }, orderBy: { id: 'asc' } });
-    const lead = staff.find(u => u.role === 'manager') || staff.find(u => u.role === 'deputy');
+    const lead = staff.find(u => u.role === 'manager');
     if (!lead) continue;
     const used = new Set((await prisma.project.findMany({ select: { key: true } })).map(x => x.key));
     const key = [b.code, b.code + 'NB'].find(k => !used.has(k));
@@ -472,7 +475,7 @@ async function centreFinal(prisma) {
       key, name: b.name, departmentId: dept.id, leadId: lead.id, createdById: lead.id, visibility: 'DEPARTMENT',
       description: `Bảng Kanban cho việc nội bộ của ${dept.name} (dữ liệu mẫu, tên giả). Việc Ban Tổng Giám đốc giao về phòng nằm ở "Việc phòng được giao".`,
       states: { create: DEFAULT_STATES.map((s, position) => ({ ...s, position })) },
-      members: { create: staff.map(u => ({ userId: u.id, role: ['manager', 'deputy'].includes(u.role) ? 'OWNER' : 'MEMBER' })) },
+      members: { create: staff.map(u => ({ userId: u.id, role: u.role === 'manager' ? 'OWNER' : 'MEMBER' })) },
     }, include: { states: true } });
     let n = 0;
     for (const it of b.items) {

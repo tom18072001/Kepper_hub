@@ -61,7 +61,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     return { cfg, s };
   };
   const target = async userId => {
-    const u = await prisma.user.findFirst({ where: { id: userId, ...NOT_IT_WHERE }, include: { permissions: true, department: { select: { id: true, name: true } } } });
+    const u = await prisma.user.findFirst({ where: { id: userId, ...NOT_IT_WHERE }, include: { department: { select: { id: true, name: true } } } });
     if (!u) fail(404, 'Không tìm thấy nhân sự', 'NOT_FOUND');
     return u;
   };
@@ -73,7 +73,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     const directors = (await prisma.user.findMany({ where: { ...ACTIVE_USER, ...BOARD_WHERE }, select: { id: true } })).map(x => x.id).filter(id => id !== u.id);
     if (H.isDirector(u)) return [...new Set([...directors, ...(await activeIds(cfg.hrUserIds))])].filter(id => id !== u.id);
     if (H.isLeader(u) || u.departmentId == null) return directors;
-    const leaders = (await prisma.user.findMany({ where: { ...ACTIVE_USER, departmentId: u.departmentId, id: { not: u.id } }, include: { permissions: true } })).filter(H.isLeader).map(x => x.id);
+    const leaders = (await prisma.user.findMany({ where: { ...ACTIVE_USER, departmentId: u.departmentId, id: { not: u.id } } })).filter(H.isLeader).map(x => x.id);
     return leaders.length ? leaders : directors;
   }
 
@@ -177,7 +177,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     const where = { ...NOT_IT_WHERE, ...(req.query.inactive === '1' ? {} : { isActive: true }) };
     if (!s.hr && !s.director) where.departmentId = s.departmentId ?? -1;
     else if (req.query.departmentId) where.departmentId = optionalInt(req.query.departmentId, 'Bộ phận');
-    const users = await prisma.user.findMany({ where, include: { permissions: true, department: { select: { id: true, name: true } } }, orderBy: [{ departmentId: 'asc' }, { fullName: 'asc' }] });
+    const users = await prisma.user.findMany({ where, include: { department: { select: { id: true, name: true } } }, orderBy: [{ departmentId: 'asc' }, { fullName: 'asc' }] });
     const ids = users.map(u => u.id);
     const [profiles, contracts] = await Promise.all([
       prisma.hrProfile.findMany({ where: { userId: { in: ids } } }),
@@ -343,7 +343,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
         cancel: (l.status === 'PENDING' || (l.status === 'APPROVED' && (!started || s.hr))) && P.can(s, 'edit', 'hrm.leave', tctx(u, cfg, { op: 'cancel' })) } : undefined };
   };
   async function usersMap(ids) {
-    const rows = await prisma.user.findMany({ where: { id: { in: [...new Set(ids.filter(Boolean))] } }, include: { permissions: true, department: { select: { id: true, name: true } } } });
+    const rows = await prisma.user.findMany({ where: { id: { in: [...new Set(ids.filter(Boolean))] } }, include: { department: { select: { id: true, name: true } } } });
     return Object.fromEntries(rows.map(u => [u.id, u]));
   }
   // Người duyệt thấy trước khi duyệt: việc người nghỉ đang chủ trì đến hạn trong thời gian nghỉ (chỉ mã việc — nội dung xem trong dự án
@@ -612,7 +612,7 @@ module.exports = function mountHrm(app, { prisma, auth, audit, config }) {
     const where = { ...NOT_IT_WHERE, OR: [{ isActive: true }, { id: { in: withRecords } }] };
     if (!s.hr && !s.director) where.departmentId = s.departmentId ?? -1;
     else if (req.query.departmentId) where.departmentId = optionalInt(req.query.departmentId, 'Bộ phận');
-    const users = (await prisma.user.findMany({ where, include: { permissions: true, department: { select: { id: true, name: true } } }, orderBy: [{ departmentId: 'asc' }, { fullName: 'asc' }] }))
+    const users = (await prisma.user.findMany({ where, include: { department: { select: { id: true, name: true } } }, orderBy: [{ departmentId: 'asc' }, { fullName: 'asc' }] }))
       .filter(u => P.can(s, 'view', 'hrm.attendance', tctx(u, cfg)));
     const ids = users.map(u => u.id);
     const [records, leaves, profiles] = await Promise.all([

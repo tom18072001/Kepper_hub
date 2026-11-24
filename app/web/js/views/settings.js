@@ -1,12 +1,13 @@
 // Tạo dự án và cài đặt dự án: thông tin chung, cột trạng thái + WIP, thành viên, quy trình duyệt nhiều cấp.
 import { api } from '../api.js';
 import { store, reloadProjects, labelsFor } from '../store.js';
-import { $, $$, esc, VISIBILITY, APPROVER, CATEGORY, PRIORITY, toast, openModal, closeModal, formData, errorMessage, fmtDateTime, labelChip, multiSelect, readMulti, bindMulti } from '../util.js';
+import { $, $$, esc, VISIBILITY, APPROVER, CATEGORY, PRIORITY, toast, openModal, closeModal, formData, errorMessage, fmtDateTime, labelChip, multiSelect, readMulti, bindMulti, isItUser, isLeadershipUser, isBoardUser } from '../util.js';
 import { scheduleFields, bindSchedule, readSchedule, openRepeatDialog } from './recurring-form.js';
 import { renderProjectNav } from '../main.js';
 
 export function openCreateProject(onCreated) {
-  const system = store.me.isRootAdmin || store.me.permissions['projects.manage']?.operate === 'SYSTEM';
+  // Quản lý dự án toàn công ty = vai Ban Tổng Giám đốc: chỉ vai này tạo dự án MTL (ma trận 5.4).
+  const system = isBoardUser(store.me);
   const depts = store.departments.filter(d => d.isActive && (system || d.id === store.me.departmentId));
   const modal = openModal(`<h2>Tạo dự án</h2><form>
     <div class="grid2"><label class="field">Mã dự án<input name="key" required maxlength="10" pattern="[A-Za-z][A-Za-z0-9]{1,9}" placeholder="VD: MKT" data-testid="project-key"></label>
@@ -15,7 +16,7 @@ export function openCreateProject(onCreated) {
     <label class="field">Ai được xem<select name="visibility" data-testid="project-visibility">${Object.entries(VISIBILITY).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label></div>
     <label class="field">Mô tả<textarea name="description" rows="2"></textarea></label>
     <label class="field">Kiểu dự án<select name="template" data-testid="project-template">
-      <option value="MTL" selected>Theo Master Timeline — hạng mục theo tháng T, đường găng, mốc; dùng chung giữa các bộ phận</option>
+      ${system ? '<option value="MTL" selected>Theo Master Timeline — hạng mục theo tháng T, đường găng, mốc; dùng chung giữa các bộ phận</option>' : ''}
       <option value="">Quy trình công việc — Tồn đọng → Cần làm → Đang làm → Chờ duyệt → Hoàn thành</option>
       <option value="WEEK">Lịch tuần — cột Thứ 2 … Cuối tuần, không duyệt (vd. ai ở / không ở văn phòng)</option></select></label>
     <label class="field mtl-t0">Tháng T0 (bắt đầu Master Timeline)<input type="month" name="t0" data-testid="project-t0"></label>
@@ -66,7 +67,7 @@ export function openCreateProject(onCreated) {
 
 // Người duyệt được chọn đích danh: chỉ lãnh đạo bộ phận / Ban Tổng Giám đốc (tài khoản không phải admin IT).
 function approverUserOptions(selected) {
-  const list = store.users.filter(u => ['director', 'manager'].includes(u.role));
+  const list = store.users.filter(isLeadershipUser);
   return list.length ? `<optgroup label="Chọn đích danh">${list.map(u => `<option value="USER:${u.id}"${selected === u.id ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</optgroup>` : '';
 }
 
@@ -251,7 +252,7 @@ function ruleRow(r, p) {
 function stepRow(s, users) {
   return `<div class="row" data-row style="margin-bottom:6px"><span class="pill">Cấp</span>
     <select name="type" style="width:auto" data-testid="step-type">${Object.entries(APPROVER).map(([k, v]) => `<option value="${k}"${s.approverType === k ? ' selected' : ''}>${v}</option>`).join('')}</select>
-    <select name="user" style="width:auto" class="${s.approverType === 'USER' ? '' : 'hidden'}"><option value="">— Chọn người —</option>${users.filter(u => u.role !== 'admin').map(u => `<option value="${u.id}"${s.approverUserId === u.id ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select>
+    <select name="user" style="width:auto" class="${s.approverType === 'USER' ? '' : 'hidden'}"><option value="">— Chọn người —</option>${users.filter(u => !isItUser(u)).map(u => `<option value="${u.id}"${s.approverUserId === u.id ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select>
     <input name="name" value="${esc(s.name)}" placeholder="Tên bước (tuỳ chọn)" class="grow" style="width:auto" maxlength="60" data-testid="step-name">
     ${s.approvers ? `<span class="muted xs" title="Người sẽ duyệt ở cấp này">${s.approvers.length ? 'Người duyệt: ' + esc(s.approvers.map(a => a.fullName).join(', ')) : '<span class="due overdue">Chưa có người duyệt</span>'}</span>` : ''}
     <button type="button" class="btn btn-ghost btn-sm" data-remove>Xoá</button></div>`;

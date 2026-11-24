@@ -85,6 +85,12 @@ test('quản trị: vai BTGĐ ngoài bộ phận Ban Tổng Giám đốc phải 
   expect(after.boardMismatch).toBeNull();
   const audit = JSON.stringify(await (await apiAs(admin, '/api/admin/audit?action=BOARD_SCOPE_UPDATE')).json());
   expect(audit).toContain('ROLE_CHANGE');
+  // Mọi lần đổi vai đều báo Ban Tổng Giám đốc (không chỉ khi vai mới là BTGĐ).
+  expect((await apiAs(admin, `/api/admin/users/${id}`, { method: 'PUT', data: { role: 'manager' } })).status()).toBe(200);
+  const notes = (await (await apiAs(pages.giamdoc, '/api/notifications')).json()).items.map(n => n.title).join('
+');
+  expect(notes).toContain('btgd.lech: Nhân viên → Lãnh đạo bộ phận');
+  expect(notes).toContain('xác nhận lưu tài khoản lệch vai / bộ phận: btgd.lech');
   // Bộ phận không tự chọn Phó TGĐ phụ trách nữa (nhập ở tài khoản).
   const giamdoc = U('giamdoc');
   expect((await apiAs(admin, `/api/departments/${D('KT').id}`, { method: 'PUT', data: { supervisorId: giamdoc.id } })).status()).toBe(422);
@@ -101,6 +107,22 @@ test('giao diện Quản trị: cột Vai / Bộ phận / Phụ trách; quyền 
   await expect(admin.getByTestId('user-tp.kinhdoanh')).toContainText('Lãnh đạo bộ phận');
   await admin.getByTestId('perm-giamdoc').click();
   await expect(admin.getByTestId('perm-board-all')).toBeChecked();
-  await expect(admin.getByTestId('grant-reports.kpi-VIEW')).toHaveText('Toàn công ty');
+  await expect(admin.getByTestId('role-grid')).toContainText('KPI & phân tích');
+  await expect(admin.getByTestId('role-grid')).toContainText('Mọi người, mọi bộ phận');
   await expect(admin.locator('select[data-key]')).toHaveCount(0); // không còn ô chỉnh quyền từng người
+  await expect(table.locator('thead')).toContainText('Kiêm nhiệm');
+});
+
+test('chỉ Ban Tổng Giám đốc tạo dự án MTL; quan hệ dự án chỉ cộng quyền (BTGĐ là Người xem vẫn sửa được)', async () => {
+  const body = key => ({ key, name: 'MTL thử quyền (giả)', kind: 'MTL', t0Date: new Date().toISOString(), departmentId: U('tp.kinhdoanh').departmentId });
+  for (const name of ['tp.kinhdoanh', 'nv.kinhdoanh1']) expect((await apiAs(pages[name], '/api/projects', { method: 'POST', data: body('MQ' + name.length) })).status(), name).toBe(403);
+  // Dự án Kanban của bộ phận Kinh doanh: thêm giamdoc làm "Người xem" — vẫn giữ quyền BTGĐ.
+  const lead = pages['tp.kinhdoanh'];
+  const created = await apiAs(lead, '/api/projects', { method: 'POST', data: { key: 'VQ', name: 'Người xem thử (giả)', departmentId: U('tp.kinhdoanh').departmentId, visibility: 'DEPARTMENT' } });
+  expect(created.status(), await created.text()).toBeLessThan(300);
+  const p = await created.json();
+  const members = [{ userId: U('tp.kinhdoanh').id, role: 'OWNER' }, { userId: U('giamdoc').id, role: 'VIEWER' }];
+  expect((await apiAs(lead, `/api/projects/${p.id}/members`, { method: 'PUT', data: { members } })).status()).toBeLessThan(300);
+  const d = await (await apiAs(pages.giamdoc, `/api/projects/${p.id}`)).json();
+  expect(d.rights).toMatchObject({ canView: true, canEdit: true, canManage: true });
 });

@@ -413,7 +413,7 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
     if (!hasPermission(req.user, 'work.approve', 'OPERATE')) fail(403, 'Chỉ người có quyền duyệt mới uỷ quyền được', 'FORBIDDEN');
     const toUserId = intParam(req.body?.toUserId, 'Người nhận uỷ quyền');
     if (toUserId === req.user.id) fail(422, 'Không tự uỷ quyền cho chính mình');
-    const to = await prisma.user.findFirst({ where: { id: toUserId, isActive: true, ...NOT_IT_WHERE }, include: { permissions: true } });
+    const to = await prisma.user.findFirst({ where: { id: toUserId, isActive: true, ...NOT_IT_WHERE } });
     if (!to || !hasPermission(to, 'work.approve', 'OPERATE')) fail(422, 'Người nhận uỷ quyền phải là lãnh đạo có quyền duyệt (trưởng / phó phòng, Ban Tổng Giám đốc)', 'INVALID_DELEGATE');
     // Không uỷ quyền bước Ban Tổng Giám đốc xuống cấp phòng.
     if (permissionScope(req.user, 'work.approve', 'OPERATE') === 'SYSTEM' && permissionScope(to, 'work.approve', 'OPERATE') !== 'SYSTEM')

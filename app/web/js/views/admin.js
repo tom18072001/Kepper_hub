@@ -1,7 +1,7 @@
 // Quản trị: tài khoản (tạo/sửa/khoá + bàn giao/reset/phân quyền), bộ phận, nhãn, nhật ký hệ thống.
 import { api } from '../api.js';
 import { store, can, loadBasics } from '../store.js';
-import { $, $$, esc, ROLE_LABEL, fmtDateTime, toast, openModal, closeModal, formData, confirmDialog, errorMessage, labelChip } from '../util.js';
+import { $, $$, esc, ROLE_LABEL, fmtDateTime, toast, openModal, closeModal, formData, confirmDialog, errorMessage, labelChip, ROLE_OPTIONS, roleKey, isItUser, isBoardUser } from '../util.js';
 
 const ICON = {
   plus: '<svg class="i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="M12 5v14"/></svg>',
@@ -35,21 +35,47 @@ async function renderTokens(root) {
 let catalogCache = null;
 const getCatalog = async () => (catalogCache ||= await api('/api/permissions/catalog'));
 const ACTION_TEXT = { VIEW: 'Xem', OPERATE: 'Thao tác' }, SCOPE_TEXT = { UNIT: 'Bộ phận mình', SYSTEM: 'Toàn công ty' };
-const BOARD_DEPT_CODES = ['BTGD', 'BGD'];
 const deptById = id => store.departments.find(d => d.id === Number(id)) || null;
 // Cùng quy tắc với server (lib/permissions.js boardDeptMismatch): vai BTGĐ nên trùng đúng thành viên bộ phận Ban Tổng Giám đốc.
 function boardMismatch(role, departmentId) {
-  if (role === 'admin') return null;
-  const inBoard = BOARD_DEPT_CODES.includes(String(deptById(departmentId)?.code || '').toUpperCase());
-  if (role === 'director' && !inBoard) return 'Vai Ban Tổng Giám đốc nhưng không thuộc bộ phận Ban Tổng Giám đốc';
-  if (role !== 'director' && inBoard) return 'Thuộc bộ phận Ban Tổng Giám đốc nhưng không có vai Ban Tổng Giám đốc';
+  if (isItUser({ role })) return null;
+  const inBoard = (catalogCache?.boardDeptCodes || ['BTGD']).includes(String(deptById(departmentId)?.code || '').toUpperCase());
+  if (isBoardUser({ role }) && !inBoard) return 'Vai Ban Tổng Giám đốc nhưng không thuộc bộ phận Ban Tổng Giám đốc';
+  if (!isBoardUser({ role }) && inBoard) return 'Thuộc bộ phận Ban Tổng Giám đốc nhưng không có vai Ban Tổng Giám đốc';
   return null;
 }
 function scopeText(u) {
-  if (u.role !== 'director') return '<span class="muted">—</span>';
+  if (!isBoardUser(u)) return '<span class="muted">—</span>';
   const names = (u.supervisedDepartmentIds || []).map(id => esc(deptById(id)?.name || '#' + id));
   const parts = [u.boardAll ? '<span class="pill info" title="Phạm vi phụ trách: Toàn công ty — BTGĐ phụ trách của mọi việc" data-testid="board-all-pill">Toàn công ty</span>' : '', names.join(', ')].filter(Boolean);
   return parts.length ? parts.join(' ') : '<span class="muted xs">Chưa phụ trách</span>';
+}
+
+// So sánh hai bộ quyền — chỉ còn dùng để XEM nhật ký cũ (Phân quyền từng người trước 24/11/2026, đổi vai).
+const slot = g => g.permissionKey + '|' + g.action;
+let permOrder = [];
+function rememberOrder(cat) { permOrder = cat.permissions.map((p, i) => [p.key, i]); }
+function grantName(cat, g) {
+  const p = cat.permissions.find(x => x.key === g.permissionKey);
+  return `${esc(p ? p.label : g.permissionKey)} <span class="muted xs">· ${ACTION_TEXT[g.action] || esc(g.action)}</span>`;
+}
+function diffGrants(current = [], target = []) {
+  const cur = new Map(current.map(g => [slot(g), g.scope])), next = new Map(target.map(g => [slot(g), g.scope]));
+  const rows = [];
+  for (const [k, scope] of next) {
+    const [permissionKey, action] = k.split('|');
+    if (!cur.has(k)) rows.push({ kind: 'add', permissionKey, action, to: scope });
+    else if (cur.get(k) !== scope) rows.push({ kind: 'change', permissionKey, action, from: cur.get(k), to: scope });
+  }
+  for (const [k, scope] of cur) if (!next.has(k)) { const [permissionKey, action] = k.split('|'); rows.push({ kind: 'remove', permissionKey, action, from: scope }); }
+  const order = new Map(permOrder);
+  return rows.sort((x, y) => (order.get(x.permissionKey) ?? 99) - (order.get(y.permissionKey) ?? 99));
+}
+function diffTable(cat, rows, testid = 'perm-diff') {
+  if (!rows.length) return '<p class="muted sm">Không có khác biệt.</p>';
+  const tag = { add: '<span class="pill ok">Thêm</span>', remove: '<span class="pill warn">Bỏ</span>', change: '<span class="pill">Đổi phạm vi</span>' };
+  return `<table class="table diff-table" data-testid="${testid}"><thead><tr><th>Thay đổi</th><th>Quyền</th><th>Phạm vi</th></tr></thead><tbody>
+    ${rows.map(r => `<tr class="diff-${r.kind}"><td>${tag[r.kind]}</td><td>${grantName(cat, r)}</td><td class="sm">${r.kind === 'add' ? SCOPE_TEXT[r.to] : r.kind === 'remove' ? `<s>${SCOPE_TEXT[r.from]}</s>` : `${SCOPE_TEXT[r.from]} → <b>${SCOPE_TEXT[r.to]}</b>`}</td></tr>`).join('')}</tbody></table>`;
 }
 
 // ---------- Tài khoản ----------
@@ -59,22 +85,23 @@ async function renderUsers(root) {
   const canEdit = can('admin.users', 'operate'), canPerm = can('admin.permissions');
   root.innerHTML = `<div class="page-head"><h1>Tài khoản</h1>${canEdit ? `<button class="btn btn-primary" id="addUser" data-testid="add-user">${ICON.plus}Tạo tài khoản</button>` : ''}</div>
     <p class="muted sm">Mỗi tài khoản có đúng một <b>vai</b>: Ban Tổng Giám đốc, Lãnh đạo bộ phận, Nhân viên hoặc Quản trị hệ thống. Quyền đi theo vai; thành viên Ban Tổng Giám đốc có thêm <b>phạm vi phụ trách</b>.</p>
-    <div class="admin-scroll"><table class="table admin-cards adm-users" data-testid="users-table"><thead><tr><th>Tài khoản</th><th>Họ tên</th><th>Vai</th><th>Bộ phận</th><th>Phụ trách</th><th>Trạng thái</th><th>Đăng nhập gần nhất</th><th></th></tr></thead><tbody>
+    <div class="admin-scroll"><table class="table admin-cards adm-users" data-testid="users-table"><thead><tr><th>Tài khoản</th><th>Họ tên</th><th>Vai</th><th>Bộ phận</th><th>Phụ trách</th><th>Kiêm nhiệm</th><th>Trạng thái</th><th>Đăng nhập gần nhất</th><th></th></tr></thead><tbody>
     ${users.map(u => `<tr data-testid="user-${esc(u.username)}"><td class="card-title" data-label="Tài khoản"><b>${esc(u.username)}</b>${u.isRootAdmin ? ' <span class="pill">Gốc</span>' : ''}</td>
       <td class="adm-name" data-label="Họ tên"><span>${esc(u.fullName)}<span class="muted xs adm-block">${esc(u.displayTitle || '')}</span></span></td>
       <td data-label="Vai"><span>${ROLE_LABEL[u.role] || esc(u.role)}${u.boardMismatch ? ` <span class="pill warn" title="${esc(u.boardMismatch)}" data-testid="board-mismatch-${esc(u.username)}">Lệch bộ phận BTGĐ</span>` : ''}</span></td>
       <td data-label="Bộ phận"><span>${esc(u.department?.name || '—')}${u.department && store.departments.find(d => d.id === u.department.id)?.isActive === false ? ' <span class="muted xs">(đã khoá)</span>' : ''}</span></td>
       <td data-label="Phụ trách" class="sm"><span>${scopeText(u)}</span></td>
+      <td data-label="Kiêm nhiệm" class="sm" data-testid="duties-${esc(u.username)}"><span>${u.duties?.length ? esc(u.duties.join(', ')) : '<span class="muted">—</span>'}</span></td>
       <td data-label="Trạng thái">${u.isActive ? (u.mustChangePw ? '<span class="pill">Chờ đổi mật khẩu</span>' : '<span class="pill">Hoạt động</span>') : '<span class="pill">Đã khoá</span>'}</td>
       <td class="muted sm" data-label="Đăng nhập gần nhất">${u.lastLoginAt ? fmtDateTime(u.lastLoginAt) : '—'}</td>
-      <td class="actions">${canEdit && !u.isRootAdmin ? `<button class="btn btn-ghost btn-sm" data-edit="${u.id}" data-testid="edit-${esc(u.username)}">Sửa</button><button class="btn btn-ghost btn-sm" data-reset="${u.id}">Reset MK</button>` : ''}${canPerm && !u.isRootAdmin ? `<button class="btn btn-ghost btn-sm" data-perm="${u.id}" data-testid="perm-${esc(u.username)}">${u.role === 'director' ? 'Quyền & phụ trách' : 'Quyền'}</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
+      <td class="actions">${canEdit && !u.isRootAdmin ? `<button class="btn btn-ghost btn-sm" data-edit="${u.id}" data-testid="edit-${esc(u.username)}">Sửa</button><button class="btn btn-ghost btn-sm" data-reset="${u.id}">Reset MK</button>` : ''}${canPerm && !u.isRootAdmin ? `<button class="btn btn-ghost btn-sm" data-perm="${u.id}" data-testid="perm-${esc(u.username)}">${isBoardUser(u) ? 'Quyền & phụ trách' : 'Quyền'}</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   root.onclick = async e => {
     if (e.target.closest('#addUser')) return userForm(root);
     const edit = e.target.closest('[data-edit]'); if (edit) return userForm(root, users.find(u => u.id === Number(edit.dataset.edit)));
     const reset = e.target.closest('[data-reset]');
     if (reset) {
       const u = users.find(x => x.id === Number(reset.dataset.reset));
-      const extra = u.role === 'director' ? ' Đây là tài khoản Ban Tổng Giám đốc — Ban Tổng Giám đốc sẽ được thông báo.' : '';
+      const extra = isBoardUser(u) ? ' Đây là tài khoản Ban Tổng Giám đốc — Ban Tổng Giám đốc sẽ được thông báo.' : '';
       if (await confirmDialog(`Reset mật khẩu của ${u.username} về mật khẩu mặc định? Tài khoản sẽ phải đổi mật khẩu ở lần đăng nhập tới.${extra}`, { okText: 'Reset' }))
         await api(`/api/admin/users/${u.id}/reset-password`, { method: 'POST' }).then(() => toast('Đã reset mật khẩu', 'ok')).catch(err => toast(errorMessage(err), 'err'));
       return;
@@ -105,7 +132,7 @@ function userForm(root, user = null) {
     <label class="field">Họ tên<input name="fullName" required value="${esc(user?.fullName || '')}" data-testid="user-fullname"></label>
     <label class="field">Chức danh <span class="muted xs">(vd. Trưởng phòng, Phó trưởng ban — chỉ để hiển thị)</span><input name="displayTitle" value="${esc(user?.displayTitle || '')}"></label>
     <label class="field">Email<input name="email" type="email" value="${esc(user?.email || '')}"></label>
-    <label class="field">Vai<select name="role" data-testid="user-role">${Object.entries(ROLE_LABEL).filter(([k]) => k !== 'deputy').map(([k, v]) => `<option value="${k}"${((user?.role === 'deputy' ? 'manager' : user?.role) || 'member') === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+    <label class="field">Vai<select name="role" data-testid="user-role">${ROLE_OPTIONS.map(k => `<option value="${k}"${(roleKey(user) || ROLE_OPTIONS[2]) === k ? ' selected' : ''}>${ROLE_LABEL[k]}</option>`).join('')}</select></label>
     <label class="field">Bộ phận<select name="departmentId" data-testid="user-department"><option value="">— Không thuộc bộ phận —</option>${departmentOptions(user?.departmentId ?? null)}</select></label>
     ${user ? `<label class="check"><input type="checkbox" name="isActive" ${user.isActive ? 'checked' : ''} data-testid="user-active"> Đang hoạt động</label>` : '<label class="field">Mật khẩu ban đầu<input name="password" type="password" placeholder="Để trống: mật khẩu mặc định" autocomplete="new-password"></label>'}</div>
     <div id="boardBox" class="hidden"></div>
@@ -119,7 +146,7 @@ function userForm(root, user = null) {
   // Vai BTGĐ lệch bộ phận Ban Tổng Giám đốc: cảnh báo, phải xác nhận mới lưu (server kiểm lại).
   function showBoardBox() {
     const warning = boardMismatch(form.elements.role.value, form.elements.departmentId.value || null);
-    const unchanged = user && form.elements.role.value === (user.role === 'deputy' ? 'manager' : user.role) && String(form.elements.departmentId.value || '') === String(user.departmentId ?? '');
+    const unchanged = user && form.elements.role.value === roleKey(user) && String(form.elements.departmentId.value || '') === String(user.departmentId ?? '');
     if (!warning || unchanged) { boardBox.className = 'hidden'; boardBox.innerHTML = ''; return; }
     boardBox.className = 'admin-box warn';
     boardBox.innerHTML = `<b>${esc(warning)}.</b> <span class="muted sm">Vai Ban Tổng Giám đốc nên trùng đúng thành viên bộ phận Ban Tổng Giám đốc.</span>
@@ -127,11 +154,11 @@ function userForm(root, user = null) {
   }
   // Đổi vai: quyền đổi theo vai mới (không còn "áp hồ sơ quyền").
   function showRoleBox() {
-    const role = form.elements.role.value, old = user.role === 'deputy' ? 'manager' : user.role;
+    const role = form.elements.role.value, old = roleKey(user);
     if (role === old) { roleBox.classList.add('hidden'); roleBox.innerHTML = ''; return; }
     roleBox.className = 'admin-box';
     roleBox.innerHTML = `<h4>Đổi vai: ${esc(ROLE_LABEL[old] || old)} → ${esc(ROLE_LABEL[role])}</h4>
-      <p class="muted sm">Quyền của tài khoản đổi ngay theo vai mới.${role === 'director' ? ' Ban Tổng Giám đốc sẽ được thông báo; đặt phạm vi phụ trách ở nút "Quyền & phụ trách".' : ''}${old === 'director' ? ' Phạm vi phụ trách (toàn công ty, bộ phận) của tài khoản sẽ được bỏ.' : ''}</p>`;
+      <p class="muted sm">Quyền của tài khoản đổi ngay theo vai mới.${isBoardUser({ role }) ? ' Ban Tổng Giám đốc sẽ được thông báo; đặt phạm vi phụ trách ở nút "Quyền & phụ trách".' : ''}${isBoardUser({ role: old }) ? ' Phạm vi phụ trách (toàn công ty, bộ phận) của tài khoản sẽ được bỏ.' : ''}</p>`;
   }
   // Khoá tài khoản (nghỉ việc): hiện số đếm khối lượng đang có + tuỳ chọn trả việc về lãnh đạo bộ phận.
   async function showLockBox() {
@@ -182,23 +209,21 @@ function userForm(root, user = null) {
 
 // Quyền của vai (CHỈ XEM) + phạm vi phụ trách (chỉ tài khoản vai Ban Tổng Giám đốc).
 async function roleViewer(root, user) {
-  const [{ grants }, cat] = await Promise.all([api(`/api/admin/users/${user.id}/permissions`), getCatalog()]);
-  const current = new Map(grants.map(g => [g.permissionKey + '|' + g.action, g.scope]));
+  const cat = await getCatalog();
   const canWrite = can('admin.permissions', 'operate');
-  const board = user.role === 'director';
+  const board = isBoardUser(user);
   const supervised = new Set(user.supervisedDepartmentIds || []);
   const depts = store.departments.filter(d => d.isActive || supervised.has(d.id));
   const modal = openModal(`<h2>${board ? 'Quyền & phụ trách' : 'Quyền'}: ${esc(user.fullName)} (${esc(user.username)})</h2>
-    <p class="muted sm" data-testid="perm-state">Vai: <b>${esc(ROLE_LABEL[user.role] || user.role)}</b>. Quyền đi theo vai — muốn đổi quyền thì đổi vai, hoặc giao kiêm nhiệm / vai trên dự án. Không chỉnh quyền từng người.</p>
+    <p class="muted sm" data-testid="perm-state">Vai: <b>${esc(ROLE_LABEL[user.role] || user.role)}</b>. Quyền đi theo vai — muốn đổi quyền thì đổi vai, hoặc giao kiêm nhiệm / quan hệ với dự án (Chủ dự án, Thành viên). Không chỉnh quyền từng người.</p>
     ${board ? `<div class="admin-box" data-testid="perm-board-all-box"><h4>Phạm vi phụ trách</h4>
       <p class="muted xs">BTGĐ phụ trách của một việc: sửa kế hoạch, người giao, duyệt gia hạn, duyệt việc mốc / đường găng. Mọi thành viên Ban Tổng Giám đốc đều xem toàn công ty.</p>
       <label class="check"><input type="checkbox" id="scopeAll" data-testid="perm-board-all"${user.boardAll ? ' checked' : ''}${canWrite ? '' : ' disabled'}> <b>Toàn công ty</b> — BTGĐ phụ trách của mọi việc ở mọi bộ phận</label>
       <div class="muted sm">Phó Tổng Giám đốc phụ trách các bộ phận:</div>
       <div class="scope-depts">${depts.map(d => `<label class="check"><input type="checkbox" data-scope-dept="${d.id}" data-testid="scope-dept-${esc(d.code)}"${supervised.has(d.id) ? ' checked' : ''}${canWrite ? '' : ' disabled'}> ${esc(d.name)}${d.supervisor && d.supervisor.id !== user.id ? ` <span class="muted xs">(đang: ${esc(d.supervisor.fullName)})</span>` : ''}</label>`).join('')}</div></div>` : ''}
-    <div class="admin-scroll"><table class="table perm-grid" data-testid="role-grid"><thead><tr><th>Mảng</th><th>Quyền</th><th>Xem</th><th>Thao tác</th></tr></thead><tbody>
-    ${cat.permissions.map(p => `<tr data-row="${p.key}"><td class="muted sm">${esc(p.group)}</td><td><b>${esc(p.label)}</b><div class="muted xs">${esc(p.description)}</div></td>
-      ${['VIEW', 'OPERATE'].map(action => p.actions.includes(action) ? `<td class="sm" data-testid="grant-${p.key}-${action}">${current.get(p.key + '|' + action) ? SCOPE_TEXT[current.get(p.key + '|' + action)] : (action === 'VIEW' && current.get(p.key + '|OPERATE') ? SCOPE_TEXT[current.get(p.key + '|OPERATE')] : '<span class="muted">—</span>')}</td>` : '<td></td>').join('')}</tr>`).join('')}
-    </tbody></table></div><p class="error" id="permError"></p>
+    <div class="admin-scroll"><table class="table perm-grid" data-testid="role-grid"><thead><tr><th>Chức năng</th><th>${esc(ROLE_LABEL[user.role] || user.role)} được làm</th></tr></thead><tbody>
+    ${(cat.roleSummary?.[roleKey(user)] || []).map(([k, v], i) => `<tr data-testid="role-line-${i}"><td><b>${esc(k)}</b></td><td class="sm">${esc(v)}</td></tr>`).join('')}
+    </tbody></table></div><p class="muted xs">${esc(cat.roleSummaryNote || '')}</p><p class="error" id="permError"></p>
     <div class="modal-actions"><button class="btn btn-ghost" data-close>Đóng</button>${board && canWrite ? '<button class="btn btn-primary" data-save data-testid="perm-save">Lưu phạm vi phụ trách</button>' : ''}</div>`, { wide: true });
   modal.querySelector('[data-close]').onclick = () => closeModal();
   modal.querySelector('[data-save]')?.addEventListener('click', async () => {

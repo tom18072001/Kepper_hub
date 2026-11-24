@@ -47,8 +47,8 @@ test('2. Quản trị: tạo bộ phận, tạo tài khoản, phân quyền, nh�
   // Quyền đi theo vai: chỉ xem, không chỉnh từng người (một hệ quy chiếu, 24/11/2026).
   await page.getByTestId('perm-nv.marketing').click();
   await expect(page.getByTestId('perm-state')).toContainText('Nhân viên');
-  await expect(page.getByTestId('grant-work.view-VIEW')).toHaveText('Bộ phận mình');
-  await expect(page.getByTestId('grant-reports.kpi-VIEW')).toHaveText('—');
+  await expect(page.getByTestId('role-grid')).toContainText('Không tạo; quản lý dự án mình là Chủ dự án');
+  await expect(page.getByTestId('role-grid')).not.toContainText('Mọi người, mọi bộ phận');
   await expect(page.getByTestId('perm-save')).toHaveCount(0);
   await page.locator('.modal [data-close]').click();
 

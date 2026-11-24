@@ -379,7 +379,7 @@ module.exports.runVanthuReminders = async function runVanthuReminders(prisma, no
   const leaders = new Map();
   const leadersOf = async deptId => {
     if (!deptId) return [];
-    if (!leaders.has(deptId)) leaders.set(deptId, (await prisma.user.findMany({ where: { ...ACTIVE_USER, departmentId: deptId }, include: { permissions: true } })).filter(H.isLeader).map(u => u.id));
+    if (!leaders.has(deptId)) leaders.set(deptId, (await prisma.user.findMany({ where: { ...ACTIVE_USER, departmentId: deptId } })).filter(H.isLeader).map(u => u.id));
     return leaders.get(deptId);
   };
   let sent = 0;

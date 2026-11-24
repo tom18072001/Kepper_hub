@@ -3,7 +3,7 @@
 // Gần đây: chỉ lưu id việc (và id dự án) theo người dùng; tên việc tải lại qua API mỗi lần mở, nên việc đã mất quyền xem không hiện.
 import { api } from '../api.js';
 import { store, can, isItAdmin } from '../store.js';
-import { $, esc, debounce, uiPref } from '../util.js';
+import { $, esc, debounce, uiPref, isBoardUser } from '../util.js';
 import * as shortcuts from '../shortcuts.js';
 import { PAGE_TITLES } from '../shell.js';
 
@@ -16,7 +16,7 @@ const recentCache = new Map(); // id → { id, code, title, projectId, projectNa
 const fold = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 const matches = (e, q) => !q || fold(q).split(/\s+/).filter(Boolean).every(t => fold(`${e.label} ${e.words || ''}`).includes(t));
 
-const isDirector = () => store.me?.permissions?.['work.approve']?.operate === 'SYSTEM';
+const isDirector = () => isBoardUser(store.me);
 const panel = () => { const p = $('#itemPanel'); return p && !p.classList.contains('hidden') ? p : null; };
 const projectInView = () => Number((location.hash.match(/^#\/projects\/(\d+)/) || [])[1]) || null;
 // Phím G + chữ: đọc từ tooltip menu do shortcuts.js gắn ("Điều hành (G O)") — chỉ hiện gợi ý khi phím thật sự chạy.

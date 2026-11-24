@@ -99,13 +99,21 @@ test('Nhân sự, Đối tác (đang tắt trên bản thật): BTGĐ theo vai, 
   expect('giá trị hợp đồng đối tác bộ phận 2', can('view', 'crm.engagement', { departmentId: 2 }), ['tgd', 'ptgd', 'lead']);
 });
 
-test('Dự án: Người xem chỉ xem; quản trị không thấy dự án', () => {
-  const project = { id: 7, departmentId: 2, visibility: 'DEPARTMENT', kind: 'KANBAN', archivedAt: null, leadId: null };
-  const rights = (n, role) => projectRights(U[n], project, role ? { role } : null);
-  assert.deepEqual(rights('lead', 'VIEWER'), { canView: true, canEdit: false, canManage: false, canDelete: false, memberRole: 'VIEWER' });
-  assert.equal(rights('staff', 'VIEWER').canEdit, false);
-  assert.equal(rights('staff', 'MEMBER').canEdit, true);
-  assert.equal(rights('staff', null).canEdit, true, 'nhân viên cùng bộ phận vẫn làm việc trong dự án bộ phận');
+test('Dự án: quan hệ chỉ CỘNG quyền — Người xem chỉ được thêm quyền xem; quyền từ vai giữ nguyên; quản trị không thấy dự án', () => {
+  const dept = { id: 7, departmentId: 2, visibility: 'DEPARTMENT', kind: 'KANBAN', archivedAt: null, leadId: null };
+  const shared = { ...dept, id: 8, visibility: 'PUBLIC' };
+  const rights = (n, role, project = dept) => projectRights(U[n], project, role ? { role } : null);
+  // Người không có quyền sửa từ vai (nhân viên bộ phận khác, dự án dùng chung): Người xem chỉ xem; Thành viên thì sửa được.
+  assert.deepEqual(rights('pmo', 'VIEWER', shared), { canView: true, canEdit: false, canManage: false, canDelete: false, memberRole: 'VIEWER' });
+  assert.equal(rights('pmo', 'MEMBER', shared).canEdit, true);
+  // Ai đã có quyền từ vai thì đặt làm Người xem cũng không mất: BTGĐ, lãnh đạo / nhân viên bộ phận của dự án bộ phận.
+  for (const [n, p] of [['tgd', shared], ['ptgd', dept], ['lead', dept]]) {
+    const r = rights(n, 'VIEWER', p);
+    assert.equal(r.canEdit, true, n + ' giữ quyền sửa');
+    assert.equal(r.canManage, rights(n, null, p).canManage, n + ' giữ quyền quản lý từ vai');
+  }
+  assert.equal(rights('tgd', 'VIEWER', shared).canManage, true, 'BTGĐ là Người xem vẫn quản lý dự án');
+  assert.equal(rights('staff', 'VIEWER').canEdit, true, 'nhân viên cùng bộ phận vẫn làm việc trong dự án bộ phận');
   assert.equal(rights('it', 'OWNER').canView, false);
 });
 
@@ -141,33 +149,85 @@ test('vai quyết định, không phải bộ quyền lưu riêng: vai Ban TGĐ 
   assert.match(P.boardDeptMismatch(narrowed.role, { code: 'TH' }), /không thuộc bộ phận Ban Tổng Giám đốc/, 'quản trị được cảnh báo');
 });
 
-// ---------- Quét mã: cấm so chuỗi vai / lọc theo bảng quyền từng người ngoài lib/permissions.js ----------
-// Tệp PR #40 (Báo cáo tuần) đang sửa: chuyển sang hàm vai sau khi #40 merge (rồi bỏ khỏi danh sách này).
-const PENDING_PR40 = new Set(['services/weekly-data.js', 'routes/reports.js', 'services/alerts.js']);
-const FORBIDDEN = [
-  [/\brole\s*[!=]==?\s*['"](director|manager|deputy|member|admin)['"]/, 'so chuỗi vai'],
-  [/\brole:\s*['"](director|manager|deputy|member|admin)['"]/, 'lọc CSDL theo chuỗi vai'],
-  [/\brole:\s*\{\s*(not|in)\s*:\s*[\['"]/, 'lọc CSDL theo chuỗi vai'],
-  [/\[\s*['"](director|manager|deputy)['"]/, 'danh sách chuỗi vai'],
-  [/permissions:\s*\{\s*some\b/, 'lọc theo bảng quyền từng người (quyền giờ suy từ vai)'],
+// ---------- Quét mã: chốt "một hệ quy chiếu" ----------
+// Quét server/src, server/scripts, web/js THEO CÚ PHÁP: bỏ chú thích, quét cả tệp (bắt được cách viết nhiều dòng), không phụ thuộc
+// cách viết so sánh (===, đảo vế, includes, switch/case, Prisma in / notIn…):
+//   • chuỗi giá trị vai 'director' | 'manager' | 'deputy' | 'member' ở BẤT KỲ đâu; 'admin' khi đứng gần chữ role;
+//   • đọc / lọc bảng quyền lưu riêng từng người: userPermission, `permissions: { some`, `permissions: true`, `.permissions.`.
+// Chỉ nơi định nghĩa vai được dùng: server lib/permissions.js, web js/util.js (+ js/store.js đọc bảng quyền-theo-vai của chính mình).
+const APP = path.join(__dirname, '..', '..', '..');
+const ROOTS = [['server/src', path.join(APP, 'server', 'src')], ['server/scripts', path.join(APP, 'server', 'scripts')], ['web/js', path.join(APP, 'web', 'js')]];
+const ALLOW = {
+  'server/src/lib/permissions.js': 'nơi định nghĩa vai và bảng quyền theo vai',
+  'web/js/util.js': 'nơi so giá trị vai duy nhất trên giao diện',
+  'server/scripts/sync-role-grants.js': 'đồng bộ bảng quyền cũ để quay lại bản trước (chỉ ghi qua permissions.js)',
+  'server/src/seed.js': 'dữ liệu GIẢ (khai báo vai của tài khoản mẫu)',
+  'server/src/seed-showcase.js': 'dữ liệu GIẢ',
+  'server/src/seed-playground.js': 'dữ liệu GIẢ',
+  'server/src/tidy-demo.js': 'dọn dữ liệu GIẢ',
+};
+const ALLOW_RULE = { 'web/js/store.js': ['bảng quyền'] }; // can() đọc bảng quyền-theo-vai server trả cho chính người dùng
+// Tệp PR #40 (Báo cáo tuần) đang sửa: chuyển sang hàm vai sau khi #40 merge. Test FAIL khi một tệp trong danh sách đã hết vi phạm
+// (buộc gỡ khỏi danh sách) — danh sách không thể nằm lại mãi.
+const PENDING_PR40 = ['server/src/services/weekly-data.js', 'server/src/routes/reports.js', 'server/src/services/alerts.js', 'web/js/views/weekly.js'];
+const RULES = [
+  ['chuỗi vai', /['"`](director|manager|deputy|member)['"`]/g, 'code'],
+  ['chuỗi vai', /\brole\b[^;]{0,60}?['"`]admin['"`]|['"`]admin['"`][^;]{0,60}?\brole\b/g, 'code'],
+  ['bảng quyền', /\buserPermission\b/g, 'bare'],
+  ['bảng quyền', /\bpermissions\s*:\s*(\{\s*some|true)\b/g, 'bare'],
+  ['bảng quyền', /\b(me|user|u|actor|target|req\.user)\??\.permissions\b/g, 'bare'],
 ];
-test('quét mã: không so chuỗi vai, không lọc theo bảng quyền từng người ngoài lib/permissions.js', () => {
-  const root = path.join(__dirname, '..');
-  const files = [];
-  const walk = dir => { for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, e.name);
-    if (e.isDirectory()) { if (!['node_modules', '__fixtures__'].includes(e.name)) walk(p); }
-    else if (/\.(m?js)$/.test(e.name) && !/\.test\.m?js$/.test(e.name)) files.push(p);
-  } };
-  walk(root);
+// Bỏ chú thích (giữ xuống dòng để đếm dòng); bản 'bare' bỏ thêm nội dung chuỗi.
+const TOKENS = /('(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`)|(\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g;
+const blank = t => t.replace(/[^\n]/g, ' ');
+const codeOf = src => src.replace(TOKENS, (m, str) => (str ? m : blank(m)));
+const bareOf = src => src.replace(TOKENS, (m, str) => (str ? m[0] + blank(m.slice(1, -1)) + m.slice(-1) : blank(m)));
+function scanFile(src) {
+  const text = { code: codeOf(src), bare: bareOf(src) };
   const hits = [];
-  for (const file of files) {
-    const rel = path.relative(root, file).split(path.sep).join('/');
-    if (rel === 'lib/permissions.js' || /^seed/.test(rel) || rel === 'tidy-demo.js' || PENDING_PR40.has(rel)) continue;
-    fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
-      for (const [re, why] of FORBIDDEN) if (re.test(line)) hits.push(`${rel}:${i + 1} (${why}): ${line.trim().slice(0, 120)}`);
-    });
+  for (const [why, re, kind] of RULES) for (const m of text[kind].matchAll(re)) {
+    const line = text[kind].slice(0, m.index).split('\n').length;
+    hits.push({ why, line, snippet: src.split('\n')[line - 1].trim().slice(0, 110) });
   }
-  assert.deepEqual(hits, [], 'Hỏi vai qua lib/permissions.js (isBoard, isDeptLeader, isItAdmin, roleRank, *_WHERE, rolesWith):\n' + hits.join('\n'));
-  assert.ok(files.length > 50, 'quét được mã nguồn');
+  return hits;
+}
+function sources() {
+  const out = [];
+  for (const [prefix, dir] of ROOTS) {
+    const walk = d => { for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) { if (!['node_modules', '__fixtures__', 'vendor'].includes(e.name)) walk(p); }
+      else if (/\.m?js$/.test(e.name) && !/\.test\.m?js$/.test(e.name)) out.push([prefix + '/' + path.relative(dir, p).split(path.sep).join('/'), p]);
+    } };
+    walk(dir);
+  }
+  return out;
+}
+
+test('quét mã: chính bộ quét bắt được mọi cách viết đã gặp (đảo vế, includes, Prisma in / notIn, switch, nhiều dòng, bảng quyền)', () => {
+  const bad = [
+    "if ('director' === u.role) x();", "if ([ 'manager', 'deputy' ].includes(u.role)) x();", "where: { role: { notIn: ['admin'] } }",
+    "switch (u.role) { case 'member': break; }", "if ((u.role || '') === 'director') x();", "const ok = u.permissions.some(g => g);",
+    "await tx.userPermission.findMany({});", "where: {\n  role:\n    'director' }", "include: { permissions: true }", "where: { permissions: { some: {} } }",
+  ];
+  for (const src of bad) assert.ok(scanFile(src).length > 0, 'phải bắt: ' + src);
+  const good = ["// so 'director' trong chú thích thì không sao", "app.get('/api/admin/users', h)", "if (parts[0] === 'admin') route()", "cat.permissions.map(p => p)", "x = 'admin.users'"];
+  for (const src of good) assert.deepEqual(scanFile(src), [], 'không được bắt nhầm: ' + src);
+});
+
+test('quét mã: server, scripts, web không so chuỗi vai / không đọc bảng quyền từng người ngoài nơi định nghĩa vai', () => {
+  const files = sources();
+  assert.ok(files.length > 80, 'quét được mã nguồn server + scripts + web');
+  const hits = [], pendingHits = new Map(PENDING_PR40.map(f => [f, 0]));
+  for (const [rel, file] of files) {
+    if (ALLOW[rel]) continue;
+    for (const h of scanFile(fs.readFileSync(file, 'utf8'))) {
+      if ((ALLOW_RULE[rel] || []).includes(h.why)) continue;
+      if (pendingHits.has(rel)) { pendingHits.set(rel, pendingHits.get(rel) + 1); continue; }
+      hits.push(`${rel}:${h.line} (${h.why}): ${h.snippet}`);
+    }
+  }
+  assert.deepEqual(hits, [], 'Hỏi vai qua lib/permissions.js (server) hoặc web/js/util.js (giao diện):\n' + hits.join('\n'));
+  const cleared = [...pendingHits].filter(([, n]) => n === 0).map(([f]) => f);
+  assert.deepEqual(cleared, [], 'Tệp đã hết vi phạm — gỡ khỏi PENDING_PR40: ' + cleared.join(', '));
 });

@@ -23,7 +23,7 @@ const PERMISSIONS = [
   P('Báo cáo', 'reports.export', 'Xuất Excel', 'Xuất danh sách công việc ra Excel.', ['OPERATE']),
   P('Quản trị', 'admin.departments', 'Quản lý bộ phận', 'Thêm, sửa, khoá bộ phận.', ACTIONS, ['SYSTEM']),
   P('Quản trị', 'admin.users', 'Quản lý tài khoản', 'Tạo, sửa, khoá tài khoản, reset mật khẩu.', ACTIONS, ['SYSTEM']),
-  P('Quản trị', 'admin.permissions', 'Phân quyền', 'Cấp hoặc thu hồi quyền của tài khoản.', ACTIONS, ['SYSTEM']),
+  P('Quản trị', 'admin.permissions', 'Vai & phạm vi phụ trách', 'Xem quyền theo vai của tài khoản; đặt phạm vi phụ trách của thành viên Ban Tổng Giám đốc.', ACTIONS, ['SYSTEM']),
   P('Quản trị', 'admin.labels', 'Quản lý nhãn', 'Quản lý nhãn dùng chung.', ['OPERATE'], ['SYSTEM']),
   P('Quản trị', 'admin.audit', 'Xem nhật ký hệ thống', 'Xem ai đã làm gì, lúc nào, trên dữ liệu nào.', ['VIEW'], ['SYSTEM']),
 ];
@@ -40,13 +40,17 @@ const isBoard = user => !!user && !isItAdmin(user) && roleOf(user) === 'director
 const isDeptLeader = user => !!user && !isItAdmin(user) && roleOf(user) === 'manager' && user.departmentId != null;
 // Thứ bậc trên cây tổ chức: 0 Ban Tổng Giám đốc, 1 Lãnh đạo bộ phận, 2 Nhân viên (quản trị hệ thống: null).
 const roleRank = user => (isItAdmin(user) ? null : isBoard(user) ? 0 : roleOf(user) === 'manager' ? 1 : 2);
+// Người duyệt / tiếp nhận ở cấp MỘT bộ phận (một định nghĩa cho hàng chờ duyệt, ngữ cảnh việc, cảnh báo): Lãnh đạo bộ phận của bộ phận
+// đó; với bộ phận Ban Tổng Giám đốc là các thành viên BTGĐ trong bộ phận. Lọc theo bộ phận ở nơi gọi (user.departmentId).
+const isDeptApprover = user => isDeptLeader(user) || (isBoard(user) && user.departmentId != null);
 // Điều kiện Prisma theo vai (thay cho so chuỗi rải rác).
 const IT_WHERE = Object.freeze({ OR: [{ isRootAdmin: true }, { role: 'admin' }] });
 const NOT_IT_WHERE = Object.freeze({ isRootAdmin: false, role: { not: 'admin' } });
 const BOARD_WHERE = Object.freeze({ isRootAdmin: false, role: 'director' });
-const LEADER_WHERE = Object.freeze({ isRootAdmin: false, role: { in: ['manager', 'deputy'] } });
+const DEPT_APPROVER_WHERE = Object.freeze({ isRootAdmin: false, role: { in: ['director', 'manager', 'deputy'] }, departmentId: { not: null } });
 // Bộ phận Ban Tổng Giám đốc (theo mã): vai BTGĐ nên trùng đúng thành viên bộ phận này — lệch thì quản trị được cảnh báo.
-const BOARD_DEPT_CODES = ['BTGD', 'BGD'];
+// Dữ liệu GIẢ (SEED_DEMO=true: bản thử, e2e) đặt mã 'BGD' cho bộ phận này; máy chạy thật chỉ nhận 'BTGD'.
+const BOARD_DEPT_CODES = Object.freeze(['BTGD', ...(process.env.SEED_DEMO === 'true' ? ['BGD'] : [])]);
 const isBoardDept = dept => !!dept && BOARD_DEPT_CODES.includes(String(dept.code || '').toUpperCase());
 // Cảnh báo khi vai BTGĐ và bộ phận BTGĐ không khớp (không chặn cứng — cơ cấu có thể đổi).
 function boardDeptMismatch(role, dept) {
@@ -59,6 +63,8 @@ function boardDeptMismatch(role, dept) {
 const grant = (permissionKey, action, scope) => ({ permissionKey, action, scope });
 const allOf = scope => PERMISSIONS.flatMap(p => p.actions.filter(a => p.scopes.includes(scope)).map(a => grant(p.key, a, scope)));
 
+// Vai mặc định của tài khoản mới (Nhân viên).
+const DEFAULT_ROLE = 'member';
 const ROLES = {
   director: { label: 'Ban Tổng Giám đốc' },
   manager: { label: 'Lãnh đạo bộ phận' },
@@ -83,6 +89,47 @@ const ROLE_PROFILES = {
   ],
 };
 
+// Bảng quyền của từng vai BẰNG LỜI (ma trận 5.4, docs/de-xuat-mot-he-quy-chieu-phan-quyen.md) — hiện ở Quản trị → Tài khoản → "Quyền".
+// Quyền thật thực thi ở máy chủ (permissionScope, lib/policy.js, services/task-access.js…); role-matrix.test.js chốt từng ô.
+const ROLE_SUMMARY = {
+  director: [
+    ['Xem dự án, công việc', 'Toàn công ty; xem đầy đủ mọi việc, bình luận được'],
+    ['Tạo, quản lý dự án', 'Mọi bộ phận, kể cả dự án Master Timeline (MTL)'],
+    ['Kế hoạch của việc, duyệt gia hạn, duyệt việc mốc / đường găng', 'Việc trong phạm vi phụ trách (Toàn công ty hoặc các bộ phận được chọn) và việc mình giao'],
+    ['Xoá, đặt lặp lại việc', 'Việc trong phạm vi phụ trách và việc mình giao'],
+    ['Báo cáo tuần', 'Không lập; xem bản tổng hợp đầy đủ; kết luận giao ban; chọn thư ký, PMO'],
+    ['KPI & phân tích', 'Mọi người, mọi bộ phận'],
+    ['Tài liệu dự án', 'Mọi dự án (Hub + NAS)'],
+    ['Văn thư', 'Mọi mức mật; vào sổ, sửa, huỷ'],
+    ['Nhân sự, đối tác', 'Mọi bộ phận (số CCCD: chỉ người phụ trách nhân sự)'],
+  ],
+  manager: [
+    ['Xem dự án, công việc', 'Dự án của bộ phận, dự án dùng chung, dự án mình là thành viên; sổ giao việc: việc liên quan đến mình và bộ phận'],
+    ['Tạo, quản lý dự án', 'Dự án thường của bộ phận mình; dự án mình là Chủ dự án'],
+    ['Kế hoạch của việc', 'Việc mình giao; chọn người cho việc giao về bộ phận'],
+    ['Duyệt', 'Việc mình giao; cấp "Lãnh đạo bộ phận chủ trì" của quy trình duyệt'],
+    ['Báo cáo tuần', 'Lập cho bộ phận; xem bản tổng hợp tóm tắt'],
+    ['KPI', 'Của chính mình'],
+    ['Tài liệu dự án', 'Dự án mình là thành viên'],
+    ['Văn thư', 'Công khai / Nội bộ; Hạn chế của bộ phận mình; vào sổ dãy D7 của bộ phận'],
+    ['Nhân sự, đối tác', 'Thông tin cơ bản người trong bộ phận, duyệt nghỉ phép / chấm công; đối tác của bộ phận (gồm giá trị hợp đồng)'],
+  ],
+  member: [
+    ['Xem dự án, công việc', 'Dự án của bộ phận, dự án dùng chung, dự án mình là thành viên; sổ giao việc: việc liên quan đến mình'],
+    ['Tạo, quản lý dự án', 'Không tạo; quản lý dự án mình là Chủ dự án'],
+    ['Kế hoạch của việc', 'Việc mình giao; làm phần việc mình chủ trì / phối hợp'],
+    ['Báo cáo tuần', 'Lập cho bộ phận'],
+    ['KPI', 'Của chính mình'],
+    ['Tài liệu dự án', 'Dự án mình là thành viên'],
+    ['Văn thư', 'Công khai / Nội bộ; Hạn chế của bộ phận mình; văn bản mình xử lý'],
+    ['Nhân sự, đối tác', 'Hồ sơ của mình; đối tác của bộ phận (trừ giá trị hợp đồng)'],
+  ],
+  admin: [
+    ['Quản trị', 'Tài khoản, bộ phận, nhãn, nhật ký hệ thống; đặt phạm vi phụ trách của Ban Tổng Giám đốc'],
+    ['Nội dung nghiệp vụ', 'Không xem: dự án, công việc, báo cáo, KPI, tài liệu, văn thư, nhân sự, đối tác'],
+  ],
+};
+const ROLE_SUMMARY_NOTE = 'Cộng thêm theo quan hệ với từng việc / dự án (người giao, người chủ trì, Chủ dự án…) và theo kiêm nhiệm (Thư ký giao ban, PMO, Phụ trách nhân sự, Văn thư, Pháp chế). Quan hệ chỉ cộng quyền, không bớt quyền của vai.';
 function definition(key) { return BY_KEY[key] || null; }
 function validGrant(value) {
   if (!value || typeof value !== 'object') return false;
@@ -118,11 +165,20 @@ function accessMap(user) {
 function canResetPassword(actor, target) {
   return !!actor && !!target && hasPermission(actor, 'admin.users', 'OPERATE') && Number(actor.id) !== Number(target.id) && !target.isRootAdmin;
 }
+// GIAI ĐOẠN CHUYỂN TIẾP (để quay lại bản cũ): ghi bảng UserPermission đúng bộ quyền mặc định của vai. Mã mới KHÔNG đọc bảng này;
+// mã cũ đọc nó. Gọi khi tạo tài khoản và khi đổi vai; scripts/sync-role-grants.js đồng bộ toàn bộ trước khi quay lại bản cũ.
+async function syncRoleGrants(tx, user, grantedById = null) {
+  if (!user || user.isRootAdmin) return 0;
+  const grants = ROLE_PROFILES[roleOf(user)] || [];
+  await tx.userPermission.deleteMany({ where: { userId: user.id } });
+  if (grants.length) await tx.userPermission.createMany({ data: grants.map(g => ({ ...g, userId: user.id, grantedById, source: 'ROLE_PROFILE' })) });
+  return grants.length;
+}
 function catalog() {
-  return { permissions: PERMISSIONS, actions: ACTIONS, scopes: SCOPES, roles: ROLES, roleProfiles: ROLE_PROFILES };
+  return { permissions: PERMISSIONS, actions: ACTIONS, scopes: SCOPES, roles: ROLES, roleProfiles: ROLE_PROFILES, roleSummary: ROLE_SUMMARY, roleSummaryNote: ROLE_SUMMARY_NOTE, boardDeptCodes: BOARD_DEPT_CODES };
 }
 
 module.exports = {
-  PERMISSIONS, ROLES, ROLE_PROFILES, isBusinessKey, isItAdmin, isBoard, isDeptLeader, roleOf, NOT_IT_WHERE, BOARD_WHERE, LEADER_WHERE,
-  BOARD_DEPT_CODES, isBoardDept, rolesWith, IT_WHERE, roleRank, boardDeptMismatch, validGrant, permissionScope, hasPermission, canAccessDepartment, accessMap, canResetPassword, catalog,
+  PERMISSIONS, ROLES, DEFAULT_ROLE, ROLE_PROFILES, isBusinessKey, isItAdmin, isBoard, isDeptLeader, roleOf, NOT_IT_WHERE, BOARD_WHERE, isDeptApprover, DEPT_APPROVER_WHERE,
+  BOARD_DEPT_CODES, isBoardDept, rolesWith, IT_WHERE, roleRank, boardDeptMismatch, validGrant, permissionScope, hasPermission, canAccessDepartment, accessMap, canResetPassword, catalog, syncRoleGrants,
 };

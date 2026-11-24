@@ -5,7 +5,7 @@ import { api, download, ApiError } from '../api.js';
 import { store, can, labelsFor, createProjectLabel, deptName, userById } from '../store.js';
 import { scheduleFields, bindSchedule, readSchedule } from './recurring-form.js';
 import { drawRegister, openPlanImport, openRegisterImport, exportRegister, REG_DL, registerFull, setRegisterFull } from './register.js';
-import { $, $$, esc, avatars, labelChip, prioChip, stateChip, fmtDate, dueClass, PRIORITY, toast, openModal, closeModal, requestCloseModal, multiSelect, readMulti, bindMulti, formData, fromDateInput, confirmDialog, errorMessage, dateInput, deadlineStatus, uiPref, replaceHashParams, debounce } from '../util.js';
+import { $, $$, esc, avatars, labelChip, prioChip, stateChip, fmtDate, dueClass, PRIORITY, toast, openModal, closeModal, requestCloseModal, multiSelect, readMulti, bindMulti, formData, fromDateInput, confirmDialog, errorMessage, dateInput, deadlineStatus, uiPref, replaceHashParams, debounce, isItUser, roleRank, isBoardUser } from '../util.js';
 import { icon } from '../icons.js';
 import { refreshCounters } from '../main.js';
 import { drawCycles, drawIntake, currentCycle } from './project-extra.js';
@@ -674,7 +674,7 @@ function finishInteraction() { if (deferredReload) reloadProject(); else drawBod
 
 export function assignableUsers(project) {
   const ids = new Set(project.members.map(m => m.userId));
-  return store.users.filter(u => u.role !== 'admin' && (ids.has(u.id) || u.departmentId === project.departmentId || ['PUBLIC', 'ASSIGNED'].includes(project.visibility)));
+  return store.users.filter(u => !isItUser(u) && (ids.has(u.id) || u.departmentId === project.departmentId || ['PUBLIC', 'ASSIGNED'].includes(project.visibility)));
 }
 
 export async function reloadProject({ realtime = false, ids = null } = {}) {
@@ -1021,17 +1021,16 @@ function dispatchFields(project, defaults) {
 // "Giao cho": mỗi phòng một nhóm — dòng đầu là cả phòng (trưởng phòng tiếp nhận, phân công), sau đó từng người (lãnh đạo trước).
 // Giá trị: id phòng, hoặc "u:<id người>" (giao thẳng; phòng chủ trì = phòng của người đó, việc coi như đã tiếp nhận).
 function giaoChoOptions(depts, selected = '') {
-  const rank = { manager: 0, deputy: 1, member: 2 };
   return depts.map(d => {
-    const people = store.users.filter(u => u.departmentId === d.id && u.role !== 'admin').sort((a, b) => (rank[a.role] ?? 3) - (rank[b.role] ?? 3) || a.fullName.localeCompare(b.fullName, 'vi'));
+    const people = store.users.filter(u => u.departmentId === d.id && !isItUser(u)).sort((a, b) => roleRank(a) - roleRank(b) || a.fullName.localeCompare(b.fullName, 'vi'));
     return `<optgroup label="${esc(d.name)}"><option value="${d.id}"${String(selected) === String(d.id) ? ' selected' : ''}>${esc(d.name)} (phòng phân công)</option>${people.map(u => `<option value="u:${u.id}"${selected === 'u:' + u.id ? ' selected' : ''}>${esc(u.fullName)}${u.displayTitle ? ' — ' + esc(u.displayTitle) : ''}</option>`).join('')}</optgroup>`;
   }).join('');
 }
 const giaoChoValue = v => (!v ? {} : String(v).startsWith('u:') ? { assigneeIds: [Number(String(v).slice(2))] } : { leadDepartmentId: Number(v) });
 // Người giao: Ban Tổng Giám đốc + chính mình (mặc định là mình nếu là lãnh đạo, ngược lại là Giám đốc).
 function assignerOptions(selected) {
-  const leaders = store.users.filter(u => u.role === 'director' && u.id !== store.me.id);
-  const meDefault = store.me.role === 'director' || !leaders.length;
+  const leaders = store.users.filter(u => isBoardUser(u) && u.id !== store.me.id);
+  const meDefault = isBoardUser(store.me) || !leaders.length;
   const pick = selected ?? (meDefault ? store.me.id : leaders[0].id);
   return [{ id: store.me.id, fullName: store.me.fullName + ' (tôi)' }, ...leaders].map(u => `<option value="${u.id}"${u.id === pick ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('');
 }

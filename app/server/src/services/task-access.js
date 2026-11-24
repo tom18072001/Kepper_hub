@@ -14,7 +14,7 @@
 // taskCapabilities() là hàm THUẦN (không chạm CSDL, test ma trận trong task-access.test.js). Route nạp ngữ cảnh bằng loadTask()
 // rồi kiểm bằng assertCap(); payload chi tiết việc trả `capabilities` để giao diện chỉ dựng ô nhập / nút khi có quyền.
 const { fail } = require('../lib/http');
-const { permissionScope, isItAdmin, isBoard, NOT_IT_WHERE, rolesWith } = require('../lib/permissions');
+const { isItAdmin, isBoard, isDeptApprover, DEPT_APPROVER_WHERE, NOT_IT_WHERE } = require('../lib/permissions');
 
 // ---------- Trường của việc theo phần ----------
 // Kế hoạch: A, B (việc chưa có người giao: chỉ B).
@@ -185,7 +185,7 @@ function assertMove(caps, fromCategory, toCategory) {
 async function orgContext(db, now = new Date()) {
   const [depts, approvers, delegations, active] = await Promise.all([
     db.department.findMany({ select: { id: true, supervisorId: true } }),
-    db.user.findMany({ where: { isActive: true, isRootAdmin: false, role: { in: rolesWith('work.approve', 'OPERATE') } }, include: { permissions: true } }),
+    db.user.findMany({ where: { ...DEPT_APPROVER_WHERE, isActive: true } }),
     db.delegation.findMany({ where: { revokedAt: null, startsAt: { lte: now }, endsAt: { gte: now } }, select: { fromUserId: true, toUserId: true } }),
     db.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE }, select: { id: true, departmentId: true, boardAll: true, role: true, isRootAdmin: true } }),
   ]);
@@ -195,7 +195,7 @@ async function orgContext(db, now = new Date()) {
   const supervisor = new Map(depts.filter(d => d.supervisorId != null && boardIds.has(d.supervisorId)).map(d => [d.id, d.supervisorId]));
   const byDept = new Map();
   for (const u of approvers) {
-    if (u.departmentId == null || !permissionScope(u, 'work.approve', 'OPERATE')) continue;
+    if (!isDeptApprover(u)) continue;
     if (!byDept.has(u.departmentId)) byDept.set(u.departmentId, []);
     byDept.get(u.departmentId).push(u.id);
   }

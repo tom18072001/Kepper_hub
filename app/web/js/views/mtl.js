@@ -2,7 +2,7 @@
 // nhập MTL tổng / MTL bộ phận từ Excel, cài đặt T0 và ngưỡng cảnh báo, KPI tiến độ theo bộ phận / người.
 import { api, download } from '../api.js';
 import { store, deptLink, personLink } from '../store.js';
-import { $, $$, esc, fmtDate, toast, openModal, closeModal, errorMessage, uiPref, replaceHashParams, ago } from '../util.js';
+import { $, $$, esc, fmtDate, toast, openModal, closeModal, errorMessage, uiPref, replaceHashParams, ago, isBoardUser, isLeaderUser, isLeadershipUser } from '../util.js';
 import { icon } from '../icons.js';
 
 const TONE = { NOT_DUE: '', LATE_START: 'warn', ON_TRACK: 'ok', BEHIND: 'warn', AHEAD: 'info', OVERDUE: 'danger', DONE_ON_TIME: 'ok', DONE_LATE: 'warn', CANCELLED: '', NO_PLAN: '' };
@@ -70,7 +70,7 @@ export function latestDraw(body) {
 
 // ---------- Thanh thao tác của dự án MTL ----------
 // Lãnh đạo bộ phận (trưởng / phó, có quyền duyệt): tự tải và nhập MTL của bộ phận mình. Máy chủ kiểm tra lại.
-const isDeptLeader = () => store.me?.departmentId != null && ['UNIT', 'SYSTEM'].includes(store.me?.permissions?.['work.approve']?.operate);
+const isDeptLeader = () => isBoardUser(store.me) || (isLeaderUser(store.me) && store.me?.departmentId != null);
 export function mtlActions(project) {
   if (project.rights.canManage) return `<button class="menu-item" data-mtl="import" data-testid="mtl-import">${icon('upload')}<span>Nhập MTL từ Excel</span></button>
     <button class="menu-item" data-mtl="template" data-testid="mtl-template">${icon('download')}<span>Tải mẫu MTL bộ phận</span></button>
@@ -152,7 +152,7 @@ export async function drawMtlOverview(body, project) {
   </div>`;
   body.onclick = e => { const r = e.target.closest('tr[data-href]'); if (r && !e.target.closest('a,[data-person],[data-dept-link]')) location.hash = r.dataset.href; };
   // KPI theo người: chỉ Ban lãnh đạo / trưởng bộ phận (máy chủ chặn người khác).
-  if (project.rights.canManage || store.me.permissions?.['work.approve']?.operate) api(`/api/projects/${project.id}/mtl-kpi`).then(k => {
+  if (project.rights.canManage || isLeadershipUser(store.me)) api(`/api/projects/${project.id}/mtl-kpi`).then(k => {
     const el = $('#mtlPeople', body); if (!el || !k.rows.length) return;
     el.hidden = false;
     el.innerHTML = `<div class="mtl-h"><h3>KPI tiến độ theo người chủ trì</h3><span class="muted xs">${k.scope === 'UNIT' ? 'bộ phận của bạn' : 'mọi bộ phận'} · chỉ để tham khảo · lần xem được ghi nhật ký</span></div>

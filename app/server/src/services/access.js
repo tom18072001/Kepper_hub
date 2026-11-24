@@ -12,9 +12,9 @@ function projectRights(user, project, member) {
     || (!!viewScope && ['PUBLIC', 'ASSIGNED'].includes(project.visibility))
     || (viewScope === 'UNIT' && sameDept && project.visibility === 'DEPARTMENT');
   const editScope = permissionScope(user, 'work.edit', 'OPERATE');
-  // "Người xem" (VIEWER) của dự án CHỈ XEM — vai trên dự án đặt rõ thắng quyền chung theo vai / bộ phận (24/11/2026).
-  const viewer = isMember && member.role === 'VIEWER';
-  const canEdit = canView && !viewer && !project.archivedAt && (editScope === 'SYSTEM'
+  // Quan hệ với dự án chỉ CỘNG quyền, không bao giờ TRỪ quyền của vai (quyền = vai + quan hệ + kiêm nhiệm):
+  // "Người xem" (VIEWER) chỉ được thêm quyền XEM; ai đã có quyền sửa từ vai (BTGĐ, người cùng bộ phận của dự án bộ phận…) vẫn giữ.
+  const canEdit = canView && !project.archivedAt && (editScope === 'SYSTEM'
     || (!!editScope && isMember && member.role !== 'VIEWER')
     // Sổ giao việc của đơn vị: ai thấy việc (theo quyền xem từng việc) thì cập nhật được việc đó.
     || (!!editScope && project.visibility === 'ASSIGNED')
@@ -23,8 +23,8 @@ function projectRights(user, project, member) {
   // Dự án MTL (kế hoạch chính thức dùng chung): người quản lý = quyền quản lý toàn công ty, chủ dự án (OWNER) hoặc trưởng dự án —
   // không mở cho mọi trưởng / phó của phòng sở hữu dự án (họ là lãnh đạo bộ phận chủ trì phần của mình, xem lib/policy.js).
   const mtl = project.kind === 'MTL';
-  const canManage = !viewer && (manageScope === 'SYSTEM' || (manageScope === 'UNIT' && sameDept && !mtl)
-    || (!isItAdmin(user) && ((isMember && member.role === 'OWNER') || (mtl && project.leadId === user.id))));
+  const canManage = manageScope === 'SYSTEM' || (manageScope === 'UNIT' && sameDept && !mtl)
+    || (!isItAdmin(user) && ((isMember && member.role === 'OWNER') || (mtl && project.leadId === user.id)));
   const deleteScope = permissionScope(user, 'work.delete', 'OPERATE');
   const canDelete = canEdit && (deleteScope === 'SYSTEM' || (deleteScope === 'UNIT' && sameDept) || canManage);
   return { canView, canEdit, canManage, canDelete, memberRole: member ? member.role : null };
@@ -81,7 +81,7 @@ async function delegatedView(prisma, user, item, parent) {
   const project = await prisma.project.findUnique({ where: { id: item.projectId } });
   if (!project || project.deletedAt) return null;
   for (const r of rows) {
-    const from = await prisma.user.findFirst({ where: { id: r.fromUserId, isActive: true }, include: { permissions: true } });
+    const from = await prisma.user.findFirst({ where: { id: r.fromUserId, isActive: true } });
     if (!from) continue;
     const member = await prisma.projectMember.findUnique({ where: { projectId_userId: { projectId: project.id, userId: from.id } } });
     if (projectRights(from, project, member).canView && canSeeItem(from, project, member, item, parent))

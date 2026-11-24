@@ -1,7 +1,7 @@
 // Quản trị: bộ phận, nhãn, tài khoản (vai, phạm vi phụ trách của BTGĐ), bảng quyền theo vai (chỉ xem), nhật ký. Danh bạ người dùng.
 // Một hệ quy chiếu phân quyền (24/11/2026): quyền suy hoàn toàn từ vai — không còn chỉnh quyền từng người.
 const bcrypt = require('bcryptjs');
-const { ROLES, ROLE_PROFILES, isItAdmin, isBoard, roleOf: roleKey, BOARD_WHERE, boardDeptMismatch, canResetPassword, catalog } = require('../lib/permissions');
+const { ROLES, DEFAULT_ROLE, ROLE_PROFILES, isItAdmin, isBoard, isBoardDept, roleOf: roleKey, BOARD_WHERE, boardDeptMismatch, canResetPassword, catalog, syncRoleGrants } = require('../lib/permissions');
 const { DEFAULT_PASSWORD, MIN_PASSWORD_LENGTH } = require('../lib/passwords');
 const { fail, intParam, optionalInt, text } = require('../lib/http');
 const { activity, notify } = require('../services/events');
@@ -156,6 +156,26 @@ async function parentOf(prisma, value, id = null) {
   return parentId;
 }
 
+// Thông báo Ban Tổng Giám đốc khi quản trị đổi vai / bộ phận (đặc tả 5.1(4), mục 10 DET): MỌI lần đổi vai; MỌI lần chuyển người
+// vào / ra bộ phận Ban Tổng Giám đốc; MỌI lần quản trị xác nhận lưu tài khoản lệch vai ↔ bộ phận BTGĐ. Hàm thuần (admin.test.js).
+//   change = { username, fullName, created, oldRole, newRole, oldInBoardDept, newInBoardDept, mismatch }
+function roleNotices(c) {
+  const label = r => ROLES[roleKey({ role: r })]?.label || r;
+  const who = `${c.fullName} (${c.username})`;
+  const out = [];
+  if (c.created) {
+    if (isBoard({ role: c.newRole })) out.push({ title: `Quản trị hệ thống vừa tạo tài khoản vai Ban Tổng Giám đốc ${c.username}`, detail: `${c.fullName} — xem toàn công ty theo vai Ban Tổng Giám đốc` });
+    else if (c.newInBoardDept) out.push({ title: `Quản trị hệ thống vừa tạo tài khoản ${c.username} trong bộ phận Ban Tổng Giám đốc`, detail: `${who} — vai ${label(c.newRole)}` });
+  } else {
+    if (roleKey({ role: c.newRole }) !== roleKey({ role: c.oldRole })) out.push({ title: `Quản trị hệ thống vừa đổi vai tài khoản ${c.username}: ${label(c.oldRole)} → ${label(c.newRole)}`,
+      detail: isBoard({ role: c.newRole }) ? `${c.fullName} — xem toàn công ty theo vai Ban Tổng Giám đốc` : isBoard({ role: c.oldRole }) ? `${c.fullName} — bỏ vai Ban Tổng Giám đốc và phạm vi phụ trách` : c.fullName });
+    if (!c.oldInBoardDept && c.newInBoardDept) out.push({ title: `Quản trị hệ thống vừa chuyển ${c.username} vào bộ phận Ban Tổng Giám đốc`, detail: `${who} — vai ${label(c.newRole)}` });
+    if (c.oldInBoardDept && !c.newInBoardDept) out.push({ title: `Quản trị hệ thống vừa chuyển ${c.username} ra khỏi bộ phận Ban Tổng Giám đốc`, detail: `${who} — vai ${label(c.newRole)}` });
+  }
+  if (c.mismatch) out.push({ title: `Quản trị hệ thống xác nhận lưu tài khoản lệch vai / bộ phận: ${c.username}`, detail: `${c.mismatch} — ${who}` });
+  return out;
+}
+const inBoardDept = async (client, departmentId) => departmentId != null && isBoardDept(await client.department.findUnique({ where: { id: departmentId }, select: { code: true } }));
 // Báo mọi thành viên Ban Tổng Giám đốc đang hoạt động (trừ người thao tác) về thao tác quản trị nhạy cảm.
 async function notifyDirectors(client, actor, title, detail = null) {
   const ids = (await client.user.findMany({ where: { ...BOARD_WHERE, isActive: true, id: { not: actor.id } }, select: { id: true } })).map(u => u.id);
@@ -260,8 +280,15 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
     if (req.body.parentId !== undefined) data.parentId = await parentOf(prisma, req.body.parentId, id);
     if (req.body.isActive !== undefined) data.isActive = !!req.body.isActive;
     if (req.body.supervisorId !== undefined && (optionalInt(req.body.supervisorId, 'Phó Tổng Giám đốc phụ trách') ?? null) !== (old.supervisorId ?? null)) noSupervisorHere(req.body);
-    const row = await prisma.department.update({ where: { id }, data });
-    await audit(req, 'UPDATE', 'Department', id, old, row);
+    // Đổi mã làm bộ phận trở thành / thôi là bộ phận Ban Tổng Giám đốc: đổi cách hệ thống cảnh báo vai ↔ bộ phận → nhật ký nhạy cảm + báo BTGĐ.
+    const boardChanged = data.code !== undefined && isBoardDept(old) !== isBoardDept({ code: data.code });
+    const row = await prisma.$transaction(async tx => {
+      const updated = await tx.department.update({ where: { id }, data });
+      await audit(req, 'UPDATE', 'Department', id, old, boardChanged ? { ...updated, sensitive: true } : updated, tx);
+      if (boardChanged) await notifyDirectors(tx, req.user, isBoardDept(updated) ? `Quản trị hệ thống vừa đặt bộ phận ${updated.name} là bộ phận Ban Tổng Giám đốc (mã ${updated.code})`
+        : `Quản trị hệ thống vừa đổi mã bộ phận ${old.name}: thôi là bộ phận Ban Tổng Giám đốc`, `Mã ${old.code} → ${updated.code}`);
+      return updated;
+    });
     res.json(row);
   });
 
@@ -279,8 +306,9 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
       prisma.department.findMany({ where: { supervisorId: { not: null } }, select: { id: true, supervisorId: true } }),
     ]);
     // Phạm vi phụ trách (chỉ BTGĐ): Toàn công ty hoặc danh sách bộ phận; cảnh báo vai BTGĐ lệch bộ phận Ban Tổng Giám đốc.
+    const D = require('../services/duties'), dutyCfg = await D.dutyConfig(prisma);
     res.json(rows.map(u => ({ ...u, supervisedDepartmentIds: depts.filter(d => d.supervisorId === u.id).map(d => d.id),
-      boardMismatch: u.isActive ? boardDeptMismatch(u.role, u.department) : null })));
+      boardMismatch: u.isActive ? boardDeptMismatch(u.role, u.department) : null, duties: D.dutiesFor(u, dutyCfg) })));
   });
   app.post('/api/admin/users', auth, requirePermission('admin.users', 'OPERATE', 'SYSTEM'), async (req, res) => {
     if (req.body.isRootAdmin !== undefined) fail(403, 'Không thể cấp tài khoản quản trị gốc qua API này', 'FORBIDDEN');
@@ -289,15 +317,18 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
     const data = {
       username: usernameOf(req.body.username), fullName: text(req.body.fullName, 'Họ tên', { required: true, max: 120 }),
       displayTitle: text(req.body.displayTitle, 'Chức danh', { max: 120 }) || null, email: text(req.body.email, 'Email', { max: 160 }) || null,
-      phone: text(req.body.phone, 'Điện thoại', { max: 30 }) || null, role: roleOf(req.body.role) || 'member',
+      phone: text(req.body.phone, 'Điện thoại', { max: 30 }) || null, role: roleOf(req.body.role) || DEFAULT_ROLE,
       departmentId: await departmentOf(prisma, req.body.departmentId) ?? null, passwordHash: await bcrypt.hash(password, 10), mustChangePw: true,
     };
     const mismatch = await assertBoardDept(prisma, data.role, data.departmentId, req.body.confirmBoardDept);
     const sensitive = isBoard(data);
     const user = await prisma.$transaction(async tx => {
       const created = await tx.user.create({ data });
-      await audit(req, 'CREATE', 'User', created.id, null, { username: created.username, role: created.role, departmentId: created.departmentId, ...(mismatch ? { boardMismatch: mismatch } : {}), ...(sensitive || mismatch ? { sensitive: true } : {}) }, tx);
-      if (sensitive) await notifyDirectors(tx, req.user, `Quản trị hệ thống vừa tạo tài khoản vai Ban Tổng Giám đốc ${created.username}`, `${created.fullName} — xem toàn công ty theo vai Ban Tổng Giám đốc`);
+      // Giai đoạn chuyển tiếp: ghi bộ quyền mặc định của vai (để quay lại bản cũ vẫn đúng quyền). Mã mới không đọc bảng này.
+      await syncRoleGrants(tx, created, req.user.id);
+      const notices = roleNotices({ username: created.username, fullName: created.fullName, created: true, newRole: created.role, newInBoardDept: await inBoardDept(tx, created.departmentId), mismatch });
+      await audit(req, 'CREATE', 'User', created.id, null, { username: created.username, role: created.role, departmentId: created.departmentId, ...(mismatch ? { boardMismatch: mismatch } : {}), ...(sensitive || notices.length ? { sensitive: true } : {}) }, tx);
+      for (const n of notices) await notifyDirectors(tx, req.user, n.title, n.detail);
       return created;
     });
     res.status(201).json(await prisma.user.findUnique({ where: { id: user.id }, select: USER_SELECT }));
@@ -332,18 +363,22 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
     const newDept = data.departmentId !== undefined ? data.departmentId : old.departmentId;
     const roleChanged = roleKey({ role: newRole }) !== roleKey(old);
     const mismatch = roleChanged || newDept !== old.departmentId ? await assertBoardDept(prisma, newRole, newDept, req.body.confirmBoardDept) : null;
-    const toDirector = isBoard({ role: newRole }) && !isBoard(old);
     const fromDirector = !isBoard({ role: newRole }) && isBoard(old);
+    const deptMoved = newDept !== old.departmentId;
+    const [oldInBoardDept, newInBoardDept] = deptMoved ? await Promise.all([inBoardDept(prisma, old.departmentId), inBoardDept(prisma, newDept)]) : [false, false];
+    const notices = roleNotices({ username: old.username, fullName: old.fullName, oldRole: old.role, newRole, oldInBoardDept, newInBoardDept, mismatch });
     const handover = req.body.handover === true && (data.isActive === false || (data.isActive === undefined && !old.isActive));
     const result = await prisma.$transaction(async tx => {
       const row = await tx.user.update({ where: { id }, data, select: USER_SELECT });
-      await audit(req, 'UPDATE', 'User', id, old, toDirector || mismatch ? { ...row, ...(mismatch ? { boardMismatch: mismatch } : {}), sensitive: true } : row, tx);
+      await audit(req, 'UPDATE', 'User', id, old, notices.length ? { ...row, ...(mismatch ? { boardMismatch: mismatch } : {}), sensitive: true } : row, tx);
       let applied = null;
       if (roleChanged) {
         // Quyền đi theo vai: ghi lại số quyền thêm / bớt do đổi vai để tra cứu.
         const diff = profileDiff(ROLE_PROFILES[roleKey(old)] || [], ROLE_PROFILES[roleKey({ role: newRole })] || []);
         applied = { added: diff.added.length, removed: diff.removed.length, changed: diff.changed.length };
-        await audit(req, 'ROLE_PROFILE_APPLY', 'User', id, { role: old.role }, { role: newRole, ...applied, ...(toDirector ? { sensitive: true } : {}) }, tx);
+        await audit(req, 'ROLE_PROFILE_APPLY', 'User', id, { role: old.role }, { role: newRole, ...applied, sensitive: true }, tx);
+        // Giai đoạn chuyển tiếp: ghi lại bộ quyền theo vai mới để quay lại bản cũ vẫn đúng quyền.
+        await syncRoleGrants(tx, { id, role: newRole, isRootAdmin: old.isRootAdmin }, req.user.id);
       }
       // Rời vai BTGĐ: bỏ phạm vi phụ trách (Toàn công ty, bộ phận) — phạm vi chỉ có nghĩa với vai BTGĐ.
       if (fromDirector) {
@@ -358,8 +393,7 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
         for (const deptId of done.departments) await audit(req, 'UPDATE', 'Department', deptId, { supervisorId: id }, { supervisorId: null, reason: 'HANDOVER' }, tx);
         await audit(req, 'HANDOVER', 'User', id, null, done.counts, tx);
       }
-      if (toDirector) await notifyDirectors(tx, req.user, `Quản trị hệ thống vừa đổi tài khoản ${row.username} sang vai Ban Tổng Giám đốc`, row.fullName + ' — xem toàn công ty theo vai Ban Tổng Giám đốc');
-      else if (fromDirector) await notifyDirectors(tx, req.user, `Quản trị hệ thống vừa đổi tài khoản ${row.username} khỏi vai Ban Tổng Giám đốc`, `${row.fullName} — vai mới: ${ROLES[roleKey(row)]?.label || row.role}`);
+      for (const n of notices) await notifyDirectors(tx, req.user, n.title, n.detail);
       return { row, applied, done };
     }, { timeout: 60_000 });
     for (const t of result.done?.touched || []) bus.item(t.projectId, t.itemId, req.user.id);
@@ -414,9 +448,12 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
     const raw = req.body.departmentIds ?? [];
     if (!Array.isArray(raw) || raw.length > 200) fail(422, 'Danh sách bộ phận không hợp lệ', 'INVALID_VALUE');
     const wanted = [...new Set(raw.map(v => intParam(v, 'Bộ phận')))];
-    const valid = await prisma.department.findMany({ where: { id: { in: wanted } }, select: { id: true, name: true, supervisorId: true } });
+    const valid = await prisma.department.findMany({ where: { id: { in: wanted } }, select: { id: true, name: true, supervisorId: true, isActive: true } });
     if (valid.length !== wanted.length) fail(422, 'Bộ phận không tồn tại', 'INVALID_DEPARTMENT');
     const current = (await prisma.department.findMany({ where: { supervisorId: id }, select: { id: true } })).map(d => d.id);
+    // Bộ phận đã khoá: chỉ giữ được nếu đang phụ trách sẵn, không nhận thêm.
+    const locked = valid.filter(d => !d.isActive && !current.includes(d.id));
+    if (locked.length) fail(422, 'Bộ phận đã khoá, không nhận thêm vào phạm vi phụ trách: ' + locked.map(d => d.name).join(', '), 'INACTIVE_DEPARTMENT');
     const before = { all: user.boardAll, departmentIds: [...current].sort((x, y) => x - y) };
     const after = { all: req.body.all, departmentIds: [...wanted].sort((x, y) => x - y) };
     if (JSON.stringify(before) === JSON.stringify(after)) return res.json({ ok: true, ...after });
@@ -465,4 +502,4 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
       items: rows.map(r => ({ ...presentAudit(r, { itAdmin, names }), actorName: r.userId ? actor.get(r.userId) || '#' + r.userId : (r.action === 'LOGIN_FAILED' ? 'Chưa đăng nhập' : 'Hệ thống') })) });
   });
 };
-Object.assign(module.exports, { profileDiff, wouldCreateCycle, planHandover, presentAudit, auditWhere, isBusinessEntity, workloadOf, runHandover, AUDIT_ACTIONS, AUDIT_ENTITIES, NON_BUSINESS_ENTITIES });
+Object.assign(module.exports, { profileDiff, roleNotices, wouldCreateCycle, planHandover, presentAudit, auditWhere, isBusinessEntity, workloadOf, runHandover, AUDIT_ACTIONS, AUDIT_ENTITIES, NON_BUSINESS_ENTITIES });

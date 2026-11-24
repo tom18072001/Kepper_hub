@@ -370,7 +370,7 @@ async function runCrmFollowups(prisma, now = new Date()) {
   const rows = await prisma.crmInteraction.findMany({ where: { followUpDone: false, nextDue: { gte: new Date(end.getTime() - 9 * 86_400_000), lt: end }, partner: { archivedAt: null } },
     include: { partner: { select: { id: true, name: true, ownerUserId: true, ownerDepartmentId: true } } } });
   const active = new Set((await prisma.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE }, select: { id: true } })).map(u => u.id));
-  const leadersOf = async dept => (await prisma.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE, departmentId: dept }, include: { permissions: true } }))
+  const leadersOf = async dept => (await prisma.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE, departmentId: dept } }))
     .filter(u => require('../lib/permissions').permissionScope(u, 'reports.summary', 'VIEW')).map(u => u.id);
   let sent = 0;
   for (const i of rows) {

@@ -3,7 +3,7 @@
 // lương chỉ chính người đó, người phụ trách nhân sự, Ban TGĐ thấy. Đơn nghỉ / giải trình chờ duyệt còn hiện ở "Chờ tôi duyệt" (renderHrDecisions).
 import { api } from '../api.js';
 import { store, deptName } from '../store.js';
-import { $, esc, fmtDate, toast, openModal, closeModal, confirmDialog, errorMessage, dateInput, fromDateInput, uiPref, debounce } from '../util.js';
+import { $, esc, fmtDate, toast, openModal, closeModal, confirmDialog, errorMessage, dateInput, fromDateInput, uiPref, debounce, isItUser } from '../util.js';
 import { refreshCounters } from '../main.js';
 
 let meta = null;
@@ -436,7 +436,7 @@ function importForm(done) {
 // ---------- Thiết lập ----------
 async function renderSettings(root, m) {
   const c = m.config;
-  const people = store.users.filter(u => u.role !== 'admin');
+  const people = store.users.filter(u => !isItUser(u));
   root.innerHTML = `<form class="card pg-section pg-grid" id="cfgForm" data-testid="hrm-settings">
     <label class="field">Giờ vào<input type="time" name="workStart" value="${esc(c.workStart)}"></label><label class="field">Giờ ra<input type="time" name="workEnd" value="${esc(c.workEnd)}"></label>
     <label class="field">Nghỉ trưa từ<input type="time" name="lunchStart" value="${esc(c.lunchStart)}"></label><label class="field">Nghỉ trưa đến<input type="time" name="lunchEnd" value="${esc(c.lunchEnd)}"></label>

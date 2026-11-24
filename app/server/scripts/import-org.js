@@ -15,7 +15,7 @@
 const fs = require('node:fs');
 const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
-const { ROLES } = require('../src/lib/permissions');
+const { ROLES, DEFAULT_ROLE, isBoard, syncRoleGrants } = require('../src/lib/permissions');
 const { DEFAULT_PASSWORD } = require('../src/lib/passwords');
 
 const args = process.argv.slice(2);
@@ -47,14 +47,15 @@ async function main() {
     for (const u of input.users || []) {
       const username = String(u.username || '').trim().toLowerCase();
       if (!/^[a-z0-9._-]{3,50}$/.test(username)) { report.errors.push(`Tài khoản không hợp lệ: ${u.username}`); continue; }
-      if (!ROLES[u.role || 'member']) { report.errors.push(`Vai trò không hợp lệ cho ${username}: ${u.role}`); continue; }
+      if (!ROLES[u.role || DEFAULT_ROLE]) { report.errors.push(`Vai trò không hợp lệ cho ${username}: ${u.role}`); continue; }
       if (await tx.user.findUnique({ where: { username } })) { report.users.skipped++; continue; }
       const dept = u.departmentCode ? await tx.department.findUnique({ where: { code: String(u.departmentCode).toUpperCase() } }) : null;
       if (u.departmentCode && !dept) { report.errors.push(`Không có phòng ${u.departmentCode} cho ${username}`); continue; }
       const created = await tx.user.create({ data: {
         username, fullName: clean(u.fullName, 120) || username, displayTitle: clean(u.displayTitle, 120), email: clean(u.email, 160),
-        phone: clean(u.phone, 30), role: u.role || 'member', departmentId: dept?.id ?? null, passwordHash: hash, mustChangePw: true,
+        phone: clean(u.phone, 30), role: u.role || DEFAULT_ROLE, departmentId: dept?.id ?? null, passwordHash: hash, mustChangePw: true,
       } });
+      await syncRoleGrants(tx, created, root?.id ?? null);
       await tx.auditLog.create({ data: { userId: root?.id ?? null, action: 'CREATE', entity: 'User', entityId: String(created.id),
         newValue: JSON.stringify({ username, role: created.role, departmentId: created.departmentId, via: 'import-org' }) } });
       report.users.created++;
@@ -62,7 +63,7 @@ async function main() {
     for (const d of depts) { // Phó TGĐ phụ trách — sau khi tài khoản đã có
       if (!d.supervisorUsername) continue;
       const sup = await tx.user.findUnique({ where: { username: String(d.supervisorUsername).toLowerCase() } });
-      if (!sup || sup.role !== 'director') { report.errors.push(`Phó TGĐ phụ trách ${d.supervisorUsername} không phải tài khoản Ban Tổng Giám đốc`); continue; }
+      if (!sup || !isBoard(sup)) { report.errors.push(`Phó TGĐ phụ trách ${d.supervisorUsername} không phải tài khoản Ban Tổng Giám đốc`); continue; }
       await tx.department.update({ where: { code: String(d.code).toUpperCase() }, data: { supervisorId: sup.id } });
     }
     const st = input.settings || {};

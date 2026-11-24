@@ -2,7 +2,7 @@
 // đề nghị gia hạn, văn bản liên quan, nộp sản phẩm (phiếu trình), xếp loại khi nghiệm thu.
 import { api } from '../api.js';
 import { store, personLink } from '../store.js';
-import { $, esc, fmtDate, fmtDateTime, ago, toast, errorMessage, openModal, closeModal, multiSelect, readMulti, bindMulti, dateInput, fromDateInput, dueCountdown, draft, debounce } from '../util.js';
+import { $, esc, fmtDate, fmtDateTime, ago, toast, errorMessage, openModal, closeModal, multiSelect, readMulti, bindMulti, dateInput, fromDateInput, dueCountdown, draft, debounce, isItUser } from '../util.js';
 import { icon } from '../icons.js';
 import { capsOf } from '../task-caps.js';
 
@@ -12,7 +12,7 @@ export const RATINGS = { EXCELLENT: 'Xuất sắc', GOOD: 'Tốt', PASS: 'Đạt
 const DOC_KINDS = { BASIS: 'Căn cứ giao việc', OUTPUT: 'Sản phẩm tham mưu', ISSUED: 'Văn bản đã phát hành' };
 const deptList = () => store.departments.filter(d => d.isActive !== false);
 const userOpts = (prefer) => {
-  const list = store.users.filter(u => u.role !== 'admin');
+  const list = store.users.filter(u => !isItUser(u));
   const rank = u => (u.departmentId === prefer ? 0 : 1);
   return list.sort((a, b) => rank(a) - rank(b) || a.fullName.localeCompare(b.fullName, 'vi')).map(u => ({ id: u.id, label: u.fullName + (u.departmentId === prefer ? '' : ` — ${store.departments.find(d => d.id === u.departmentId)?.name || ''}`) }));
 };
@@ -309,7 +309,7 @@ export function submitDialog(d, refresh) {
 export function applyTemplateDialog(d, refresh) {
   const tpls = store.templates || [];
   if (!tpls.length) { toast('Chưa có mẫu nhóm việc — tạo ở Danh mục', 'err'); return; }
-  const people = store.users.filter(u => u.isActive !== false && u.role !== 'admin' && (!d.leadDepartmentId || u.departmentId === d.leadDepartmentId || d.assignees.some(a => a.id === u.id)));
+  const people = store.users.filter(u => u.isActive !== false && !isItUser(u) && (!d.leadDepartmentId || u.departmentId === d.leadDepartmentId || d.assignees.some(a => a.id === u.id)));
   const modal = openModal(`<h2>Tạo việc nhánh từ mẫu</h2><p class="muted sm">${esc(d.code)} · ${esc(d.title)}${d.dueDate ? ` · hạn ${fmtDate(d.dueDate)}` : ''}</p>
     <div class="grid2"><label class="field">Mẫu<select id="tpId" data-testid="template-select">${tpls.map(t => `<option value="${t.id}">${esc(t.name)} (${t.items.length} việc)</option>`).join('')}</select></label>
       <label class="field">Ngày mốc <span class="muted xs">(hạn tương đối tính từ ngày này; để trống = theo hạn việc cha)</span><input type="date" id="tpAnchor" data-testid="template-anchor"></label>
@@ -361,7 +361,7 @@ function supportStaffDialog(d, refresh) {
 
 // Chia nhiều việc nhánh một lần: mỗi dòng = tên, cán bộ, hạn, sản phẩm. Dán được từ Excel (tab giữa các cột).
 export function bulkChildrenDialog(d, refresh) {
-  const people = store.users.filter(u => u.isActive !== false && u.role !== 'admin' && (u.departmentId === d.leadDepartmentId || d.assignees.some(a => a.id === u.id) || !d.leadDepartmentId));
+  const people = store.users.filter(u => u.isActive !== false && !isItUser(u) && (u.departmentId === d.leadDepartmentId || d.assignees.some(a => a.id === u.id) || !d.leadDepartmentId));
   const userSel = (sel = []) => `<select data-col="assignee" aria-label="Cán bộ"><option value="">— Như việc cha —</option>${people.map(u => `<option value="${u.id}"${sel.includes(u.id) ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select>`;
   const row = (r = {}) => `<tr><td><input data-col="title" maxlength="300" value="${esc(r.title || '')}" aria-label="Tên việc nhánh"></td><td>${userSel(r.assignee ? [r.assignee] : [])}</td>
     <td><input type="date" data-col="due" value="${esc(r.due || '')}"${d.dueDate ? ` max="${dateInput(d.dueDate)}"` : ''} aria-label="Hạn"></td><td><input data-col="deliverable" maxlength="500" value="${esc(r.deliverable || '')}" aria-label="Sản phẩm"></td>

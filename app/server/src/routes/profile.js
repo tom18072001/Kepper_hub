@@ -56,23 +56,6 @@ function orgOf(me, users, depts) {
   return { above, me: person(me), peers: peers.map(person), below: below.filter(b => b.people.length) };
 }
 
-// Kiêm nhiệm của chính người dùng (Ban Tổng Giám đốc chỉ định trong từng mảng) — chỉ để xem trên hồ sơ.
-async function dutiesOf(prisma, me) {
-  const out = [];
-  const safe = async fn => { try { return await fn(); } catch { return null; } };
-  const w = await safe(() => require('../services/weekly-data').weeklyConfig(prisma));
-  if (w) {
-    if (w.secretaryDepartmentId != null && w.secretaryDepartmentId === me.departmentId && !isBoard(me)) out.push('Thư ký giao ban');
-    if ((w.pmoUserIds || []).includes(me.id)) out.push('PMO');
-  }
-  const h = await safe(() => require('../services/hrm').hrmConfig(prisma));
-  if ((h?.hrUserIds || []).includes(me.id)) out.push('Phụ trách nhân sự');
-  const v = await safe(() => require('../services/vanthu').vanthuConfig(prisma));
-  if ((v?.clerkUserIds || []).includes(me.id)) out.push('Văn thư');
-  if ((v?.legalUserIds || []).includes(me.id)) out.push('Pháp chế');
-  return out;
-}
-
 module.exports = function mountProfile(app, { prisma, auth, audit }) {
   app.get('/api/me/profile', auth, async (req, res) => {
     const me = await prisma.user.findUnique({ where: { id: req.user.id }, include: { department: true } });
@@ -85,7 +68,8 @@ module.exports = function mountProfile(app, { prisma, auth, audit }) {
         prisma.department.findMany({ where: { isActive: true }, select: { id: true, name: true, parentId: true, supervisorId: true } }),
       ]);
       out.org = orgOf(me, users, new Map(depts.map(d => [d.id, d])));
-      out.duties = await dutiesOf(prisma, me);
+      const D = require('../services/duties');
+      out.duties = D.dutiesFor(me, await D.dutyConfig(prisma));
     }
     res.setHeader('Cache-Control', 'private, no-store');
     res.json(out);

@@ -2,7 +2,7 @@
 // (nhóm việc / việc nhánh, trạng thái hạn tô màu, tiến độ %, sản phẩm, kết quả, đánh giá) + nhập Kế hoạch năm, nhập/xuất sổ Excel.
 import { api, download } from '../api.js';
 import { store, userById, deptName } from '../store.js';
-import { $, esc, fmtDate, PRIORITY, deadlineStatus, deadlineChip, toast, errorMessage, openModal, closeModal, uiPref } from '../util.js';
+import { $, esc, fmtDate, PRIORITY, deadlineStatus, deadlineChip, toast, errorMessage, openModal, closeModal, uiPref, isLeadershipUser } from '../util.js';
 import { icon } from '../icons.js';
 import { stagePill } from './dispatch-panel.js';
 
@@ -108,7 +108,7 @@ export function drawRegister(body, current, { filtered, openItemHash, reload }) 
 
 // Nhập Kế hoạch công tác năm (.docx): xem trước rồi mới tạo việc.
 export function openPlanImport(project, reload) {
-  const leaders = store.users.filter(u => ['director', 'manager'].includes(u.role));
+  const leaders = store.users.filter(isLeadershipUser);
   const modal = openModal(`<h2>Nhập Kế hoạch công tác năm</h2>
     <p class="muted sm">Chọn văn bản Word (.docx) có bảng <b>"Phân công công việc cụ thể"</b> (TT · Nội dung · Thời gian · Địa điểm · Mô tả · Kết quả dự kiến · Thực hiện).
       Mỗi nhiệm vụ thành một dòng trong Sổ giao việc (nguồn "Kế hoạch năm"); các mốc "Tháng …: …" thành việc nhánh; "Kết quả dự kiến" thành sản phẩm đầu ra.</p>

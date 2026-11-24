@@ -4,7 +4,7 @@ const path = require('node:path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
-const { NOT_IT_WHERE } = require('./lib/permissions');
+const { NOT_IT_WHERE, syncRoleGrants } = require('./lib/permissions');
 const { DEFAULT_PASSWORD, MIN_PASSWORD_LENGTH } = require('./lib/passwords');
 const { DEFAULT_STATES } = require('./routes/projects');
 
@@ -64,6 +64,7 @@ async function seed(prisma = new PrismaClient(), env = process.env) {
       if (existing) return existing;
       const created = await tx.user.create({ data: { username: u.username, fullName: u.fullName, displayTitle: u.displayTitle, role: u.role, boardAll: !!u.boardAll,
         departmentId: dept[u.dept].id, passwordHash: bcrypt.hashSync(DEFAULT_PASSWORD, 10), mustChangePw: true } });
+      await syncRoleGrants(tx, created, root.id);
       return created;
     });
   }

@@ -5,7 +5,7 @@ const admin = require('./admin');
 const { failedLogin } = require('./auth');
 const { ROLE_PROFILES } = require('../lib/permissions');
 
-const { profileDiff, wouldCreateCycle, planHandover, presentAudit, auditWhere, runHandover } = admin;
+const { profileDiff, roleNotices, wouldCreateCycle, planHandover, presentAudit, auditWhere, runHandover } = admin;
 const g = (permissionKey, action, scope) => ({ permissionKey, action, scope });
 
 test('đổi vai: khác biệt quyền giữa bảng quyền của hai vai (ghi nhật ký khi đổi vai)', () => {
@@ -20,6 +20,22 @@ test('đổi vai: khác biệt quyền giữa bảng quyền của hai vai (ghi 
   const scope = profileDiff([g('work.view', 'VIEW', 'UNIT')], [g('work.view', 'VIEW', 'SYSTEM')]);
   assert.deepEqual(scope.changed, [{ permissionKey: 'work.view', action: 'VIEW', scope: 'SYSTEM', from: 'UNIT', to: 'SYSTEM' }]);
   assert.equal(profileDiff(ROLE_PROFILES.manager, ROLE_PROFILES.manager).mismatch, false);
+});
+
+test('thông báo Ban TGĐ: MỌI lần đổi vai, chuyển vào / ra bộ phận BTGĐ, xác nhận lệch vai / bộ phận (đặc tả 5.1(4), mục 10)', () => {
+  const base = { username: 'x', fullName: 'X (giả)' };
+  const titles = c => roleNotices({ ...base, ...c }).map(n => n.title);
+  assert.equal(titles({ oldRole: 'member', newRole: 'manager' }).length, 1, 'Nhân viên → Lãnh đạo bộ phận vẫn báo');
+  assert.match(titles({ oldRole: 'member', newRole: 'manager' })[0], /Nhân viên → Lãnh đạo bộ phận/);
+  assert.match(titles({ oldRole: 'director', newRole: 'member' })[0], /Ban Tổng Giám đốc → Nhân viên/);
+  assert.deepEqual(titles({ oldRole: 'deputy', newRole: 'manager' }), [], 'Phó phòng cũ = Lãnh đạo bộ phận: không phải đổi vai');
+  assert.deepEqual(titles({ oldRole: 'member', newRole: 'member' }), [], 'sửa tên, chức danh: không báo');
+  assert.match(titles({ oldRole: 'member', newRole: 'member', newInBoardDept: true })[0], /vào bộ phận Ban Tổng Giám đốc/);
+  assert.match(titles({ oldRole: 'director', newRole: 'director', oldInBoardDept: true })[0], /ra khỏi bộ phận Ban Tổng Giám đốc/);
+  assert.equal(titles({ oldRole: 'director', newRole: 'director', oldInBoardDept: true, mismatch: 'Vai Ban Tổng Giám đốc nhưng không thuộc bộ phận Ban Tổng Giám đốc' }).length, 2);
+  assert.match(titles({ created: true, newRole: 'director' })[0], /tạo tài khoản vai Ban Tổng Giám đốc/);
+  assert.deepEqual(titles({ created: true, newRole: 'member' }), [], 'tạo nhân viên thường: không báo');
+  assert.equal(titles({ created: true, newRole: 'member', newInBoardDept: true, mismatch: 'lệch' }).length, 2);
 });
 
 test('bộ phận: chặn đặt trực thuộc thành vòng', () => {

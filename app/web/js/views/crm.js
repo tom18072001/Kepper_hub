@@ -2,12 +2,12 @@
 // việc cần theo dõi, hợp đồng / gói thầu. Quyền do máy chủ quyết (lib/policy.js crm.*) — giao diện chỉ ẩn nút theo cờ "can".
 import { api } from '../api.js';
 import { store, deptName } from '../store.js';
-import { $, esc, fmtDate, fmtDateTime, toast, openModal, closeModal, confirmDialog, errorMessage, dateInput, fromDateInput, debounce, replaceHashParams } from '../util.js';
+import { $, esc, fmtDate, fmtDateTime, toast, openModal, closeModal, confirmDialog, errorMessage, dateInput, fromDateInput, debounce, replaceHashParams, isItUser } from '../util.js';
 
 let meta = null;
 const getMeta = async () => (meta ||= await api('/api/crm/meta'));
 const opts = (map, cur) => Object.entries(map).map(([k, v]) => `<option value="${k}"${k === cur ? ' selected' : ''}>${esc(v)}</option>`).join('');
-const userOpts = (cur, { blank = true } = {}) => (blank ? '<option value="">—</option>' : '') + store.users.filter(u => u.role !== 'admin')
+const userOpts = (cur, { blank = true } = {}) => (blank ? '<option value="">—</option>' : '') + store.users.filter(u => !isItUser(u))
   .map(u => `<option value="${u.id}"${Number(cur) === u.id ? ' selected' : ''}>${esc(u.fullName)}${u.departmentId ? ' · ' + esc(deptName(u.departmentId)) : ''}</option>`).join('');
 const stars = n => (n ? '★'.repeat(n) + '<span class="muted">' + '★'.repeat(5 - n) + '</span>' : '<span class="muted">—</span>');
 const statusPill = s => `<span class="pill ${s.code === 'ACTIVE' ? 'ok' : s.code === 'PAUSED' ? 'warn' : 'info'}">${esc(s.label)}</span>`;

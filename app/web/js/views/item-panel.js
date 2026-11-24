@@ -3,7 +3,7 @@
 // không có quyền thì hiện giá trị dạng chữ. Người không liên quan chỉ xem tóm tắt.
 import { api, download, openPreview, ApiError } from '../api.js';
 import { store, labelsFor, createProjectLabel, personLink } from '../store.js';
-import { $, $$, esc, avatar, labelChip, fmtDate, fmtDateTime, ago, PRIORITY, toast, multiSelect, bindMulti, dateInput, fromDateInput, confirmDialog, errorMessage, CATEGORY, draft, draftLater, uiPref } from '../util.js';
+import { $, $$, esc, avatar, labelChip, fmtDate, fmtDateTime, ago, PRIORITY, toast, multiSelect, bindMulti, dateInput, fromDateInput, confirmDialog, errorMessage, CATEGORY, draft, draftLater, uiPref, isItUser } from '../util.js';
 import { reloadProject, assignableUsers, loadedProject } from './project.js';
 import { refreshCounters, refreshBackground } from '../main.js';
 import { openRepeatDialog } from './recurring-form.js';
@@ -358,7 +358,7 @@ function render() {
   const c = capsOf(d), fe = !!c.plan;
   const users = assignableUsers(project);
   // Lãnh đạo bộ phận chủ trì chọn người cho bước chưa có người: chỉ người trong phòng chủ trì.
-  const pickUsers = c.assign ? users : c.assignOwnDept ? store.users.filter(u => u.isActive !== false && u.role !== 'admin' && u.departmentId === d.leadDepartmentId) : [];
+  const pickUsers = c.assign ? users : c.assignOwnDept ? store.users.filter(u => u.isActive !== false && !isItUser(u) && u.departmentId === d.leadDepartmentId) : [];
   const canPick = c.assign || c.assignOwnDept;
   const states = project.states;
   // Việc cần duyệt: không kéo thẳng sang Hoàn thành (máy chủ cũng chặn) — đi qua "Gửi duyệt" / "Nộp sản phẩm".
@@ -473,7 +473,7 @@ function render() {
         <div class="${(d.supporters || []).length || canPick ? '' : 'lite-hide'}"><span class="side-h">Người phối hợp</span>${canPick ? multiSelect('supporters', pickUsers.map(u => ({ id: u.id, label: u.fullName })), (d.supporters || []).map(a => a.id), 'Không') : `<div>${(d.supporters || []).map(a => personLink(a)).join(', ') || '—'}</div>`}</div>
         <label>Hạn hoàn thành${fe ? `<input type="date" id="ipDue" value="${dateInput(d.dueDate)}" data-testid="item-due" title="Hạn (D)">` : `<div class="side-text" data-testid="item-due">${d.dueDate ? fmtDate(d.dueDate) : '—'}</div>`}${d.dueDate ? `<span class="muted xs">${countdownPill(d)}</span>` : ''}${!fe && c.extension ? '<span class="muted xs">Hạn do người giao đặt — dùng "Xin gia hạn"</span>' : ''}</label>
         ${d.state.category === 'COMPLETED' ? `<label>Ngày hoàn thành thực tế${c.completedAt ? `<input type="date" id="ipCompleted" value="${dateInput(d.completedAt)}" data-testid="item-completed">` : `<div class="side-text" data-testid="item-completed">${d.completedAt ? fmtDate(d.completedAt) : '—'}</div>`}</label>` : ''}
-        <label class="${c.assigner ? '' : 'lite-hide'}">Người giao${c.assigner ? `<select id="ipAssigner" data-testid="item-assigner">${d.assignedById ? '' : '<option value="">—</option>'}${store.users.filter(u => u.role !== 'admin' && (d.assignedById || u.id !== store.me.id)).map(u => `<option value="${u.id}"${u.id === d.assignedById ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select>` : `<div class="side-text" data-testid="item-assigner">${d.assignedById ? personLink({ id: d.assignedById, fullName: d.assignedByName }) : '—'}</div>`}</label>
+        <label class="${c.assigner ? '' : 'lite-hide'}">Người giao${c.assigner ? `<select id="ipAssigner" data-testid="item-assigner">${d.assignedById ? '' : '<option value="">—</option>'}${store.users.filter(u => !isItUser(u) && (d.assignedById || u.id !== store.me.id)).map(u => `<option value="${u.id}"${u.id === d.assignedById ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select>` : `<div class="side-text" data-testid="item-assigner">${d.assignedById ? personLink({ id: d.assignedById, fullName: d.assignedByName }) : '—'}</div>`}</label>
         <label class="${fe ? '' : 'lite-hide'}">Ngày giao${fe ? `<input type="date" id="ipAssignedAt" value="${dateInput(d.assignedAt)}" data-testid="item-assigned-at">` : `<div class="side-text" data-testid="item-assigned-at">${d.assignedAt ? fmtDate(d.assignedAt) : '—'}</div>`}</label>
         ${showLabels ? `<div class="${fe ? '' : 'lite-hide'}"><span class="side-h">Nhãn</span>${fe ? multiSelect('labels', labelsFor(d.project.id).map(l => ({ id: l.id, label: l.name, chip: labelChip(l) })), d.labels.map(l => l.id), 'Không có', { create: true }) : d.labels.map(labelChip).join(' ') || '—'}</div>` : ''}
         ${d.intake ? `<div class="pill" data-testid="item-intake" style="white-space:normal">Từ yêu cầu của ${esc(d.intake.requesterName || '')}</div>` : ''}

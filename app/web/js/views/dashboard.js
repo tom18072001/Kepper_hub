@@ -3,7 +3,7 @@
 import { api, download } from '../api.js';
 import { store, can, personLink } from '../store.js';
 import { icon } from '../icons.js';
-import { $, esc, fmtDate, CATEGORY, dateInput, toast, errorMessage, replaceHashParams } from '../util.js';
+import { $, esc, fmtDate, CATEGORY, dateInput, toast, errorMessage, replaceHashParams, isLeaderUser } from '../util.js';
 
 const DAY = 86_400_000;
 const iso = d => d.toISOString().slice(0, 10);
@@ -166,7 +166,7 @@ export async function renderDashboard(root, params, setCrumbs) {
   const t = d.totals, maxTp = Math.max(1, ...d.throughput.map(w => w.completed)), maxLoad = Math.max(1, ...d.workload.map(w => w.open));
   const catTotal = Object.values(d.byCategory).reduce((a, b) => a + b, 0) || 1;
   const deptLabel = d.scope === 'UNIT' ? 'bộ phận của tôi' : d.departmentId ? store.departments.find(x => x.id === d.departmentId)?.name : '';
-  const isLeader = store.me.permissions?.['work.approve']?.operate === 'UNIT'; // lãnh đạo phòng: có hộp "Việc phòng được giao"
+  const isLeader = isLeaderUser(store.me) && store.me.departmentId != null; // lãnh đạo phòng: có hộp "Việc phòng được giao"
   const showDepts = d.byDepartment.length > 1 || d.scope === 'SYSTEM';
   const canApprove = can('work.approve', 'operate');
   const canExport = can('reports.export', 'operate');

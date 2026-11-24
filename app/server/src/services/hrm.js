@@ -168,7 +168,7 @@ async function pendingDecisions(prisma, s, cfg) {
     prisma.hrAttendance.findMany({ where: { adjustStatus: 'PENDING', userId: { not: s.userId } }, orderBy: { day: 'asc' }, take: 300 }),
   ]);
   const ids = [...new Set([...leaves, ...atts].map(r => r.userId))];
-  const users = ids.length ? Object.fromEntries((await prisma.user.findMany({ where: { id: { in: ids } }, include: { permissions: true, department: { select: { id: true, name: true } } } })).map(u => [u.id, u])) : {};
+  const users = ids.length ? Object.fromEntries((await prisma.user.findMany({ where: { id: { in: ids } }, include: { department: { select: { id: true, name: true } } } })).map(u => [u.id, u])) : {};
   const can = (u, scope) => !!u && P.can(s, 'view', scope, targetCtx(u, cfg)) && P.can(s, 'edit', scope, targetCtx(u, cfg, { op: 'approve' }));
   return { leaves: leaves.filter(l => can(users[l.userId], 'hrm.leave')), atts: atts.filter(r => can(users[r.userId], 'hrm.attendance')), users };
 }

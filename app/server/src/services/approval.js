@@ -1,7 +1,7 @@
 // Duyệt nhiều cấp: mỗi dự án khai báo các bước (level 1..n). Khi việc vào cột thuộc nhóm REVIEW,
 // hệ thống mở yêu cầu duyệt ở level 1; duyệt hết các level thì việc tự chuyển sang Hoàn thành;
 // từ chối ở bất kỳ level nào thì việc quay lại trạng thái trước khi gửi duyệt.
-const { permissionScope, isBoard, NOT_IT_WHERE, rolesWith } = require('../lib/permissions');
+const { isBoard, isDeptApprover, DEPT_APPROVER_WHERE, NOT_IT_WHERE } = require('../lib/permissions');
 const { fail } = require('../lib/http');
 const { activity, notify, notifyRequesterIfDone } = require('./events');
 const rules = require('./task-rules');
@@ -30,20 +30,20 @@ async function withDelegates(client, ids, now = new Date()) {
 // Lãnh đạo phòng (trưởng / phó phòng, kể cả người được uỷ quyền) của một bộ phận.
 async function deptLeaderIds(client, departmentId) {
   if (departmentId == null) return [];
-  const users = await client.user.findMany({ where: { isActive: true, departmentId, isRootAdmin: false, role: { in: rolesWith('work.approve', 'OPERATE') } }, include: { permissions: true } });
-  return withDelegates(client, users.filter(u => permissionScope(u, 'work.approve', 'OPERATE')).map(u => u.id));
+  const users = await client.user.findMany({ where: { ...DEPT_APPROVER_WHERE, isActive: true, departmentId } });
+  return withDelegates(client, users.filter(isDeptApprover).map(u => u.id));
 }
 // Ngữ cảnh duyệt nạp một lần (người có quyền duyệt, Phó TGĐ phụ trách từng phòng, uỷ quyền đang hiệu lực, các bước duyệt):
 // tính người duyệt cho nhiều phiếu trong bộ nhớ thay vì vài truy vấn cho mỗi phiếu (hàng chờ, số đếm huy hiệu).
 async function approvalContext(client, projectIds = [], now = new Date()) {
   const [users, depts, delegations, steps, active] = await Promise.all([
-    client.user.findMany({ where: { isActive: true, isRootAdmin: false, role: { in: rolesWith('work.approve', 'OPERATE') } }, include: { permissions: true } }),
+    client.user.findMany({ where: { ...DEPT_APPROVER_WHERE, isActive: true } }),
     client.department.findMany({ select: { id: true, supervisorId: true } }),
     client.delegation.findMany({ where: { revokedAt: null, startsAt: { lte: now }, endsAt: { gte: now } }, select: { fromUserId: true, toUserId: true } }),
     projectIds.length ? client.approvalStep.findMany({ where: { projectId: { in: projectIds } }, orderBy: { level: 'asc' } }) : [],
     client.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE }, select: { id: true, departmentId: true, boardAll: true, role: true, isRootAdmin: true } }),
   ]);
-  const scope = new Map(users.map(u => [u.id, permissionScope(u, 'work.approve', 'OPERATE')]));
+  const scope = new Map(users.map(u => [u.id, isDeptApprover(u)])); // người duyệt cấp bộ phận (lib/permissions.js isDeptApprover)
   const steps_ = new Map(projectIds.map(id => [id, []]));
   for (const st of steps) steps_.get(st.projectId)?.push(st);
   // sys = thành viên Ban Tổng Giám đốc (vai). Phạm vi phụ trách (Toàn công ty / bộ phận) chỉ tính với vai BTGĐ.

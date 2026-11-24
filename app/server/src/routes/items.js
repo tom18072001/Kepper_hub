@@ -478,7 +478,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       const row = await tx.comment.create({ data: { workItemId: id, authorId: req.user.id, bodyHtml, bodyText } });
       await activity(tx, id, req.user.id, 'COMMENT', { commentId: row.id });
       const names = mentions(bodyText);
-      const mentioned = names.length ? await tx.user.findMany({ where: { username: { in: names }, isActive: true }, include: { permissions: true, memberships: { where: { projectId: project.id } } } }) : [];
+      const mentioned = names.length ? await tx.user.findMany({ where: { username: { in: names }, isActive: true }, include: { memberships: { where: { projectId: project.id } } } }) : [];
       const access = project.visibility === 'ASSIGNED' ? await tx.workItem.findUnique({ where: { id }, select: ITEM_ACCESS_SELECT }) : null;
       const parentAccess = access?.parentId ? await tree.ancestors(tx, access.parentId, ITEM_ACCESS_SELECT) : null;
       const allowed = mentioned.filter(u => projectRights(u, project, u.memberships[0]).canView && (!access || canSeeItem(u, project, u.memberships[0], access, parentAccess))).map(u => u.id);
