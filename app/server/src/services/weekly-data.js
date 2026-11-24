@@ -150,7 +150,7 @@ async function runSummaryNotice(prisma, now = new Date()) {
   for (const week of [cf, WK.addDays(cf, -7)]) {
     const S = WK.scheduleOf(week, await meetingOf(prisma, week));
     if (S.meetingDay !== today || S.skip) continue;
-    const { sum } = await summaryOf(prisma, week, now, { auto: false }); // người nhận gồm cả trưởng / phó (bản tóm tắt)
+    const { sum } = await summaryOf(prisma, week, now); // số liệu giống nhau với mọi người nhận (dòng tự bổ sung chỉ đếm)
     const k = sum.kpis;
     const sent = await notify(prisma, await summaryViewerIds(prisma), { type: 'WEEKLY_SUMMARY', title: `Tổng hợp giao ban ${WK.fmtD(today)}: ${k.submitted}/${k.total} bộ phận đã nộp`, body: `${k.stuck} chậm/vướng · ${k.overdue} quá hạn · ${k.helps} yêu cầu hỗ trợ`, link: `#/tuan/tong-hop?w=${week}` });
     return { week, sent };

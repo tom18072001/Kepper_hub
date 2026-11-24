@@ -164,6 +164,8 @@ function placeOf(i, S, prevDone = null) {
   const s = startOf(i), e = dueOf(i);
   return (s ? s <= S.nextTo : e && e <= S.nextTo) ? 'plans' : null;
 }
+// Mốc nạp việc đã xong cho điền sẵn / phạm vi bộ phận: 00:00 thứ Hai TUẦN TRƯỚC — cùng cửa sổ với placeOf (routes/weekly.js).
+const doneSince = f => at(addDays(scheduleOf(f).from, -7), 0, 0);
 const planRow = i => ({ key: `m${i.id}`, itemId: i.id, ref: i.code, step: i.planCode || '', task: i.title, basis: i.kind === 'TASK' ? TASK_SOURCE : MTL_SOURCE,
   ownerIds: (i.assignees || []).map(a => a.id), due: dueOf(i), output: '' });
 
@@ -179,8 +181,10 @@ function buildPrefill({ week: f, deptId, items = [], memberIds = new Set(), prev
   // chưa khởi động (dù chưa có nguy cơ theo hạn) vẫn báo ở Phần III để người đọc thấy "đăng ký mà chưa làm".
   const put = (i, planned = false) => {
     let where = placeOf(i, S, prevDone);
-    if (planned && !i.done && !i.cancelled && !i.started && where !== 'risks') where = 'planned';
-    if (where === 'planned') add(risks, mtlRow({ ...i, risk: i.risk || PLAN_NOT_STARTED }));
+    const reg = planned && !i.done && !i.cancelled && !i.started; // đã đăng ký mà chưa khởi động: cờ "planned" giữ qua các tuần
+    if (reg && where !== 'risks') where = 'planned';
+    if (where === 'planned') add(risks, mtlRow({ ...i, risk: i.risk || PLAN_NOT_STARTED }, { planned: true }));
+    else if (reg && where === 'risks') add(risks, mtlRow(i, { planned: true }));
     else if (where === 'plans') { if (!seen.has(i.id)) { seen.add(i.id); plans.push(planRow(i)); } } else if (where) add(lists[where], mtlRow(i));
   };
 
@@ -196,9 +200,10 @@ function buildPrefill({ week: f, deptId, items = [], memberIds = new Set(), prev
     for (const r of [...(prev.results || []), ...(prev.ongoing || []), ...(prev.risks || [])]) {
       if (r.status === DONE || !String(r.task || '').trim()) continue;
       // xong trong tuần → I, xong trước đó → bỏ; "đã đăng ký mà chưa làm" giữ cờ tới khi việc được bắt đầu hoặc bị huỷ.
-      if (r.itemId) { const i = byId.get(r.itemId); if (i) put(i, r.risk === PLAN_NOT_STARTED.code); continue; }
-      if (ongoing.some(o => o.key === r.key) || results.some(o => o.key === r.key)) continue;
-      ongoing.push({ key: r.key || newKey('f'), itemId: null, actionRef: r.actionRef || null, task: r.task, source: r.source === MTL_SOURCE ? 'Chuyển tiếp tuần trước' : r.source || 'Chuyển tiếp tuần trước',
+      if (r.itemId) { const i = byId.get(r.itemId); if (i) put(i, !!r.planned || r.risk === PLAN_NOT_STARTED.code); continue; }
+      if ([...ongoing, ...results, ...risks].some(o => o.key === r.key)) continue;
+      const carry = !r.actionRef && (r.mandatory || r.planned) && !rowStarted(r) ? risks : ongoing; // đăng ký mà chưa làm → Phần III
+      carry.push({ key: r.key || newKey('f'), itemId: null, actionRef: r.actionRef || null, task: r.task, source: r.source === MTL_SOURCE ? 'Chuyển tiếp tuần trước' : r.source || 'Chuyển tiếp tuần trước',
         ownerIds: r.ownerIds || [], start: r.start || '', due: r.due || '', status: r.status || 'Đúng tiến độ', pct: r.pct ?? '', ...blankIssue(), next: '', mandatory: !!r.actionRef,
         // Đã đăng ký (bắt buộc) mà vẫn chưa làm: giữ nguy cơ "đăng ký mà chưa làm" các tuần sau; người lập vẫn bỏ được khi việc bị huỷ.
         ...(!r.actionRef && (r.mandatory || r.planned) && !rowStarted(r) ? { planned: true } : {}) });
@@ -261,7 +266,10 @@ function sanitize(data, { userIds = null, deptIds = new Set(), itemIds = null, t
   };
   const itemId = r => Number.isInteger(r?.itemId) && (!itemIds || itemIds.has(r.itemId));
   const itemSource = r => (itemId(r) ? (taskIds?.has(r.itemId) ? TASK_SOURCE : MTL_SOURCE) : null);
-  const lim = (v, n) => (Array.isArray(v) ? v.slice(0, n) : []);
+  // Dòng gắn một việc không có trong tập cho phép (người gửi không xem được, việc đã xoá…) → BỎ hẳn, không biến thành dòng tự do
+  // giữ nguyên tên việc (lộ tên, trùng dòng). Mã việc là dữ liệu của máy chủ.
+  const foreign = r => r?.itemId != null && r.itemId !== '' && !itemId(r);
+  const lim = (v, n) => (Array.isArray(v) ? v.slice(0, n) : []).filter(r => !foreign(r));
   return {
     results: lim(d.results, 200).map(r => row(r, false)),
     ongoing: lim(d.ongoing, 200).map(r => row(r, true)),
@@ -327,6 +335,12 @@ function regroup(data) {
   move('ongoing', 'results', r => r.status === DONE);
   move('risks', 'results', r => r.status === DONE);
   move('risks', 'ongoing', r => rowStarted(r));
+  // Dòng tự do: bắt buộc / đã đăng ký mà chưa làm → III (tổng hợp cũng xếp ở III); ở III mà đã làm → II.
+  const free = (from, to, test) => { for (const r of out[from].filter(x => !x.itemId && x.task && test(x))) { out[from].splice(out[from].indexOf(r), 1); out[to].push(to === 'ongoing' ? { start: '', next: '', ...r } : r); } };
+  free('results', 'risks', r => r.status !== DONE && !rowStarted(r) && (r.mandatory || r.planned));
+  free('ongoing', 'risks', r => r.status !== DONE && !rowStarted(r) && (r.mandatory || r.planned));
+  free('risks', 'results', r => r.status === DONE);
+  free('risks', 'ongoing', r => rowStarted(r));
   return out;
 }
 // Dòng bắt buộc báo cáo (theo điền sẵn mới nhất) mà bản gửi lên còn để ở Phần IV (kế hoạch) — vd. việc kế hoạch thành sắp hạn,
@@ -364,7 +378,17 @@ function addAutoRows(data, full, visibleIds, parentOf = new Map()) {
   }
   return { data: out, added: n };
 }
-// Bản không có dòng tự bổ sung (bản tóm tắt, thông báo tổng hợp, người không xem được việc).
+// Bản người xem nhận: bỏ MỌI dòng gắn việc mà người xem không xem được (canSee(itemId) = false), kể cả dòng do người khác nhập.
+const viewFor = (data, canSee) => (data ? { ...data, results: (data.results || []).filter(r => !r.itemId || canSee(r.itemId)),
+  ongoing: (data.ongoing || []).filter(r => !r.itemId || canSee(r.itemId)), risks: (data.risks || []).filter(r => !r.itemId || canSee(r.itemId)),
+  plans: (data.plans || []).filter(r => !r.itemId || canSee(r.itemId)) } : data);
+// Bản tóm tắt theo người xem: báo cáo bộ phận mình chỉ còn dòng họ xem được; danh sách nguy cơ: dòng không xem được giữ để ĐẾM, bỏ tên.
+// Số liệu (kpis, rows[].done / ongoing / risk) không đổi — giống nhau với mọi người xem.
+function briefFor(view, canSee) {
+  return { ...view, rows: view.rows.map(r => (r.report ? { ...r, report: viewFor(r.report, canSee) } : r)),
+    risks: (view.risks || []).map(x => (x.itemId && !canSee(x.itemId) ? { departmentId: x.departmentId, department: x.department, key: x.key, risk: x.risk, hidden: true, task: '', ref: '', solution: '', due: '', pct: '', itemId: null } : x)) };
+}
+// Bản không có dòng tự bổ sung.
 const withoutAuto = (data, keep = () => false) => (data ? { ...data, results: (data.results || []).filter(r => !isAuto(r) || keep(r)),
   ongoing: (data.ongoing || []).filter(r => !isAuto(r) || keep(r)), risks: (data.risks || []).filter(r => !isAuto(r) || keep(r)) } : data);
 
@@ -419,7 +443,7 @@ function buildSummary({ week: f, depts, reports, notices, meeting = null, action
     const dDone = parts.done.length, dOngoing = parts.ongoing.length, dRisk = parts.risk;
     nDone += dDone; nOngoing += dOngoing;
     for (const x of dRisk) risks.push({ departmentId: d.id, department: d.name, key: x.key, ref: x.ref || '', task: x.task, risk: rowRisk(x, f), due: x.due || '', pct: x.pct ?? '',
-      started: rowStarted(x), auto: isAuto(x), solution: x.solution || '' });
+      started: rowStarted(x), auto: isAuto(x), solution: x.solution || '', itemId: x.itemId || null });
     for (const x of items) if (needsIssue(x, f) && x.helpFrom && x.helpFrom !== HELP_SELF)
       helps.push({ key: `${d.id}:${safeKey(x.key)}`, fromId: d.id, from: d.name, to: helpTarget(x.helpFrom, deptName), toKey: x.helpFrom, task: x.task, ref: x.ref || '', what: x.helpWhat, by: x.helpBy, status: issueLabel(x, f), cause: x.cause, solution: x.solution, conclusion: md.conclusions?.[`${d.id}:${safeKey(x.key)}`] || null });
     rows.push({ id: d.id, name: d.name, status: st, submittedAt: sent?.firstSubmittedAt || null, lastSubmittedAt: sent?.submittedAt || null, resubmits: sent ? Math.max(0, (sent.submitCount || 1) - 1) : 0,
@@ -457,8 +481,9 @@ function briefSummary(sum, ownDeptId) {
 // Bản tổng hợp theo quyền người xem: có quyền chi tiết (weekly.summary.detail) → đầy đủ; còn lại (trưởng / phó) → bản tóm tắt của
 // bộ phận mình. text = BẢN GỬI EMAIL (emailText, chủ dự án chọn "Bản tóm tắt" 24/11/2026) cho MỌI người dùng — nút "Sao chép bản tổng hợp",
 // API /api/weekly/summary, MCP kepper_weekly_summary. fullText (I, II, III đầy đủ) chỉ cho người xem đầy đủ, chỉ dùng nội bộ, không gửi email.
-function summaryView(sum, { full, departmentId }) {
-  const view = full ? sum : briefSummary(sum, departmentId);
+// canSee(itemId): người xem xem được việc (bản tóm tắt: dòng / tên việc họ không xem được bị bỏ; số liệu giữ nguyên với mọi người).
+function summaryView(sum, { full, departmentId, canSee = () => false }) {
+  const view = full ? sum : briefFor(briefSummary(sum, departmentId), canSee);
   return { view, text: emailText(view), ...(full ? { fullText: summaryText(view) } : {}) };
 }
 
@@ -512,8 +537,9 @@ function emailText(sum) {
     for (const a of sum.actionReview) L.push(`- [${a.department}] ${a.task} — ${a.status || 'chưa báo cáo'}${a.overdue && a.status !== DONE ? ', quá hạn' : ''}`);
   }
   L.push('', 'NGUY CƠ CHẬM TIẾN ĐỘ (trễ hạn / chậm / vướng / sắp hạn / chậm khởi động / đăng ký mà chưa làm)');
-  const named = (sum.risks || []).filter(x => !x.auto);
-  if (!named.length) L.push('- Không có');
+  const named = (sum.risks || []).filter(x => !x.auto && !x.hidden), unnamed = (sum.risks || []).length - named.length;
+  if (!named.length && !unnamed) L.push('- Không có');
+  if (unnamed) L.push(`- (${unnamed} việc hệ thống tự bổ sung / không nêu tên — xem trong Kepler Hub)`);
   for (const x of named) L.push(`- [${x.department}] ${x.task} — ${x.risk}${x.due ? ` (hạn ${fmtD(x.due)})` : ''}${x.pct !== '' && x.pct != null ? ` · ${x.pct}%` : ''}${x.solution ? ` — Giải pháp: ${x.solution}` : ''}`);
   L.push('', 'YÊU CẦU HỖ TRỢ (xử lý 09:15 – 09:25)');
   if (!sum.helps.length) L.push('- Không có');
@@ -563,6 +589,6 @@ function fridaysOf(ym, now = new Date(), startWeek = null) {
 module.exports = {
   SOURCES, MTL_SOURCE, TASK_SOURCE, RISK_CODES, STATUSES, DONE, HELP_BGD, HELP_SELF, REASONS, NOTICE_TYPES, ATTENDANCE, DECISIONS, POINTS, POINT_LABEL,
   isDay, addDays, dayOf, at, weekday, currentFriday, isFriday, fmtD, fmtDY, fmtTime, scheduleOf, meetingStarted,
-  AUTO_LABEL, isAuto, addAutoRows, withoutAuto, isOverdue, needsIssue, issueLabel, rowRisk, riskRows, rowStarted, partsOf, regroup, adoptMandatory, PLAN_NOT_STARTED, riskNoteOf, placeOf, statusFromMtl, taskStatus, deptCandidates, buildPrefill, sanitize, validate, finalize, writeBacks,
+  doneSince, AUTO_LABEL, isAuto, addAutoRows, withoutAuto, viewFor, briefFor, allRows, isOverdue, needsIssue, issueLabel, rowRisk, riskRows, rowStarted, partsOf, regroup, adoptMandatory, PLAN_NOT_STARTED, riskNoteOf, placeOf, statusFromMtl, taskStatus, deptCandidates, buildPrefill, sanitize, validate, finalize, writeBacks,
   submissionStatus, absenceNoticed, SUBMITTED, buildSummary, briefSummary, summaryText, emailText, summaryView, compliance, fridaysOf, stableStringify,
 };

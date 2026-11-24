@@ -217,7 +217,8 @@ const testKey = r => esc(r.ref || r.key);
 const autoChip = r => (r.auto ? ` <span class="wk-chip c-idle" title="Việc của bộ phận mà người lập không xem được — tiến độ, hạn, nguy cơ lấy từ hệ thống" data-testid="wk-auto-${testKey(r)}">Hệ thống tự bổ sung</span>` : '');
 
 function rowHtml(list, r, i) {
-  const f = st.week, ed = st.rep.canEdit, linked = !!r.itemId;
+  // Dòng "Hệ thống tự bổ sung": máy chủ dựng lại ở mỗi lần nộp — chỉ đọc trên biểu mẫu.
+  const f = st.week, ed = st.rep.canEdit && !r.auto, linked = !!r.itemId;
   const dis = ed ? '' : 'disabled';
   const pct = r.pctLocked
     ? `<label class="wk-f">% hoàn thành<input type="number" value="${esc(r.pct)}" readonly title="Tự tính từ việc nhánh của hạng mục"><span class="wk-note">tự tính từ việc nhánh</span></label>`

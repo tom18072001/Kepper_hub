@@ -370,8 +370,42 @@ test('21. Mục S10 — việc Giám đốc giao trưởng phòng qua sổ, nhâ
   // Người lập: báo cáo đã nộp của bộ phận mình không có dòng đó.
   const nvRep = await json(nv, `/api/weekly/report?week=${ctx.week}`);
   expect(JSON.stringify(nvRep.report.data).includes(title)).toBe(false);
-  // Bản tóm tắt (trưởng phòng Kỹ thuật, trưởng ban Tài chính): không có việc, kể cả trường text (MCP kepper_weekly_summary dùng chung).
-  for (const p of [tp, tc]) {
+  // Hồi quy vòng 3: "Gửi lại" của trưởng phòng (xem được việc) và của thư ký (không xem được việc, nhập thay) — dòng tự bổ sung giữ nguyên,
+  // một việc một dòng, số liệu không đổi, nhân viên không thấy tên, bản email không nêu tên.
+  const base = { ongoing: ktRow.ongoing, risk: ktRow.risk };
+  const stable = async label => {
+    const sum = await json(gd, `/api/weekly/summary?week=${ctx.week}`);
+    const row = sum.rows.find(r => r.id === kt);
+    const mine = rowsOf(row.report).filter(r => r.itemId === item.id);
+    expect(mine.length, label).toBe(1); expect(mine[0].auto, label).toBe(true);
+    expect(rowsOf(row.report).filter(r => !r.itemId && r.task === title).length, label).toBe(0);
+    expect({ ongoing: row.ongoing, risk: row.risk }, label).toEqual(base);
+    expect(sum.text, label).not.toContain(title);
+    expect(JSON.stringify((await json(nv, `/api/weekly/report?week=${ctx.week}`)).report.data).includes(title), label).toBe(false);
+  };
+  const tpForm = (await json(tp, `/api/weekly/report?week=${ctx.week}`)).report.data;
+  expect(rowsOf(tpForm).some(r => r.itemId === item.id)).toBe(true); // trưởng phòng vốn xem được việc
+  tpForm.other = 'Trưởng phòng bổ sung (giả)';
+  await post(tp, '/api/weekly/submit', { week: ctx.week, data: tpForm });
+  await stable('trưởng phòng gửi lại');
+  const hc = await as('nv.hcns'); // thư ký giao ban: bộ phận khác, không xem được việc trong sổ
+  expect((await apiAs(hc, `/api/items/${item.id}`)).status()).toBeGreaterThanOrEqual(403);
+  const secForm = async () => (await json(hc, `/api/weekly/report?week=${ctx.week}&departmentId=${kt}`)).report.data;
+  const drop = await secForm();
+  for (const k of ['results', 'ongoing', 'risks']) drop[k] = drop[k].filter(r => r.itemId !== item.id);
+  await post(hc, '/api/weekly/submit', { week: ctx.week, departmentId: kt, data: drop });
+  await stable('thư ký gửi lại — bỏ dòng');
+  const filled = await secForm();
+  for (const r of rowsOf(filled)) Object.assign(r, { next: r.next || 'Theo dõi (giả)', cause: 'Theo báo cáo (giả)', solution: 'Đôn đốc (giả)', helpFrom: 'SELF' });
+  await post(hc, '/api/weekly/submit', { week: ctx.week, departmentId: kt, data: filled });
+  await stable('thư ký gửi lại — điền rồi gửi');
+  // Trưởng phòng Kỹ thuật (vốn xem được việc) thấy dòng trên trang Tổng hợp; số liệu giống Ban GĐ.
+  const tpSum = await json(tp, `/api/weekly/summary?week=${ctx.week}`);
+  expect(rowsOf(tpSum.rows.find(r => r.id === kt).report).some(r => r.itemId === item.id)).toBe(true);
+  expect({ ongoing: tpSum.rows.find(r => r.id === kt).ongoing, risk: tpSum.rows.find(r => r.id === kt).risk }).toEqual(base);
+  expect(tpSum.text).not.toContain(title);
+  // Bản tóm tắt (trưởng phòng Kỹ thuật, trưởng ban Tài chính): trưởng ban Tài chính không có việc, kể cả trường text (MCP kepper_weekly_summary dùng chung).
+  for (const p of [tc]) {
     const brief = await json(p, `/api/weekly/summary?week=${ctx.week}`);
     expect(JSON.stringify(brief).includes(title)).toBe(false);
     expect(brief.text.includes('tự bổ sung')).toBe(false);

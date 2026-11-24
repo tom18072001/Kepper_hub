@@ -1003,9 +1003,10 @@ Việc chưa bắt đầu thì không báo cáo, trừ khi đã có nguy cơ ch�
 ### 4. Khuyến nghị và rủi ro còn lại
 
 - **Khuyến nghị 1 (Nên có):** chủ dự án xác nhận việc này là chấp nhận được. Tên việc thường của dự án hạn chế đi vào báo cáo tuần bộ phận. Người đọc thực tế:
-  **mọi thành viên bộ phận** (báo cáo bộ phận mình), thư ký / PMO / Ban GĐ (mọi bộ phận, bản đầy đủ và văn bản sao chép đầy đủ), người nhận email nếu bản
-  đầy đủ được dán vào email gửi các trưởng bộ phận. Theo QC-TH-01, đây là bộ phận báo cáo việc của mình lên. Nếu không chấp nhận, lọc theo `visibility`
-  của dự án khi điền sẵn. (Việc người lập không xem được thì không đến người lập — mục 5.)
+  **mọi thành viên bộ phận** (báo cáo bộ phận mình — trừ việc họ không xem được, xem mục 5), thư ký / PMO / Ban GĐ (mọi bộ phận, bản đầy đủ trong Hub),
+  và **các trưởng bộ phận nhận email sau giao ban**: bản gửi email (bản tóm tắt, chủ dự án chọn) nêu **tên việc ở mục nguy cơ chậm** của mọi bộ phận
+  (tên việc, mức nguy cơ, hạn, giải pháp) — đúng quyết định "Bản tóm tắt"; dòng "Hệ thống tự bổ sung" thì không nêu tên, chỉ đếm.
+  Theo QC-TH-01, đây là bộ phận báo cáo việc của mình lên. Nếu không chấp nhận, lọc theo `visibility` của dự án khi điền sẵn.
 - **Khuyến nghị 2 (Bắt buộc):** cập nhật hồ sơ đánh giá tác động xử lý DLCN (PRI-04) như mục 3, gồm kênh MCP.
 - **Khuyến nghị 3 (Nên có):** soát các bản tổng hợp đã sao chép / gửi qua Claude trước bản sửa: trưởng / phó bộ phận có thể đã nhận văn bản đầy đủ của bộ phận khác.
 - **Khuyến nghị 4 (đã xử lý 24/11/2026):** bản gửi email = bản tóm tắt nói trên (chủ dự án chọn). Còn lại (Nên có): thư ký / Ban GĐ không dán
@@ -1034,10 +1035,23 @@ Ví dụ: TGĐ giao trưởng phòng qua sổ giao việc, nhân viên lập bá
 
 | Nơi xem | Ban GĐ, thư ký, PMO (`weekly.summary.detail`) | Người vốn xem được việc (vd. trưởng phòng được giao) | Người lập, nhân viên khác | Trưởng / phó (bản tóm tắt) |
 |---|---|---|---|---|
-| `/api/weekly/report`, `/report/versions`, MCP `kepper_weekly_report` | Có | Có (kiểm quyền xem từng việc) | Không | Không, trừ việc họ xem được |
-| `/api/weekly/summary` (số liệu, `rows`, `risks`, `fullText`), MCP `kepper_weekly_summary` | Có, đếm vào KPI; bản đầy đủ ghi "(hệ thống tự bổ sung)"; **bản gửi email (`text`) không nêu tên, chỉ đếm** | Bản tóm tắt: không | — | Không có, **không đếm** (dựng từ báo cáo đã bỏ dòng tự bổ sung) |
-| Thông báo "Tổng hợp giao ban" (gửi cả trưởng / phó) | Số liệu không đếm dòng tự bổ sung | | | |
+| `/api/weekly/report`, `/report/versions`, MCP `kepper_weekly_report`, dữ liệu trả kèm lỗi 422 khi nộp | Có | Có (kiểm quyền xem từng việc) | Không | Không, trừ việc họ xem được |
+| `/api/weekly/summary` trang Tổng hợp (`rows`, `risks`, `fullText`) | Có; bản đầy đủ ghi "(hệ thống tự bổ sung)" | Trưởng / phó của chính bộ phận đó: **có** (dòng của việc họ xem được) | — | Không có tên (danh sách nguy cơ chỉ còn mức nguy cơ, không tên) |
+| Số liệu (KPI, xong / đang làm / nguy cơ từng bộ phận) — trang Tổng hợp, bản gửi email, thông báo | **Giống nhau với mọi người**: luôn đếm dòng tự bổ sung | như cột trái | | như cột trái |
+| Bản gửi email (`text`), MCP `kepper_weekly_summary` | Không nêu tên dòng tự bổ sung; mục nguy cơ ghi "(N việc hệ thống tự bổ sung / không nêu tên — xem trong Kepler Hub)" | như cột trái | | như cột trái, thêm: không nêu tên việc họ không xem được |
 | Bản Word (Dashboard) | Đếm theo quyền xem của người xuất. Ban GĐ có `work.view` toàn hệ thống nên có cả việc này | | | |
+
+**Ẩn / hiện theo người xem (nghiệm thu vòng 3).** Quy tắc áp cho MỌI dòng gắn việc, không chỉ dòng tự bổ sung: người không có quyền xem tổng hợp đầy đủ
+chỉ nhận dòng gắn việc họ xem được (`itemVisibleWhere` của chính người xem), kể cả dòng do trưởng phòng / thư ký nhập.
+
+**Gửi lại.** Mã việc và cờ tự bổ sung là dữ liệu của máy chủ, không phụ thuộc người bấm gửi:
+- Dòng tự bổ sung đã lưu luôn được máy chủ dựng lại từ phạm vi bộ phận, kể cả khi trưởng phòng (xem được việc) bấm "Gửi lại". Trên biểu mẫu, dòng này chỉ đọc.
+- Dòng gắn việc mà người gửi không xem được (vd. thư ký nhập thay) được giữ từ bản đã lưu. Máy chủ chỉ nhận phần giải trình người gửi sửa.
+- Mọi lần nộp / gửi lại đều tính lại phạm vi bộ phận và gộp theo `itemId`: một việc là một dòng.
+- Dòng gắn việc không hợp lệ bị bỏ, không thành dòng tự do giữ nguyên tên việc.
+- Lỗi kiểm tra không nêu dòng người gửi không sửa được.
+
+Thư ký vẫn gửi lại được sau giờ giao ban: đây là ngoại lệ có sẵn của quy chế (thư ký sửa căn cứ sau họp). Mọi phiên bản đều được lưu, bất biến và có SHA-256.
 
 Bản nộp vẫn băm SHA-256 trên bản đầy đủ (có dòng tự bổ sung). Bản người không có quyền nhận là bản đã lọc. Mã băm vẫn là của bản đầy đủ.
 

@@ -189,7 +189,8 @@ test('làm sạch + kiểm tra: Chậm / Vướng / Quá hạn bắt buộc nguy
   };
   const data = WK.sanitize(raw, { userIds: new Set([50]), deptIds: new Set([1, 2]), itemIds: new Set([1, 4]) });
   assert.equal(data.results[1].task, 'Việc phát sinh'); assert.equal(data.results[1].status, 'Hoàn thành'); assert.deepEqual(data.results[1].ownerIds, [50]);
-  assert.equal(data.results[2].itemId, null); // không xem được hạng mục 9 → thành dòng tự do
+  // Không xem được hạng mục 9 → BỎ dòng (không thành dòng tự do giữ nguyên tên việc — nghiệm thu vòng 3).
+  assert.equal(data.results.length, 2); assert.equal(data.results.some(r => r.task === 'Không được xem'), false);
   assert.equal(data.plans[0].basis, 'KH tháng'); assert.equal(data.extra, undefined);
   const errs = WK.validate(data, F, { deptName: id => (id === 2 ? 'Ban Tài chính (giả)' : '') });
   assert.ok(errs.some(e => /Hạng mục 1.*Chậm · Quá hạn.*thiếu nguyên nhân/.test(e)));
@@ -197,10 +198,10 @@ test('làm sạch + kiểm tra: Chậm / Vướng / Quá hạn bắt buộc nguy
   assert.ok(errs.some(e => /cần Ban Tài chính \(giả\) hỗ trợ việc gì/.test(e)));
   assert.ok(errs.some(e => /Phần II “Hạng mục 4”: ghi việc sẽ làm tuần tới/.test(e)));
   assert.ok(errs.some(e => /Phần IV “Kế hoạch \(giả\)”: thiếu người phụ trách/.test(e)));
-  assert.ok(errs.some(e => /Không được xem.*thiếu người phụ trách/.test(e)));
+  assert.equal(errs.some(e => /Không được xem/.test(e)), false);
   assert.ok(errs.some(e => /Hạng mục 1.*thiếu người phụ trách/.test(e))); // dòng MTL chưa giao người: phải chọn người phụ trách
   Object.assign(data.results[0], { cause: 'Chờ Sở (giả)', solution: 'Đôn đốc (giả)', helpWhat: 'Làm việc với Sở', helpBy: '2026-11-03', ownerIds: [50] });
-  data.ongoing[0].next = 'Nộp hồ sơ'; data.ongoing[0].ownerIds = [50]; data.plans[0].ownerIds = [50]; data.plans[0].due = '2026-11-05'; data.plans[0].output = 'Biên bản (giả)'; data.results[2].ownerIds = [50];
+  data.ongoing[0].next = 'Nộp hồ sơ'; data.ongoing[0].ownerIds = [50]; data.plans[0].ownerIds = [50]; data.plans[0].due = '2026-11-05'; data.plans[0].output = 'Biên bản (giả)';
   assert.deepEqual(WK.validate(data, F), []);
   // Dòng gắn việc (vd. việc thường đã xong, chưa từng đặt hạn): hạn lấy từ việc, không bắt nhập. Dòng tự do vẫn bắt buộc.
   assert.deepEqual(WK.validate({ ...data, results: [...data.results, { key: 'm7', itemId: 7, task: 'Việc thường (giả)', status: 'Hoàn thành', due: '', ownerIds: [50] }] }, F), []);
