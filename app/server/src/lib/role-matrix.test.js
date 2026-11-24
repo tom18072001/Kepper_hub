@@ -163,13 +163,13 @@ test('vai quyết định, không phải bộ quyền lưu riêng: vai Ban TGĐ 
 });
 
 // ---------- Quét mã: chốt "một hệ quy chiếu" ----------
-// Quét server/src, server/scripts, web/js THEO CÚ PHÁP: bỏ chú thích, quét cả tệp (bắt được cách viết nhiều dòng), không phụ thuộc
+// Quét server/src, server/scripts, web/js, mcp THEO CÚ PHÁP: bỏ chú thích, quét cả tệp (bắt được cách viết nhiều dòng), không phụ thuộc
 // cách viết so sánh (===, đảo vế, includes, switch/case, Prisma in / notIn…):
 //   • chuỗi giá trị vai 'director' | 'manager' | 'deputy' | 'member' ở BẤT KỲ đâu; 'admin' khi đứng gần chữ role;
 //   • đọc / lọc bảng quyền lưu riêng từng người: userPermission, `permissions: { some`, `permissions: true`, `.permissions.`.
 // Chỉ nơi định nghĩa vai được dùng: server lib/permissions.js, web js/util.js (+ js/store.js đọc bảng quyền-theo-vai của chính mình).
 const APP = path.join(__dirname, '..', '..', '..');
-const ROOTS = [['server/src', path.join(APP, 'server', 'src')], ['server/scripts', path.join(APP, 'server', 'scripts')], ['web/js', path.join(APP, 'web', 'js')]];
+const ROOTS = [['server/src', path.join(APP, 'server', 'src')], ['server/scripts', path.join(APP, 'server', 'scripts')], ['web/js', path.join(APP, 'web', 'js')], ['mcp', path.join(APP, 'mcp')]];
 const ALLOW = {
   'server/src/lib/permissions.js': 'nơi định nghĩa vai và bảng quyền theo vai',
   'web/js/util.js': 'nơi so giá trị vai duy nhất trên giao diện',
@@ -180,9 +180,6 @@ const ALLOW = {
   'server/src/tidy-demo.js': 'dọn dữ liệu GIẢ',
 };
 const ALLOW_RULE = { 'web/js/store.js': ['bảng quyền'] }; // can() đọc bảng quyền-theo-vai server trả cho chính người dùng
-// Tệp PR #40 (Báo cáo tuần) đang sửa: chuyển sang hàm vai sau khi #40 merge. Test FAIL khi một tệp trong danh sách đã hết vi phạm
-// (buộc gỡ khỏi danh sách) — danh sách không thể nằm lại mãi.
-const PENDING_PR40 = ['server/src/services/weekly-data.js', 'server/src/routes/reports.js', 'server/src/services/alerts.js', 'web/js/views/weekly.js'];
 const RULES = [
   ['chuỗi vai', /['"`](director|manager|deputy|member)['"`]/g, 'code'],
   ['chuỗi vai', /\brole\b[^;]{0,60}?['"`]admin['"`]|['"`]admin['"`][^;]{0,60}?\brole\b/g, 'code'],
@@ -193,6 +190,7 @@ const RULES = [
   ['bảng quyền', /\bpermissions\s*:\s*(\{\s*(some|none|every|where)\b|true\b)/g, 'bare'],
   ['bảng quyền', /\b(me|user|u|actor|target|req\.user)\??\.permissions\b/g, 'bare'],
   ['bảng quyền', /\.permissions\s*\??\.\s*[A-Za-z_$]/g, 'bare'], // <biến bất kỳ>.permissions.find / .some / .length …
+  ['bảng quyền', /\bpermissions\s*:\s*\[/g, 'bare'], // người dùng giả mang bảng quyền riêng (vd. { role: 'system', permissions: [ … ] })
 ];
 // Bỏ chú thích (giữ xuống dòng để đếm dòng); bản 'bare' bỏ thêm nội dung chuỗi.
 const TOKENS = /('(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`)|(\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g;
@@ -213,8 +211,8 @@ function sources() {
   for (const [prefix, dir] of ROOTS) {
     const walk = d => { for (const e of fs.readdirSync(d, { withFileTypes: true })) {
       const p = path.join(d, e.name);
-      if (e.isDirectory()) { if (!['node_modules', '__fixtures__', 'vendor'].includes(e.name)) walk(p); }
-      else if (/\.m?js$/.test(e.name) && !/\.test\.m?js$/.test(e.name)) out.push([prefix + '/' + path.relative(dir, p).split(path.sep).join('/'), p]);
+      if (e.isDirectory()) { if (!['node_modules', '__fixtures__', 'vendor', 'test'].includes(e.name)) walk(p); }
+      else if (/\.[mc]?js$/.test(e.name) && !/\.test\.[mc]?js$/.test(e.name)) out.push([prefix + '/' + path.relative(dir, p).split(path.sep).join('/'), p]);
     } };
     walk(dir);
   }
@@ -228,7 +226,7 @@ test('quét mã: chính bộ quét bắt được mọi cách viết đã gặp 
     "await tx.userPermission.findMany({});", "where: {\n  role:\n    'director' }", "include: { permissions: true }", "where: { permissions: { some: {} } }",
     "where: { permissions: { none: {} } }", "where: { permissions: { every: {} } }", "include: { permissions: { where: { scope: 'SYSTEM' } } }",
     "const g = actor2.permissions.find(x => x);", "await db['userPermission'].findMany({})", "if (u.role.toUpperCase() === 'DIRECTOR') x();",
-    "const r = u.role === \"Manager\";",
+    "const r = u.role === \"Manager\";", "const S = { id: 0, permissions: [{ permissionKey: 'work.view' }] };",
   ];
   for (const src of bad) assert.ok(scanFile(src).length > 0, 'phải bắt: ' + src);
   const good = ["// so 'director' trong chú thích thì không sao", "app.get('/api/admin/users', h)", "if (parts[0] === 'admin') route()", "catalogList(cat).map(p => p)", "x = 'admin.users'", "if (step.approverType === 'DIRECTOR') x();", "oneOf(m.role || 'MEMBER', MEMBER_ROLES)"];
@@ -238,16 +236,13 @@ test('quét mã: chính bộ quét bắt được mọi cách viết đã gặp 
 test('quét mã: server, scripts, web không so chuỗi vai / không đọc bảng quyền từng người ngoài nơi định nghĩa vai', () => {
   const files = sources();
   assert.ok(files.length > 80, 'quét được mã nguồn server + scripts + web');
-  const hits = [], pendingHits = new Map(PENDING_PR40.map(f => [f, 0]));
+  const hits = [];
   for (const [rel, file] of files) {
     if (ALLOW[rel]) continue;
     for (const h of scanFile(fs.readFileSync(file, 'utf8'))) {
       if ((ALLOW_RULE[rel] || []).includes(h.why)) continue;
-      if (pendingHits.has(rel)) { pendingHits.set(rel, pendingHits.get(rel) + 1); continue; }
       hits.push(`${rel}:${h.line} (${h.why}): ${h.snippet}`);
     }
   }
   assert.deepEqual(hits, [], 'Hỏi vai qua lib/permissions.js (server) hoặc web/js/util.js (giao diện):\n' + hits.join('\n'));
-  const cleared = [...pendingHits].filter(([, n]) => n === 0).map(([f]) => f);
-  assert.deepEqual(cleared, [], 'Tệp đã hết vi phạm — gỡ khỏi PENDING_PR40: ' + cleared.join(', '));
 });

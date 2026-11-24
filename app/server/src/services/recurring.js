@@ -5,7 +5,7 @@ const bus = require('./bus');
 
 const H7 = 7 * 3_600_000, DAY = 86_400_000, RUN_HOUR = 7;
 const FREQUENCIES = ['DAILY', 'WEEKLY', 'MONTHLY'];
-const SYSTEM_ACTOR = Object.freeze({ id: null, isSystem: true, fullName: 'Hệ thống', permissions: [] });
+const SYSTEM_ACTOR = Object.freeze({ id: null, isSystem: true, fullName: 'Hệ thống' });
 
 function localParts(date) {
   const x = new Date(date.getTime() + H7);

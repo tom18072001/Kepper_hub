@@ -5,7 +5,7 @@ const M = require('./mtl');
 const { notify } = require('./events');
 const approval = require('./approval');
 const viber = require('./viber');
-const { permissionScope } = require('../lib/permissions');
+const { permissionScope, NOT_IT_WHERE } = require('../lib/permissions');
 
 const KIND_LABEL = { START_SOON: 'Sắp bắt đầu', LATE_START: 'Chậm khởi động', DUE_SOON: 'Sắp đến hạn', BEHIND: 'Chậm tiến độ', AHEAD: 'Vượt tiến độ', OVERDUE: 'Trễ hạn', STALE: 'Lâu chưa cập nhật' };
 // Chu kỳ nhắc lại (ngày); 0 = chỉ một lần cho mỗi hạng mục.
@@ -109,7 +109,8 @@ async function runProjectAlerts(prisma, project, day = new Date()) {
   // Người nhận: người chủ trì; lãnh đạo bộ phận chủ trì; PMO = trưởng dự án + chủ dự án; đường găng / mốc mức nặng: thêm Ban lãnh đạo.
   const owners = (await prisma.projectMember.findMany({ where: { projectId: project.id, role: 'OWNER' }, select: { userId: true } })).map(m => m.userId);
   const pmo = [...new Set([project.leadId, ...owners].filter(Boolean))];
-  const directors = (await prisma.user.findMany({ where: { isActive: true, permissions: { some: { permissionKey: 'work.approve', scope: 'SYSTEM' } } }, include: { permissions: true } }))
+  // Ban lãnh đạo = vai có quyền duyệt toàn đơn vị (theo vai — lib/permissions.js, không đọc quyền lưu riêng từng người).
+  const directors = (await prisma.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE }, select: { id: true, role: true, isRootAdmin: true, departmentId: true } }))
     .filter(u => permissionScope(u, 'work.approve', 'OPERATE') === 'SYSTEM').map(u => u.id);
   const leaderCache = new Map();
   const leadersOf = async id => { if (!leaderCache.has(id)) leaderCache.set(id, await approval.deptLeaderIds(prisma, id)); return leaderCache.get(id); };

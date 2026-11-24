@@ -47,6 +47,9 @@ const isDeptApprover = user => isDeptLeader(user) || (isBoard(user) && user.depa
 const IT_WHERE = Object.freeze({ OR: [{ isRootAdmin: true }, { role: 'admin' }] });
 const NOT_IT_WHERE = Object.freeze({ isRootAdmin: false, role: { not: 'admin' } });
 const BOARD_WHERE = Object.freeze({ isRootAdmin: false, role: 'director' });
+// Chủ thể NỘI BỘ của hệ thống (không phải tài khoản, id 0): xem mọi việc để dựng phạm vi của một bộ phận (vd. báo cáo tuần: mọi việc
+// của bộ phận, routes/weekly.js). Quyền lấy từ vai như mọi người dùng (work.view toàn đơn vị) — không mang bảng quyền riêng.
+const SYSTEM_VIEWER = Object.freeze({ id: 0, isRootAdmin: false, role: 'director', departmentId: null });
 const DEPT_APPROVER_WHERE = Object.freeze({ isRootAdmin: false, role: { in: ['director', 'manager', 'deputy'] }, departmentId: { not: null } });
 // Bộ phận Ban Tổng Giám đốc (theo mã): vai BTGĐ nên trùng đúng thành viên bộ phận này — lệch thì quản trị được cảnh báo.
 // Dữ liệu GIẢ (SEED_DEMO=true: bản thử, e2e) đặt mã 'BGD' cho bộ phận này; máy chạy thật chỉ nhận 'BTGD'.
@@ -179,6 +182,6 @@ function catalog() {
 }
 
 module.exports = {
-  PERMISSIONS, ROLES, DEFAULT_ROLE, ROLE_PROFILES, isBusinessKey, isItAdmin, isBoard, isDeptLeader, roleOf, NOT_IT_WHERE, BOARD_WHERE, isDeptApprover, DEPT_APPROVER_WHERE,
+  PERMISSIONS, ROLES, DEFAULT_ROLE, ROLE_PROFILES, isBusinessKey, isItAdmin, isBoard, isDeptLeader, roleOf, NOT_IT_WHERE, BOARD_WHERE, SYSTEM_VIEWER, isDeptApprover, DEPT_APPROVER_WHERE,
   BOARD_DEPT_CODES, isBoardDept, rolesWith, IT_WHERE, roleRank, boardDeptMismatch, validGrant, permissionScope, hasPermission, canAccessDepartment, accessMap, canResetPassword, catalog, syncRoleGrants,
 };

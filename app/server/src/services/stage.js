@@ -2,7 +2,7 @@
 // → chờ phòng duyệt → chờ BTGĐ cho ý kiến → hoàn thành; bị trả lại. Dùng chung cho sổ, hộp việc phòng, file xuất.
 const STAGES = {
   PENDING_ACCEPT: 'Chờ phòng tiếp nhận', TODO: 'Chưa bắt đầu', DOING: 'Đang thực hiện', RETURNED: 'Bị trả lại',
-  WAIT_ASSIGNER: 'Chờ người giao duyệt', WAIT_DEPT: 'Chờ phòng duyệt', WAIT_BGD: 'Chờ BGĐ cho ý kiến' /* đổi chữ BTGĐ sau khi PR #40 (dashboard.test) merge */, WAIT_APPROVAL: 'Chờ duyệt', DONE: 'Hoàn thành', CANCELLED: 'Huỷ',
+  WAIT_ASSIGNER: 'Chờ người giao duyệt', WAIT_DEPT: 'Chờ phòng duyệt', WAIT_BGD: 'Chờ BTGĐ cho ý kiến', WAIT_APPROVAL: 'Chờ duyệt', DONE: 'Hoàn thành', CANCELLED: 'Huỷ',
 };
 // item: { state: { category }, dispatchStatus, returnedAt, pendingApproval|approvals: [{ currentLevel }] }
 // steps: các bước duyệt của dự án [{ level, name, approverType }]

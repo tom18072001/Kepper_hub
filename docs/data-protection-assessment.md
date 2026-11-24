@@ -1022,6 +1022,7 @@ Việc chưa bắt đầu thì không báo cáo, trừ khi đã có nguy cơ ch�
 **Là gì.** Tập việc phải báo cáo của một bộ phận (xong trong tuần / đang làm / nguy cơ chậm) nay tính theo **phạm vi bộ phận**, không theo quyền xem
 của người lập. Quy tắc chọn việc giống điền sẵn (`deptCandidates`). Biểu mẫu của người lập vẫn chỉ có việc họ được xem.
 Lúc nộp (`POST /api/weekly/submit`), máy chủ đọc mọi việc của bộ phận bằng phạm vi nội bộ `DEPT_SCOPE` (chỉ dùng trong máy chủ, không trả thẳng cho ai).
+(Cập nhật 24/11/2026 — một hệ quy chiếu phân quyền: `DEPT_SCOPE` là chủ thể nội bộ `SYSTEM_VIEWER` của `lib/permissions.js`, quyền xem việc lấy theo vai, không mang bảng quyền riêng; phạm vi dữ liệu không đổi. Vai giao ban: Ban TGĐ theo vai; thư ký, PMO theo kiêm nhiệm trong thiết lập giao ban — đổi vai một tài khoản không làm đổi quyền thư ký / PMO.)
 Việc người nộp không xem được thì máy chủ thêm vào bản nộp, có cờ `auto: true`, nhãn "Hệ thống tự bổ sung":
 - tên, mã, hạn, người phụ trách, %, tình trạng, nguy cơ lấy từ hệ thống;
 - không có nguyên nhân / giải pháp / đề nghị hỗ trợ, không bắt người lập ghi;

@@ -2,7 +2,7 @@
 // việc trễ hạn kèm khâu, khó khăn – kiến nghị (từ báo cáo tiến độ), nhiệm vụ kỳ tới. Kỳ tối đa 93 ngày (xuất theo quý).
 const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, HeadingLevel, WidthType, AlignmentType, ShadingType } = require('docx');
 const { fail, optionalInt } = require('../lib/http');
-const { permissionScope } = require('../lib/permissions');
+const { permissionScope, isBoard } = require('../lib/permissions');
 const { visibleProjectsWhere, itemVisibleWhere } = require('../services/access');
 const { stageOf } = require('../services/stage');
 const S = require('../services/stats');
@@ -119,8 +119,8 @@ async function buildWeekly(prisma, user, { projectId, departmentId, from, to }) 
   const scope = permissionScope(user, 'reports.export', 'OPERATE');
   if (!scope) fail(403, 'Bạn không có quyền xuất báo cáo', 'FORBIDDEN');
   const where = { ...visibleProjectsWhere(user), archivedAt: null };
-  // Dự án MTL (Bảo mật): xuất theo quy định mtl.plan · export — báo cáo Word cũ chỉ Ban GĐ mới gồm MTL.
-  if (user.role !== 'director') where.kind = { not: 'MTL' };
+  // Dự án MTL (Bảo mật): xuất theo quy định mtl.plan · export — báo cáo Word cũ chỉ Ban TGĐ mới gồm MTL.
+  if (!isBoard(user)) where.kind = { not: 'MTL' };
   if (projectId) where.id = projectId;
   const projects = await prisma.project.findMany({ where, select: { id: true, key: true, name: true, departmentId: true }, orderBy: { name: 'asc' } });
   if (projectId && !projects.length) fail(404, 'Không tìm thấy dự án trong phạm vi được xuất', 'NOT_FOUND');

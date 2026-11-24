@@ -140,7 +140,7 @@ export function buildServer({ call = createSession() } = {}) {
       const me = await call('/api/me');
       const ctx = await call('/api/weekly/context').catch(() => null);
       return { user: pick(me, ['id', 'username', 'fullName', 'displayTitle', 'role']), department: me.department?.name || null,
-        weekly: ctx ? { week: ctx.week, deadline: ctx.schedule?.deadline, roles: pick(ctx.me, ['director', 'secretary', 'pmo', 'leader', 'mustReport', 'canSummary', 'canDetail']) } : null };
+        weekly: ctx ? { week: ctx.week, deadline: ctx.schedule?.deadline, roles: { banTGD: !!ctx.me?.director, ...pick(ctx.me, ['secretary', 'pmo', 'leader', 'mustReport', 'canSummary', 'canDetail']) } } : null };
     }));
 
   server.registerTool('kepper_my_tasks', { title: 'Việc của tôi', description: 'Việc đang mở được giao cho tôi (chủ trì hoặc phối hợp), sắp theo hạn. Dùng để tổng hợp, nhắc việc, lập báo cáo.',
@@ -185,7 +185,7 @@ export function buildServer({ call = createSession() } = {}) {
       return { week: d.week, department: d.department?.name, status: d.status, deadline: d.schedule?.deadline, canEdit: d.canEdit, savedAt: d.report?.updatedAt, submitted: !!d.report?.firstSubmittedAt, data, names: d.names };
     }));
 
-  server.registerTool('kepper_weekly_summary', { title: 'Tổng hợp giao ban', description: 'Bản tổng hợp giao ban tuần theo quyền (Ban GĐ, thư ký, PMO: đầy đủ; trưởng / phó: bản tóm tắt). text là bản gửi email: số liệu, việc nguy cơ chậm, yêu cầu hỗ trợ (không có danh sách việc xong / đang làm). Không có quyền → báo lỗi.',
+  server.registerTool('kepper_weekly_summary', { title: 'Tổng hợp giao ban', description: 'Bản tổng hợp giao ban tuần theo quyền (Ban TGĐ, thư ký, PMO: đầy đủ; trưởng / phó: bản tóm tắt). text là bản gửi email: số liệu, việc nguy cơ chậm, yêu cầu hỗ trợ (không có danh sách việc xong / đang làm). Không có quyền → báo lỗi.',
     inputSchema: { week: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }, annotations: R },
     run(async ({ week }) => { const d = await call(`/api/weekly/summary${week ? `?week=${week}` : ''}`); return { text: d.text, kpis: d.kpis, helps: d.helps, rows: (d.rows || []).map(r => pick(r, ['name', 'status', 'absent', 'late'])) }; }));
 

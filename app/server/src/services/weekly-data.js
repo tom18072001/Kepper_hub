@@ -1,12 +1,12 @@
 // Kepper GĐ2b — truy vấn dùng chung cho báo cáo tuần (API và lịch nhắc tự động).
-const { permissionScope, isItAdmin } = require('../lib/permissions');
+const { permissionScope, isItAdmin, isBoard, NOT_IT_WHERE, BOARD_WHERE } = require('../lib/permissions');
 const P = require('../lib/policy');
 const { notify } = require('./events');
 const approval = require('./approval');
 const WK = require('./weekly');
 
 const CONFIG_KEY = 'weekly.config';
-const ACTIVE_USER = { isActive: true, isRootAdmin: false, role: { not: 'admin' } };
+const ACTIVE_USER = { isActive: true, ...NOT_IT_WHERE };
 
 async function weeklyConfig(prisma) {
   const row = await prisma.appSetting.findUnique({ where: { key: CONFIG_KEY } });
@@ -17,27 +17,26 @@ async function weeklyConfig(prisma) {
     points: v.points && typeof v.points === 'object' ? v.points : null,
     // Bộ phận làm thư ký giao ban (QC-TH-01 Điều 2, 5: Phòng Tổng hợp & Nhân sự) — thành viên bộ phận này có quyền thư ký.
     secretaryDepartmentId: Number.isInteger(v.secretaryDepartmentId) ? v.secretaryDepartmentId : null,
-    // PMO do Ban GĐ chỉ định (không suy từ việc tự tạo / làm chủ một dự án MTL — tránh tự nâng quyền).
+    // PMO do Ban TGĐ chỉ định (không suy từ việc tự tạo / làm chủ một dự án MTL — tránh tự nâng quyền).
     pmoUserIds: Array.isArray(v.pmoUserIds) ? v.pmoUserIds.map(Number).filter(Number.isInteger) : [],
     pmoConfigured: Array.isArray(v.pmoUserIds),
   };
 }
-// Ban giám đốc (vai trò director): chủ trì giao ban, nhận báo cáo — KHÔNG lập báo cáo tuần (QC-TH-01 Điều 2, 5).
-const isDirector = user => user?.role === 'director';
+// Ban Tổng Giám đốc (vai BTGĐ, lib/permissions.js isBoard): chủ trì giao ban, nhận báo cáo — KHÔNG lập báo cáo tuần (QC-TH-01 Điều 2, 5).
 // Vai trò nghiệp vụ trong giao ban (subject của lib/policy.js), suy ra từ vai trò + phòng ban đã gán cho tài khoản:
-// - director: tài khoản vai trò Ban giám đốc — chủ trì, kết luận, KHÔNG lập báo cáo tuần;
-// - secretary: thành viên bộ phận thư ký (Ban GĐ chọn trong thiết lập) — tổng hợp, điểm danh, Action Log, nhập thay, chấm điểm;
-// - pmo: người Ban GĐ chỉ định làm PMO (chưa thiết lập danh sách: tạm dùng quyền "Xem tổng hợp" toàn đơn vị) — xem đầy đủ, không sửa;
+// - director: tài khoản vai trò Ban TGĐ — chủ trì, kết luận, KHÔNG lập báo cáo tuần;
+// - secretary: thành viên bộ phận thư ký (Ban TGĐ chọn trong thiết lập) — tổng hợp, điểm danh, Action Log, nhập thay, chấm điểm;
+// - pmo: người Ban TGĐ chỉ định làm PMO (chưa thiết lập danh sách: tạm dùng quyền "Xem tổng hợp" toàn đơn vị) — xem đầy đủ, không sửa;
 // - leader: có quyền "Xem tổng hợp" (trưởng / phó bộ phận) — nhận bản tổng hợp mức tóm tắt (Điều 5);
-// - mustReport: có phòng ban và không phải Ban GĐ.
+// - mustReport: có phòng ban và không phải Ban TGĐ.
 async function rolesOf(prisma, user, cfg = null) {
   if (isItAdmin(user)) return { it: true, director: false, secretary: false, pmo: false, leader: false, mustReport: false, departmentId: user.departmentId ?? null, userId: user.id, manage: false, summary: false, full: false };
   const c = cfg || await weeklyConfig(prisma);
   const scope = permissionScope(user, 'reports.summary', 'VIEW');
-  const director = isDirector(user);
-  // Ban GĐ không kiêm thư ký (không tự trình rồi tự duyệt bảng điểm, không nhập thay).
+  const director = isBoard(user);
+  // Ban TGĐ không kiêm thư ký (không tự trình rồi tự duyệt bảng điểm, không nhập thay).
   const secretary = !director && c.secretaryDepartmentId != null && user.departmentId === c.secretaryDepartmentId;
-  // PMO = danh sách Ban GĐ chỉ định. Chỉ khi Ban GĐ CHƯA thiết lập danh sách mới tạm dùng quyền "Xem tổng hợp" toàn đơn vị (khởi tạo).
+  // PMO = danh sách Ban TGĐ chỉ định. Chỉ khi Ban TGĐ CHƯA thiết lập danh sách mới tạm dùng quyền "Xem tổng hợp" toàn đơn vị (khởi tạo).
   const pmo = !director && (c.pmoConfigured ? c.pmoUserIds.includes(user.id) : scope === 'SYSTEM');
   const s = { it: false, director, secretary, pmo, leader: !!scope, mustReport: !director && user.departmentId != null, departmentId: user.departmentId ?? null, userId: user.id };
   // Tiện cho giao diện / route: manage = sửa giao ban; summary = xem bản tổng hợp; full = xem chi tiết mọi bộ phận.
@@ -49,8 +48,8 @@ async function requiredDepartments(prisma, cfg) {
   if (cfg.departments.length) return { list: cfg.departments.map(id => all.find(d => d.id === id)).filter(Boolean), all, configured: true };
   const rows = await prisma.workItem.findMany({ where: { archivedAt: null, leadDepartmentId: { not: null }, project: { kind: 'MTL', archivedAt: null, deletedAt: null } }, distinct: ['leadDepartmentId'], select: { leadDepartmentId: true } });
   const ids = new Set(rows.map(r => r.leadDepartmentId));
-  // Bộ phận của Ban giám đốc không nộp (Ban GĐ nhận báo cáo).
-  const bgd = new Set((await prisma.user.findMany({ where: { ...ACTIVE_USER, role: 'director', departmentId: { not: null } }, distinct: ['departmentId'], select: { departmentId: true } })).map(u => u.departmentId));
+  // Bộ phận của Ban TGĐ không nộp (Ban TGĐ nhận báo cáo).
+  const bgd = new Set((await prisma.user.findMany({ where: { isActive: true, ...BOARD_WHERE, departmentId: { not: null } }, distinct: ['departmentId'], select: { departmentId: true } })).map(u => u.departmentId));
   return { list: all.filter(d => ids.has(d.id) && !bgd.has(d.id)), all, configured: false };
 }
 async function userNames(prisma, ids) {
@@ -64,12 +63,12 @@ const meetingOf = (prisma, week) => prisma.weeklyMeeting.findUnique({ where: { w
 
 async function usersWhere(prisma, test) {
   const cfg = await weeklyConfig(prisma);
-  const users = await prisma.user.findMany({ where: ACTIVE_USER, include: { permissions: true } });
+  const users = await prisma.user.findMany({ where: ACTIVE_USER });
   const out = [];
   for (const u of users) if (test(await rolesOf(prisma, u, cfg))) out.push(u.id);
   return out;
 }
-// Thư ký / Ban GĐ / PMO — nhận thông báo nộp muộn, vắng.
+// Thư ký / Ban TGĐ / PMO — nhận thông báo nộp muộn, vắng.
 const managerIds = prisma => usersWhere(prisma, r => r.manage);
 // Người nhận bản tổng hợp: TGĐ, thư ký, PMO và trưởng / phó các bộ phận (Điều 5).
 const summaryViewerIds = prisma => usersWhere(prisma, r => r.summary);
@@ -158,4 +157,4 @@ async function runSummaryNotice(prisma, now = new Date()) {
   return { skipped: true, sent: 0 };
 }
 
-module.exports = { meetingLock, CONFIG_KEY, ACTIVE_USER, weeklyConfig, isDirector, rolesOf, requiredDepartments, userNames, rowOwnerIds, meetingOf, managerIds, summaryViewerIds, summaryOf, openActions, snapshotRequired, runReportReminder, runSummaryNotice };
+module.exports = { meetingLock, CONFIG_KEY, ACTIVE_USER, weeklyConfig, rolesOf, requiredDepartments, userNames, rowOwnerIds, meetingOf, managerIds, summaryViewerIds, summaryOf, openActions, snapshotRequired, runReportReminder, runSummaryNotice };
