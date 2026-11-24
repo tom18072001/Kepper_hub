@@ -205,7 +205,7 @@ export function buildServer({ call = createSession() } = {}) {
   server.registerTool('kepper_add_comment', { title: 'Bình luận', description: 'Thêm bình luận vào một việc (có thể @nhắc tên người trong dự án).', inputSchema: { itemId: z.number().int().positive(), text: z.string().min(1).max(5000) }, annotations: W },
     run(async ({ itemId, text }) => call(`/api/items/${itemId}/comments`, { method: 'POST', body: { body: text } }).then(c => pick(c, ['id', 'createdAt']))));
 
-  server.registerTool('kepper_create_task', { title: 'Giao việc / tạo việc', description: 'Tạo việc trong một dự án và giao người phụ trách. Dự án MTL: chỉ người quản lý dự án tạo hạng mục. Việc nhánh (parentId = việc cha): chỉ người chủ trì, người giao hoặc Ban Giám đốc của việc cha tạo.',
+  server.registerTool('kepper_create_task', { title: 'Giao việc / tạo việc', description: 'Tạo việc trong một dự án và giao người phụ trách. Dự án MTL: chỉ người quản lý dự án tạo hạng mục. Việc nhánh (parentId = việc cha): chỉ người chủ trì, người giao hoặc BTGĐ phụ trách của việc cha tạo.',
     inputSchema: { projectId: z.number().int().positive(), title: z.string().min(1).max(300), parentId: z.number().int().positive().optional(), assigneeIds: z.array(z.number().int().positive()).max(10).optional(),
       dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), description: z.string().max(5000).optional() }, annotations: W },
     run(async ({ projectId, title, parentId, assigneeIds, dueDate, description }) => {
@@ -261,7 +261,7 @@ export function buildServer({ call = createSession() } = {}) {
         interactions: p.interactions.slice(0, 50).map(i => ({ id: i.id, type: i.type.label, date: day(i.date), by: i.createdBy.fullName, summary: i.summary, nextStep: i.nextStep, nextDue: day(i.nextDue), nextOwner: i.nextOwner?.fullName, done: i.followUpDone })),
         limited: p.interactionsLimited || !p.can.detail };
     }));
-  server.registerTool('kepper_crm_followups', { title: 'Việc cần theo dõi với đối tác', description: 'Việc cần theo dõi với đối tác chưa xong, sắp theo hạn. scope=mine: được giao cho tôi; dept: của bộ phận tôi (lãnh đạo; Ban GĐ: tất cả).',
+  server.registerTool('kepper_crm_followups', { title: 'Việc cần theo dõi với đối tác', description: 'Việc cần theo dõi với đối tác chưa xong, sắp theo hạn. scope=mine: được giao cho tôi; dept: của bộ phận tôi (lãnh đạo; Ban TGĐ: tất cả).',
     inputSchema: { scope: z.enum(['mine', 'dept']).optional() }, annotations: R },
     run(async ({ scope = 'mine' }) => (await call(`/api/crm/followups?scope=${scope}`)).map(f => ({ id: f.id, partner: f.partner.name, partnerId: f.partner.id, nextStep: f.nextStep || f.summary, due: day(f.nextDue), overdue: f.overdue, owner: f.nextOwner?.fullName }))));
   server.registerTool('kepper_crm_log_interaction', { title: 'Ghi nhật ký làm việc với đối tác', description: 'Ghi một lần làm việc (họp, gọi, email, công văn, khảo sát) với đối tác; có thể giao việc cần theo dõi (nextDue + nextOwnerId; Kepler Hub nhắc vào sáng ngày đến hạn). Nhật ký không sửa / xoá được — kiểm tra nội dung trước khi ghi.',
@@ -275,20 +275,20 @@ export function buildServer({ call = createSession() } = {}) {
   // ---------- Playground HRM — chỉ khi Kepper bật module HRM. Số CCCD chỉ 4 số cuối, KHÔNG có lương; không chấm công / duyệt qua Claude ----------
   server.registerTool('kepper_hr_me', { title: 'Hồ sơ và phép của tôi', description: 'Hồ sơ nhân sự của tôi (không gồm số định danh đầy đủ, không gồm lương), số ngày phép năm còn lại, giờ chấm công hôm nay.', inputSchema: {}, annotations: R },
     run(async () => { const m = await call('/api/hrm/me'); return { profile: m.profile, leave: m.leave, today: m.today, workday: m.workday, contracts: m.contracts.map(k => ({ type: k.type.label, start: day(k.startDate), end: day(k.endDate), status: k.status })) }; }));
-  server.registerTool('kepper_hr_leaves', { title: 'Đơn nghỉ', description: 'Đơn nghỉ phép. scope=mine: của tôi; approve: đang chờ tôi duyệt (lãnh đạo bộ phận / Ban GĐ — duyệt trên giao diện Kepler Hub); team: bộ phận tôi (lãnh đạo / nhân sự / Ban GĐ).',
+  server.registerTool('kepper_hr_leaves', { title: 'Đơn nghỉ', description: 'Đơn nghỉ phép. scope=mine: của tôi; approve: đang chờ tôi duyệt (lãnh đạo bộ phận / Ban TGĐ — duyệt trên giao diện Kepler Hub); team: bộ phận tôi (lãnh đạo / nhân sự / Ban TGĐ).',
     inputSchema: { scope: z.enum(['mine', 'approve', 'team']).optional(), year: z.number().int().min(2020).max(2100).optional() }, annotations: R },
     run(async ({ scope = 'mine', year }) => (await call(`/api/hrm/leaves?scope=${scope}${year ? `&year=${year}` : ''}`)).slice(0, MAX_ROWS)
       .map(l => ({ id: l.id, person: l.user.fullName, department: l.user.department?.name, type: l.type.label, from: l.fromDate, to: l.toDate, halfDay: l.halfDay, days: l.days, reason: l.reason, status: l.status.label, approver: l.approver }))));
   server.registerTool('kepper_hr_request_leave', { title: 'Tạo đơn nghỉ', description: 'Tạo đơn nghỉ của CHÍNH tôi (gửi lãnh đạo bộ phận duyệt — Claude không duyệt). Lý do ngắn, không ghi tên bệnh / chẩn đoán. Hỏi lại người dùng ngày và loại nghỉ trước khi tạo.',
     inputSchema: { type: z.enum(['ANNUAL', 'SICK', 'PERSONAL_PAID', 'UNPAID', 'MATERNITY', 'OTHER']), fromDate: D, toDate: D.optional(), halfDay: z.enum(['NONE', 'AM', 'PM']).optional(), reason: z.string().max(200).optional() }, annotations: W },
     run(async args => call('/api/hrm/leaves', { method: 'POST', body: args })));
-  server.registerTool('kepper_hr_attendance', { title: 'Bảng công tháng', description: 'Bảng công một tháng (YYYY-MM) của tôi, hoặc của người trong bộ phận (lãnh đạo / nhân sự / Ban GĐ): tổng hợp và các ngày thiếu công / đi muộn. Giải trình chấm công làm trên giao diện Kepler Hub.',
+  server.registerTool('kepper_hr_attendance', { title: 'Bảng công tháng', description: 'Bảng công một tháng (YYYY-MM) của tôi, hoặc của người trong bộ phận (lãnh đạo / nhân sự / Ban TGĐ): tổng hợp và các ngày thiếu công / đi muộn. Giải trình chấm công làm trên giao diện Kepler Hub.',
     inputSchema: { month: z.string().regex(/^\d{4}-\d{2}$/).optional(), userId: z.number().int().positive().optional() }, annotations: R },
     run(async ({ month, userId }) => {
       const s = await call(`/api/hrm/attendance?${new URLSearchParams({ ...(month ? { month } : {}), ...(userId ? { userId: String(userId) } : {}) })}`);
       return { person: s.user.fullName, month: s.month, totals: s.totals, issues: s.sheet.filter(d => ['MISSING', 'NO_OUT', 'LATE_EARLY'].includes(d.status)).map(d => ({ day: d.day, status: d.status, minutesLate: d.record?.minutesLate || 0, explain: d.record?.adjust?.status || null })) };
     }));
-  server.registerTool('kepper_hr_team_attendance', { title: 'Tổng hợp công bộ phận', description: 'Tổng hợp công tháng theo người (lãnh đạo: bộ phận mình; nhân sự / Ban GĐ: mọi người).',
+  server.registerTool('kepper_hr_team_attendance', { title: 'Tổng hợp công bộ phận', description: 'Tổng hợp công tháng theo người (lãnh đạo: bộ phận mình; nhân sự / Ban TGĐ: mọi người).',
     inputSchema: { month: z.string().regex(/^\d{4}-\d{2}$/).optional() }, annotations: R },
     run(async ({ month }) => { const d = await call(`/api/hrm/attendance/team${month ? `?month=${month}` : ''}`); return { month: d.month, rows: d.rows.map(r => ({ person: r.user.fullName, department: r.user.department?.name, ...r.totals })) }; }));
 

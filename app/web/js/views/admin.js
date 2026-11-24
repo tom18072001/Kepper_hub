@@ -54,9 +54,11 @@ function scopeText(u) {
 // So sánh hai bộ quyền — chỉ còn dùng để XEM nhật ký cũ (Phân quyền từng người trước 24/11/2026, đổi vai).
 const slot = g => g.permissionKey + '|' + g.action;
 let permOrder = [];
-function rememberOrder(cat) { permOrder = cat.permissions.map((p, i) => [p.key, i]); }
+// Danh mục 14 quyền kỹ thuật (catalog) — KHÔNG phải bảng quyền của một người.
+const catalogList = cat => cat.permissions || [];
+function rememberOrder(cat) { permOrder = catalogList(cat).map((p, i) => [p.key, i]); }
 function grantName(cat, g) {
-  const p = cat.permissions.find(x => x.key === g.permissionKey);
+  const p = catalogList(cat).find(x => x.key === g.permissionKey);
   return `${esc(p ? p.label : g.permissionKey)} <span class="muted xs">· ${ACTION_TEXT[g.action] || esc(g.action)}</span>`;
 }
 function diffGrants(current = [], target = []) {
@@ -80,7 +82,8 @@ function diffTable(cat, rows, testid = 'perm-diff') {
 
 // ---------- Tài khoản ----------
 async function renderUsers(root) {
-  const users = await api('/api/admin/users');
+  // Nạp danh mục (mã bộ phận Ban TGĐ, bảng quyền theo vai) cùng lúc: cảnh báo lệch vai / bộ phận cần nó ngay khi mở form.
+  const [users] = await Promise.all([api('/api/admin/users'), getCatalog()]);
   adminUsersCache = null;
   const canEdit = can('admin.users', 'operate'), canPerm = can('admin.permissions');
   root.innerHTML = `<div class="page-head"><h1>Tài khoản</h1>${canEdit ? `<button class="btn btn-primary" id="addUser" data-testid="add-user">${ICON.plus}Tạo tài khoản</button>` : ''}</div>
@@ -144,10 +147,11 @@ function userForm(root, user = null) {
   let workload = null;
   const roleBox = $('#roleBox', modal), lockBox = $('#lockBox', modal), boardBox = $('#boardBox', modal);
   // Vai BTGĐ lệch bộ phận Ban Tổng Giám đốc: cảnh báo, phải xác nhận mới lưu (server kiểm lại).
-  function showBoardBox() {
-    const warning = boardMismatch(form.elements.role.value, form.elements.departmentId.value || null);
+  // serverWarning: máy chủ trả 422 BOARD_DEPT_MISMATCH — luôn hiện ô xác nhận, kể cả khi giao diện tự tính không ra.
+  function showBoardBox(serverWarning = null) {
+    const warning = (typeof serverWarning === 'string' ? serverWarning : null) || boardMismatch(form.elements.role.value, form.elements.departmentId.value || null);
     const unchanged = user && form.elements.role.value === roleKey(user) && String(form.elements.departmentId.value || '') === String(user.departmentId ?? '');
-    if (!warning || unchanged) { boardBox.className = 'hidden'; boardBox.innerHTML = ''; return; }
+    if (!warning || (unchanged && !serverWarning)) { boardBox.className = 'hidden'; boardBox.innerHTML = ''; return; }
     boardBox.className = 'admin-box warn';
     boardBox.innerHTML = `<b>${esc(warning)}.</b> <span class="muted sm">Vai Ban Tổng Giám đốc nên trùng đúng thành viên bộ phận Ban Tổng Giám đốc.</span>
       <label class="check"><input type="checkbox" name="confirmBoardDept" data-testid="user-confirm-board"> Tôi đã kiểm tra, vẫn lưu</label>`;
@@ -177,8 +181,8 @@ function userForm(root, user = null) {
         ${workload.approvalsPending ? '<p class="muted xs">Yêu cầu duyệt đang chờ: cấp Lãnh đạo bộ phận / BTGĐ phụ trách tự chuyển cho người còn lại; cấp "Người đứng tên dự án" hoặc "Người được chỉ định" cần đổi người duyệt trong cài đặt dự án.</p>' : ''}`;
     } catch (error) { lockBox.innerHTML = `<p class="error">${esc(errorMessage(error))}</p>`; }
   }
-  form.elements.role.addEventListener('change', showBoardBox);
-  form.elements.departmentId.addEventListener('change', showBoardBox);
+  form.elements.role.addEventListener('change', () => showBoardBox());
+  form.elements.departmentId.addEventListener('change', () => showBoardBox());
   if (user) {
     form.elements.role.addEventListener('change', showRoleBox);
     form.elements.isActive.addEventListener('change', showLockBox);
@@ -201,7 +205,7 @@ function userForm(root, user = null) {
       if (saved.handover) notes.push(`bàn giao: gỡ khỏi ${saved.handover.leadRemoved + saved.handover.supportRemoved} việc, ${saved.handover.reassignNotices} việc chờ phân công lại`);
       closeModal(); toast('Đã lưu tài khoản' + (notes.length ? ' — ' + notes.join('; ') : ''), 'ok'); await loadBasics(); renderUsers(root);
     } catch (error) {
-      if (error.code === 'BOARD_DEPT_MISMATCH') showBoardBox();
+      if (error.code === 'BOARD_DEPT_MISMATCH') showBoardBox(errorMessage(error));
       $('#userError', modal).textContent = errorMessage(error);
     }
   };

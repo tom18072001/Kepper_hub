@@ -9,6 +9,9 @@ BRANCH="${1:-}"
 stamp="$(date +%Y%m%d-%H%M)"
 if docker compose version >/dev/null 2>&1; then DC="docker compose"; else DC="docker-compose"; fi
 
+echo "==> 0/5 Kiểm phân quyền trên CSDL đang chạy (dừng ở đây thì app cũ vẫn chạy)"
+sh deploy/precheck-roles.sh || { echo "!! Kiểm phân quyền chưa đạt — DỪNG nâng cấp."; exit 1; }
+
 echo "==> 1/5 Sao lưu CSDL + tệp đính kèm trước khi nâng cấp"
 $DC build backup >/dev/null || { echo "!! Build image sao lưu lỗi — DỪNG nâng cấp."; exit 1; }
 $DC run --rm -e BACKUP_ONCE=1 backup || { echo "!! Sao lưu lỗi — DỪNG nâng cấp (dữ liệu hiện tại không đổi)."; exit 1; }

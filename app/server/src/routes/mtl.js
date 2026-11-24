@@ -19,9 +19,16 @@ const bus = require('../services/bus');
 const M = require('../services/mtl');
 const A = require('../services/alerts');
 
-// KPI theo người (dữ liệu cá nhân, kpi.person — chủ dự án chốt 25/11/2026 "Chỉ Ban TGĐ"): Ban Tổng Giám đốc xem mọi người; mọi người
+// KPI theo người (dữ liệu cá nhân, kpi.person — chủ dự án chốt 24/11/2026 "Chỉ Ban TGĐ"): Ban Tổng Giám đốc xem mọi người; mọi người
 // khác (lãnh đạo bộ phận, PMO / chủ dự án, nhân viên) chỉ xem KPI của CHÍNH MÌNH; quản trị hệ thống không xem.
 const kpiScope = user => (isItAdmin(user) ? null : isBoard(user) ? 'SYSTEM' : 'SELF');
+// Ai được xem KPI của ai (hàm thuần, test trong role-matrix.test.js): trả { scope, target } — target = id một người (null = mọi người).
+function kpiTarget(user, queryUser) {
+  const scope = kpiScope(user);
+  const only = queryUser === undefined ? null : intParam(queryUser, 'Người');
+  if (!scope || (scope === 'SELF' && only != null && only !== user.id)) fail(403, 'KPI theo người chỉ Ban Tổng Giám đốc xem; mỗi người xem KPI của chính mình', 'FORBIDDEN');
+  return { scope, target: scope === 'SELF' ? user.id : only };
+}
 
 module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
   const upload = multer({ dest: path.join(config.uploadTmpDir, 'workhub-import'), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
@@ -265,10 +272,7 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
   // ---------- KPI tiến độ theo người (chủ trì) ----------
   app.get('/api/projects/:id/mtl-kpi', auth, async (req, res) => {
     const { project } = await mtlProject(req);
-    const scope = kpiScope(req.user);
-    const only = req.query.user === undefined ? null : intParam(req.query.user, 'Người');
-    if (!scope || (scope === 'SELF' && only != null && only !== req.user.id)) fail(403, 'KPI theo người chỉ Ban Tổng Giám đốc xem; mỗi người xem KPI của chính mình', 'FORBIDDEN');
-    const target = scope === 'SELF' ? req.user.id : only;
+    const { scope, target } = kpiTarget(req.user, req.query.user);
     const now = new Date();
     const { items, cfg, actualOf } = await computeProject(project, req.user, now);
     const leaves = M.leavesOf(items);
@@ -313,3 +317,4 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
   });
 };
 module.exports.kpiScope = kpiScope;
+module.exports.kpiTarget = kpiTarget;

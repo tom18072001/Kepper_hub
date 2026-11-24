@@ -65,6 +65,19 @@ test('KPI & phân tích: chỉ Ban Tổng Giám đốc (endpoint /api/kpi, /api/
 });
 const nameOf = u => NAMES.find(n => U[n] === u);
 
+test('KPI theo người trong dự án MTL (chốt 24/11/2026 "Chỉ Ban TGĐ"): BTGĐ mọi người; người khác chỉ chính mình; quản trị không', () => {
+  const { kpiScope, kpiTarget } = require('../routes/mtl');
+  expect('scope SYSTEM', u => kpiScope(u) === 'SYSTEM', ['tgd', 'ptgd']);
+  expect('scope SELF', u => kpiScope(u) === 'SELF', ['lead', 'staff', 'pmo', 'sec']);
+  expect('scope null', u => kpiScope(u) === null, ['it', 'root']);
+  // Không chỉ định người: BTGĐ → mọi người (target null); người khác → đúng chính mình.
+  for (const n of ['tgd', 'ptgd']) assert.deepEqual(kpiTarget(U[n], undefined), { scope: 'SYSTEM', target: null });
+  for (const n of ['lead', 'staff', 'pmo', 'sec']) assert.deepEqual(kpiTarget(U[n], undefined), { scope: 'SELF', target: U[n].id });
+  // Chỉ định người khác: chỉ BTGĐ được; chỉ định chính mình: ai (trừ quản trị) cũng được.
+  expect('xem KPI người khác (staff)', u => kpiTarget(u, String(U.staff.id)).target === U.staff.id && u !== U.staff, ['tgd', 'ptgd']);
+  expect('xem KPI của chính mình', u => kpiTarget(u, String(u.id)).target === u.id, BUSINESS);
+});
+
 test('Tài liệu dự án (Hub + NAS): thành viên dự án + Ban Tổng Giám đốc; quản trị không', () => {
   const project = { id: 5, leadId: null, deletedAt: null };
   const members = new Set([11]);
@@ -173,9 +186,13 @@ const PENDING_PR40 = ['server/src/services/weekly-data.js', 'server/src/routes/r
 const RULES = [
   ['chuỗi vai', /['"`](director|manager|deputy|member)['"`]/g, 'code'],
   ['chuỗi vai', /\brole\b[^;]{0,60}?['"`]admin['"`]|['"`]admin['"`][^;]{0,60}?\brole\b/g, 'code'],
+  // Viết hoa / hoa đầu (vd. so u.role.toUpperCase() === 'DIRECTOR'); 'DIRECTOR' của loại cấp duyệt không đứng gần chữ role nên không bị bắt.
+  ['chuỗi vai', /\brole\b[^;]{0,60}?['"`](director|manager|deputy)['"`]|['"`](director|manager|deputy)['"`][^;]{0,60}?\brole\b/gi, 'code'],
   ['bảng quyền', /\buserPermission\b/g, 'bare'],
-  ['bảng quyền', /\bpermissions\s*:\s*(\{\s*some|true)\b/g, 'bare'],
+  ['bảng quyền', /['"`]userPermission['"`]/g, 'code'], // db['userPermission']
+  ['bảng quyền', /\bpermissions\s*:\s*(\{\s*(some|none|every|where)\b|true\b)/g, 'bare'],
   ['bảng quyền', /\b(me|user|u|actor|target|req\.user)\??\.permissions\b/g, 'bare'],
+  ['bảng quyền', /\.permissions\s*\??\.\s*[A-Za-z_$]/g, 'bare'], // <biến bất kỳ>.permissions.find / .some / .length …
 ];
 // Bỏ chú thích (giữ xuống dòng để đếm dòng); bản 'bare' bỏ thêm nội dung chuỗi.
 const TOKENS = /('(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`)|(\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g;
@@ -209,9 +226,12 @@ test('quét mã: chính bộ quét bắt được mọi cách viết đã gặp 
     "if ('director' === u.role) x();", "if ([ 'manager', 'deputy' ].includes(u.role)) x();", "where: { role: { notIn: ['admin'] } }",
     "switch (u.role) { case 'member': break; }", "if ((u.role || '') === 'director') x();", "const ok = u.permissions.some(g => g);",
     "await tx.userPermission.findMany({});", "where: {\n  role:\n    'director' }", "include: { permissions: true }", "where: { permissions: { some: {} } }",
+    "where: { permissions: { none: {} } }", "where: { permissions: { every: {} } }", "include: { permissions: { where: { scope: 'SYSTEM' } } }",
+    "const g = actor2.permissions.find(x => x);", "await db['userPermission'].findMany({})", "if (u.role.toUpperCase() === 'DIRECTOR') x();",
+    "const r = u.role === \"Manager\";",
   ];
   for (const src of bad) assert.ok(scanFile(src).length > 0, 'phải bắt: ' + src);
-  const good = ["// so 'director' trong chú thích thì không sao", "app.get('/api/admin/users', h)", "if (parts[0] === 'admin') route()", "cat.permissions.map(p => p)", "x = 'admin.users'"];
+  const good = ["// so 'director' trong chú thích thì không sao", "app.get('/api/admin/users', h)", "if (parts[0] === 'admin') route()", "catalogList(cat).map(p => p)", "x = 'admin.users'", "if (step.approverType === 'DIRECTOR') x();", "oneOf(m.role || 'MEMBER', MEMBER_ROLES)"];
   for (const src of good) assert.deepEqual(scanFile(src), [], 'không được bắt nhầm: ' + src);
 });
 

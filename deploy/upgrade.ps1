@@ -8,6 +8,12 @@ $ErrorActionPreference = "Continue"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 $stamp = Get-Date -Format "yyyyMMdd-HHmm"
 
+Write-Host "==> 0/5 Kiểm phân quyền trên CSDL đang chạy (dừng ở đây thì app cũ vẫn chạy) — deploy/precheck-roles-db.sh"
+if (docker compose ps -q postgres) {
+  Get-Content -Raw deploy\precheck-roles-db.sh | docker compose exec -T postgres sh -s
+  if ($LASTEXITCODE -ne 0) { throw "Kiểm phân quyền chưa đạt — DỪNG nâng cấp (đổi vai các tài khoản được liệt kê trên màn Quản trị rồi chạy lại)." }
+}
+
 Write-Host "==> 1/5 Sao lưu CSDL + tệp đính kèm trước khi nâng cấp"
 docker compose build backup | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Build image sao lưu lỗi (cần mạng để cài age) — DỪNG nâng cấp." }

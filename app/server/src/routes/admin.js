@@ -156,7 +156,7 @@ async function parentOf(prisma, value, id = null) {
   return parentId;
 }
 
-// Thông báo Ban Tổng Giám đốc khi quản trị đổi vai / bộ phận (đặc tả 5.1(4), mục 10 DET): MỌI lần đổi vai; MỌI lần chuyển người
+// Thông báo Ban Tổng Giám đốc khi quản trị gán / đổi vai / bộ phận (đặc tả 5.1(4), mục 10 DET): MỌI lần tạo tài khoản; MỌI lần đổi vai; MỌI lần chuyển người
 // vào / ra bộ phận Ban Tổng Giám đốc; MỌI lần quản trị xác nhận lưu tài khoản lệch vai ↔ bộ phận BTGĐ. Hàm thuần (admin.test.js).
 //   change = { username, fullName, created, oldRole, newRole, oldInBoardDept, newInBoardDept, mismatch }
 function roleNotices(c) {
@@ -164,8 +164,9 @@ function roleNotices(c) {
   const who = `${c.fullName} (${c.username})`;
   const out = [];
   if (c.created) {
-    if (isBoard({ role: c.newRole })) out.push({ title: `Quản trị hệ thống vừa tạo tài khoản vai Ban Tổng Giám đốc ${c.username}`, detail: `${c.fullName} — xem toàn công ty theo vai Ban Tổng Giám đốc` });
-    else if (c.newInBoardDept) out.push({ title: `Quản trị hệ thống vừa tạo tài khoản ${c.username} trong bộ phận Ban Tổng Giám đốc`, detail: `${who} — vai ${label(c.newRole)}` });
+    // Tạo tài khoản = gán vai: MỌI lần tạo đều báo (một quy tắc, không ngoại lệ — bảng 5.4 "Gán vai … BTGĐ được thông báo").
+    out.push({ title: `Quản trị hệ thống vừa tạo tài khoản ${c.username} — vai ${label(c.newRole)}${c.newInBoardDept ? ', bộ phận Ban Tổng Giám đốc' : ''}`,
+      detail: isBoard({ role: c.newRole }) ? `${c.fullName} — xem toàn công ty theo vai Ban Tổng Giám đốc` : who });
   } else {
     if (roleKey({ role: c.newRole }) !== roleKey({ role: c.oldRole })) out.push({ title: `Quản trị hệ thống vừa đổi vai tài khoản ${c.username}: ${label(c.oldRole)} → ${label(c.newRole)}`,
       detail: isBoard({ role: c.newRole }) ? `${c.fullName} — xem toàn công ty theo vai Ban Tổng Giám đốc` : isBoard({ role: c.oldRole }) ? `${c.fullName} — bỏ vai Ban Tổng Giám đốc và phạm vi phụ trách` : c.fullName });
@@ -431,7 +432,7 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
   });
   // Quyền suy hoàn toàn từ vai (chủ dự án duyệt 24/11/2026): không còn chỉnh quyền từng người.
   app.put('/api/admin/users/:id/permissions', auth, requirePermission('admin.permissions', 'OPERATE', 'SYSTEM'), async () => {
-    fail(410, 'Quyền đi theo vai — không chỉnh quyền từng người. Đổi vai của tài khoản, hoặc giao kiêm nhiệm / vai trên dự án', 'PERMISSIONS_BY_ROLE');
+    fail(410, 'Quyền đi theo vai — không chỉnh quyền từng người. Đổi vai của tài khoản, hoặc giao kiêm nhiệm / quan hệ với dự án (Chủ dự án, Thành viên)', 'PERMISSIONS_BY_ROLE');
   });
 
   // Phạm vi phụ trách của một thành viên Ban Tổng Giám đốc: Toàn công ty (User.boardAll) hoặc các bộ phận (Department.supervisorId).

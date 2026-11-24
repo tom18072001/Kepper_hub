@@ -20,7 +20,9 @@ if [ ! -f .env ]; then
   sudo mkdir -p "$DATA/caddy"
   chmod 600 .env
 else
-  echo "==> Đã có .env — nâng cấp: sao lưu CSDL trước"
+  echo "==> Đã có .env — nâng cấp: kiểm phân quyền trước (app cũ vẫn chạy nếu dừng ở đây)"
+  sh deploy/precheck-roles.sh
+  echo "==> Sao lưu CSDL trước"
   docker compose exec -T -e BACKUP_ONCE=1 backup sh /deploy/backup.sh || echo "!! Không chạy được sao lưu tay — kiểm tra $DATA/backups trước khi tiếp tục"
 fi
 echo "==> Build và chạy (app, postgres, backup, caddy)"

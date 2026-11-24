@@ -40,7 +40,7 @@ Kepler Hub chỉ có **một trục vai** để trả lời "người này là a
 - **các bộ phận được chọn** (Phó Tổng Giám đốc phụ trách): chỉ với việc do các bộ phận đó chủ trì.
 
 Ngoài vai, mỗi người còn có:
-- **Quan hệ với từng việc / dự án** (không phải vai): **Người giao** sửa kế hoạch việc mình giao, duyệt và chấm mức việc thường; **Người chủ trì**, **Người phối hợp** làm phần việc của mình; dự án có **Chủ dự án**, **Thành viên**, **Người xem** (chỉ xem) và một **Người đứng tên dự án**.
+- **Quan hệ với từng việc / dự án** (không phải vai): **Người giao** sửa kế hoạch việc mình giao, duyệt và chấm mức việc thường; **Người chủ trì**, **Người phối hợp** làm phần việc của mình; dự án có **Chủ dự án**, **Thành viên**, **Người xem** và một **Người đứng tên dự án**. Quan hệ với dự án chỉ **cộng** quyền: "Người xem" chỉ được thêm quyền xem; ai đã có quyền sửa từ vai (Ban TGĐ, người trong bộ phận của dự án bộ phận) vẫn sửa được.
 - **Kiêm nhiệm** do Ban Tổng Giám đốc giao: **Thư ký giao ban** (theo bộ phận), **PMO**, **Phụ trách nhân sự**, **Văn thư**, **Pháp chế**. Kiêm nhiệm hiện ở trang Thông tin cá nhân.
 
 Lưu ý:

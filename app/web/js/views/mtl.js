@@ -151,7 +151,7 @@ export async function drawMtlOverview(body, project) {
     <section class="card"><div class="mtl-h"><h3>Mốc chính <svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg></h3></div><div class="tbl-scroll"><table class="table" data-testid="mtl-milestones"><thead><tr><th>Bước</th><th>Mốc</th><th>Kế hoạch</th><th>Thực tế / dự báo</th><th>Trạng thái</th></tr></thead><tbody>${ms || '<tr><td colspan="5" class="muted">—</td></tr>'}</tbody></table></div></section>
   </div>`;
   body.onclick = e => { const r = e.target.closest('tr[data-href]'); if (r && !e.target.closest('a,[data-person],[data-dept-link]')) location.hash = r.dataset.href; };
-  // KPI theo người: chỉ Ban Tổng Giám đốc (chủ dự án chốt 25/11/2026); người khác không thấy phần này (máy chủ chỉ trả KPI của chính mình).
+  // KPI theo người: chỉ Ban Tổng Giám đốc (chủ dự án chốt 24/11/2026); người khác không thấy phần này (máy chủ chỉ trả KPI của chính mình).
   if (isBoardUser(store.me)) api(`/api/projects/${project.id}/mtl-kpi`).then(k => {
     const el = $('#mtlPeople', body); if (!el || !k.rows.length) return;
     el.hidden = false;

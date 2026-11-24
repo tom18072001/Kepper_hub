@@ -33,8 +33,11 @@ test('thông báo Ban TGĐ: MỌI lần đổi vai, chuyển vào / ra bộ ph�
   assert.match(titles({ oldRole: 'member', newRole: 'member', newInBoardDept: true })[0], /vào bộ phận Ban Tổng Giám đốc/);
   assert.match(titles({ oldRole: 'director', newRole: 'director', oldInBoardDept: true })[0], /ra khỏi bộ phận Ban Tổng Giám đốc/);
   assert.equal(titles({ oldRole: 'director', newRole: 'director', oldInBoardDept: true, mismatch: 'Vai Ban Tổng Giám đốc nhưng không thuộc bộ phận Ban Tổng Giám đốc' }).length, 2);
-  assert.match(titles({ created: true, newRole: 'director' })[0], /tạo tài khoản vai Ban Tổng Giám đốc/);
-  assert.deepEqual(titles({ created: true, newRole: 'member' }), [], 'tạo nhân viên thường: không báo');
+  // Tạo tài khoản = gán vai: MỌI vai đều báo, đúng một thông báo (thêm một nếu xác nhận lệch vai / bộ phận).
+  for (const role of ['director', 'manager', 'member', 'admin']) assert.equal(titles({ created: true, newRole: role }).length, 1, 'tạo ' + role);
+  assert.match(titles({ created: true, newRole: 'director' })[0], /vai Ban Tổng Giám đốc/);
+  assert.match(titles({ created: true, newRole: 'admin' })[0], /vai Quản trị hệ thống/);
+  assert.match(titles({ created: true, newRole: 'member', newInBoardDept: true })[0], /bộ phận Ban Tổng Giám đốc/);
   assert.equal(titles({ created: true, newRole: 'member', newInBoardDept: true, mismatch: 'lệch' }).length, 2);
 });
 

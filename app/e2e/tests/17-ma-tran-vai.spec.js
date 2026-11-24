@@ -125,3 +125,23 @@ test('chỉ Ban Tổng Giám đốc tạo dự án MTL; quan hệ dự án chỉ
   const d = await (await apiAs(pages.giamdoc, `/api/projects/${p.id}`)).json();
   expect(d.rights).toMatchObject({ canView: true, canEdit: true, canManage: true });
 });
+
+test('giao diện: tải trang mới, chuyển Nhân viên vào bộ phận Ban TGĐ → có cảnh báo ngay → xác nhận → lưu được', async ({ browser }) => {
+  const admin = pages.admin;
+  const depts = await (await apiAs(admin, '/api/departments')).json();
+  const D = code => depts.find(d => d.code === code);
+  const r = await apiAs(admin, '/api/admin/users', { method: 'POST', data: { username: 'nv.vaobtgd', fullName: 'Chuyển vào BTGĐ (giả)', role: 'member', departmentId: D('KD').id } });
+  expect(r.status()).toBe(201);
+  // Trang mới hoàn toàn (danh mục chưa nạp từ trước): cảnh báo phải có ngay khi đổi bộ phận.
+  const page = await (await browser.newContext()).newPage();
+  await login(page, 'admin');
+  await page.goto('/#/admin/users');
+  await page.getByTestId('edit-nv.vaobtgd').click();
+  await page.getByTestId('user-department').selectOption(String(D('BGD').id));
+  await expect(page.getByTestId('user-confirm-board')).toBeVisible();
+  await page.getByTestId('user-confirm-board').check();
+  await page.getByTestId('user-save').click();
+  await expect(page.getByTestId('user-nv.vaobtgd').getByTestId('board-mismatch-nv.vaobtgd')).toBeVisible();
+  const saved = (await (await apiAs(admin, '/api/admin/users')).json()).find(u => u.username === 'nv.vaobtgd');
+  expect(saved.departmentId).toBe(D('BGD').id);
+});
