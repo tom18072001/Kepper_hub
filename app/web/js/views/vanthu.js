@@ -226,7 +226,7 @@ async function renderDoc(root, id, setCrumbs, m) {
 
 async function renderSettings(root, setCrumbs, m) {
   setCrumbs('<a href="#/vanthu">Văn thư</a> / Thiết lập');
-  if (!m.me.director) { root.innerHTML = '<div class="empty">Chỉ Ban Giám đốc thiết lập văn thư.</div>'; return; }
+  if (!m.me.director) { root.innerHTML = '<div class="empty">Chỉ Ban Tổng Giám đốc thiết lập văn thư.</div>'; return; }
   const people = (ids, name) => `<select name="${name}" multiple size="6">${store.users.filter(u => u.role !== 'admin').map(u => `<option value="${u.id}"${ids.includes(u.id) ? ' selected' : ''}>${esc(u.fullName)}${u.departmentId ? ' · ' + esc(deptName(u.departmentId)) : ''}</option>`).join('')}</select>`;
   root.innerHTML = `<div class="page-head"><h1>Thiết lập văn thư</h1><span class="muted sm">Pháp nhân có dãy số riêng. Văn thư được vào sổ mọi dãy; Pháp chế nhận văn bản có thời hạn pháp lý.</span></div>
     <form class="card pg-section pg-grid" id="vtCfg">

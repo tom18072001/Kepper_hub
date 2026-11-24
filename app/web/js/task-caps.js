@@ -4,7 +4,7 @@
 export const WORK_FROM = ['BACKLOG', 'UNSTARTED', 'STARTED'];
 export const WORK_TO = ['BACKLOG', 'UNSTARTED', 'STARTED', 'REVIEW', 'COMPLETED'];
 
-// state: 'ALL' (người giao / Ban Giám đốc) | 'WORK' (người chủ trì) | null; submit: gửi duyệt (chỉ người chủ trì).
+// state: 'ALL' (người giao / Ban Tổng Giám đốc) | 'WORK' (người chủ trì) | null; submit: gửi duyệt (chỉ người chủ trì).
 export function canMove(state, fromCategory, toCategory, submit = false) {
   if (!state) return false;
   if (fromCategory !== toCategory && ['REVIEW', 'COMPLETED'].includes(toCategory) && !submit) return false;
@@ -13,12 +13,12 @@ export function canMove(state, fromCategory, toCategory, submit = false) {
   return WORK_FROM.includes(fromCategory) && WORK_TO.includes(toCategory);
 }
 
-// Ai duyệt cấp đầu (chấm mức): việc mốc / đường găng → Ban Giám đốc của việc; việc thường → người giao.
+// Ai duyệt cấp đầu (chấm mức): việc mốc / đường găng → BTGĐ phụ trách của việc; việc thường → người giao.
 // pending: phiếu đang chờ (withBoard chốt lúc gửi duyệt) — có phiếu thì theo phiếu, chưa có thì theo cờ mốc / găng của việc.
-export const firstApprover = (item, pending = null) => ((pending ? pending.withBoard : (item?.critical || item?.milestone)) ? 'Ban Giám đốc' : 'người giao');
+export const firstApprover = (item, pending = null) => ((pending ? pending.withBoard : (item?.critical || item?.milestone)) ? 'Ban Tổng Giám đốc' : 'người giao');
 
 const NONE = Object.freeze({ view: 'SUMMARY', roles: [], state: null, fields: {} });
 export const capsOf = d => d?.capabilities || NONE;
 
 // Vai hiện trên panel (A, B, L, S, D, O).
-export const ROLE_LABEL = { A: 'Người giao', B: 'Ban Giám đốc', L: 'Người chủ trì', S: 'Người phối hợp', D: 'Lãnh đạo bộ phận', O: 'Chủ dự án / PMO', U: 'Thành viên dự án' };
+export const ROLE_LABEL = { A: 'Người giao', B: 'Ban Tổng Giám đốc', L: 'Người chủ trì', S: 'Người phối hợp', D: 'Lãnh đạo bộ phận', O: 'Chủ dự án / PMO', U: 'Thành viên dự án' };

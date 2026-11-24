@@ -1,4 +1,4 @@
-// Quyền ở cấp dự án = quyền hệ thống (permissions.js) giao với thành viên dự án và phạm vi phòng ban.
+// Quyền ở cấp dự án = quyền hệ thống (permissions.js) giao với thành viên dự án và phạm vi bộ phận.
 const { permissionScope, hasPermission, isItAdmin, isDeptLeader } = require('../lib/permissions');
 const { fail } = require('../lib/http');
 const tree = require('./tree');
@@ -46,7 +46,7 @@ async function loadProject(prisma, user, projectId, need = 'view', { allowDelete
 // Lãnh đạo bộ phận: vai Lãnh đạo bộ phận (lib/permissions.js isDeptLeader — một định nghĩa duy nhất).
 const ITEM_ACCESS_SELECT = { id: true, projectId: true, parentId: true, assignedById: true, reporterId: true, leadDepartmentId: true,
   assignees: { select: { userId: true } }, supporters: { select: { userId: true } }, supportDepartments: { select: { departmentId: true } } };
-// Sổ giao việc của đơn vị (visibility ASSIGNED): chỉ Ban Giám đốc (xem toàn tổ chức), thành viên sổ, người giao,
+// Sổ giao việc của đơn vị (visibility ASSIGNED): chỉ Ban Tổng Giám đốc (xem toàn tổ chức), thành viên sổ, người giao,
 // người chủ trì / phối hợp và lãnh đạo phòng chủ trì / phòng phối hợp thấy việc (quyền xem theo từng việc).
 // `ancestors`: việc cha, hoặc danh sách tổ tiên [cha, ông, …] — ai thấy một việc tổ tiên thì thấy cả cây con của nó.
 function canSeeItem(user, project, member, item, ancestors = null) {
@@ -66,12 +66,12 @@ function itemVisibleWhere(user) {
   return { OR: [{ project: { visibility: { not: 'ASSIGNED' } } }, { project: { members: { some: { userId: user.id } } } }, ...mine, { parent: up }] };
 }
 // Sổ giao việc của đơn vị: thao tác cấp sổ (giao việc gốc, nhập hàng loạt, tiếp nhận yêu cầu, chuyển ghi chú,
-// chuyển chu kỳ, xem quy tắc lặp) chỉ dành cho Ban Giám đốc / người quản lý sổ / thành viên sổ.
+// chuyển chu kỳ, xem quy tắc lặp) chỉ dành cho Ban Tổng Giám đốc / người quản lý sổ / thành viên sổ.
 // Thành viên "Người xem" (VIEWER) chỉ xem, không giao việc.
 const isRegisterWriter = member => !!member && member.role !== 'VIEWER';
 function assertRegisterManager(project, rights, member) {
   if (project.visibility === 'ASSIGNED' && !rights.canManage && !isRegisterWriter(member))
-    fail(403, 'Chỉ Ban Giám đốc / người quản lý sổ được thao tác này trên sổ giao việc của đơn vị', 'FORBIDDEN');
+    fail(403, 'Chỉ Ban Tổng Giám đốc / người quản lý sổ được thao tác này trên sổ giao việc của đơn vị', 'FORBIDDEN');
 }
 // Người được uỷ quyền (trong thời hạn) xem được — chỉ xem — việc mà người uỷ quyền xem được (để duyệt thay từ hàng chờ duyệt).
 async function delegatedView(prisma, user, item, parent) {

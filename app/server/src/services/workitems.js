@@ -146,8 +146,8 @@ function approvalLevelsInput(value, rights) {
   return n;
 }
 // Các trường của Sổ giao việc (dùng chung khi tạo và khi sửa). Chỉ trả về các trường có trong input.
-// ctx = { user, rights, project }: ghi "người giao" là người khác (nhập thay) chỉ được ghi lãnh đạo — Ban Giám đốc
-// (sổ của đơn vị) hoặc Ban Giám đốc / lãnh đạo phòng (dự án thường); người quản lý dự án ghi được bất kỳ ai.
+// ctx = { user, rights, project }: ghi "người giao" là người khác (nhập thay) chỉ được ghi lãnh đạo — Ban Tổng Giám đốc
+// (sổ của đơn vị) hoặc Ban Tổng Giám đốc / lãnh đạo phòng (dự án thường); người quản lý dự án ghi được bất kỳ ai.
 async function registerFields(tx, input, ctx = null) {
   const out = {};
   if (input.assignedById !== undefined) {

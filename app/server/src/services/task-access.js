@@ -1,5 +1,5 @@
 // PHÂN QUYỀN TỐI THIỂU TRÊN MỘT VIỆC — một nguồn quyền duy nhất ở máy chủ (bảng chủ dự án chốt 20/11/2026).
-// Nguyên tắc: kế hoạch là chỉ đạo của Ban Giám đốc qua người giao; ai làm phần nào thì chỉ thấy và sửa phần đó.
+// Nguyên tắc: kế hoạch là chỉ đạo của Ban Tổng Giám đốc qua người giao; ai làm phần nào thì chỉ thấy và sửa phần đó.
 //
 // Vai của người dùng trên MỘT việc:
 //   A  người giao (assignedById)
@@ -36,29 +36,29 @@ const WORK_TO = ['BACKLOG', 'UNSTARTED', 'STARTED', 'REVIEW', 'COMPLETED'];
 
 const MESSAGES = {
   view: 'Bạn chỉ xem được tóm tắt việc này (tên, người chủ trì, hạn, trạng thái, %)',
-  plan: 'Kế hoạch của việc (tên, mô tả, hạn, mốc, đường găng, ưu tiên, nguồn, nhãn, kế hoạch gốc…) do người giao hoặc Ban Giám đốc sửa',
-  assign: 'Chỉ người giao hoặc Ban Giám đốc đổi người chủ trì / người phối hợp',
+  plan: 'Kế hoạch của việc (tên, mô tả, hạn, mốc, đường găng, ưu tiên, nguồn, nhãn, kế hoạch gốc…) do người giao hoặc Ban Tổng Giám đốc sửa',
+  assign: 'Chỉ người giao hoặc Ban Tổng Giám đốc đổi người chủ trì / người phối hợp',
   assignOwnDept: 'Lãnh đạo bộ phận chủ trì chỉ chọn người trong phòng mình cho bước giao cho bộ phận mà chưa có người',
-  assigner: 'Chỉ người giao (chuyển giao) hoặc Ban Giám đốc đổi người giao',
+  assigner: 'Chỉ người giao (chuyển giao) hoặc Ban Tổng Giám đốc đổi người giao',
   selfAssigner: 'Không tự nhận làm người giao của việc chưa có người giao',
-  delete: 'Chỉ người giao hoặc Ban Giám đốc xoá việc',
-  recur: 'Chỉ người giao hoặc Ban Giám đốc đặt lặp lại việc',
-  state: 'Bạn không đổi được trạng thái này — người chủ trì: Chưa bắt đầu → Đang thực hiện → Gửi duyệt; người giao / Ban Giám đốc: duyệt hoàn thành (qua phiếu duyệt), tạm dừng, huỷ, mở lại',
+  delete: 'Chỉ người giao hoặc Ban Tổng Giám đốc xoá việc',
+  recur: 'Chỉ người giao hoặc Ban Tổng Giám đốc đặt lặp lại việc',
+  state: 'Bạn không đổi được trạng thái này — người chủ trì: Chưa bắt đầu → Đang thực hiện → Gửi duyệt; người giao / Ban Tổng Giám đốc: duyệt hoàn thành (qua phiếu duyệt), tạm dừng, huỷ, mở lại',
   progress: 'Tiến độ, khó khăn, kiến nghị, dự báo hoàn thành do người chủ trì cập nhật',
   submit: 'Chỉ người chủ trì gửi duyệt / nộp sản phẩm',
   extension: 'Chỉ người chủ trì đề nghị gia hạn',
-  decideExtension: 'Chỉ Ban Giám đốc của việc (Ban Giám đốc toàn quyền, PGĐ phụ trách bộ phận chủ trì) duyệt đề nghị gia hạn',
-  children: 'Chỉ người chủ trì, người giao hoặc Ban Giám đốc tạo việc nhánh',
-  comment: 'Chỉ người liên quan đến việc (người giao, Ban Giám đốc, chủ trì, phối hợp, lãnh đạo bộ phận, chủ dự án / PMO) bình luận',
-  docsGive: 'Văn bản "Căn cứ giao việc" và tài liệu bên giao do người giao hoặc Ban Giám đốc gửi',
+  decideExtension: 'Chỉ BTGĐ phụ trách của việc (BTGĐ phụ trách toàn công ty, Phó TGĐ phụ trách bộ phận chủ trì) duyệt đề nghị gia hạn',
+  children: 'Chỉ người chủ trì, người giao hoặc Ban Tổng Giám đốc tạo việc nhánh',
+  comment: 'Chỉ người liên quan đến việc (người giao, Ban Tổng Giám đốc, chủ trì, phối hợp, lãnh đạo bộ phận, chủ dự án / PMO) bình luận',
+  docsGive: 'Văn bản "Căn cứ giao việc" và tài liệu bên giao do người giao hoặc Ban Tổng Giám đốc gửi',
   docsBack: 'Sản phẩm, tài liệu bên thực hiện do người chủ trì / người phối hợp gửi',
   deleteFile: 'Chỉ người đã gửi tệp / văn bản này được xoá',
-  answer: 'Chỉ người giao, Ban Giám đốc hoặc lãnh đạo bộ phận chủ trì trả lời kiến nghị',
-  forward: 'Chỉ lãnh đạo bộ phận chủ trì trình kiến nghị lên Ban Giám đốc',
+  answer: 'Chỉ người giao, Ban Tổng Giám đốc hoặc lãnh đạo bộ phận chủ trì trả lời kiến nghị',
+  forward: 'Chỉ lãnh đạo bộ phận chủ trì trình kiến nghị lên Ban Tổng Giám đốc',
   supportStaff: 'Chỉ lãnh đạo phòng phối hợp được cử cán bộ phối hợp',
-  approvalLevels: 'Chỉ Ban Giám đốc hoặc người quản lý dự án đổi mức duyệt của việc',
-  completedAt: 'Chỉ người giao hoặc Ban Giám đốc sửa ngày hoàn thành thực tế',
-  rebaseline: 'Chỉ người giao hoặc Ban Giám đốc điều chỉnh kế hoạch gốc',
+  approvalLevels: 'Chỉ Ban Tổng Giám đốc hoặc người quản lý dự án đổi mức duyệt của việc',
+  completedAt: 'Chỉ người giao hoặc Ban Tổng Giám đốc sửa ngày hoàn thành thực tế',
+  rebaseline: 'Chỉ người giao hoặc Ban Tổng Giám đốc điều chỉnh kế hoạch gốc',
   review: 'Ô "Đánh giá của người giao" viết tay đã bỏ — đánh giá là mức chấm và nhận xét khi duyệt hoàn thành',
 };
 
@@ -113,7 +113,7 @@ function taskCapabilities(user, item, ctx = {}) {
   const write = !!r.canEdit && !r.delegated;
   const live = write && !item.archivedAt;
   const open = live && !CLOSED.includes(item.category);
-  const boss = A || B; // kế hoạch là chỉ đạo của Ban Giám đốc qua người giao
+  const boss = A || B; // kế hoạch là chỉ đạo của Ban Tổng Giám đốc qua người giao
   const plan = live && boss;
   Object.assign(caps, {
     plan,
@@ -125,7 +125,7 @@ function taskCapabilities(user, item, ctx = {}) {
     recur: plan,
     state: live && boss ? 'ALL' : open && L ? 'WORK' : null,
     progress: open && L,
-    submit: open && L, // gửi duyệt là bước của người chủ trì (người giao / BGĐ duyệt, tạm dừng, huỷ, mở lại)
+    submit: open && L, // gửi duyệt là bước của người chủ trì (người giao / BTGĐ duyệt, tạm dừng, huỷ, mở lại)
     extension: open && L,
     decideExtension: write && B,
     children: (live && boss) || (open && L),
@@ -145,7 +145,7 @@ function taskCapabilities(user, item, ctx = {}) {
 }
 
 // Đổi trạng thái: người chủ trì trong nhóm đang làm và GỬI DUYỆT (vào "Chờ duyệt" / chọn "Hoàn thành" khi chưa duyệt);
-// người giao / Ban Giám đốc: duyệt (qua phiếu), tạm dừng, huỷ, mở lại — không gửi duyệt thay người chủ trì.
+// người giao / Ban Tổng Giám đốc: duyệt (qua phiếu), tạm dừng, huỷ, mở lại — không gửi duyệt thay người chủ trì.
 const SUBMIT_TO = ['REVIEW', 'COMPLETED'];
 function canMove(caps, fromCategory, toCategory) {
   if (!caps?.state) return false;
@@ -180,7 +180,7 @@ function assertMove(caps, fromCategory, toCategory) {
 }
 
 // ---------- Nạp ngữ cảnh từ CSDL ----------
-// Ngữ cảnh tổ chức (nạp một lần cho cả danh sách): Ban Giám đốc toàn quyền, PGĐ phụ trách từng phòng, lãnh đạo từng phòng
+// Ngữ cảnh tổ chức (nạp một lần cho cả danh sách): BTGĐ phụ trách toàn công ty, Phó TGĐ phụ trách từng phòng, lãnh đạo từng phòng
 // (kể cả uỷ quyền), phòng của từng người.
 async function orgContext(db, now = new Date()) {
   const [depts, approvers, delegations, active] = await Promise.all([

@@ -1,4 +1,4 @@
-// Thống kê dùng chung cho Dashboard, KPI và Báo cáo: quy đổi phòng ban của việc, chỉ số theo kỳ, điểm tổng hợp.
+// Thống kê dùng chung cho Dashboard, KPI và Báo cáo: quy đổi bộ phận của việc, chỉ số theo kỳ, điểm tổng hợp.
 // Toàn bộ là hàm thuần (không truy vấn CSDL) để kiểm thử được; truy vấn nằm ở routes/*.
 const DAY = 86_400_000, H7 = 7 * 3_600_000;
 
@@ -28,7 +28,7 @@ const isOverdue = (i, now = new Date()) => isOpen(i) && i.dueDate != null && vnD
 const onTimeDone = i => isDone(i) && i.completedAt != null && i.dueDate != null && vnDay(i.completedAt) <= vnDay(i.dueDate);
 const assignedOn = i => i.assignedAt ?? i.createdAt ?? null;
 
-// ---------- Phòng ban của việc ----------
+// ---------- Bộ phận của việc ----------
 // Khi thống kê, việc thuộc đơn vị chủ trì; không có đơn vị chủ trì thì thuộc phòng sở hữu dự án / sổ.
 function departmentOf(item) {
   return item.leadDepartmentId ?? item.project?.departmentId ?? null;
@@ -42,7 +42,7 @@ function departmentWhere(departmentId) {
   return { OR: [{ leadDepartmentId: id }, { leadDepartmentId: null, project: { departmentId: id } }] };
 }
 
-// Phạm vi "phòng ban" của Thống kê / KPI / báo cáo Word / chấm điểm = phòng CHỦ TRÌ việc (departmentOf), không theo phòng của người làm.
+// Phạm vi "bộ phận" của Thống kê / KPI / báo cáo Word / chấm điểm = phòng CHỦ TRÌ việc (departmentOf), không theo phòng của người làm.
 // Lý do giữ (review UX B5): một việc chỉ thuộc một phòng nên tổng các phòng khớp tổng chung và KPI đã chốt không đổi; đếm theo
 // người làm thì việc phòng A chủ trì, người phòng B phối hợp bị tính cho cả hai phòng. Thay vào đó, trang Thống kê ghi rõ phạm vi
 // và báo riêng số việc đang mở mà người trong phòng làm nhưng phòng khác chủ trì (không cộng vào số liệu).

@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { levelsForItem, approverIdsSync, actingForSync } = require('./approval');
 
-const steps = [{ level: 1, name: 'Lãnh đạo phòng duyệt', approverType: 'DEPARTMENT_MANAGER' }, { level: 2, name: 'BGĐ cho ý kiến', approverType: 'SUPERVISOR' }];
+const steps = [{ level: 1, name: 'Lãnh đạo phòng duyệt', approverType: 'DEPARTMENT_MANAGER' }, { level: 2, name: 'BTGĐ cho ý kiến', approverType: 'SUPERVISOR' }];
 const client = { approvalRule: { findMany: async () => [] }, workItem: { findUnique: async () => null } };
 
 test('việc nhánh trong sổ của đơn vị: chỉ cấp lãnh đạo phòng; việc gốc đủ cấp; chọn tay vẫn thắng', async () => {

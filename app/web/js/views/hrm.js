@@ -1,6 +1,6 @@
 // Playground HRM — của tôi (chấm công hôm nay, đơn nghỉ, bảng công, hồ sơ / hợp đồng thu gọn), chờ duyệt, danh sách nhân sự, bảng công, thiết lập.
 // Quyền do máy chủ quyết (lib/policy.js hrm.*). Số CCCD chỉ hiện khi bấm "Hiện CCCD" (nhập lại mật khẩu, mỗi lượt ghi nhật ký);
-// lương chỉ chính người đó, người phụ trách nhân sự, Ban GĐ thấy. Đơn nghỉ / giải trình chờ duyệt còn hiện ở "Chờ tôi duyệt" (renderHrDecisions).
+// lương chỉ chính người đó, người phụ trách nhân sự, Ban TGĐ thấy. Đơn nghỉ / giải trình chờ duyệt còn hiện ở "Chờ tôi duyệt" (renderHrDecisions).
 import { api } from '../api.js';
 import { store, deptName } from '../store.js';
 import { $, esc, fmtDate, toast, openModal, closeModal, confirmDialog, errorMessage, dateInput, fromDateInput, uiPref, debounce } from '../util.js';
@@ -203,7 +203,7 @@ function sheetHtml(s, self) {
 // Xin nghỉ: xem trước ngay khi chọn ngày / loại (GET /api/hrm/leaves/preview) — số ngày làm việc, phép năm còn lại sau đơn, đơn trùng.
 function leaveForm(m, bal, done) {
   const today = vnToday();
-  const modal = openModal(`<h2>Xin nghỉ</h2><p class="muted sm">Phép năm còn <b>${num(bal.remaining)}</b> ngày (tham khảo). Đơn gửi lãnh đạo bộ phận duyệt; đơn của lãnh đạo bộ phận do Ban giám đốc duyệt.</p><form class="pg-grid">
+  const modal = openModal(`<h2>Xin nghỉ</h2><p class="muted sm">Phép năm còn <b>${num(bal.remaining)}</b> ngày (tham khảo). Đơn gửi lãnh đạo bộ phận duyệt; đơn của lãnh đạo bộ phận do Ban Tổng Giám đốc duyệt.</p><form class="pg-grid">
     <label class="field">Loại nghỉ<select name="type" data-testid="hrm-l-type">${opts(m.leaveTypes, 'ANNUAL')}</select></label>
     <label class="field">Nửa ngày<select name="halfDay" data-testid="hrm-l-half"><option value="NONE">Cả ngày</option><option value="AM">Buổi sáng</option><option value="PM">Buổi chiều</option></select></label>
     <label class="field">Từ ngày<input type="date" name="fromDate" required value="${today}" data-testid="hrm-l-from"></label>
@@ -447,7 +447,7 @@ async function renderSettings(root, m) {
     <label class="field span2">Chỉ cho chấm công trong mạng văn phòng (mỗi dòng một dải, vd. 192.168.1.0/24; để trống = không giới hạn)
       <textarea name="officeNetworks" rows="2">${esc((c.officeNetworks || []).join('\n'))}</textarea>
       <span class="muted xs">IP Kepler Hub đang thấy từ máy bạn: <code>${esc(m.yourIp || '')}</code>. Nếu là 172.x / 192.168.65.x (Docker Desktop) thì Kepler Hub KHÔNG thấy IP thật — đừng bật giới hạn này.</span></label>
-    ${m.me.canRoles ? `<label class="field span2">Người phụ trách nhân sự (Ban giám đốc chỉ định — xem / sửa hồ sơ, hợp đồng, số định danh)
+    ${m.me.canRoles ? `<label class="field span2">Người phụ trách nhân sự (Ban Tổng Giám đốc chỉ định — xem / sửa hồ sơ, hợp đồng, số định danh)
       <select name="hrUserIds" multiple size="6" data-testid="hrm-hr-users">${people.map(u => `<option value="${u.id}"${(c.hrUserIds || []).includes(u.id) ? ' selected' : ''}>${esc(u.fullName)} · ${esc(deptName(u.departmentId))}</option>`).join('')}</select></label>` : ''}
     <p class="error span2" id="cfgErr"></p><div class="modal-actions span2"><button class="btn btn-primary">Lưu thiết lập</button></div></form>`;
   $('#cfgForm', root).onsubmit = async e => {

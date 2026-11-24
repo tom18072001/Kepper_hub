@@ -125,8 +125,8 @@ function levelControl(pending) {
   const all = data.allApprovalSteps || [];
   if (!all.length) return '';
   const extra = data.approvalSteps.filter(s => s.approverType !== 'ASSIGNER' && s.approverType !== 'BOARD').length;
-  // Việc mốc / đường găng: cấp 1 là Ban Giám đốc của việc (thay người giao).
-  const first = data.approvalSteps[0]?.approverType === 'BOARD' ? 'Ban Giám đốc' : 'Người giao';
+  // Việc mốc / đường găng: cấp 1 là BTGĐ phụ trách của việc (thay người giao).
+  const first = data.approvalSteps[0]?.approverType === 'BOARD' ? 'Ban Tổng Giám đốc' : 'Người giao';
   const label = n => n === 0 ? `Chỉ ${first.toLowerCase()} duyệt` : n >= all.length ? `${first} → đủ ${all.length} cấp (${all.map(s => s.name).join(' → ')})` : `${first} → ${n} cấp: ${all.slice(0, n).map(s => s.name).join(' → ')}`;
   const source = { MANUAL: 'chọn tay', RULE: 'theo quy tắc tự động', DEFAULT: 'mặc định của dự án', CHILD: 'việc nhánh — lãnh đạo phòng duyệt' }[data.approvalSource] || '';
   if (!capsOf(data).approvalLevels || pending || data.archivedAt) return `<p class="muted sm" data-testid="approval-level-text">Mức duyệt: <b>${esc(label(extra))}</b>${source ? ` · ${source}` : ''}</p>`;
@@ -154,7 +154,7 @@ function approvalBox() {
       <div class="field-error" id="approvalCommentHelp" role="alert"></div>
       <div class="row" style="margin-top:8px"><button class="btn btn-ok" data-act="approve" data-testid="approve-btn">${data.ratingRequired ? 'Duyệt hoàn thành' : 'Duyệt'}</button><button class="btn btn-danger" data-act="reject" data-testid="reject-btn">${data.ratingRequired ? 'Trả lại' : 'Không duyệt'}</button></div></div>`;
 }
-// Kết quả duyệt cấp chấm mức (người giao; việc mốc / găng: Ban Giám đốc): ai, lúc nào, mức nào, nhận xét gì.
+// Kết quả duyệt cấp chấm mức (người giao; việc mốc / găng: Ban Tổng Giám đốc): ai, lúc nào, mức nào, nhận xét gì.
 // Đánh giá = mức chấm + nhận xét lúc duyệt (cấp người giao). Người chủ trì thấy sau khi đã chấm; chỉ đọc.
 function ratingResult() {
   if (!data.rating) return '';
@@ -203,7 +203,7 @@ const ACT_TEXT = {
   REOPENED_BY_CHILD: d => `mở lại ${esc(d?.from || '')} → ${esc(d?.to || '')}` + (d?.reason ? ': ' + esc(d.reason) : ''),
   DISPATCHED: d => d?.direct ? 'giao trực tiếp cán bộ (phòng vẫn duyệt trước khi trình)' : 'giao về phòng chủ trì', DISPATCH_ACCEPTED: d => 'tiếp nhận và phân công' + (d?.onBehalfOf ? ` (thay ${esc(d.onBehalfOf)})` : '') + (d?.internalDueDate ? `, hạn nộp phòng ${fmtDate(d.internalDueDate)}` : '') + (d?.note ? ': ' + esc(d.note) : ''), DISPATCH_REASSIGNED: () => 'phân công lại',
   PROGRESS_REPORT: d => (d.asSupporter ? `báo cáo phần phối hợp ${d.progress}%` : `báo cáo tiến độ ${d.progress}%`) + (d.hasProposal ? ' (có kiến nghị)' : ''), PROPOSAL_ANSWERED: () => 'trả lời kiến nghị',
-  PROPOSAL_FORWARDED: () => 'trình kiến nghị lên Ban Giám đốc',
+  PROPOSAL_FORWARDED: () => 'trình kiến nghị lên Ban Tổng Giám đốc',
   REBASELINE: d => 'điều chỉnh kế hoạch gốc' + (d?.reason ? ': ' + esc(d.reason) : ''),
   EXTENSION_REQUESTED: () => 'đề nghị gia hạn', EXTENSION_APPROVED: () => 'đồng ý gia hạn', EXTENSION_REJECTED: () => 'không đồng ý gia hạn',
   CHILDREN_BULK: d => `chia ${d.count} việc nhánh`, SUPPORT_STAFF: () => 'cử cán bộ phối hợp', HANDOVER: d => 'bàn giao: cán bộ nghỉ việc được gỡ khỏi việc' + (d?.reset ? ', trả về phòng để phân công lại' : ''),
@@ -255,7 +255,7 @@ function legacyResult() {
   return `<div class="legacy-note" data-testid="item-result-legacy"><span class="muted xs">Kết quả / khó khăn, kiến nghị — ghi trước đây (nay ghi qua báo cáo tiến độ)</span><div class="reg-readonly">${esc(v).replace(/\n/g, '<br>')}</div></div>`;
 }
 
-// Lặp lại việc: người giao, Ban Giám đốc của việc.
+// Lặp lại việc: người giao, BTGĐ phụ trách của việc.
 function repeatBlock(c) {
   const rule = data.recurring;
   if (rule) return `<div class="repeat-box" data-testid="item-repeat"><span class="muted xs">Lặp lại</span><b>${esc(rule.schedule)}</b>${rule.isActive ? '' : '<span class="pill">Đang tạm dừng</span>'}
@@ -264,7 +264,7 @@ function repeatBlock(c) {
   return `<button class="btn btn-ghost btn-sm" data-act="repeat" data-testid="repeat-open">${icon('history')}Lặp lại việc này…</button>`;
 }
 
-// Chia việc nhánh: người chủ trì (là người giao của việc nhánh), người giao, Ban Giám đốc (máy chủ trả capabilities.children).
+// Chia việc nhánh: người chủ trì (là người giao của việc nhánh), người giao, Ban Tổng Giám đốc (máy chủ trả capabilities.children).
 const canSplit = d => !!capsOf(d).children;
 // Bảng việc nhánh: ai làm, hạn, khâu, tiến độ — lãnh đạo phòng nắm được ngay.
 function childrenSection(d, editable, open) {
@@ -354,7 +354,7 @@ export function revealInPanel(el) {
 
 function render() {
   const d = data, r = d.rights, editable = r.canEdit && !d.archivedAt;
-  // Quyền theo từng phần của việc (máy chủ): kế hoạch — người giao / Ban Giám đốc; tiến độ — người chủ trì; tài liệu theo bên.
+  // Quyền theo từng phần của việc (máy chủ): kế hoạch — người giao / Ban Tổng Giám đốc; tiến độ — người chủ trì; tài liệu theo bên.
   const c = capsOf(d), fe = !!c.plan;
   const users = assignableUsers(project);
   // Lãnh đạo bộ phận chủ trì chọn người cho bước chưa có người: chỉ người trong phòng chủ trì.
@@ -362,7 +362,7 @@ function render() {
   const canPick = c.assign || c.assignOwnDept;
   const states = project.states;
   // Việc cần duyệt: không kéo thẳng sang Hoàn thành (máy chủ cũng chặn) — đi qua "Gửi duyệt" / "Nộp sản phẩm".
-  // Chọn "Hoàn thành" khi chưa được duyệt → máy chủ đưa vào "Chờ duyệt" (người giao — việc mốc / găng: Ban Giám đốc — duyệt + chấm mức).
+  // Chọn "Hoàn thành" khi chưa được duyệt → máy chủ đưa vào "Chờ duyệt" (người giao — việc mốc / găng: Ban Tổng Giám đốc — duyệt + chấm mức).
   const approvedNow = d.approvals[0]?.status === 'APPROVED';
   // Gọn (mặc định): các khối mở / đóng theo vai trò và khâu, ẩn trường chỉ đọc ít dùng ở cột phải (ô sửa được luôn hiện).
   // "Mở tất cả các mục": hiện đủ trường, mở mọi khối (nhớ theo người).
@@ -397,7 +397,7 @@ function render() {
   const outRow = l => `<div class="att tw-doc tw-out" data-testid="tw-output"><span class="pill">Đã ghi</span><span class="name" title="${esc(l)}">${esc(l)}</span></div>`;
   const giveFiles = d.attachments.filter(a => !doers.has(a.uploadedById)), backFiles = d.attachments.filter(a => doers.has(a.uploadedById));
   const giveDocs = (d.documents || []).filter(x => x.kind === 'BASIS'), backDocs = (d.documents || []).filter(x => x.kind !== 'BASIS');
-  // Bên gửi theo quyền: người chủ trì / phối hợp gửi kết quả; người giao / Ban Giám đốc gửi tài liệu giao.
+  // Bên gửi theo quyền: người chủ trì / phối hợp gửi kết quả; người giao / Ban Tổng Giám đốc gửi tài liệu giao.
   const iAmDoer = !!c.docsBack, canSend = !!(c.docsGive || c.docsBack);
   const twCol = (title, who, rows, testid) => `<div class="tw-col" data-testid="${testid}"><div class="tw-h">${title}${who ? ` <span class="muted xs">· ${who}</span>` : ''}</div>
       ${rows.join('') || '<div class="muted xs tw-empty">Chưa có</div>'}</div>`;
@@ -464,7 +464,7 @@ function render() {
         <div class="ip-core">
         <label class="${project.visibility === 'ASSIGNED' && !c.state ? 'lite-hide' : ''}">Trạng thái${c.state ? `<select id="ipState" data-testid="item-state" title="Trạng thái (S)">${states.map(s => { const done = s.category === 'COMPLETED' && s.id !== d.stateId && !approvedNow, doneLock = done && (d.state.category === 'REVIEW' || d.childProgress?.open > 0);
           const ruleLock = s.id !== d.stateId && !canMove(c.state, d.state.category, s.category, !!c.submit);
-          const locked = s.id !== d.stateId && (doneLock || ruleLock); return `<option value="${s.id}"${s.id === d.stateId ? ' selected' : ''}${locked ? ' disabled' : ''}>${stateLabel(s)}${locked ? (ruleLock ? (['REVIEW', 'COMPLETED'].includes(s.category) ? ' (người chủ trì gửi duyệt)' : ' (người giao / Ban Giám đốc)') : d.state.category === 'REVIEW' ? ` (đang chờ ${firstApprover(d, d.approvals.find(a => a.status === 'PENDING'))} duyệt)` : ' (còn việc con chưa duyệt)') : done ? ` → gửi ${firstApprover(d)} duyệt` : ''}</option>`; }).join('')}</select>` : `<div class="side-text" data-testid="item-state">${stateLabel(d.state)}</div>`}</label>
+          const locked = s.id !== d.stateId && (doneLock || ruleLock); return `<option value="${s.id}"${s.id === d.stateId ? ' selected' : ''}${locked ? ' disabled' : ''}>${stateLabel(s)}${locked ? (ruleLock ? (['REVIEW', 'COMPLETED'].includes(s.category) ? ' (người chủ trì gửi duyệt)' : ' (người giao / Ban Tổng Giám đốc)') : d.state.category === 'REVIEW' ? ` (đang chờ ${firstApprover(d, d.approvals.find(a => a.status === 'PENDING'))} duyệt)` : ' (còn việc con chưa duyệt)') : done ? ` → gửi ${firstApprover(d)} duyệt` : ''}</option>`; }).join('')}</select>` : `<div class="side-text" data-testid="item-state">${stateLabel(d.state)}</div>`}</label>
         <label class="${fe ? '' : 'lite-hide'}">Ưu tiên${fe ? `<select id="ipPriority" data-testid="item-priority" title="Ưu tiên (P)">${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}"${k === d.priority ? ' selected' : ''}>${v.label}</option>`).join('')}</select>` : `<div class="side-text" data-testid="item-priority">${esc(PRIORITY[d.priority]?.label || '—')}</div>`}</label>
         <div class="side-progress ${project.kind === 'MTL' || d.progress || prog.canReport ? '' : 'lite-hide'}"><span class="side-h" id="ipProgLabel">Tiến độ</span>
           <div class="row progress-view" role="meter" aria-labelledby="ipProgLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pctNow}"><span class="progress"><i style="width:${pctNow}%"></i></span><b data-testid="item-progress">${pctNow}%</b></div>
@@ -514,7 +514,7 @@ function renderSummary() {
     <div class="ip-body ip-summary-only" data-testid="item-summary-only">
       <div class="ip-main">
         <h2 class="ip-title ip-title-ro" data-testid="item-title">${esc(d.title)}</h2>
-        <p class="muted sm">Bạn xem được tóm tắt việc này. Nội dung, tài liệu, báo cáo, đánh giá và bình luận chỉ hiện với người liên quan (người giao, Ban Giám đốc, người chủ trì, người phối hợp, lãnh đạo bộ phận, chủ dự án / PMO).</p>
+        <p class="muted sm">Bạn xem được tóm tắt việc này. Nội dung, tài liệu, báo cáo, đánh giá và bình luận chỉ hiện với người liên quan (người giao, Ban Tổng Giám đốc, người chủ trì, người phối hợp, lãnh đạo bộ phận, chủ dự án / PMO).</p>
         <dl class="summary-facts">
           <dt>Người chủ trì</dt><dd data-testid="item-assignees">${d.assignees.map(a => personLink(a)).join(', ') || '—'}</dd>
           <dt>Hạn hoàn thành</dt><dd data-testid="item-due">${d.dueDate ? fmtDate(d.dueDate) : '—'}</dd>

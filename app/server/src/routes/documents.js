@@ -65,7 +65,7 @@ module.exports = function mountDocuments(app, { prisma, auth, audit }) {
     });
   });
 
-  // Tải / xem nhanh tệp tải lên Hub từ mục Tài liệu. Quyền = quyền xem tài liệu dự án (thành viên + Ban GĐ) — rộng hơn quyền xem
+  // Tải / xem nhanh tệp tải lên Hub từ mục Tài liệu. Quyền = quyền xem tài liệu dự án (thành viên + Ban TGĐ) — rộng hơn quyền xem
   // đầy đủ từng việc (người không liên quan tới việc chỉ xem tóm tắt trong panel việc), theo quyết định của chủ dự án 24/11/2026.
   app.get('/api/documents/files/:fid', auth, async (req, res) => {
     assertNotVia(req);

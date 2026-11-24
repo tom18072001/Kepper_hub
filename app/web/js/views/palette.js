@@ -34,7 +34,7 @@ export function canCreateRoot(p) {
 function pages() {
   if (isItAdmin()) return [
     ...(can('admin.users') ? [{ label: 'Quản trị tài khoản', href: '#/admin/users', nav: 'nav-admin-users' }] : []),
-    ...(can('admin.departments') ? [{ label: 'Phòng ban', href: '#/admin/departments', nav: 'nav-admin-departments' }] : []),
+    ...(can('admin.departments') ? [{ label: 'Bộ phận', href: '#/admin/departments', nav: 'nav-admin-departments' }] : []),
     ...(can('admin.audit') ? [{ label: 'Nhật ký hệ thống', href: '#/admin/audit', nav: 'nav-admin-audit' }] : []),
     { label: 'Danh mục', href: '#/catalog', nav: 'nav-admin-catalog' },
   ];

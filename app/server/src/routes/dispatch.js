@@ -1,4 +1,4 @@
-// GĐ3a — điều hành hai chiều Ban Giám đốc → phòng → cán bộ:
+// GĐ3a — điều hành hai chiều Ban Tổng Giám đốc → phòng → cán bộ:
 // hộp "Việc phòng được giao", tiếp nhận + phân công, báo cáo tiến độ (kiến nghị), đề nghị gia hạn, văn bản liên quan,
 // nộp sản phẩm (phiếu trình), uỷ quyền có thời hạn.
 const { fail, intParam, optionalDate, text, oneOf } = require('../lib/http');
@@ -39,7 +39,7 @@ async function supervisorOf(client, deptId) {
   if (deptId == null) return null;
   return (await client.department.findUnique({ where: { id: deptId }, select: { supervisorId: true } }))?.supervisorId ?? null;
 }
-// Ban Giám đốc nhận đề nghị gia hạn: PGĐ phụ trách bộ phận chủ trì; phòng chưa có PGĐ phụ trách thì TGĐ.
+// Ban Tổng Giám đốc nhận đề nghị gia hạn: Phó TGĐ phụ trách bộ phận chủ trì; phòng chưa có Phó TGĐ phụ trách thì TGĐ.
 async function boardOf(client, item, org) {
   const sup = await supervisorOf(client, item.leadDepartmentId);
   return sup ? [sup] : org.topIds;
@@ -87,8 +87,8 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'item:' + id}))`;
       const item = await itemWithProject(tx, id);
       if (!item.leadDepartmentId || !item.dispatchStatus) fail(409, 'Việc này không giao về phòng', 'NOT_DISPATCHED');
-      // Phân công: người giao / Ban Giám đốc; bước chưa có người: lãnh đạo bộ phận chủ trì chọn người trong phòng mình.
-      if (!caps.assign && !caps.assignOwnDept) TA.assertCap(caps, 'assign', 'Chỉ lãnh đạo bộ phận chủ trì (bước chưa có người), người giao hoặc Ban Giám đốc được phân công');
+      // Phân công: người giao / Ban Tổng Giám đốc; bước chưa có người: lãnh đạo bộ phận chủ trì chọn người trong phòng mình.
+      if (!caps.assign && !caps.assignOwnDept) TA.assertCap(caps, 'assign', 'Chỉ lãnh đạo bộ phận chủ trì (bước chưa có người), người giao hoặc Ban Tổng Giám đốc được phân công');
       const assigneeIds = await W.activeUsers(tx, W.idList(body.assigneeIds, 'Người chủ trì') || []);
       if (!assigneeIds.length) fail(422, 'Chọn ít nhất một cán bộ chủ trì', 'REQUIRED');
       const supporterIds = (await W.activeUsers(tx, W.idList(body.supporterIds, 'Người phối hợp') || [])).filter(x => !assigneeIds.includes(x));
@@ -102,9 +102,9 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
       await tx.workItemSupporter.deleteMany({ where: { workItemId: id } });
       if (supporterIds.length) await tx.workItemSupporter.createMany({ data: supporterIds.map(userId => ({ workItemId: id, userId })) });
       const data = { dispatchStatus: 'ACCEPTED', acceptedById: req.user.id, ...(item.dispatchStatus === 'PENDING' ? { acceptedAt: new Date() } : {}) };
-      // Hạn nộp phòng là một phần kế hoạch (người giao, Ban Giám đốc): không muộn hơn hạn chính thức.
+      // Hạn nộp phòng là một phần kế hoạch (người giao, Ban Tổng Giám đốc): không muộn hơn hạn chính thức.
       if (body.internalDueDate !== undefined && body.internalDueDate !== null && body.internalDueDate !== '') {
-        TA.assertCap(caps, 'plan', 'Hạn nộp phòng là kế hoạch — người giao hoặc Ban Giám đốc đặt');
+        TA.assertCap(caps, 'plan', 'Hạn nộp phòng là kế hoạch — người giao hoặc Ban Tổng Giám đốc đặt');
         data.internalDueDate = optionalDate(body.internalDueDate, 'Hạn nội bộ');
         if (data.internalDueDate && item.dueDate && data.internalDueDate > item.dueDate) fail(422, 'Hạn nội bộ không được muộn hơn hạn của người giao', 'INVALID_DUE');
       }
@@ -183,8 +183,8 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
     res.json(row);
   });
 
-  // Lãnh đạo phòng trình kiến nghị của cán bộ lên Ban Giám đốc (khi vượt thẩm quyền phòng), kèm ý kiến của phòng.
-  // Kiến nghị vẫn "chờ trả lời"; người giao / PGĐ phụ trách trả lời (Duyệt / Không duyệt). Phòng không còn thấy ở hàng chờ của mình.
+  // Lãnh đạo phòng trình kiến nghị của cán bộ lên Ban Tổng Giám đốc (khi vượt thẩm quyền phòng), kèm ý kiến của phòng.
+  // Kiến nghị vẫn "chờ trả lời"; người giao / Phó TGĐ phụ trách trả lời (Duyệt / Không duyệt). Phòng không còn thấy ở hàng chờ của mình.
   app.post('/api/progress-reports/:id/forward', auth, async (req, res) => {
     const report = await prisma.progressReport.findUnique({ where: { id: intParam(req.params.id) } });
     if (!report || !report.proposals) fail(404, 'Không tìm thấy kiến nghị', 'NOT_FOUND');
@@ -193,17 +193,17 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
     const leaders = await leadersOf(prisma, item);
     TA.assertCap(caps, 'forward');
     if (report.answer) fail(409, 'Kiến nghị đã có ý kiến trả lời', 'ANSWERED');
-    if (report.forwardedAt) fail(409, 'Kiến nghị đã được trình lên Ban Giám đốc', 'FORWARDED');
+    if (report.forwardedAt) fail(409, 'Kiến nghị đã được trình lên Ban Tổng Giám đốc', 'FORWARDED');
     const note = text(req.body?.note, 'Ý kiến của phòng', { max: 2000 }) || null;
     const supervisor = await supervisorOf(prisma, item.leadDepartmentId);
     const to = [...new Set([item.assignedById, supervisor].filter(x => x && x !== req.user.id && !leaders.includes(x)))];
-    if (!to.length) fail(422, 'Việc này không có người giao / lãnh đạo phụ trách thuộc Ban Giám đốc để trình', 'NO_TARGET');
+    if (!to.length) fail(422, 'Việc này không có người giao / lãnh đạo phụ trách thuộc Ban Tổng Giám đốc để trình', 'NO_TARGET');
     const row = await prisma.$transaction(async tx => {
       const r = await tx.progressReport.update({ where: { id: report.id }, data: { forwardedAt: new Date(), forwardedById: req.user.id, forwardNote: note } });
       const onBehalfOf = await onBehalfOfLeader(tx, req.user, item.leadDepartmentId);
       await activity(tx, item.id, req.user.id, 'PROPOSAL_FORWARDED', { reportId: report.id, ...(onBehalfOf ? { onBehalfOf } : {}) });
-      await notify(tx, to, { type: 'PROPOSAL', title: `Phòng trình kiến nghị ở ${label(project, item)} — cần BGĐ cho ý kiến`, body: [report.proposals.slice(0, 160), note && `Ý kiến phòng: ${note.slice(0, 120)}`].filter(Boolean).join(' · '), link: W.link(project, item) }, req.user.id);
-      await notify(tx, [report.authorId], { type: 'PROGRESS', title: `Kiến nghị ở ${label(project, item)} đã được phòng trình Ban Giám đốc`, body: note ? note.slice(0, 200) : null, link: W.link(project, item) }, req.user.id);
+      await notify(tx, to, { type: 'PROPOSAL', title: `Phòng trình kiến nghị ở ${label(project, item)} — cần BTGĐ cho ý kiến`, body: [report.proposals.slice(0, 160), note && `Ý kiến phòng: ${note.slice(0, 120)}`].filter(Boolean).join(' · '), link: W.link(project, item) }, req.user.id);
+      await notify(tx, [report.authorId], { type: 'PROGRESS', title: `Kiến nghị ở ${label(project, item)} đã được phòng trình Ban Tổng Giám đốc`, body: note ? note.slice(0, 200) : null, link: W.link(project, item) }, req.user.id);
       await audit(req, 'PROPOSAL_FORWARD', 'ProgressReport', report.id, null, { workItemId: item.id }, tx);
       return r;
     });
@@ -227,7 +227,7 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
       const reason = text(req.body?.reason, 'Lý do', { required: true, max: 1000 });
       const x = await tx.dueExtension.create({ data: { workItemId: id, requestedById: req.user.id, oldDue: item.dueDate, newDue, reason } });
       await activity(tx, id, req.user.id, 'EXTENSION_REQUESTED', { extensionId: x.id, newDue });
-      // Ban Giám đốc duyệt mọi đề nghị gia hạn; người giao được báo để theo dõi.
+      // Ban Tổng Giám đốc duyệt mọi đề nghị gia hạn; người giao được báo để theo dõi.
       const deciders = [...new Set([...(await boardOf(tx, item, org)), item.assignedById].filter(u => u && u !== req.user.id))];
       await notify(tx, deciders, { type: 'EXTENSION_REQUESTED', title: `Đề nghị gia hạn ${label(project, item)}`, body: reason.slice(0, 200), link: W.link(project, item) }, req.user.id);
       return x;
@@ -248,7 +248,7 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
       const current = await tx.dueExtension.findUnique({ where: { id: ext.id } });
       if (current.status !== 'PENDING') fail(409, 'Đề nghị đã được xử lý', 'CLOSED');
       if (current.requestedById === req.user.id) fail(403, 'Không tự duyệt đề nghị gia hạn của chính mình', 'SELF_APPROVAL');
-      // Ban Giám đốc của việc (TGĐ, PGĐ phụ trách bộ phận chủ trì) duyệt mọi đề nghị gia hạn.
+      // BTGĐ phụ trách của việc (TGĐ, Phó TGĐ phụ trách bộ phận chủ trì) duyệt mọi đề nghị gia hạn.
       TA.assertCap(caps, 'decideExtension');
       const x = await tx.dueExtension.update({ where: { id: ext.id }, data: { status: decision === 'APPROVE' ? 'APPROVED' : 'REJECTED', decidedById: req.user.id, decidedAt: new Date(), decisionNote: note || null } });
       if (decision === 'APPROVE') await tx.workItem.update({ where: { id: item.id }, data: { dueDate: current.newDue, originalDueDate: item.originalDueDate ?? current.oldDue } });
@@ -267,7 +267,7 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
     const { project, caps } = await TA.loadTask(prisma, req.user, id);
     await itemWithProject(prisma, id);
     const b = req.body || {};
-    // "Căn cứ giao việc": người giao / Ban Giám đốc. Sản phẩm tham mưu, văn bản đã phát hành: người chủ trì / người phối hợp.
+    // "Căn cứ giao việc": người giao / Ban Tổng Giám đốc. Sản phẩm tham mưu, văn bản đã phát hành: người chủ trì / người phối hợp.
     const kind = oneOf(b.kind, Object.keys(DOC_KINDS), 'Loại văn bản') || (caps.docsGive || !caps.docsBack ? 'BASIS' : 'OUTPUT');
     TA.assertCap(caps, kind === 'BASIS' ? 'docsGive' : 'docsBack');
     const url = text(b.url, 'Liên kết', { max: 500 }) || null;
@@ -293,7 +293,7 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
     res.json({ ok: true });
   });
 
-  // ---------- Nộp sản phẩm (phiếu trình) → mở yêu cầu duyệt: lãnh đạo phòng → Ban Giám đốc ----------
+  // ---------- Nộp sản phẩm (phiếu trình) → mở yêu cầu duyệt: lãnh đạo phòng → Ban Tổng Giám đốc ----------
   app.post('/api/items/:id/submit', auth, async (req, res) => {
     const id = intParam(req.params.id);
     const { project, rights, caps } = await TA.loadTask(prisma, req.user, id);
@@ -328,7 +328,7 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
     if (rows.length > 100) fail(422, 'Tối đa 100 việc nhánh mỗi lần');
     const created = await prisma.$transaction(async tx => {
       const parent = await itemWithProject(tx, id); // việc nhánh được chia tiếp ở mọi cấp (trần cấp: services/tree.js)
-      // Chia việc nhánh: người chủ trì (là người giao của việc nhánh), người giao, Ban Giám đốc của việc cha.
+      // Chia việc nhánh: người chủ trì (là người giao của việc nhánh), người giao, BTGĐ phụ trách của việc cha.
       const g = await MG.mtlCreateGuard(tx, req.user, project, rights, { parentId: id }, { planParent: caps.plan });
       const out = [];
       for (const r of rows) {
@@ -414,10 +414,10 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
     const toUserId = intParam(req.body?.toUserId, 'Người nhận uỷ quyền');
     if (toUserId === req.user.id) fail(422, 'Không tự uỷ quyền cho chính mình');
     const to = await prisma.user.findFirst({ where: { id: toUserId, isActive: true, ...NOT_IT_WHERE }, include: { permissions: true } });
-    if (!to || !hasPermission(to, 'work.approve', 'OPERATE')) fail(422, 'Người nhận uỷ quyền phải là lãnh đạo có quyền duyệt (trưởng / phó phòng, Ban Giám đốc)', 'INVALID_DELEGATE');
-    // Không uỷ quyền bước Ban Giám đốc xuống cấp phòng.
+    if (!to || !hasPermission(to, 'work.approve', 'OPERATE')) fail(422, 'Người nhận uỷ quyền phải là lãnh đạo có quyền duyệt (trưởng / phó phòng, Ban Tổng Giám đốc)', 'INVALID_DELEGATE');
+    // Không uỷ quyền bước Ban Tổng Giám đốc xuống cấp phòng.
     if (permissionScope(req.user, 'work.approve', 'OPERATE') === 'SYSTEM' && permissionScope(to, 'work.approve', 'OPERATE') !== 'SYSTEM')
-      fail(422, 'Thành viên Ban Giám đốc chỉ uỷ quyền cho thành viên Ban Giám đốc khác', 'INVALID_DELEGATE');
+      fail(422, 'Thành viên Ban Tổng Giám đốc chỉ uỷ quyền cho thành viên Ban Tổng Giám đốc khác', 'INVALID_DELEGATE');
     const startsAt = optionalDate(req.body?.startsAt, 'Từ ngày') || new Date();
     const endsRaw = optionalDate(req.body?.endsAt, 'Đến ngày');
     if (!endsRaw) fail(422, 'Chọn ngày kết thúc uỷ quyền', 'REQUIRED');

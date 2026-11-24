@@ -1,5 +1,5 @@
 // Tổng thể công việc trên mọi dự án theo một người (chủ trì / phối hợp / người giao) hoặc một phòng (chủ trì, phối hợp,
-// có cán bộ tham gia). Phạm vi: Ban Giám đốc — mọi người, mọi phòng; lãnh đạo phòng — phòng mình; cán bộ — chính mình.
+// có cán bộ tham gia). Phạm vi: Ban Tổng Giám đốc — mọi người, mọi phòng; lãnh đạo phòng — phòng mình; cán bộ — chính mình.
 // Luôn giao với quyền xem từng việc của người xem. Xem việc của người khác là thao tác trên dữ liệu cá nhân → ghi nhật ký.
 const { NOT_IT_WHERE, isItAdmin } = require('../lib/permissions');
 const { fail, optionalInt, optionalDate } = require('../lib/http');

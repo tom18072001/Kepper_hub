@@ -33,7 +33,7 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
   const computeProject = (project, user, day) => MP.computeProject(prisma, project, user, day);
   const isDeptLeader = async (user, departmentId) => departmentId != null && (await approval.deptLeaderIds(prisma, departmentId)).includes(user.id);
 
-  // Lõi nhập MTL — dùng chung cho API (trên) và scripts/import-mtl.js (chạy trên máy chạy, thay mặt PMO đã được Ban GĐ chỉ định).
+  // Lõi nhập MTL — dùng chung cho API (trên) và scripts/import-mtl.js (chạy trên máy chạy, thay mặt PMO đã được Ban TGĐ chỉ định).
   // req: { user, body: { sheet, planName, dryRun, rebaseline }, ip, headers } — quyền đã kiểm tra trước khi gọi.
   async function importMtl(req, { project, kind, departmentId, asLeader, buf, fileName }) {
     const fileHash = crypto.createHash('sha256').update(buf).digest('hex');
@@ -70,7 +70,7 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
     // MTL bộ phận: khớp "Thuộc bước" với hạng mục MTL tổng (kế hoạch MASTER mới nhất).
     const master = kind === 'DEPARTMENT' ? await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, plan: { kind: 'MASTER' } }, select: { id: true, planCode: true, title: true, progress: true, leadDepartmentId: true, assignees: { select: { userId: true } }, supportDepartments: { select: { departmentId: true } }, state: { select: { category: true } }, _count: { select: { children: { where: { archivedAt: null } } } } }, orderBy: { id: 'desc' } }) : [];
     const masterByCode = new Map(); for (const m of master) if (m.planCode && !masterByCode.has(m.planCode)) masterByCode.set(m.planCode, m);
-    // Nhập lại MTL chỉ THÊM bước mới; bước đã có giữ nguyên (kế hoạch đã giao là chỉ đạo — sửa qua người giao / Ban Giám đốc,
+    // Nhập lại MTL chỉ THÊM bước mới; bước đã có giữ nguyên (kế hoạch đã giao là chỉ đạo — sửa qua người giao / Ban Tổng Giám đốc,
     // kế hoạch gốc qua "Điều chỉnh kế hoạch gốc"). Không còn tuỳ chọn đặt lại kế hoạch gốc khi nhập.
     if (req.body.rebaseline === '1' || req.body.rebaseline === 'true') fail(422, 'Nhập lại MTL chỉ thêm bước mới — điều chỉnh kế hoạch gốc từng hạng mục bằng "Điều chỉnh kế hoạch gốc"', 'REBASELINE_REMOVED');
     const unmatchedOwners = new Map(), unmatchedParents = new Set();
@@ -239,7 +239,7 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
     const id = intParam(req.params.id);
     const { project, caps } = await TA.loadTask(prisma, req.user, id);
     if (project.kind !== 'MTL') fail(422, 'Chỉ dùng cho hạng mục Master Timeline', 'NOT_MTL');
-    TA.assertCap(caps, 'rebaseline'); // kế hoạch gốc là kế hoạch: người giao, Ban Giám đốc
+    TA.assertCap(caps, 'rebaseline'); // kế hoạch gốc là kế hoạch: người giao, Ban Tổng Giám đốc
     const reason = text(req.body.reason, 'Lý do điều chỉnh', { required: true, max: 500 });
     const item = await prisma.workItem.findUnique({ where: { id }, select: { id: true, startT: true, endT: true, baselineStart: true, baselineEnd: true } });
     let data;

@@ -1,5 +1,5 @@
 // Dashboard: số liệu tiến độ, khối lượng việc, số liệu dòng chảy (throughput, cycle time, việc tồn lâu).
-// Phòng ban của việc = đơn vị chủ trì ?? phòng sở hữu dự án / sổ (services/stats.js).
+// Bộ phận của việc = đơn vị chủ trì ?? phòng sở hữu dự án / sổ (services/stats.js).
 const { fail, optionalInt } = require('../lib/http');
 const { visibleProjectsWhere, itemVisibleWhere, dashboardScope } = require('../services/access');
 const { permissionScope } = require('../lib/permissions');
@@ -71,12 +71,12 @@ module.exports = function mountDashboard(app, { prisma, auth }) {
   app.get('/api/dashboard', auth, async (req, res) => {
     const scope = dashboardScope(req.user);
     if (!scope) fail(403, 'Không đủ quyền xem dashboard', 'FORBIDDEN');
-    const departmentId = optionalInt(req.query.departmentId, 'Phòng ban');
+    const departmentId = optionalInt(req.query.departmentId, 'Bộ phận');
     const projectId = optionalInt(req.query.projectId, 'Dự án');
     const projectWhere = { ...visibleProjectsWhere(req.user), archivedAt: null };
     if (projectId) projectWhere.id = projectId;
     const projects = await prisma.project.findMany({ where: projectWhere, select: { id: true, key: true, name: true, departmentId: true, visibility: true } });
-    // Phạm vi UNIT ("phòng ban của tôi"): việc phòng tôi chủ trì, hoặc không có đơn vị chủ trì mà dự án thuộc phòng tôi.
+    // Phạm vi UNIT ("bộ phận của tôi"): việc phòng tôi chủ trì, hoặc không có đơn vị chủ trì mà dự án thuộc phòng tôi.
     // Luôn chỉ đếm việc người xem thấy được (itemVisibleWhere + visibleProjectsWhere).
     const unit = scope === 'UNIT' ? (req.user.departmentId ?? -1) : departmentId;
     const items = await prisma.workItem.findMany({

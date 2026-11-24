@@ -1,6 +1,6 @@
 // Kepper — thẻ hạng mục (tab Giai đoạn, Kỳ cập nhật tháng, trang "Cập nhật nhanh") + nút cập nhật một chạm: "✓ Gửi duyệt" (hoặc "Xong")
 // và % khi đang làm dở. Cập nhật % dùng PATCH /api/items/:id (máy chủ tự chuyển cột: > 0% → Đang thực hiện, 100% → "Chờ duyệt",
-// người giao — việc mốc / đường găng: Ban Giám đốc — duyệt mới thành Hoàn thành). Gửi duyệt xong có 5 giây để hoàn tác (rút lại phiếu). Ghi chú = bình luận của hạng mục.
+// người giao — việc mốc / đường găng: Ban Tổng Giám đốc — duyệt mới thành Hoàn thành). Gửi duyệt xong có 5 giây để hoàn tác (rút lại phiếu). Ghi chú = bình luận của hạng mục.
 import { api } from '../api.js';
 import { personLink } from '../store.js';
 import { $, esc, fmtDate, ago, toast, errorMessage } from '../util.js';
@@ -83,7 +83,7 @@ export function bindQuick(root, onSaved) {
       const row = await api(`/api/items/${id}`, { method: 'PATCH', body: { progress: v } });
       const req = row?.pendingApproval;
       // Đã vào "Chờ duyệt": thanh "Đã gửi duyệt · Hoàn tác" 5 giây — hoàn tác = rút lại phiếu, việc về trạng thái và % cũ.
-      if (v >= 100 && req?.id) toast(`${code}: đã gửi ${req.withBoard ? 'Ban Giám đốc ' : ''}duyệt`, 'ok', { ms: 5000, action: { label: 'Hoàn tác', run: async () => {
+      if (v >= 100 && req?.id) toast(`${code}: đã gửi ${req.withBoard ? 'Ban Tổng Giám đốc ' : ''}duyệt`, 'ok', { ms: 5000, action: { label: 'Hoàn tác', run: async () => {
         await api(`/api/approvals/${req.id}/withdraw`, { method: 'POST', body: { progress: was } });
         toast(`${code}: đã rút lại, tiến độ về ${was}%`, 'ok');
         await onSaved();

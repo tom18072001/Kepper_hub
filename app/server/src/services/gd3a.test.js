@@ -18,7 +18,7 @@ test('Phó phòng có quyền như trưởng phòng (tiếp nhận, phân công,
 test('sổ giao việc của đơn vị: chỉ người liên quan thấy việc, cán bộ khác không thấy', () => {
   const it = item();
   assert.equal(projectRights(as(40, 'member', 4), register, null).canView, true); // thấy sổ, không thấy việc
-  assert.equal(canSeeItem(as(1, 'director', 1), register, null, it), true); // Ban Giám đốc
+  assert.equal(canSeeItem(as(1, 'director', 1), register, null, it), true); // Ban Tổng Giám đốc
   assert.equal(canSeeItem(as(22, 'manager', 2), register, null, it), true); // lãnh đạo phòng chủ trì
   assert.equal(canSeeItem(as(23, 'deputy', 2), register, null, it), true); // phó phòng chủ trì
   assert.equal(canSeeItem(as(32, 'manager', 3), register, null, it), true); // lãnh đạo phòng phối hợp
@@ -33,7 +33,7 @@ test('sổ giao việc của đơn vị: chỉ người liên quan thấy việc
   assert.equal(canSeeItem(as(24, 'member', 2), { ...register, visibility: 'DEPARTMENT' }, null, it), true);
 });
 
-test('điều kiện Prisma tương ứng: Ban Giám đốc không lọc; lãnh đạo phòng thêm điều kiện theo phòng', () => {
+test('điều kiện Prisma tương ứng: Ban Tổng Giám đốc không lọc; lãnh đạo phòng thêm điều kiện theo phòng', () => {
   assert.deepEqual(itemVisibleWhere(as(1, 'director', 1)), {});
   const staff = itemVisibleWhere(as(21, 'member', 2));
   assert.equal(JSON.stringify(staff).includes('leadDepartmentId'), false);

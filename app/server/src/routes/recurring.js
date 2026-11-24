@@ -40,14 +40,14 @@ module.exports = function mountRecurring(app, { prisma, auth, audit }) {
     res.status(201).json({ ...row, schedule: R.describe(row) });
   });
 
-  // Quy tắc của dự án: người quản lý dự án. Quy tắc lập từ một việc ("Lặp lại việc này"): thêm người giao / Ban Giám đốc của việc đó.
+  // Quy tắc của dự án: người quản lý dự án. Quy tắc lập từ một việc ("Lặp lại việc này"): thêm người giao / BTGĐ phụ trách của việc đó.
   async function ruleFor(req, need) {
     const rule = await prisma.recurringRule.findUnique({ where: { id: intParam(req.params.id) } });
     if (!rule) fail(404, 'Không tìm thấy quy tắc', 'NOT_FOUND');
     const { rights } = await loadProject(prisma, req.user, rule.projectId);
     if (need === 'manage' && !rights.canManage) {
       const source = rule.sourceItemId ? await TA.loadTask(prisma, req.user, rule.sourceItemId).catch(() => null) : null;
-      if (!source?.caps.recur) fail(403, 'Chỉ người quản lý dự án, hoặc người giao / Ban Giám đốc của việc gốc, sửa lịch lặp lại', 'FORBIDDEN');
+      if (!source?.caps.recur) fail(403, 'Chỉ người quản lý dự án, hoặc người giao / BTGĐ phụ trách của việc gốc, sửa lịch lặp lại', 'FORBIDDEN');
     }
     return rule;
   }
@@ -76,7 +76,7 @@ module.exports = function mountRecurring(app, { prisma, auth, audit }) {
   // "Lặp lại việc này": tạo quy tắc từ một việc có sẵn (sao chép tiêu đề, mô tả, ưu tiên, người nhận, nhãn).
   app.post('/api/items/:id/recurring', auth, async (req, res) => {
     const id = intParam(req.params.id);
-    // Lặp lại việc: người giao, Ban Giám đốc của việc.
+    // Lặp lại việc: người giao, BTGĐ phụ trách của việc.
     const { project } = await TA.loadTask(prisma, req.user, id, { need: 'recur' });
     const item = await prisma.workItem.findUnique({ where: { id }, include: { assignees: true, labels: true } });
     if (item.recurringRuleId && await prisma.recurringRule.findUnique({ where: { id: item.recurringRuleId } }))

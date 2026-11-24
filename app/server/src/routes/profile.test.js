@@ -4,7 +4,7 @@ const { orgOf, imageKind } = require('./profile');
 
 // Cây tổ chức giả: Ban Tổng Giám đốc (TGĐ 1, Phó TGĐ 2 phụ trách Ban Pháp lý), Ban Pháp lý (trưởng 10, phó 11, nhân viên 12, 13), Tổ hồ sơ (con của PL: trưởng 20).
 const depts = new Map([
-  [1, { id: 1, name: 'Ban Giám đốc', parentId: null, supervisorId: null }],
+  [1, { id: 1, name: 'Ban Tổng Giám đốc', parentId: null, supervisorId: null }],
   [5, { id: 5, name: 'Ban Pháp lý', parentId: null, supervisorId: 2 }],
   [6, { id: 6, name: 'Tổ hồ sơ', parentId: 5, supervisorId: null }],
 ]);
@@ -12,7 +12,7 @@ const U = (id, role, departmentId) => ({ id, fullName: 'Người ' + id, display
 const users = [U(1, 'director', 1), U(2, 'director', 1), U(10, 'manager', 5), U(11, 'deputy', 5), U(12, 'member', 5), U(13, 'member', 5), U(20, 'manager', 6), U(21, 'member', 6)];
 const ids = list => list.map(p => p.id);
 
-test('nhân viên: trên mình là Ban GĐ → PGĐ phụ trách → lãnh đạo bộ phận; đồng cấp là nhân viên cùng bộ phận', () => {
+test('nhân viên: trên mình là Ban TGĐ → Phó TGĐ phụ trách → lãnh đạo bộ phận; đồng cấp là nhân viên cùng bộ phận', () => {
   const o = orgOf(users.find(u => u.id === 12), users, depts);
   assert.deepEqual(o.above.map(l => l.label), ['Ban Tổng Giám đốc', 'Phó Tổng Giám đốc phụ trách', 'Lãnh đạo Ban Pháp lý']);
   assert.deepEqual(ids(o.above[0].people), [1]);
@@ -23,7 +23,7 @@ test('nhân viên: trên mình là Ban GĐ → PGĐ phụ trách → lãnh đạ
   assert.equal(o.me.avatarUrl, '/avatars/x.png');
 });
 
-test('nhân viên bộ phận con: lãnh đạo tổ → lãnh đạo bộ phận cấp trên → PGĐ phụ trách bộ phận cấp trên → Ban GĐ', () => {
+test('nhân viên bộ phận con: lãnh đạo tổ → lãnh đạo bộ phận cấp trên → Phó TGĐ phụ trách bộ phận cấp trên → Ban TGĐ', () => {
   const o = orgOf(users.find(u => u.id === 21), users, depts);
   assert.deepEqual(o.above.map(l => l.label), ['Ban Tổng Giám đốc', 'Phó Tổng Giám đốc phụ trách', 'Lãnh đạo Ban Pháp lý', 'Lãnh đạo Tổ hồ sơ']);
 });

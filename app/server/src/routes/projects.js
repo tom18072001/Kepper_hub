@@ -90,19 +90,19 @@ module.exports = function mountProjects(app, { prisma, auth, audit }) {
   });
 
   app.post('/api/projects', auth, async (req, res) => {
-    const departmentId = intParam(req.body.departmentId ?? req.user.departmentId, 'Phòng ban');
+    const departmentId = intParam(req.body.departmentId ?? req.user.departmentId, 'Bộ phận');
     const mtlReq = req.body.kind === 'MTL' || req.body.template === 'MTL';
-    // Dự án MTL: quyền tạo theo vai trò giao ban (Ban GĐ / quản lý toàn công ty / PMO chỉ định — kiểm bên dưới), không theo phòng ban.
-    if (!mtlReq && !canCreateProjectIn(req.user, departmentId)) fail(403, 'Bạn không có quyền tạo dự án cho phòng ban này', 'FORBIDDEN');
+    // Dự án MTL: quyền tạo theo vai trò giao ban (Ban TGĐ / quản lý toàn công ty / PMO chỉ định — kiểm bên dưới), không theo bộ phận.
+    if (!mtlReq && !canCreateProjectIn(req.user, departmentId)) fail(403, 'Bạn không có quyền tạo dự án cho bộ phận này', 'FORBIDDEN');
     const dept = await prisma.department.findFirst({ where: { id: departmentId, isActive: true } });
-    if (!dept) fail(422, 'Phòng ban không hợp lệ', 'INVALID_DEPARTMENT');
-    const leadId = optionalInt(req.body.leadId, 'Trưởng dự án') ?? req.user.id;
+    if (!dept) fail(422, 'Bộ phận không hợp lệ', 'INVALID_DEPARTMENT');
+    const leadId = optionalInt(req.body.leadId, 'Người đứng tên dự án') ?? req.user.id;
     const steps = req.body.approvalSteps === undefined ? [] : parseSteps(req.body.approvalSteps);
     await checkApprovers(prisma, steps);
     const defaultApprovalLevels = defaultLevelsInput(req.body.defaultApprovalLevels) ?? null;
     const mtl = req.body.kind === 'MTL' || req.body.template === 'MTL';
-    // Dự án MTL là kế hoạch chính thức (vào báo cáo tuần, cảnh báo của mọi bộ phận): chỉ Ban GĐ, người quản lý dự án toàn công ty
-    // hoặc PMO do Ban GĐ chỉ định được tạo — trưởng / phó bộ phận không tự tạo MTL để thành "người quản lý dự án".
+    // Dự án MTL là kế hoạch chính thức (vào báo cáo tuần, cảnh báo của mọi bộ phận): chỉ Ban TGĐ, người quản lý dự án toàn công ty
+    // hoặc PMO do Ban TGĐ chỉ định được tạo — trưởng / phó bộ phận không tự tạo MTL để thành "người quản lý dự án".
     if (mtl && !(isBoard(req.user)
       || ((await require('../services/weekly-data').weeklyConfig(prisma)).pmoUserIds || []).includes(req.user.id)))
       fail(403, 'Chỉ Ban Tổng Giám đốc hoặc PMO được chỉ định tạo dự án theo Master Timeline', 'FORBIDDEN');
@@ -139,7 +139,7 @@ module.exports = function mountProjects(app, { prisma, auth, audit }) {
     if (req.body.visibility !== undefined) data.visibility = oneOf(req.body.visibility, VISIBILITY, 'Phạm vi');
     // MTL không dùng phạm vi "sổ giao việc" (luồng giao về phòng / tiếp nhận cũ không đi qua quy định MTL).
     if (project.kind === 'MTL' && data.visibility === 'ASSIGNED') fail(422, 'Dự án MTL không dùng phạm vi sổ giao việc', 'INVALID_VALUE');
-    if (req.body.leadId !== undefined) data.leadId = optionalInt(req.body.leadId, 'Trưởng dự án');
+    if (req.body.leadId !== undefined) data.leadId = optionalInt(req.body.leadId, 'Người đứng tên dự án');
     if (req.body.archived !== undefined) data.archivedAt = req.body.archived ? new Date() : null;
     if (req.body.intakeEnabled !== undefined) data.intakeEnabled = !!req.body.intakeEnabled;
     if (req.body.defaultApprovalLevels !== undefined) data.defaultApprovalLevels = defaultLevelsInput(req.body.defaultApprovalLevels);

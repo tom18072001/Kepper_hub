@@ -30,7 +30,7 @@ const KEY_OF = Object.fromEntries(Object.entries(PARAMS).map(([k, p]) => [p, k])
 const FACETS = ['assignee', 'dept', 'type', 'stage', 'priority', 'label', 'cycle', 'source', 'plan', 'assigner']; // nằm trong "Thêm bộ lọc"
 const EMPTY_FILTERS = () => Object.fromEntries(KEYS.map(k => [k, '']));
 const LANES = ['none', 'assignee', 'priority', 'sprint']; // sprint = theo giai đoạn (chỉ dự án MTL)
-const STAGES = { PENDING_ACCEPT: 'Chờ phòng tiếp nhận', TODO: 'Chưa bắt đầu', DOING: 'Đang thực hiện', RETURNED: 'Bị trả lại', WAIT_DEPT: 'Chờ phòng duyệt', WAIT_BGD: 'Chờ BGĐ cho ý kiến', WAIT_APPROVAL: 'Chờ duyệt', DONE: 'Hoàn thành', CANCELLED: 'Huỷ' };
+const STAGES = { PENDING_ACCEPT: 'Chờ phòng tiếp nhận', TODO: 'Chưa bắt đầu', DOING: 'Đang thực hiện', RETURNED: 'Bị trả lại', WAIT_DEPT: 'Chờ phòng duyệt', WAIT_BGD: 'Chờ BTGĐ cho ý kiến', WAIT_APPROVAL: 'Chờ duyệt', DONE: 'Hoàn thành', CANCELLED: 'Huỷ' };
 const ATTENTION = ['PENDING_ACCEPT', 'RETURNED', 'WAIT_DEPT', 'WAIT_BGD']; // khâu cần chú ý: hiện trên thẻ và danh sách
 const DL_LABEL = Object.fromEntries(REG_DL.filter(([k]) => k));
 const TYPE_LABEL = { PLAN: 'Kế hoạch năm', ADHOC: 'Đột xuất' };
@@ -735,7 +735,7 @@ function drawBodyPass() {
   if (current.totalCount && current.totalCount > current.items.length) body.insertAdjacentHTML('afterbegin', `<p class="muted sm trunc-note" role="status">Đang hiện ${current.items.length}/${current.totalCount} việc. Dùng bộ lọc hoặc ô tìm để thu hẹp.</p>`);
 }
 
-// Khâu cần chú ý (chờ phòng tiếp nhận, bị trả lại, chờ phòng duyệt, chờ BGĐ) và phiếu duyệt đang chờ.
+// Khâu cần chú ý (chờ phòng tiếp nhận, bị trả lại, chờ phòng duyệt, chờ BTGĐ) và phiếu duyệt đang chờ.
 // Việc giao về phòng: chip khâu (kèm bước duyệt); việc Kanban thường giữ chip "Chờ duyệt n/m".
 function stageBits(i) {
   const st = i.stage, attn = !!st && ATTENTION.includes(st.code), dispatched = isAssigned() || !!i.dispatchStatus;
@@ -747,7 +747,7 @@ function stageBits(i) {
 // ---------- Bảng Kanban ----------
 function cardHtml(i) {
   const c = i.counts, dc = dueClass(i);
-  // Kéo thẻ chỉ khi được đổi trạng thái việc này (người chủ trì: đang làm → gửi duyệt; người giao / BGĐ: mọi trạng thái).
+  // Kéo thẻ chỉ khi được đổi trạng thái việc này (người chủ trì: đang làm → gửi duyệt; người giao / BTGĐ: mọi trạng thái).
   return `<article class="kcard" draggable="${!!i.my?.state}" data-id="${i.id}" data-testid="card-${esc(i.code)}" tabindex="0" aria-label="${esc(i.code + ' ' + i.title)}">
     <div class="top"><span class="code">${esc(i.code)}</span>${prioChip(i.priority)}</div>
     ${subMode() === 'flat' || !nestedOnBoard.has(i.parentId) ? parentChip(i) : ''}
@@ -879,7 +879,7 @@ function bindBoard(body) {
     dragId ||= Number(e.dataTransfer.getData('text/plain')) || null;
     if (!dragId) return;
     e.preventDefault();
-    if (!dropAllowed(dragId, Number(col.dataset.state))) { dragId = null; marker.remove(); toast('Bạn không chuyển việc này sang cột đó — người chủ trì: Chưa bắt đầu → Đang thực hiện → Gửi duyệt; người giao / Ban Giám đốc: duyệt, tạm dừng, huỷ, mở lại', 'err'); return; }
+    if (!dropAllowed(dragId, Number(col.dataset.state))) { dragId = null; marker.remove(); toast('Bạn không chuyển việc này sang cột đó — người chủ trì: Chưa bắt đầu → Đang thực hiện → Gửi duyệt; người giao / Ban Tổng Giám đốc: duyệt, tạm dừng, huỷ, mở lại', 'err'); return; }
     const isCard = n => n && n.classList.contains('kcard') && !n.classList.contains('dragging');
     let prev = marker.parentElement ? marker.previousElementSibling : null; while (prev && !isCard(prev)) prev = prev.previousElementSibling;
     let next = marker.parentElement ? marker.nextElementSibling : null; while (next && !isCard(next)) next = next.nextElementSibling;
@@ -897,7 +897,7 @@ export async function moveItem(id, stateId, afterId, beforeId, overrideWip = fal
   try {
     const row = await api(`/api/items/${id}/move`, { method: 'POST', body: { stateId, afterId: afterId ? Number(afterId) : null, beforeId: beforeId ? Number(beforeId) : null, overrideWip } });
     const state = current.project.states.find(s => s.id === stateId), landed = current.project.states.find(s => s.id === row?.stateId);
-    const who = firstApprover(row, row?.pendingApproval); // việc mốc / đường găng: Ban Giám đốc duyệt
+    const who = firstApprover(row, row?.pendingApproval); // việc mốc / đường găng: Ban Tổng Giám đốc duyệt
     if (landed?.category === 'REVIEW' && state?.category === 'COMPLETED') toast(`Đã chuyển vào "Chờ duyệt" — việc thành Hoàn thành khi ${who} duyệt và chấm mức`, 'ok');
     else if (landed?.category === 'REVIEW') toast(`Đã gửi ${who} duyệt`, 'ok');
   } catch (error) {
@@ -943,7 +943,7 @@ function drawList(body) {
   const items = rows.filter(r => r.item).map(r => r.item);
   const fold = r => (r.has ? `<button type="button" class="twisty" data-fold="${r.item.id}" aria-expanded="${!folded.has(r.item.id)}" aria-label="${folded.has(r.item.id) ? 'Mở' : 'Thu gọn'} việc con của ${esc(r.item.code)}" data-testid="fold-${esc(r.item.code)}">${folded.has(r.item.id) ? '▸' : '▾'}</button>` : nest && r.depth ? '<span class="twisty-sp"></span>' : '');
   const th = (k, label) => `<th data-sort="${k}" aria-sort="${key === k ? (dir > 0 ? 'ascending' : 'descending') : 'none'}">${label}${key === k ? icon(dir > 0 ? 'up' : 'down', 'sort') : ''}</th>`;
-  // Sổ giao việc: cột Khâu (chờ phòng tiếp nhận, chờ phòng duyệt, chờ BGĐ…). Dự án thường: khâu cần chú ý hiện cạnh tiêu đề.
+  // Sổ giao việc: cột Khâu (chờ phòng tiếp nhận, chờ phòng duyệt, chờ BTGĐ…). Dự án thường: khâu cần chú ý hiện cạnh tiêu đề.
   const reg = isAssigned();
   const stageCell = i => (i.dispatchStatus || i.stage?.code === 'RETURNED' || i.stage?.code?.startsWith('WAIT') ? stagePill(i.stage) : '');
   // Cột trống ở mọi dòng đang hiện (Khâu, Ưu tiên, người, Hạn, Nhãn) tự ẩn, nhường chỗ cho tiêu đề. Cột đang dùng để sắp xếp thì giữ.
@@ -1012,7 +1012,7 @@ function dispatchFields(project, defaults) {
       <label class="field">Giao cho<select name="leadDepartmentId" required data-testid="create-lead-dept"><option value="">— Chọn phòng hoặc người —</option>${giaoChoOptions(depts)}</select></label>
       <label class="field">Người giao<select name="assignedById" data-testid="create-assigner">${assignerOptions()}</select></label></div>`,
     extra: `<div class="field" id="cfSupDeptLbl">Đơn vị phối hợp${multiSelect('createSupportDepts', depts.map(d => ({ id: d.id, label: d.name })), [], 'Không', { label: 'Đơn vị phối hợp' })}</div>
-    <label class="field">Sản phẩm đầu ra<input name="deliverable" maxlength="500" placeholder="VD: Báo cáo trình BGĐ; Kế hoạch tổ chức" data-testid="create-deliverable"></label>
+    <label class="field">Sản phẩm đầu ra<input name="deliverable" maxlength="500" placeholder="VD: Báo cáo trình BTGĐ; Kế hoạch tổ chức" data-testid="create-deliverable"></label>
     <div class="grid2"><label class="field">Văn bản căn cứ — số, ký hiệu<input name="docNumber" maxlength="80" placeholder="VD: 123/TB-TTPT" data-testid="create-doc-number"></label><label class="field">Ngày văn bản<input type="date" name="docDate"></label></div>
     <label class="field">Trích yếu văn bản<input name="docSummary" maxlength="500" data-testid="create-doc-summary"></label>
     <p class="muted xs">Không nhập nội dung văn bản Mật / Tối mật / Tuyệt mật — chỉ ghi số hiệu, trích yếu.</p>`,
@@ -1028,14 +1028,14 @@ function giaoChoOptions(depts, selected = '') {
   }).join('');
 }
 const giaoChoValue = v => (!v ? {} : String(v).startsWith('u:') ? { assigneeIds: [Number(String(v).slice(2))] } : { leadDepartmentId: Number(v) });
-// Người giao: Ban Giám đốc + chính mình (mặc định là mình nếu là lãnh đạo, ngược lại là Giám đốc).
+// Người giao: Ban Tổng Giám đốc + chính mình (mặc định là mình nếu là lãnh đạo, ngược lại là Giám đốc).
 function assignerOptions(selected) {
   const leaders = store.users.filter(u => u.role === 'director' && u.id !== store.me.id);
   const meDefault = store.me.role === 'director' || !leaders.length;
   const pick = selected ?? (meDefault ? store.me.id : leaders[0].id);
   return [{ id: store.me.id, fullName: store.me.fullName + ' (tôi)' }, ...leaders].map(u => `<option value="${u.id}"${u.id === pick ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('');
 }
-// Người theo phòng ban: phòng của dự án lên trước, tên phòng làm nhóm (optgroup) — chọn đúng người khi danh sách dài.
+// Người theo bộ phận: phòng của dự án lên trước, tên phòng làm nhóm (optgroup) — chọn đúng người khi danh sách dài.
 function peopleByDept(users) {
   const groups = new Map();
   for (const u of users) { const k = u.departmentId ?? 0; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(u); }
@@ -1047,7 +1047,7 @@ function peopleByDept(users) {
 function parentChoices(phase) {
   const states = Object.fromEntries(current.project.states.map(s => [s.id, s]));
   const allow = current.createScope?.parents ? new Set(current.createScope.parents) : null;
-  // Việc nhánh: người chủ trì, người giao, Ban Giám đốc của việc cha (máy chủ trả `my.children` cho từng thẻ).
+  // Việc nhánh: người chủ trì, người giao, BTGĐ phụ trách của việc cha (máy chủ trả `my.children` cho từng thẻ).
   return current.items.filter(i => !['COMPLETED', 'CANCELLED'].includes(states[i.stateId]?.category) && (allow ? allow.has(i.id) : i.my?.children !== false)
     && (phase === '' || phase == null || !isMtl() || String(phaseOf(i) ?? 'none') === String(phase)))
     .sort((a, b) => a.number - b.number);
@@ -1078,7 +1078,7 @@ export function openCreateItem(defaults = {}) {
   // Dự án không theo MTL: "giai đoạn" là chu kỳ của dự án (tab Chu kỳ) — mặc định chu kỳ hiện tại.
   const cycleField = !mtl && current.cycles.some(c => c.status !== 'COMPLETED') ? `<label class="field">Chu kỳ (giai đoạn)<select name="cycleId" data-testid="create-cycle"><option value="">— Không —</option>${current.cycles.filter(c => c.status !== 'COMPLETED').map(c => `<option value="${c.id}"${curCycle?.id === c.id ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` : '';
   const parentField = `<label class="field">Việc cha${root ? '' : ' <span class="muted xs">(bắt buộc — phần bộ phận bạn chủ trì)</span>'}<select name="parentId" data-testid="create-parent"${root ? '' : ' required'}>${parentOptionsHtml(phase0, defaults.parentId)}</select></label>`;
-  // Chủ trì (1 người) — chọn theo phòng ban, có "Giao cho tôi"; Phối hợp nhiều người (kèm tên phòng).
+  // Chủ trì (1 người) — chọn theo bộ phận, có "Giao cho tôi"; Phối hợp nhiều người (kèm tên phòng).
   const leadSel = defaults.assigneeIds?.[0] ?? '';
   const people = reg ? '' : `<div class="grid2">
       <div class="field"><label for="cfLead">Chủ trì <span class="muted xs">(1 người)</span></label><div class="row nowrap cf-lead"><select id="cfLead" name="leadId" class="grow" data-testid="create-lead"><option value="">— Chưa giao —</option>${peopleByDept(users).map(g => `<optgroup label="${esc(g.dept)}">${g.list.map(u => `<option value="${u.id}"${String(u.id) === String(leadSel) ? ' selected' : ''}>${esc(u.fullName)}${u.id === store.me.id ? ' (tôi)' : ''}</option>`).join('')}</optgroup>`).join('')}</select>

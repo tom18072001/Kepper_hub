@@ -78,7 +78,7 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
     };
   }
 
-  // Tải tệp lên: người vào sổ, Ban GĐ, người xử lý, lãnh đạo bộ phận xử lý. Claude (token) không tải lên.
+  // Tải tệp lên: người vào sổ, Ban TGĐ, người xử lý, lãnh đạo bộ phận xử lý. Claude (token) không tải lên.
   const canUpload = (d, s) => !s.ai && !s.it && !d.cancelledAt && (s.director || s.clerk || d.handlerId === s.userId || d.createdById === s.userId || (s.leader && d.departmentId != null && d.departmentId === s.departmentId));
   const fileOut = (f, names = {}) => ({ id: f.id, fileName: f.fileName, mimeType: f.mimeType, sizeBytes: f.sizeBytes, createdAt: f.createdAt, uploadedBy: names[f.uploadedById] || null, ...storage.locationOf(f.objectKey) });
 
@@ -162,14 +162,14 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
     if (!s.cfg.entities.some(e => e.code === entity)) fail(422, 'Pháp nhân không hợp lệ', 'INVALID_VALUE');
     const dept = await deptOk(optionalInt(b.departmentId, 'Bộ phận'));
     if (seriesIn === 'D7' && !dept) fail(422, 'Văn bản nội bộ của bộ phận cần chọn bộ phận', 'REQUIRED');
-    if (!V.canRegister(s, seriesIn, dept?.id ?? null)) fail(403, seriesIn === 'D7' ? 'Chỉ văn thư, Ban GĐ hoặc lãnh đạo bộ phận đó cấp số văn bản của bộ phận' : 'Chỉ văn thư (do Ban GĐ chỉ định) hoặc Ban GĐ vào sổ văn bản', 'FORBIDDEN');
+    if (!V.canRegister(s, seriesIn, dept?.id ?? null)) fail(403, seriesIn === 'D7' ? 'Chỉ văn thư, Ban TGĐ hoặc lãnh đạo bộ phận đó cấp số văn bản của bộ phận' : 'Chỉ văn thư (do Ban TGĐ chỉ định) hoặc Ban TGĐ vào sổ văn bản', 'FORBIDDEN');
     const docType = text(b.docType, 'Tên loại', { max: 6 }) || null;
     if (docType && !/^[A-ZĐa-zđ]{2,6}$/.test(docType)) fail(422, 'Tên loại viết tắt 2–6 chữ (vd. CV, TB, QĐ, TTr)', 'INVALID_VALUE');
     const handler = await userOk(optionalInt(b.handlerId, 'Người xử lý'), 'Người xử lý');
     const security = oneOf(b.security || 'NOI_BO', Object.keys(V.SECURITY), 'Mức bảo mật');
     const urgency = oneOf(b.urgency || 'THUONG', Object.keys(V.URGENCY), 'Độ khẩn');
     const viewerIds = Array.isArray(b.viewerIds) ? [...new Set(b.viewerIds.map(Number).filter(Number.isInteger))].slice(0, 50) : [];
-    if (security === 'BAO_MAT_CAO' && !s.director && viewerIds.length) fail(403, 'Danh sách được xem văn bản Bảo mật cao do TGĐ / Chủ tịch duyệt — Ban GĐ nhập', 'FORBIDDEN');
+    if (security === 'BAO_MAT_CAO' && !s.director && viewerIds.length) fail(403, 'Danh sách được xem văn bản Bảo mật cao do TGĐ / Chủ tịch duyệt — Ban TGĐ nhập', 'FORBIDDEN');
     const today = WK.dayOf(new Date());
     const year = Number(today.slice(0, 4));
     const series = V.seriesKey(seriesIn, dept?.code);
@@ -203,7 +203,7 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
   app.patch('/api/vanthu/docs/:id', auth, async (req, res) => {
     const s = await subject(req);
     const d = await load(req.params.id, s);
-    if (s.ai || d.cancelledAt || !(s.director || s.clerk)) fail(403, 'Chỉ văn thư hoặc Ban GĐ sửa thông tin vào sổ', 'FORBIDDEN');
+    if (s.ai || d.cancelledAt || !(s.director || s.clerk)) fail(403, 'Chỉ văn thư hoặc Ban TGĐ sửa thông tin vào sổ', 'FORBIDDEN');
     const b = req.body || {}, data = {};
     if (b.title !== undefined) data.title = text(b.title, 'Trích yếu', { required: true, max: 500 });
     for (const [k, label, max] of [['counterpart', 'Nơi gửi / nhận', 300], ['externalNumber', 'Số của bên gửi', 80], ['signerName', 'Người ký', 120], ['channel', 'Kênh', 60], ['trackingCode', 'Mã vận đơn', 60], ['note', 'Ghi chú', 1000]])
@@ -214,7 +214,7 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
     if (b.urgency !== undefined) data.urgency = oneOf(b.urgency, Object.keys(V.URGENCY), 'Độ khẩn');
     if (b.toLegal !== undefined) data.toLegal = !!b.toLegal;
     if (b.viewerIds !== undefined) {
-      if (!s.director) fail(403, 'Danh sách được xem văn bản Bảo mật cao do Ban GĐ nhập', 'FORBIDDEN');
+      if (!s.director) fail(403, 'Danh sách được xem văn bản Bảo mật cao do Ban TGĐ nhập', 'FORBIDDEN');
       data.viewerIds = Array.isArray(b.viewerIds) ? [...new Set(b.viewerIds.map(Number).filter(Number.isInteger))].slice(0, 50) : [];
     }
     let handler = null;
@@ -260,7 +260,7 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
   app.post('/api/vanthu/docs/:id/cancel', auth, async (req, res) => {
     const s = await subject(req);
     const d = await load(req.params.id, s);
-    if (s.ai || d.cancelledAt || !(s.director || s.clerk)) fail(403, 'Chỉ văn thư hoặc Ban GĐ hủy số', 'FORBIDDEN');
+    if (s.ai || d.cancelledAt || !(s.director || s.clerk)) fail(403, 'Chỉ văn thư hoặc Ban TGĐ hủy số', 'FORBIDDEN');
     const reason = text(req.body?.reason, 'Lý do hủy', { required: true, max: 300 });
     // Điều 7.1.5: giữ nguyên số trong sổ, ghi "Hủy – lý do – người xác nhận"; số không cấp lại.
     const u = await prisma.$transaction(async tx => {
@@ -277,7 +277,7 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
   app.post('/api/vanthu/docs/:id/files', auth, async (req, res, next) => {
     const s = await subject(req);
     const d = await load(req.params.id, s);
-    if (!canUpload(d, s)) fail(403, 'Chỉ văn thư, Ban GĐ, người xử lý hoặc lãnh đạo bộ phận xử lý tải tệp văn bản', 'FORBIDDEN');
+    if (!canUpload(d, s)) fail(403, 'Chỉ văn thư, Ban TGĐ, người xử lý hoặc lãnh đạo bộ phận xử lý tải tệp văn bản', 'FORBIDDEN');
     req.vt = { d }; // kiểm tra quyền TRƯỚC khi nhận tệp
     next();
   }, upload.array('files', 5), async (req, res) => {
@@ -331,7 +331,7 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
   app.delete('/api/vanthu/files/:fid', auth, async (req, res) => {
     const s = await subject(req);
     const { f, d } = await fileFor(req, s);
-    if (s.ai || !(s.director || s.clerk)) fail(403, 'Chỉ văn thư hoặc Ban GĐ gỡ tệp văn bản', 'FORBIDDEN');
+    if (s.ai || !(s.director || s.clerk)) fail(403, 'Chỉ văn thư hoặc Ban TGĐ gỡ tệp văn bản', 'FORBIDDEN');
     await prisma.$transaction(async tx => {
       await tx.docFile.delete({ where: { id: f.id } });
       await tx.docEvent.create({ data: { docId: d.id, userId: req.user.id, action: 'FILE_DELETED', note: f.fileName.slice(0, 500) } });
@@ -342,10 +342,10 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
     res.json({ ok: true });
   });
 
-  // Thiết lập: pháp nhân (mã + tên), văn thư, Pháp chế — Ban GĐ chỉ định (không suy từ phòng ban, tránh tự nâng quyền).
+  // Thiết lập: pháp nhân (mã + tên), văn thư, Pháp chế — Ban TGĐ chỉ định (không suy từ bộ phận, tránh tự nâng quyền).
   app.put('/api/vanthu/config', auth, async (req, res) => {
     const s = await subject(req);
-    if (s.ai || !s.director) fail(403, 'Chỉ Ban GĐ thiết lập văn thư', 'FORBIDDEN');
+    if (s.ai || !s.director) fail(403, 'Chỉ Ban TGĐ thiết lập văn thư', 'FORBIDDEN');
     const b = req.body || {}, cur = s.cfg;
     const ids = async (v, label) => {
       if (v === undefined) return undefined;
@@ -368,7 +368,7 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
 };
 
 // Hằng ngày 08:20: văn bản đến sắp đến hạn (hạn = ngày làm việc kế tiếp) hoặc đã quá hạn → người xử lý + lãnh đạo bộ phận xử lý;
-// văn bản đến chưa giao ai quá 1 ngày → văn thư. Thứ Hai: tổng hợp văn bản quá hạn gửi Ban GĐ (Điều 11: báo cáo hằng tuần).
+// văn bản đến chưa giao ai quá 1 ngày → văn thư. Thứ Hai: tổng hợp văn bản quá hạn gửi Ban TGĐ (Điều 11: báo cáo hằng tuần).
 module.exports.runVanthuReminders = async function runVanthuReminders(prisma, now = new Date()) {
   const today = WK.dayOf(now);
   let cfgW; try { const c = await H.hrmConfig(prisma); cfgW = { workDays: c.workDays, holidays: c.holidays }; } catch { cfgW = { workDays: [1, 2, 3, 4, 5], holidays: [] }; }

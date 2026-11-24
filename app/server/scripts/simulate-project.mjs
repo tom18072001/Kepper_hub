@@ -1,4 +1,4 @@
-// Chạy thử MỘT dự án theo vai trò trên bản thử (playground, dữ liệu GIẢ): Ban GĐ giao việc → PMO nhập MTL → lãnh đạo bộ phận
+// Chạy thử MỘT dự án theo vai trò trên bản thử (playground, dữ liệu GIẢ): Ban TGĐ giao việc → PMO nhập MTL → lãnh đạo bộ phận
 // chi tiết hoá, phân công → nhân viên thực hiện (giao diện + Claude) → nghỉ phép → báo cáo tuần → giao ban → theo dõi.
 // Ghi nhật ký từng bước (journal.json) để rút phản hồi nghiệp vụ.
 //
@@ -69,7 +69,7 @@ async function main() {
   for (const u of dir.j) U[u.username] = u;
   for (const d of (await as('giamdoc', 'GET', '/api/departments')).j) D[d.code] = d;
 
-  // ---------- 1. Ban GĐ thiết lập giao ban, tạo dự án ----------
+  // ---------- 1. Ban TGĐ thiết lập giao ban, tạo dự án ----------
   log('1-thiet-lap', 'giamdoc', 'Thiết lập giao ban: thư ký = HCNS, PMO = pmo, 6 bộ phận phải nộp',
     await as('giamdoc', 'PUT', '/api/weekly/config', { secretaryDepartmentId: D.HCNS.id, pmoUserIds: [U.pmo.id], departments: ['PL', 'TC', 'TK', 'QLXD', 'GR', 'KD'].map(c => D[c].id) }));
   const t0 = today.slice(0, 7) === '2026-10' ? '2026-09-01' : today.slice(0, 8) + '01';
@@ -111,7 +111,7 @@ async function main() {
     if (!who || (i.assignees || []).some(a => a.id === U[who].id)) continue;
     log('3-phan-cong', 'pmo', `Giao ${i.code} (${i.title}) cho ${U[who].fullName}`, await as('pmo', 'PATCH', `/api/items/${i.id}`, { assigneeIds: [U[who].id] }));
   }
-  // Ban GĐ giao việc đột xuất (TGĐ giao) vào dự án.
+  // Ban TGĐ giao việc đột xuất (TGĐ giao) vào dự án.
   const due7 = addDays(today, 7);
   const adhoc = log('3-tgd-giao', 'giamdoc', 'Giao việc đột xuất: "Báo cáo phương án tài chính sơ bộ trình HĐQT (giả)" cho Ban Tài chính, hạn 7 ngày',
     await as('giamdoc', 'POST', `/api/projects/${P.id}/items`, { title: 'Báo cáo phương án tài chính sơ bộ trình HĐQT (giả)', leadDepartmentId: D.TC.id, assigneeIds: [U['tb.taichinh'].id],
@@ -158,7 +158,7 @@ async function main() {
     log('5-thuc-hien', 'nv.phaply', 'Bình luận @nhắc trưởng ban', await as('nv.phaply', 'POST', `/api/items/${c11.j.id}/comments`, { bodyHtml: `<p>Dự thảo tờ trình đã xong, nhờ chị <span data-mention="${U['tb.phaply'].id}">@${U['tb.phaply'].fullName}</span> xem giúp (giả).</p>` }));
   }
   if (c12.j?.id) {
-    log('5-thuc-hien', 'nv.phaply', 'Báo cáo tiến độ 30% kèm khó khăn + kiến nghị', await as('nv.phaply', 'POST', `/api/items/${c12.j.id}/progress-reports`, { progress: 30, content: 'Đã gửi công văn xin ý kiến (giả).', difficulties: 'Sở chưa hẹn lịch làm việc (giả).', proposals: 'Đề nghị Ban GĐ gọi điện thúc Sở (giả).' }));
+    log('5-thuc-hien', 'nv.phaply', 'Báo cáo tiến độ 30% kèm khó khăn + kiến nghị', await as('nv.phaply', 'POST', `/api/items/${c12.j.id}/progress-reports`, { progress: 30, content: 'Đã gửi công văn xin ý kiến (giả).', difficulties: 'Sở chưa hẹn lịch làm việc (giả).', proposals: 'Đề nghị Ban TGĐ gọi điện thúc Sở (giả).' }));
     const ext = log('5-thuc-hien', 'nv.phaply', 'Đề nghị gia hạn việc "Xin ý kiến Sở" thêm 7 ngày', await as('nv.phaply', 'POST', `/api/items/${c12.j.id}/extensions`, { newDue: new Date(addDays(today, 17) + 'T17:00:00+07:00').toISOString(), reason: 'Sở hẹn làm việc tuần sau (giả).' }));
     if (ext.j?.id) {
       const dec = log('5-thuc-hien', 'tb.phaply', 'Trưởng ban (người giao) duyệt gia hạn việc con', await as('tb.phaply', 'POST', `/api/extensions/${ext.j.id}/decide`, { decision: 'APPROVE', note: 'Đồng ý (giả).' }), { expect: [200, 403] });
@@ -278,7 +278,7 @@ async function main() {
     obs('10-giao-ban', 'hệ thống', `Bỏ qua điểm danh và phát hành: chưa tới giờ giao ban (${ctx?.schedule?.meetingAt}). Chạy lại kịch bản sau giờ họp để thử bước này.`);
   }
 
-  // ---------- 11. Ban GĐ / PMO theo dõi ----------
+  // ---------- 11. Ban TGĐ / PMO theo dõi ----------
   const mtlEnd = (await as('giamdoc', 'GET', `/api/projects/${P.id}/mtl`)).j;
   obs('11-theo-doi', 'giamdoc', `Tổng quan dự án BM: ${JSON.stringify(mtlEnd?.summary || mtlEnd?.stats || {}).slice(0, 300)}`);
   const alerts = log('11-theo-doi', 'pmo', 'Chạy cảnh báo tiến độ dự án BM', await as('pmo', 'POST', `/api/projects/${P.id}/mtl-alerts/run`), { expect: [200, 201] });

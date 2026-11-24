@@ -52,12 +52,12 @@ const NAV = [
   ] },
   { id: 'stats', name: 'Thống kê', color: '#2E6DB4', icon: 'chart', items: [
     { href: '#/dashboard', label: T.dashboard, icon: 'chart', testid: 'nav-dashboard', id: 'navDashboard', show: () => can('reports.dashboard'), desc: 'Số việc, thời gian làm, KPI' },
-    { href: '#/kpi', label: T.kpi, icon: 'target', testid: 'nav-kpi', show: () => can('reports.kpi'), desc: 'Thời gian xử lý, đánh giá, xu hướng (Ban giám đốc)' },
+    { href: '#/kpi', label: T.kpi, icon: 'target', testid: 'nav-kpi', show: () => can('reports.kpi'), desc: 'Thời gian xử lý, đánh giá, xu hướng (Ban Tổng Giám đốc)' },
   ] },
 ];
 const ADMIN = { id: 'admin', name: 'Quản trị', color: '#5B6676', icon: 'shield', items: [
   { href: '#/admin/users', label: 'Tài khoản', icon: 'users', testid: 'nav-admin-users', perm: 'admin.users' },
-  { href: '#/admin/departments', label: 'Phòng ban', icon: 'building', testid: 'nav-admin-departments', perm: 'admin.departments' },
+  { href: '#/admin/departments', label: 'Bộ phận', icon: 'building', testid: 'nav-admin-departments', perm: 'admin.departments' },
   { href: '#/admin/labels', label: 'Nhãn', icon: 'tag', testid: 'nav-admin-labels', perm: 'admin.labels' },
   { href: '#/catalog', label: 'Danh mục', icon: 'list', testid: 'nav-admin-catalog', perm: 'admin.departments' },
   { href: '#/admin/audit', label: 'Nhật ký hệ thống', icon: 'history', testid: 'nav-admin-audit', perm: 'admin.audit' },

@@ -26,7 +26,7 @@ test('1. Đăng nhập: sai mật khẩu bị từ chối, tài khoản mới ph
   await expect(page.locator('#adminNav')).toBeHidden();
 });
 
-test('2. Quản trị: tạo phòng ban, tạo tài khoản, phân quyền, nhật ký hệ thống', async ({ page }) => {
+test('2. Quản trị: tạo bộ phận, tạo tài khoản, phân quyền, nhật ký hệ thống', async ({ page }) => {
   await login(page, 'admin');
   await page.getByTestId('nav-admin-departments').click();
   await page.getByTestId('add-department').click();
@@ -63,7 +63,7 @@ test('3. Trưởng phòng tạo dự án, cấu hình WIP, thành viên và quy 
   await page.getByTestId('new-project').click();
   await page.getByTestId('project-key').fill('SK');
   await page.getByTestId('project-name').fill('Sự kiện khách hàng');
-  // Trưởng phòng chỉ tạo được dự án cho phòng ban của mình
+  // Trưởng phòng chỉ tạo được dự án cho bộ phận của mình
   await expect(page.getByTestId('project-department').locator('option')).toHaveCount(1);
   // Dự án quy trình công việc (không theo MTL), chưa có duyệt; các cấp duyệt được cấu hình sau trong Cài đặt.
   await page.getByTestId('project-template').selectOption('');
@@ -105,7 +105,7 @@ test('4. Kanban: tạo việc (form + thêm nhanh), kéo-thả giữa các cột
   await page.getByTestId('create-priority').selectOption('HIGH');
   await page.getByTestId('create-start').fill(vnDate(0));
   await page.getByTestId('create-due').fill(vnDate(2));
-  // Chủ trì: một người, chọn theo phòng ban; người tạo tự nhận bằng "Giao cho tôi" (đợt B review UX).
+  // Chủ trì: một người, chọn theo bộ phận; người tạo tự nhận bằng "Giao cho tôi" (đợt B review UX).
   await page.getByTestId('create-assign-me').click();
   await expect(page.getByTestId('create-lead').locator('option:checked')).toHaveText('Đỗ Thị Bình (tôi)');
   await page.getByTestId('create-submit').click();
@@ -274,7 +274,7 @@ test('6. Duyệt nhiều cấp: gửi duyệt → trưởng phòng trả lại �
   await expect(column(staff, 'Đang làm').getByTestId('card-SK-2')).toBeVisible();
 });
 
-test('7. Phân quyền dữ liệu: phòng ban khác không thấy dự án và không truy cập được qua URL/API', async ({ page, browser }) => {
+test('7. Phân quyền dữ liệu: bộ phận khác không thấy dự án và không truy cập được qua URL/API', async ({ page, browser }) => {
   // Id dự án SK và một việc của nó (lấy bằng tài khoản trưởng phòng Kinh doanh).
   const owner = await (await browser.newContext()).newPage();
   await login(owner, 'tp.kinhdoanh');

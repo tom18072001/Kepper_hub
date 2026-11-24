@@ -9,7 +9,7 @@
 //       "vanthu": { "entities": [{ "code": "HLD", "name": "..." }], "clerks": ["user"], "legal": ["user"] },
 //       "hrm": { "hr": ["user"], "workStart": "08:00", "workEnd": "17:00", "lunchStart": "12:00", "lunchEnd": "13:00", "workDays": [1,2,3,4,5], "holidays": ["2026-11-24"], "annualDays": 12 },
 //       "weekly": { "secretaryDepartmentCode": "TH" } } }
-// Chạy lại được nhiều lần: phòng ban trùng mã thì cập nhật tên / cấp trên; tài khoản đã có thì GIỮ NGUYÊN (không đổi mật khẩu, quyền).
+// Chạy lại được nhiều lần: bộ phận trùng mã thì cập nhật tên / cấp trên; tài khoản đã có thì GIỮ NGUYÊN (không đổi mật khẩu, quyền).
 // settings: ghi đè đúng các khoá có trong tệp, giữ nguyên khoá khác đã đặt trên giao diện.
 // Tài khoản mới: mật khẩu mặc định của hệ thống + bắt đổi ở lần đăng nhập đầu, quyền theo vai trò — giống tạo trong trang Quản trị.
 const fs = require('node:fs');
@@ -32,7 +32,7 @@ async function main() {
     const depts = input.departments || [];
     for (const d of depts) {
       const code = clean(d.code, 30)?.toUpperCase(); const name = clean(d.name, 200);
-      if (!code || !name) { report.errors.push(`Phòng ban thiếu mã / tên: ${JSON.stringify(d)}`); continue; }
+      if (!code || !name) { report.errors.push(`Bộ phận thiếu mã / tên: ${JSON.stringify(d)}`); continue; }
       const old = await tx.department.findUnique({ where: { code } });
       if (old) { await tx.department.update({ where: { code }, data: { name } }); report.departments.updated++; }
       else { await tx.department.create({ data: { code, name } }); report.departments.created++; }
@@ -59,10 +59,10 @@ async function main() {
         newValue: JSON.stringify({ username, role: created.role, departmentId: created.departmentId, via: 'import-org' }) } });
       report.users.created++;
     }
-    for (const d of depts) { // PGĐ phụ trách — sau khi tài khoản đã có
+    for (const d of depts) { // Phó TGĐ phụ trách — sau khi tài khoản đã có
       if (!d.supervisorUsername) continue;
       const sup = await tx.user.findUnique({ where: { username: String(d.supervisorUsername).toLowerCase() } });
-      if (!sup || sup.role !== 'director') { report.errors.push(`PGĐ phụ trách ${d.supervisorUsername} không phải tài khoản Ban giám đốc`); continue; }
+      if (!sup || sup.role !== 'director') { report.errors.push(`Phó TGĐ phụ trách ${d.supervisorUsername} không phải tài khoản Ban Tổng Giám đốc`); continue; }
       await tx.department.update({ where: { code: String(d.code).toUpperCase() }, data: { supervisorId: sup.id } });
     }
     const st = input.settings || {};

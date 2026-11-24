@@ -122,7 +122,7 @@ async function renderPartner(root, id, setCrumbs, m) {
         <dt>Điện thoại</dt><dd>${esc(p.phone || '—')}</dd><dt>Email</dt><dd>${esc(p.email || '—')}</dd><dt>Website</dt><dd>${esc(p.website || '—')}</dd>
         <dt>Bộ phận phụ trách</dt><dd>${esc(p.ownerDepartment.name || '')}</dd><dt>Người phụ trách</dt><dd>${esc(p.ownerUser?.fullName || '—')}</dd>
         ${p.rating !== undefined ? `<dt>Đánh giá nội bộ</dt><dd>${stars(p.rating)}</dd>` : ''}${p.note !== undefined ? `<dt>Nhận xét nội bộ</dt><dd class="pre">${esc(p.note || '—')}</dd>` : ''}</dl>
-        ${p.can.detail ? '' : '<p class="muted sm">Người liên hệ, nhật ký làm việc và hợp đồng chỉ bộ phận phụ trách, người phụ trách và Ban giám đốc xem.</p>'}</section>
+        ${p.can.detail ? '' : '<p class="muted sm">Người liên hệ, nhật ký làm việc và hợp đồng chỉ bộ phận phụ trách, người phụ trách và Ban Tổng Giám đốc xem.</p>'}</section>
       ${p.contacts ? `<section class="card pg-section" data-testid="crm-contacts"><div class="row"><h3 class="grow">Người liên hệ</h3><button class="btn btn-sm" id="cNew" data-testid="crm-contact-new">Thêm</button></div>
         ${p.contacts.length ? `<div class="pg-scroll"><table class="table"><tbody>${p.contacts.map(c => `<tr><td><b>${esc(c.fullName)}</b>${c.isPrimary ? ' <span class="pill info">Đầu mối</span>' : ''}<div class="muted xs">${esc(c.title || '')}</div></td>
           <td>${esc(c.phone || '')}<div class="muted xs">${esc(c.email || '')}</div></td><td class="actions"><button class="btn btn-ghost btn-sm" data-cedit="${c.id}">Sửa</button><button class="btn btn-ghost btn-sm" data-cdel="${c.id}">Xoá</button></td></tr>`).join('')}</tbody></table></div>`

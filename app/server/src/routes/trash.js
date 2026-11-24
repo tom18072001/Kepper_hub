@@ -11,7 +11,7 @@ module.exports = function mountTrash(app, { prisma, auth, audit }) {
   // Xoá việc → thùng rác (kèm việc con). Thay cho "Lưu trữ" trước đây.
   app.delete('/api/items/:id', auth, async (req, res) => {
     const id = intParam(req.params.id);
-    // Xoá việc: người giao, Ban Giám đốc của việc (services/task-access.js).
+    // Xoá việc: người giao, BTGĐ phụ trách của việc (services/task-access.js).
     const { project } = await TA.loadTask(prisma, req.user, id, { need: 'delete' });
     const ids = await prisma.$transaction(async tx => {
       const item = await tx.workItem.findUnique({ where: { id } });
@@ -64,7 +64,7 @@ module.exports = function mountTrash(app, { prisma, auth, audit }) {
   app.get('/api/trash', auth, async (req, res) => {
     const visible = await prisma.project.findMany({ where: visibleProjectsWhere(req.user), include: { members: { where: { userId: req.user.id } } } });
     const byId = Object.fromEntries(visible.map(p => [p.id, p]));
-    // Việc trong thùng rác người dùng khôi phục được: người giao, Ban Giám đốc của việc (cùng luật với xoá).
+    // Việc trong thùng rác người dùng khôi phục được: người giao, BTGĐ phụ trách của việc (cùng luật với xoá).
     const org = await TA.orgContext(prisma);
     const rows = await prisma.workItem.findMany({
       where: { archivedAt: { not: null }, projectId: { in: visible.map(p => p.id) }, AND: [itemVisibleWhere(req.user)] }, orderBy: { archivedAt: 'desc' }, take: 1000,

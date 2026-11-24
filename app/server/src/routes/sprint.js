@@ -226,7 +226,7 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
     const { project, rights } = await loadProject(prisma, req.user, intParam(req.params.id));
     if (project.kind !== 'MTL') fail(422, 'Dự án này không theo Master Timeline', 'NOT_MTL');
     const departmentId = intParam(req.query.departmentId, 'Bộ phận');
-    // Quy định xuất MTL (lib/policy.js mtl.plan · export): quản lý dự án, Ban GĐ; lãnh đạo bộ phận chỉ bộ phận mình.
+    // Quy định xuất MTL (lib/policy.js mtl.plan · export): quản lý dự án, Ban TGĐ; lãnh đạo bộ phận chỉ bộ phận mình.
     MG.mtlExportGuard(req.user, project, rights, { deptLeader: departmentId === req.user.departmentId && await isDeptLeader(req.user, departmentId) });
     const department = await prisma.department.findFirst({ where: { id: departmentId, isActive: true }, select: { id: true, name: true, code: true } });
     if (!department) fail(422, 'Bộ phận không hợp lệ', 'INVALID_DEPARTMENT');

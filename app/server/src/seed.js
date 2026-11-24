@@ -25,7 +25,7 @@ const USERS = [
   { username: 'nv.kythuat', fullName: 'Vũ Đức Cường', displayTitle: 'Kỹ sư', role: 'member', dept: 'KT' },
   { username: 'nv.hcns', fullName: 'Hoàng Mai Lan', displayTitle: 'Chuyên viên nhân sự', role: 'member', dept: 'HCNS' },
   // Kepper (tên GIẢ)
-  // PMO (kiêm nhiệm, vai Nhân viên) ngồi chung bộ phận BGĐ trong dữ liệu GIẢ — Quản trị sẽ hiện cảnh báo lệch vai / bộ phận BTGĐ.
+  // PMO (kiêm nhiệm, vai Nhân viên) ngồi chung bộ phận BTGĐ trong dữ liệu GIẢ — Quản trị sẽ hiện cảnh báo lệch vai / bộ phận BTGĐ.
   { username: 'pmo', fullName: 'Đặng Quốc Minh', displayTitle: 'Điều phối dự án (PMO)', role: 'member', dept: 'BGD' },
   { username: 'tb.phaply', fullName: 'Lý Thanh Hằng', displayTitle: 'Trưởng ban Pháp lý', role: 'manager', dept: 'PL' },
   { username: 'nv.phaply', fullName: 'Tô Minh Khoa', displayTitle: 'Chuyên viên pháp lý', role: 'member', dept: 'PL' },
@@ -50,9 +50,9 @@ async function seed(prisma = new PrismaClient(), env = process.env) {
   await require('./services/register').ensureDefaults(prisma);
   if (String(env.SEED_DEMO) !== 'true') return out;
   if (await prisma.project.count()) return seedModules(prisma, env, out);
-  // Máy chạy thật: dữ liệu mẫu tạo tài khoản Ban GĐ mẫu với mật khẩu công khai trong README → phải xác nhận rõ.
+  // Máy chạy thật: dữ liệu mẫu tạo tài khoản Ban TGĐ mẫu với mật khẩu công khai trong README → phải xác nhận rõ.
   if (env.NODE_ENV === 'production' && env.ALLOW_DEMO_SEED !== 'yes')
-    throw new Error('SEED_DEMO=true trên máy chạy sẽ tạo tài khoản mẫu (vd. giamdoc — Ban GĐ) với mật khẩu công khai. Đặt SEED_DEMO=false, hoặc ALLOW_DEMO_SEED=yes nếu đây là máy dùng thử.');
+    throw new Error('SEED_DEMO=true trên máy chạy sẽ tạo tài khoản mẫu (vd. giamdoc — Ban TGĐ) với mật khẩu công khai. Đặt SEED_DEMO=false, hoặc ALLOW_DEMO_SEED=yes nếu đây là máy dùng thử.');
 
   const root = await prisma.user.findFirst({ where: { isRootAdmin: true } });
   const dept = {};

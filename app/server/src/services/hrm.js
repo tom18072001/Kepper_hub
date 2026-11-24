@@ -27,7 +27,7 @@ async function hrmConfig(prisma) {
     annualDays: Number.isInteger(v.annualDays) && v.annualDays >= 12 && v.annualDays <= 30 ? v.annualDays : DEFAULTS.annualDays,
   };
 }
-// Subject của policy + hr (người phụ trách nhân sự do Ban GĐ chỉ định; không suy từ phòng ban — tránh tự nâng quyền).
+// Subject của policy + hr (người phụ trách nhân sự do Ban TGĐ chỉ định; không suy từ bộ phận — tránh tự nâng quyền).
 async function subjectOf(prisma, user, cfg = null) {
   const s = await WD.rolesOf(prisma, user);
   const c = cfg || await hrmConfig(prisma);
@@ -157,7 +157,7 @@ function sheetTotals(sheet) {
 }
 
 // ---------- Duyệt ----------
-// Ngữ cảnh policy của người bị xét (hrm.*): bộ phận, lãnh đạo / Ban GĐ, người phụ trách nhân sự.
+// Ngữ cảnh policy của người bị xét (hrm.*): bộ phận, lãnh đạo / Ban TGĐ, người phụ trách nhân sự.
 const targetCtx = (u, cfg, extra = {}) => ({ targetUserId: u.id, departmentId: u.departmentId, targetLeader: isLeader(u) || isDirector(u), targetDirector: isDirector(u),
   targetHr: cfg.hrUserIds.includes(u.id), ...extra });
 // Đơn nghỉ và giải trình chấm công CHỜ người dùng (subject s) duyệt — một nguồn cho Nhân sự → Chờ duyệt, "Chờ tôi duyệt" và số đếm huy hiệu.

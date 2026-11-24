@@ -1,4 +1,4 @@
-// KPI theo phòng ban và theo cá nhân trong một kỳ (mặc định: tháng hiện tại, giờ Việt Nam) + KPI của chính mình.
+// KPI theo bộ phận và theo cá nhân trong một kỳ (mặc định: tháng hiện tại, giờ Việt Nam) + KPI của chính mình.
 // Số liệu theo người là dữ liệu cá nhân: KPI phòng / cá nhân chỉ quyền reports.kpi (ban giám đốc); mỗi cán bộ xem được số liệu của mình.
 // Dùng để tham khảo, chưa gắn lương thưởng.
 const { fail, optionalInt, optionalDate } = require('../lib/http');
@@ -39,16 +39,16 @@ function rangeOf(query, now) {
 }
 
 module.exports = function mountKpi(app, { prisma, auth, audit }) {
-  require('./analytics')(app, { prisma, auth, audit }); // KPI & phân tích thống kê (Ban giám đốc)
+  require('./analytics')(app, { prisma, auth, audit }); // KPI & phân tích thống kê (Ban Tổng Giám đốc)
   app.get('/api/kpi', auth, async (req, res) => {
-    if (permissionScope(req.user, 'reports.kpi', 'VIEW') !== 'SYSTEM') fail(403, 'Chỉ Ban giám đốc được xem KPI', 'FORBIDDEN');
+    if (permissionScope(req.user, 'reports.kpi', 'VIEW') !== 'SYSTEM') fail(403, 'Chỉ Ban Tổng Giám đốc được xem KPI', 'FORBIDDEN');
     const now = new Date();
     const { from, to } = rangeOf(req.query, now);
-    const departmentId = optionalInt(req.query.departmentId, 'Phòng ban');
+    const departmentId = optionalInt(req.query.departmentId, 'Bộ phận');
     const { kpiWeights } = await getSettings(prisma);
     const weights = S.normalizeWeights(kpiWeights);
 
-    // Tôn trọng quyền xem: chỉ đếm việc người xem thấy được (Ban giám đốc: toàn bộ).
+    // Tôn trọng quyền xem: chỉ đếm việc người xem thấy được (Ban Tổng Giám đốc: toàn bộ).
     const items = await loadItems(prisma, { from, to, where: [{ project: visibleProjectsWhere(req.user) }, itemVisibleWhere(req.user)] });
     const departments = await prisma.department.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } });
     const userIds = [...new Set(items.flatMap(i => i.assignees.map(a => a.userId)))];

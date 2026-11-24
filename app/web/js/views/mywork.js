@@ -11,7 +11,7 @@ const GROUPS = [
   ['overdue', 'Quá hạn'], ['today', 'Đến hạn trong 2 ngày'], ['week', 'Trong 7 ngày tới'], ['later', 'Sau đó'], ['nodue', 'Chưa có hạn'],
 ];
 const ROLE = { LEAD: 'Chủ trì', SUPPORT: 'Phối hợp' };
-// Khâu đang nằm ở người khác: đã nộp phòng / BGĐ, chờ duyệt, chờ phòng tiếp nhận.
+// Khâu đang nằm ở người khác: đã nộp phòng / BTGĐ, chờ duyệt, chờ phòng tiếp nhận.
 const WAITING = new Set(['WAIT_DEPT', 'WAIT_BGD', 'WAIT_APPROVAL', 'PENDING_ACCEPT']);
 const vnDay = v => Math.floor((new Date(v).getTime() + 7 * 3_600_000) / 86_400_000);
 // Hạn tôi phải làm theo: người chủ trì làm theo hạn nộp phòng (nếu phòng đặt), còn lại theo hạn chính thức.
@@ -31,7 +31,7 @@ function nextStep(i) {
   if (isReturned(i)) return { text: 'Sửa & nộp lại', tone: 'danger' };
   if (st === 'PENDING_ACCEPT') return { text: 'Chờ phòng tiếp nhận', tone: 'wait' };
   if (st === 'WAIT_DEPT') return { text: 'Chờ phòng duyệt', tone: 'wait' };
-  if (st === 'WAIT_BGD') return { text: 'Chờ BGĐ cho ý kiến', tone: 'wait' };
+  if (st === 'WAIT_BGD') return { text: 'Chờ BTGĐ cho ý kiến', tone: 'wait' };
   if (st === 'WAIT_APPROVAL') return { text: i.stage.label || 'Chờ duyệt', tone: 'wait' };
   if (!i.myRole) return { text: (i.dispatchStatus ? i.stage?.label : i.state?.name) || 'Theo dõi', tone: 'wait', plain: true };
   if (i.myRole === 'SUPPORT') return { text: 'Báo cáo phần phối hợp', tone: '' };

@@ -66,8 +66,8 @@ test('đọc Kế hoạch năm có mốc tuần, cảnh báo mốc không đọc
   assert.equal(iso(t3.due), iso(vn(2027, 4, 21))); // "Thời gian: Tuần 3 tháng 4/2027"
 });
 
-test('khớp đơn vị chủ trì với phòng ban: không dấu, viết tắt KHCN/TNT/VP, chứa nhau', () => {
-  const depts = [{ id: 1, code: 'BGD', name: 'Ban Giám đốc' }, { id: 5, code: 'VP', name: 'Văn phòng' }, { id: 6, code: 'KHCN', name: 'Phòng Khoa học Công nghệ' },
+test('khớp đơn vị chủ trì với bộ phận: không dấu, viết tắt KHCN/TNT/VP, chứa nhau', () => {
+  const depts = [{ id: 1, code: 'BGD', name: 'Ban Tổng Giám đốc' }, { id: 5, code: 'VP', name: 'Văn phòng' }, { id: 6, code: 'KHCN', name: 'Phòng Khoa học Công nghệ' },
     { id: 7, code: 'TNT', name: 'Phòng Tài năng trẻ' }, { id: 4, code: 'HCNS', name: 'Phòng Hành chính – Nhân sự' }];
   const m = departmentMatcher(depts);
   const id = s => m(s)?.id ?? null;
@@ -124,11 +124,11 @@ test('tổng hợp theo phòng chủ trì: phòng = đơn vị chủ trì ?? ph�
     it('COMPLETED', { leadDepartmentId: 6, dispatchStatus: 'ACCEPTED', taskType: 'PLAN', dueDate: vn(2026, 10, 10), completedAt: vn(2026, 10, 9) }),
     it('STARTED', { leadDepartmentId: 6, dueDate: vn(2026, 10, 1) }),
     it('STARTED', { project: { departmentId: 6 }, dueDate: vn(2026, 10, 18) }), // việc nội bộ của phòng (dự án của phòng)
-    it('STARTED'), // sổ Ban Giám đốc, chưa giao về phòng → tính cho Ban Giám đốc
+    it('STARTED'), // sổ Ban Tổng Giám đốc, chưa giao về phòng → tính cho Ban Tổng Giám đốc
     it('CANCELLED', { leadDepartmentId: 6 }),
     it('STARTED', { leadDepartmentId: 99 }), // ngoài phạm vi
   ];
-  const r = R.summarizeDepartments(items, [{ id: 1, name: 'Ban Giám đốc' }, { id: 6, name: 'Phòng Khoa học Công nghệ' }], { now, dueSoonDays: 3 });
+  const r = R.summarizeDepartments(items, [{ id: 1, name: 'Ban Tổng Giám đốc' }, { id: 6, name: 'Phòng Khoa học Công nghệ' }], { now, dueSoonDays: 3 });
   const khcn = r.rows.find(x => x.departmentId === 6);
   assert.deepEqual([khcn.total, khcn.pendingAccept, khcn.overdue, khcn.dueSoon, khcn.inProgress, khcn.doneOnTime, khcn.onTimeRate], [4, 1, 1, 1, 1, 1, 100]);
   assert.deepEqual([khcn.plan.done, khcn.plan.total, khcn.plan.rate, khcn.adhoc.done, khcn.adhoc.total], [1, 2, 50, 0, 2]);
@@ -159,6 +159,6 @@ test('quyền xuất sổ và mẫu nhóm việc', () => {
   assert.equal(routes.canCreateTemplate(cv), false);
   assert.equal(routes.canEditTemplate(tp, { createdById: 16 }), true);
   assert.equal(routes.canEditTemplate(tp, { createdById: 2 }), false);
-  assert.equal(routes.canEditTemplate(tp, { createdById: null }), false); // mẫu mặc định: chỉ BGĐ / quản trị
+  assert.equal(routes.canEditTemplate(tp, { createdById: null }), false); // mẫu mặc định: chỉ BTGĐ / quản trị
   assert.equal(routes.canEditTemplate(gd, { createdById: 16 }), true);
 });

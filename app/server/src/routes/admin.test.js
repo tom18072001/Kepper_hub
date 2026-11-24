@@ -1,4 +1,4 @@
-// GĐ3b — quản trị: đổi vai (quyền theo vai, ghi nhật ký số quyền thêm / bớt), bàn giao khi nghỉ việc, nhật ký (che nội dung nghiệp vụ, lọc), phòng ban vòng.
+// GĐ3b — quản trị: đổi vai (quyền theo vai, ghi nhật ký số quyền thêm / bớt), bàn giao khi nghỉ việc, nhật ký (che nội dung nghiệp vụ, lọc), bộ phận vòng.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const admin = require('./admin');
@@ -22,7 +22,7 @@ test('đổi vai: khác biệt quyền giữa bảng quyền của hai vai (ghi 
   assert.equal(profileDiff(ROLE_PROFILES.manager, ROLE_PROFILES.manager).mismatch, false);
 });
 
-test('phòng ban: chặn đặt trực thuộc thành vòng', () => {
+test('bộ phận: chặn đặt trực thuộc thành vòng', () => {
   const depts = [{ id: 1, parentId: null }, { id: 2, parentId: 1 }, { id: 3, parentId: 2 }, { id: 4, parentId: null }];
   assert.equal(wouldCreateCycle(depts, 1, 2), true); // A ↔ B
   assert.equal(wouldCreateCycle(depts, 1, 3), true); // cháu
@@ -65,7 +65,7 @@ function fakeTx({ items, leadersByDept = {}, directors = [], supervised = [] }) 
   } };
 }
 
-test('bàn giao: trả việc giao về phòng cho lãnh đạo phòng, việc thường báo người giao, thu hồi uỷ quyền, bỏ PGĐ phụ trách', async () => {
+test('bàn giao: trả việc giao về phòng cho lãnh đạo phòng, việc thường báo người giao, thu hồi uỷ quyền, bỏ Phó TGĐ phụ trách', async () => {
   const P = { id: 3, key: 'SO', leadId: 2, departmentId: 1 };
   const items = [
     { id: 11, number: 1, title: 'Việc A', projectId: 3, project: P, dispatchStatus: 'ACCEPTED', leadDepartmentId: 6, assignedById: 2, assignees: [{ userId: 29 }], supporters: [] },
@@ -80,7 +80,7 @@ test('bàn giao: trả việc giao về phòng cho lãnh đạo phòng, việc t
   const notices = log.filter(l => l[0] === 'notify');
   assert.deepEqual(notices[0], ['notify', [16, 17], 'Cần phân công lại SO-1 (cán bộ nghỉ việc)']); // lãnh đạo phòng chủ trì (không gồm người nghỉ)
   assert.deepEqual(notices[1], ['notify', [16], 'Cần phân công lại SO-2 (cán bộ nghỉ việc)']); // người giao
-  assert.deepEqual(notices[2][1], [2, 12]); // Giám đốc: phòng mất PGĐ phụ trách
+  assert.deepEqual(notices[2][1], [2, 12]); // Giám đốc: phòng mất Phó TGĐ phụ trách
   assert.deepEqual(log.filter(l => l[0] === 'unassign').map(l => l[1]), [11, 12, 13]);
   assert.deepEqual(log.filter(l => l[0] === 'unsupport').map(l => l[1]), [14]);
   assert.equal(log.filter(l => l[0] === 'activity' && l[2] === 'HANDOVER').length, 4);

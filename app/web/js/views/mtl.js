@@ -284,7 +284,7 @@ export async function drawMtlPlan(body, project, params) {
 }
 
 // ---------- Khối MTL trong chi tiết hạng mục ----------
-// c = capabilities của việc: dự báo hoàn thành — người chủ trì; đường găng, mốc, kế hoạch gốc — người giao / Ban Giám đốc.
+// c = capabilities của việc: dự báo hoàn thành — người chủ trì; đường găng, mốc, kế hoạch gốc — người giao / Ban Tổng Giám đốc.
 export function mtlPanelBlock(d, project, c = {}) {
   if (project.kind !== 'MTL') return '';
   const st = d.mtl || {};
@@ -330,7 +330,7 @@ function importDialog(project, done) {
     ${pmo ? '' : '<p class="sm"><b>Cách nhanh nhất:</b> tải MTL bộ phận (Excel) đã điền sẵn → thêm dòng → chọn tệp ở đây → Xem trước → Nhập. Nhập lại chỉ thêm bước mới; bước đã có giữ nguyên. Chỉ gắn được dòng vào bước mình chủ trì.</p>'}
     <p class="muted sm">Bảng cần dòng tiêu đề <b>Bước | Hạng mục công việc | Đầu mối | Bắt đầu (T) | Kết thúc (T) | Thời lượng | Đường găng | Mốc</b>.
       Thời gian ghi theo <b>tháng T</b> (tính từ T0) hoặc ngày cụ thể. MTL bộ phận thêm cột <b>Thuộc bước</b> để gắn vào hạng mục của MTL tổng.
-      Nhập lại cùng kế hoạch <b>chỉ thêm bước mới; bước đã có giữ nguyên</b> (sửa kế hoạch một bước: người giao / Ban Giám đốc trên chi tiết bước; kế hoạch gốc: "Điều chỉnh kế hoạch gốc"). Tệp chỉ đọc rồi xoá, không lưu.</p>
+      Nhập lại cùng kế hoạch <b>chỉ thêm bước mới; bước đã có giữ nguyên</b> (sửa kế hoạch một bước: người giao / Ban Tổng Giám đốc trên chi tiết bước; kế hoạch gốc: "Điều chỉnh kế hoạch gốc"). Tệp chỉ đọc rồi xoá, không lưu.</p>
     <div class="grid2">
       <label class="field">Tệp .xlsx<input type="file" name="file" accept=".xlsx" required data-testid="mtl-import-file"></label>
       <label class="field"${pmo ? '' : ' hidden'}>Loại<select name="kind" data-testid="mtl-import-kind">${pmo ? '<option value="MASTER">MTL tổng (dự án)</option>' : ''}<option value="DEPARTMENT">MTL bộ phận</option></select></label>

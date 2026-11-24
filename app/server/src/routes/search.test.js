@@ -73,5 +73,5 @@ test('Postgres: tìm không dấu, không phân biệt hoa thường, vẫn theo
   const byDoc = await search(inDept, tag + '/qd-dhdcd');
   assert.deepEqual(byDoc.map(r => [r.id, r.matchedDocument]), [[other.id, `${tag}/QĐ-ĐHĐCĐ`]], 'số văn bản không dấu, Đ → D');
   assert.deepEqual(await ids(inDept, 'phong%hop ' + tag), [], '% trong từ khoá không phải ký tự đại diện');
-  assert.deepEqual(await ids(outsider, 'phong hop ' + tag), [], 'người phòng khác không thấy việc của dự án phòng ban');
+  assert.deepEqual(await ids(outsider, 'phong hop ' + tag), [], 'người phòng khác không thấy việc của dự án bộ phận');
 });

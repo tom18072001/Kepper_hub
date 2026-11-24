@@ -50,11 +50,11 @@ function canExport(user, project, member = null, rights = null) {
   return !!rights?.canManage;
 }
 function canEditCatalog(user) {
-  // Danh mục dùng chung: quản trị hệ thống hoặc Ban giám đốc (quản lý dự án toàn đơn vị).
+  // Danh mục dùng chung: quản trị hệ thống hoặc Ban Tổng Giám đốc (quản lý dự án toàn đơn vị).
   return isItAdmin(user) || permissionScope(user, 'projects.manage', 'OPERATE') === 'SYSTEM';
 }
-// Mẫu nhóm việc: ai quản lý dự án (kể cả trưởng / phó phòng — phạm vi phòng ban) được tạo mẫu; sửa / xoá mẫu của mình.
-// Quản trị và Ban giám đốc (quản lý dự án toàn đơn vị) sửa được mọi mẫu.
+// Mẫu nhóm việc: ai quản lý dự án (kể cả trưởng / phó phòng — phạm vi bộ phận) được tạo mẫu; sửa / xoá mẫu của mình.
+// Quản trị và Ban Tổng Giám đốc (quản lý dự án toàn đơn vị) sửa được mọi mẫu.
 const canCreateTemplate = user => canEditCatalog(user) || !!permissionScope(user, 'projects.manage', 'OPERATE');
 const canEditTemplate = (user, tpl) => canEditCatalog(user) || (tpl.createdById != null && tpl.createdById === user.id && canCreateTemplate(user));
 function cellText(cell) {
@@ -133,7 +133,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
   // ---------- Danh mục ----------
   app.get('/api/settings', auth, async (req, res) => res.json({ ...(await R.getSettings(prisma)), canEdit: canEditCatalog(req.user), canCreateTemplate: canCreateTemplate(req.user), modules: config?.modules || [], orgName: config?.orgName || '' }));
   app.put('/api/settings', auth, async (req, res) => {
-    if (!canEditCatalog(req.user)) fail(403, 'Chỉ Ban giám đốc hoặc quản trị được sửa danh mục', 'FORBIDDEN');
+    if (!canEditCatalog(req.user)) fail(403, 'Chỉ Ban Tổng Giám đốc hoặc quản trị được sửa danh mục', 'FORBIDDEN');
     const old = await R.getSettings(prisma);
     const next = {};
     if (req.body.dueSoonDays !== undefined) {
@@ -178,7 +178,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
     res.json(rows.map(templateView(req.user, names)));
   });
   app.post('/api/templates', auth, async (req, res) => {
-    if (!canCreateTemplate(req.user)) fail(403, 'Chỉ Ban giám đốc, lãnh đạo phòng (quản lý dự án) hoặc quản trị được tạo mẫu', 'FORBIDDEN');
+    if (!canCreateTemplate(req.user)) fail(403, 'Chỉ Ban Tổng Giám đốc, lãnh đạo phòng (quản lý dự án) hoặc quản trị được tạo mẫu', 'FORBIDDEN');
     const data = templateInput(req.body || {});
     if (await prisma.taskTemplate.findUnique({ where: { name: data.name } })) fail(409, 'Đã có mẫu cùng tên', 'EXISTS');
     const row = await prisma.taskTemplate.create({ data: { ...data, createdById: req.user.id } });
@@ -187,7 +187,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
   });
   const ownTemplate = async (req, id) => {
     const tpl = await prisma.taskTemplate.findUnique({ where: { id } }) || fail(404, 'Không tìm thấy mẫu', 'NOT_FOUND');
-    if (!canEditTemplate(req.user, tpl)) fail(403, 'Chỉ người tạo mẫu, Ban giám đốc hoặc quản trị được sửa / xoá mẫu này', 'FORBIDDEN');
+    if (!canEditTemplate(req.user, tpl)) fail(403, 'Chỉ người tạo mẫu, Ban Tổng Giám đốc hoặc quản trị được sửa / xoá mẫu này', 'FORBIDDEN');
     return tpl;
   };
   app.put('/api/templates/:id', auth, async (req, res) => {
@@ -213,7 +213,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
   // hạn = rows[i].dueDate ?? (anchorDate + offsetDays) ?? hạn việc cha, không muộn hơn hạn việc cha (cắt về hạn cha, báo trong `warnings`).
   app.post('/api/items/:id/apply-template', auth, async (req, res) => {
     const id = intParam(req.params.id);
-    // Áp mẫu = tạo việc nhánh: người chủ trì, người giao, Ban Giám đốc của việc cha (services/task-access.js).
+    // Áp mẫu = tạo việc nhánh: người chủ trì, người giao, BTGĐ phụ trách của việc cha (services/task-access.js).
     const { project, rights } = await TA.loadTask(prisma, req.user, id, { need: 'children' });
     const body = req.body || {};
     const tpl = await prisma.taskTemplate.findUnique({ where: { id: intParam(body.templateId, 'Mẫu') } }) || fail(404, 'Không tìm thấy mẫu', 'NOT_FOUND');
@@ -256,8 +256,8 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
     const scope = permissionScope(req.user, 'reports.summary', 'VIEW');
     if (!scope) fail(403, 'Bạn không có quyền xem tổng hợp giao việc', 'FORBIDDEN');
     const settings = await R.getSettings(prisma);
-    const departmentId = scope === 'SYSTEM' ? optionalInt(req.query.departmentId, 'Phòng ban') : req.user.departmentId ?? -1;
-    // Phạm vi theo NGƯỜI: trưởng phòng xem cán bộ phòng mình ở mọi dự án/sổ (kể cả việc Ban Giám đốc giao) — chỉ số đếm, không lộ nội dung việc.
+    const departmentId = scope === 'SYSTEM' ? optionalInt(req.query.departmentId, 'Bộ phận') : req.user.departmentId ?? -1;
+    // Phạm vi theo NGƯỜI: trưởng phòng xem cán bộ phòng mình ở mọi dự án/sổ (kể cả việc Ban Tổng Giám đốc giao) — chỉ số đếm, không lộ nội dung việc.
     const projectWhere = { deletedAt: null };
     const projectId = optionalInt(req.query.projectId, 'Dự án');
     if (projectId) projectWhere.id = projectId;
@@ -329,12 +329,12 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
     if (d.byDepartment.rows.length > 1) { const t = ds.addRow(deptLine(d.byDepartment.total)); t.font = { bold: true }; t.eachCell(c => { c.fill = SUB_FILL; }); }
     ds.getColumn(8).numFmt = '0%';
     ds.addRow([]);
-    ds.addRow(['Phòng của việc = đơn vị chủ trì (việc Ban Giám đốc giao về phòng); việc chưa giao về phòng tính cho phòng sở hữu dự án / sổ. Mỗi việc (kể cả việc nhánh) tính một lần; không tính việc huỷ.']);
+    ds.addRow(['Phòng của việc = đơn vị chủ trì (việc Ban Tổng Giám đốc giao về phòng); việc chưa giao về phòng tính cho phòng sở hữu dự án / sổ. Mỗi việc (kể cả việc nhánh) tính một lần; không tính việc huỷ.']);
     ds.addRow(['Tỷ lệ đúng hạn = HT đúng hạn / (HT đúng hạn + HT trễ hạn). "Chờ phòng tiếp nhận" = việc giao về phòng chưa được lãnh đạo phòng tiếp nhận, phân công.']);
     watermark(ds, req.user, now);
     // Sheet 2: theo cán bộ chủ trì, có dòng cộng theo phòng.
     const ss = wb.addWorksheet('Theo cán bộ');
-    head(ss, 'TỔNG HỢP TÌNH HÌNH THỰC HIỆN NHIỆM VỤ ĐƯỢC GIAO — THEO CÁN BỘ CHỦ TRÌ', [['Cán bộ chủ trì', 26], ['Chức danh', 26], ['Phòng ban', 24], ['Tổng việc', 10], ['Đang thực hiện', 12], ['Sắp đến hạn', 11],
+    head(ss, 'TỔNG HỢP TÌNH HÌNH THỰC HIỆN NHIỆM VỤ ĐƯỢC GIAO — THEO CÁN BỘ CHỦ TRÌ', [['Cán bộ chủ trì', 26], ['Chức danh', 26], ['Bộ phận', 24], ['Tổng việc', 10], ['Đang thực hiện', 12], ['Sắp đến hạn', 11],
       ['Quá hạn', 10], ['HT đúng hạn', 11], ['HT trễ hạn', 11], ['Tỷ lệ đúng hạn', 11], ['Số việc phối hợp', 12]]);
     const all = req.query.all === '1';
     const rows = d.result.rows.filter(r => all || r.total || r.supporting);
@@ -385,7 +385,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
       const warnings = [...plan.warnings, ...[...new Set(preview.flatMap(t => t.unmatchedLeads))].map(n => `Chưa có tài khoản cho "${n}" — việc sẽ chưa có người chủ trì`)];
       const unmatchedUnits = new Map();
       for (const t of preview) if (t.leadUnit && !t.leadDept) unmatchedUnits.set(t.leadUnit, [...(unmatchedUnits.get(t.leadUnit) || []), t.code]);
-      for (const [unit, codes] of unmatchedUnits) warnings.push(`Không khớp đơn vị chủ trì "${unit}" (nhiệm vụ ${codes.join(', ')}) với phòng ban nào — ${assigned ? 'nhiệm vụ chưa giao về phòng, ' : ''}chỉ ghi vào Ghi chú`);
+      for (const [unit, codes] of unmatchedUnits) warnings.push(`Không khớp đơn vị chủ trì "${unit}" (nhiệm vụ ${codes.join(', ')}) với bộ phận nào — ${assigned ? 'nhiệm vụ chưa giao về phòng, ' : ''}chỉ ghi vào Ghi chú`);
       if (!assigned && preview.some(t => t.leadDept && t.leadDept.id !== project.departmentId))
         warnings.push(`"${project.name}" không phải sổ giao việc của đơn vị: đơn vị chủ trì chỉ ghi vào Ghi chú, việc không giao về phòng`);
       if (req.query.dryRun === '1') {
@@ -435,7 +435,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
     require('../lib/tokens').assertNotVia(req);
     const { project, member, rights } = await loadProject(prisma, req.user, intParam(req.params.id));
     if (!canExport(req.user, project, member, rights)) fail(403, 'Bạn không có quyền xuất Excel dự án này', 'FORBIDDEN');
-    MG.mtlExportGuard(req.user, project, rights); // MTL: quy định xuất (người quản lý dự án / Ban GĐ)
+    MG.mtlExportGuard(req.user, project, rights); // MTL: quy định xuất (người quản lý dự án / Ban TGĐ)
     const settings = await R.getSettings(prisma);
     const items = await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, AND: [itemVisibleWhere(req.user)] }, orderBy: { number: 'asc' },
       include: { state: true, assignees: { include: { user: { select: { id: true, fullName: true } } } }, supporters: { include: { user: { select: { id: true, fullName: true } } } },
@@ -556,7 +556,7 @@ module.exports = function mountRegister(app, { prisma, auth, audit, config }) {
       });
       if (!rows.length) fail(422, 'Không có dòng dữ liệu nào', 'IMPORT_EMPTY');
       if (rows.length > 2000) fail(422, 'Tối đa 2000 dòng mỗi lần nhập', 'IMPORT_TOO_LARGE');
-      for (const [name, count] of unmatchedDepts) warnings.add(`Không khớp đơn vị chủ trì "${name}" với phòng ban nào (${count} dòng) — ${assigned ? 'việc chưa giao về phòng, ' : ''}chỉ ghi vào Ghi chú`);
+      for (const [name, count] of unmatchedDepts) warnings.add(`Không khớp đơn vị chủ trì "${name}" với bộ phận nào (${count} dòng) — ${assigned ? 'việc chưa giao về phòng, ' : ''}chỉ ghi vào Ghi chú`);
       if (ignoredDeptRows) warnings.add(`"${project.name}" không phải sổ giao việc của đơn vị: bỏ qua cột "Đơn vị chủ trì" (${ignoredDeptRows} dòng), chỉ ghi vào Ghi chú`);
       for (const e of docErrors.slice(0, 20)) warnings.add(`Văn bản căn cứ — ${e}`);
       if (docErrors.length > 20) warnings.add(`Văn bản căn cứ: còn ${docErrors.length - 20} lỗi khác`);

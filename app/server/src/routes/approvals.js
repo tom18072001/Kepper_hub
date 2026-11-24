@@ -21,16 +21,16 @@ async function decisionScope(prisma, user) {
   if (permissionScope(user, 'work.approve', 'OPERATE') === 'UNIT' && user.departmentId != null) leaderDepts.add(user.departmentId);
   for (const u of fromIds.length ? await prisma.user.findMany({ where: { id: { in: fromIds }, isActive: true }, select: { departmentId: true, role: true, isRootAdmin: true } }) : []) if (u.departmentId != null && !isBoard(u)) leaderDepts.add(u.departmentId);
   const supervised = (await prisma.department.findMany({ where: { supervisorId: { in: [user.id, ...fromIds] } }, select: { id: true } })).map(d => d.id);
-  // Ban Giám đốc của việc (services/task-access.js): TGĐ — mọi việc; PGĐ phụ trách — việc của phòng mình phụ trách.
+  // BTGĐ phụ trách của việc (services/task-access.js): TGĐ — mọi việc; Phó TGĐ phụ trách — việc của phòng mình phụ trách.
   const org = await TA.orgContext(prisma, now);
   const ownSupervised = (await prisma.department.findMany({ where: { supervisorId: user.id }, select: { id: true } })).map(d => d.id);
   return { assigners: [user.id, ...fromIds], leaderDepts: [...leaderDepts], supervised, top: org.topIds.includes(user.id), ownSupervised };
 }
-// Kiến nghị "của tôi": người giao / PGĐ phụ trách luôn thấy; lãnh đạo phòng chỉ thấy kiến nghị chưa trình lên BGĐ.
+// Kiến nghị "của tôi": người giao / Phó TGĐ phụ trách luôn thấy; lãnh đạo phòng chỉ thấy kiến nghị chưa trình lên BTGĐ.
 const proposalScope = s => ({ OR: [{ workItem: { assignedById: { in: s.assigners } } }, ...(s.supervised.length ? [{ workItem: { leadDepartmentId: { in: s.supervised } } }] : []),
   ...(s.leaderDepts.length ? [{ forwardedAt: null, workItem: { leadDepartmentId: { in: s.leaderDepts } } }] : [])] });
 const scopeWhere = s => (s.top ? {} : { OR: [{ assignedById: { in: s.assigners } }, ...(s.leaderDepts.length ? [{ leadDepartmentId: { in: s.leaderDepts } }] : []), ...(s.supervised.length ? [{ leadDepartmentId: { in: s.supervised } }] : [])] });
-// Giống điều kiện ở POST /api/extensions/:id/decide: Ban Giám đốc của việc (TGĐ; PGĐ phụ trách bộ phận chủ trì) duyệt mọi đề nghị gia hạn.
+// Giống điều kiện ở POST /api/extensions/:id/decide: BTGĐ phụ trách của việc (TGĐ; Phó TGĐ phụ trách bộ phận chủ trì) duyệt mọi đề nghị gia hạn.
 // Người giao, lãnh đạo bộ phận chủ trì vẫn thấy đề nghị để nắm (không có nút).
 const canDecideExt = (s, userId, ext, item) => s.top || s.ownSupervised.includes(item.leadDepartmentId ?? item.project?.departmentId);
 const ITEM_SELECT = { id: true, number: true, title: true, dueDate: true, priority: true, taskType: true, assignedById: true, leadDepartmentId: true, archivedAt: true,
@@ -82,7 +82,7 @@ module.exports = function mountApprovals(app, { prisma, auth, audit, config = {}
       include: { workItem: { select: ITEM_SELECT } }, orderBy: { createdAt: 'asc' }, take: 200,
     });
     const n = await names(rows.flatMap(r => [r.requestedById, r.workItem.assignedById])); const d = await deptNames();
-    // Chỉ Ban Giám đốc của việc có nút quyết định; người giao / lãnh đạo bộ phận xem để nắm.
+    // Chỉ BTGĐ phụ trách của việc có nút quyết định; người giao / lãnh đạo bộ phận xem để nắm.
     res.json(rows.map(r => {
       const it = r.workItem;
       const canDecide = canDecideExt(s, req.user.id, r, it);
@@ -112,7 +112,7 @@ module.exports = function mountApprovals(app, { prisma, auth, audit, config = {}
     const s = await decisionScope(prisma, req.user);
     const [queue, extensions, proposals, hr] = await Promise.all([
       approval.queueFor(prisma, req.user).then(q => q.length),
-      // Chỉ đếm đề nghị mình được quyết định (khớp tab "Đề nghị gia hạn"): Ban Giám đốc của việc.
+      // Chỉ đếm đề nghị mình được quyết định (khớp tab "Đề nghị gia hạn"): BTGĐ phụ trách của việc.
       prisma.dueExtension.findMany({ where: { status: 'PENDING', requestedById: { not: req.user.id }, workItem: { archivedAt: null, project: { deletedAt: null }, ...scopeWhere(s) } },
         select: { requestedById: true, workItem: { select: { assignedById: true, leadDepartmentId: true, project: { select: { departmentId: true } } } } }, take: 500 }).then(rows => rows.filter(r => canDecideExt(s, req.user.id, r, r.workItem)).length),
       prisma.progressReport.count({ where: { proposals: { not: '' }, answer: null, authorId: { not: req.user.id }, workItem: { archivedAt: null, project: { deletedAt: null } }, AND: [proposalScope(s)] } }),

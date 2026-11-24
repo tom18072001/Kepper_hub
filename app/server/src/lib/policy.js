@@ -1,6 +1,6 @@
 // QUY ĐỊNH PHÂN QUYỀN DỮ LIỆU KEPPER HUB — một nguồn duy nhất, thực thi bằng mã (policy-as-code).
 // Ma trận: vai trò nghiệp vụ × tập dữ liệu × hành động. Route gọi can() / assertCan(); policy.test.js kiểm từng ô của ma trận.
-// Vai trò nghiệp vụ SUY RA từ vai trò + phòng ban đã gán cho tài khoản (cơ chế đã thống nhất) và hai lựa chọn của Ban GĐ
+// Vai trò nghiệp vụ SUY RA từ VAI của tài khoản (lib/permissions.js — một trục vai) + bộ phận, và các kiêm nhiệm do Ban TGĐ chỉ định
 // trong thiết lập giao ban (bộ phận thư ký, danh sách PMO) — không cấp quyền mới cho từng tài khoản, không đổi luồng đăng nhập.
 // Sửa ma trận = sửa file này + policy.test.js + docs/data-protection-assessment.md (mục Quy định phân quyền).
 
@@ -46,8 +46,8 @@ const NEVER_AI_FIELDS = { 'hrm.identity': ['idNumber'], 'hrm.contract': ['salary
 
 // subject = { it, director, secretary, pmo, leader, departmentId, userId, hr } — dựng bằng weekly-data.rolesOf() (+ hr: services/hrm.js).
 // CRM ctx: { departmentId: bộ phận phụ trách đối tác, ownerUserId, participant: người ghi / người được giao theo dõi, op }.
-// HRM ctx: { targetUserId, departmentId: bộ phận của người đó, targetLeader: lãnh đạo bộ phận / Ban GĐ, targetDirector, targetHr: người phụ trách nhân sự, field, op }.
-// Người phụ trách nhân sự KHÔNG tự sửa hồ sơ / hợp đồng / lương / CCCD / chấm công của chính mình — Ban GĐ (hoặc người phụ trách nhân sự khác) làm.
+// HRM ctx: { targetUserId, departmentId: bộ phận của người đó, targetLeader: lãnh đạo bộ phận / Ban TGĐ, targetDirector, targetHr: người phụ trách nhân sự, field, op }.
+// Người phụ trách nhân sự KHÔNG tự sửa hồ sơ / hợp đồng / lương / CCCD / chấm công của chính mình — Ban TGĐ (hoặc người phụ trách nhân sự khác) làm.
 // ctx: { departmentId } cho dữ liệu của một bộ phận; { createdById } cho thông báo; { item } cho MTL:
 //   item = { assigneeIds: [], leadDepartmentId, leadLeaderIds: [], projectManager: bool }.
 function can(s, action, dataset, ctx = {}, env = {}) { return !!rule(s, action, dataset, ctx, env); }
@@ -63,7 +63,7 @@ function rule(s, action, dataset, ctx, env) {
   const full = s.director || s.secretary || s.pmo; // người nhận bản tổng hợp đầy đủ
   switch (dataset) {
     case 'weekly.report':
-      // Lập / gửi: thành viên đúng bộ phận (Ban GĐ không lập). Nộp thay bộ phận khác: chỉ thư ký. Xem bộ phận khác: Ban GĐ, thư ký, PMO.
+      // Lập / gửi: thành viên đúng bộ phận (Ban TGĐ không lập). Nộp thay bộ phận khác: chỉ thư ký. Xem bộ phận khác: Ban TGĐ, thư ký, PMO.
       if (action === 'view') return (own && !s.director) || full;
       if (action === 'edit') return (own && !s.director) || (!own && s.secretary);
       if (action === 'export') return full;
@@ -75,8 +75,8 @@ function rule(s, action, dataset, ctx, env) {
       if (action === 'view' || action === 'export') return full;
       return false;
     case 'weekly.notice':
-      // Xem: Ban GĐ, thư ký, PMO mọi bộ phận; lãnh đạo bộ phận — bộ phận mình; người tạo — của mình.
-      // Ghi chú lý do chỉ người tạo, thư ký, Ban GĐ thấy (ctx.field === 'note').
+      // Xem: Ban TGĐ, thư ký, PMO mọi bộ phận; lãnh đạo bộ phận — bộ phận mình; người tạo — của mình.
+      // Ghi chú lý do chỉ người tạo, thư ký, Ban TGĐ thấy (ctx.field === 'note').
       if (action === 'view') {
         if (ctx.field === 'note') return s.director || s.secretary || (ctx.createdById != null && ctx.createdById === s.userId);
         return full || (own && s.leader) || (ctx.createdById != null && ctx.createdById === s.userId);
@@ -97,7 +97,7 @@ function rule(s, action, dataset, ctx, env) {
       if (action === 'view') return full || s.leader;
       if (action === 'edit') return s.director || s.secretary;
       return false;
-    case 'weekly.roles': // ai là thư ký, ai là PMO: chỉ Ban GĐ quyết
+    case 'weekly.roles': // ai là thư ký, ai là PMO: chỉ Ban TGĐ quyết
       if (action === 'view') return full || s.leader;
       if (action === 'edit') return s.director;
       return false;
@@ -113,7 +113,7 @@ function rule(s, action, dataset, ctx, env) {
       const it = ctx.item || {};
       if (action === 'view') return true;
       if (action === 'edit') {
-        // Kế hoạch của MỘT hạng mục (tên, găng, mốc, hạn, kế hoạch gốc): người giao, Ban Giám đốc của việc (it.boss, task-access).
+        // Kế hoạch của MỘT hạng mục (tên, găng, mốc, hạn, kế hoạch gốc): người giao, BTGĐ phụ trách của việc (it.boss, task-access).
         if (ctx.op === 'item') return !!it.boss;
         // Thao tác cả dự án (tạo bước MTL tổng, nhập Excel, chuyển ghi chú thành việc): người quản lý dự án.
         return !!it.projectManager;
@@ -122,7 +122,8 @@ function rule(s, action, dataset, ctx, env) {
       return false;
     }
     case 'kpi.person':
-      if (action === 'view') return s.director || (own && s.leader) || ctx.self === true || ctx.projectManager === true;
+      // KPI & phân tích (số liệu theo người, mọi bộ phận): chỉ Ban Tổng Giám đốc; mỗi người xem KPI của chính mình (chủ dự án chốt).
+      if (action === 'view') return s.director || ctx.self === true;
       return false;
 
     // ---------- CRM: đối tác thuộc MỘT bộ phận phụ trách (ownerDepartment) + người phụ trách (ownerUser) ----------
@@ -130,7 +131,7 @@ function rule(s, action, dataset, ctx, env) {
       const owner = s.director || own || (ctx.ownerUserId != null && ctx.ownerUserId === s.userId);
       if (action === 'view') return true; // danh bạ tổ chức đối tác: mọi cán bộ (trừ IT)
       if (action === 'edit') {
-        if (ctx.op === 'create') return s.director || s.departmentId != null; // tạo cho bộ phận mình; Ban GĐ chọn bộ phận
+        if (ctx.op === 'create') return s.director || s.departmentId != null; // tạo cho bộ phận mình; Ban TGĐ chọn bộ phận
         if (ctx.op === 'archive' || ctx.op === 'transfer') return s.director || (own && s.leader); // ngừng theo dõi / chuyển bộ phận phụ trách
         return owner;
       }
@@ -148,11 +149,11 @@ function rule(s, action, dataset, ctx, env) {
       }
       return false;
     }
-    case 'crm.engagement': // giá trị hợp đồng / gói thầu: lãnh đạo bộ phận phụ trách, người phụ trách, Ban GĐ
+    case 'crm.engagement': // giá trị hợp đồng / gói thầu: lãnh đạo bộ phận phụ trách, người phụ trách, Ban TGĐ
       if (action === 'view' || action === 'edit') return s.director || (own && s.leader) || (ctx.ownerUserId != null && ctx.ownerUserId === s.userId);
       return false;
 
-    // ---------- HRM: người phụ trách nhân sự (hr) do Ban GĐ chỉ định trong thiết lập HRM ----------
+    // ---------- HRM: người phụ trách nhân sự (hr) do Ban TGĐ chỉ định trong thiết lập HRM ----------
     case 'hrm.profile': {
       const self = ctx.targetUserId != null && ctx.targetUserId === s.userId;
       if (action === 'view') {
@@ -162,7 +163,7 @@ function rule(s, action, dataset, ctx, env) {
       if (action === 'edit') return hrEdit(s, ctx, self) || (self && ctx.op === 'contact'); // tự sửa liên hệ cá nhân, người liên hệ khẩn cấp
       return false;
     }
-    case 'hrm.identity': { // số CCCD: chỉ chính người đó và người phụ trách nhân sự (Ban GĐ không cần — tối thiểu hoá)
+    case 'hrm.identity': { // số CCCD: chỉ chính người đó và người phụ trách nhân sự (Ban TGĐ không cần — tối thiểu hoá)
       const self = ctx.targetUserId != null && ctx.targetUserId === s.userId;
       if (action === 'view') return self || s.hr;
       if (action === 'edit') return hrEdit(s, ctx, self);
@@ -176,12 +177,12 @@ function rule(s, action, dataset, ctx, env) {
     }
     case 'hrm.leave': {
       const self = ctx.targetUserId != null && ctx.targetUserId === s.userId;
-      // Lãnh đạo bộ phận duyệt nhân viên; Ban GĐ duyệt lãnh đạo bộ phận; đơn của Ban GĐ: Ban GĐ khác hoặc người phụ trách nhân sự ghi nhận.
+      // Lãnh đạo bộ phận duyệt nhân viên; Ban TGĐ duyệt lãnh đạo bộ phận; đơn của Ban TGĐ: Ban TGĐ khác hoặc người phụ trách nhân sự ghi nhận.
       const approver = !self && (s.director || (own && s.leader && !ctx.targetLeader) || (ctx.targetDirector === true && s.hr));
       if (action === 'view') return self || s.hr || s.director || (own && s.leader);
       if (action === 'edit') {
         if (ctx.op === 'create') return self || s.hr;
-        if (ctx.op === 'approve') return approver; // lãnh đạo bộ phận duyệt nhân viên; đơn của lãnh đạo bộ phận: Ban GĐ
+        if (ctx.op === 'approve') return approver; // lãnh đạo bộ phận duyệt nhân viên; đơn của lãnh đạo bộ phận: Ban TGĐ
         if (ctx.op === 'cancel') return self || s.hr;
         return false;
       }
@@ -193,7 +194,7 @@ function rule(s, action, dataset, ctx, env) {
       if (action === 'edit') {
         if (ctx.op === 'check' || ctx.op === 'explain') return self; // chấm công / giải trình: chính người đó (chỉ trên giao diện)
         if (ctx.op === 'approve') return !self && (s.hr || s.director || (own && s.leader && !ctx.targetLeader));
-        if (ctx.op === 'hr') return !self && (s.hr || s.director); // nhập máy chấm công: người phụ trách nhân sự (của chính họ: Ban GĐ)
+        if (ctx.op === 'hr') return !self && (s.hr || s.director); // nhập máy chấm công: người phụ trách nhân sự (của chính họ: Ban TGĐ)
         return false;
       }
       if (action === 'export') return s.hr || s.director;
@@ -208,12 +209,12 @@ function rule(s, action, dataset, ctx, env) {
   }
 }
 
-// Sửa hồ sơ / hợp đồng / CCCD: người phụ trách nhân sự, trừ hồ sơ của chính mình; hồ sơ của người phụ trách nhân sự: Ban GĐ.
+// Sửa hồ sơ / hợp đồng / CCCD: người phụ trách nhân sự, trừ hồ sơ của chính mình; hồ sơ của người phụ trách nhân sự: Ban TGĐ.
 function hrEdit(s, ctx, self) {
   if (self) return false;
   return !!s.hr || (!!s.director && ctx.targetHr === true);
 }
-// Xuất MTL ra tệp (Excel / Word): người quản lý dự án, Ban GĐ; lãnh đạo bộ phận chỉ phần bộ phận mình (op 'dept').
+// Xuất MTL ra tệp (Excel / Word): người quản lý dự án, Ban TGĐ; lãnh đạo bộ phận chỉ phần bộ phận mình (op 'dept').
 function mtlExport(s, ctx) {
   const it = ctx.item || {};
   return !!it.projectManager || !!s.director || (ctx.op === 'dept' && (it.leadLeaderIds || []).includes(s.userId));
@@ -222,23 +223,23 @@ function mtlExport(s, ctx) {
 class PolicyError extends Error { constructor(message) { super(message); this.status = 403; this.code = 'FORBIDDEN'; } }
 const MESSAGES = {
   'weekly.report': 'Chỉ thành viên bộ phận lập báo cáo của bộ phận mình; thư ký giao ban nhập thay bộ phận khác',
-  'weekly.summary.detail': 'Chi tiết báo cáo các bộ phận chỉ Ban giám đốc, thư ký giao ban, PMO xem',
+  'weekly.summary.detail': 'Chi tiết báo cáo các bộ phận chỉ Ban Tổng Giám đốc, thư ký giao ban, PMO xem',
   'weekly.notice': 'Chỉ báo cho bộ phận của mình; thư ký giao ban báo thay',
-  'weekly.meeting': 'Chỉ TGĐ / Ban giám đốc và thư ký giao ban ghi điểm danh, kết luận, Action Log',
-  'weekly.compliance': 'Điểm tuân thủ chỉ thư ký giao ban và Ban giám đốc xem',
-  'weekly.roles': 'Chỉ Ban giám đốc chọn bộ phận thư ký và PMO',
+  'weekly.meeting': 'Chỉ TGĐ / Ban Tổng Giám đốc và thư ký giao ban ghi điểm danh, kết luận, Action Log',
+  'weekly.compliance': 'Điểm tuân thủ chỉ thư ký giao ban và Ban Tổng Giám đốc xem',
+  'weekly.roles': 'Chỉ Ban Tổng Giám đốc chọn bộ phận thư ký và PMO',
   'mtl.progress': 'Tiến độ hạng mục do người chủ trì cập nhật',
-  'mtl.plan': 'Kế hoạch hạng mục MTL do người giao hoặc Ban Giám đốc sửa; tạo bước MTL tổng, nhập Excel do người quản lý dự án (PMO)',
-  'crm.partner': 'Chỉ bộ phận phụ trách đối tác, người phụ trách hoặc Ban giám đốc sửa đối tác này',
-  'crm.contact': 'Người liên hệ của đối tác chỉ bộ phận phụ trách, người phụ trách và Ban giám đốc xem / sửa',
-  'crm.interaction': 'Nhật ký làm việc với đối tác chỉ bộ phận phụ trách, người phụ trách, người được giao theo dõi và Ban giám đốc xem',
-  'crm.engagement': 'Hợp đồng / gói thầu chỉ lãnh đạo bộ phận phụ trách, người phụ trách và Ban giám đốc xem / sửa',
-  'hrm.profile': 'Hồ sơ nhân sự chỉ chính người đó, người phụ trách nhân sự và Ban giám đốc xem đầy đủ',
+  'mtl.plan': 'Kế hoạch hạng mục MTL do người giao hoặc Ban Tổng Giám đốc sửa; tạo bước MTL tổng, nhập Excel do người quản lý dự án (PMO)',
+  'crm.partner': 'Chỉ bộ phận phụ trách đối tác, người phụ trách hoặc Ban Tổng Giám đốc sửa đối tác này',
+  'crm.contact': 'Người liên hệ của đối tác chỉ bộ phận phụ trách, người phụ trách và Ban Tổng Giám đốc xem / sửa',
+  'crm.interaction': 'Nhật ký làm việc với đối tác chỉ bộ phận phụ trách, người phụ trách, người được giao theo dõi và Ban Tổng Giám đốc xem',
+  'crm.engagement': 'Hợp đồng / gói thầu chỉ lãnh đạo bộ phận phụ trách, người phụ trách và Ban Tổng Giám đốc xem / sửa',
+  'hrm.profile': 'Hồ sơ nhân sự chỉ chính người đó, người phụ trách nhân sự và Ban Tổng Giám đốc xem đầy đủ',
   'hrm.identity': 'Số định danh chỉ chính người đó và người phụ trách nhân sự xem',
-  'hrm.contract': 'Hợp đồng lao động chỉ chính người đó, người phụ trách nhân sự và Ban giám đốc xem; người phụ trách nhân sự sửa',
-  'hrm.leave': 'Đơn nghỉ do chính người đó lập; lãnh đạo bộ phận duyệt nhân viên, Ban giám đốc duyệt đơn của lãnh đạo bộ phận',
+  'hrm.contract': 'Hợp đồng lao động chỉ chính người đó, người phụ trách nhân sự và Ban Tổng Giám đốc xem; người phụ trách nhân sự sửa',
+  'hrm.leave': 'Đơn nghỉ do chính người đó lập; lãnh đạo bộ phận duyệt nhân viên, Ban Tổng Giám đốc duyệt đơn của lãnh đạo bộ phận',
   'hrm.attendance': 'Chấm công / giải trình do chính người đó làm; lãnh đạo bộ phận hoặc người phụ trách nhân sự duyệt giải trình',
-  'hrm.config': 'Chỉ Ban giám đốc chỉ định người phụ trách nhân sự; Ban giám đốc / người phụ trách nhân sự sửa giờ làm, ngày lễ',
+  'hrm.config': 'Chỉ Ban Tổng Giám đốc chỉ định người phụ trách nhân sự; Ban Tổng Giám đốc / người phụ trách nhân sự sửa giờ làm, ngày lễ',
 };
 function assertCan(s, action, dataset, ctx, env) {
   if (!can(s, action, dataset, ctx, env)) throw new PolicyError(MESSAGES[dataset] || 'Bạn không có quyền với dữ liệu này');

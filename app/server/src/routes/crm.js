@@ -35,8 +35,8 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
     if (!u) fail(422, label + ' không hợp lệ', 'INVALID_USER');
     return u;
   };
-  // Người phụ trách đối tác: phải thuộc bộ phận phụ trách (Ban GĐ chọn tự do). Người phụ trách được xem người liên hệ, nhật ký, giá trị hợp đồng
-  // → đổi / chỉ định người khác chỉ lãnh đạo bộ phận phụ trách hoặc Ban GĐ (op 'transfer'), không tự gán mình để mở quyền.
+  // Người phụ trách đối tác: phải thuộc bộ phận phụ trách (Ban TGĐ chọn tự do). Người phụ trách được xem người liên hệ, nhật ký, giá trị hợp đồng
+  // → đổi / chỉ định người khác chỉ lãnh đạo bộ phận phụ trách hoặc Ban TGĐ (op 'transfer'), không tự gán mình để mở quyền.
   const ownerOk = async (s, id, departmentId) => {
     const u = await userOk(id, 'Người phụ trách');
     if (u && !s.director && u.departmentId !== departmentId) fail(422, 'Người phụ trách phải thuộc bộ phận phụ trách đối tác', 'INVALID_USER');
@@ -105,7 +105,7 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
     const s = await subject(req);
     if (!P.can(s, 'edit', 'crm.partner', { op: 'create' })) fail(403, 'Tài khoản chưa thuộc bộ phận nào — không tạo được đối tác', 'FORBIDDEN');
     const b = req.body || {};
-    // Bộ phận phụ trách: bộ phận của người tạo; Ban GĐ chọn bộ phận.
+    // Bộ phận phụ trách: bộ phận của người tạo; Ban TGĐ chọn bộ phận.
     let ownerDepartmentId = s.departmentId;
     if (s.director && b.ownerDepartmentId != null) ownerDepartmentId = intParam(b.ownerDepartmentId, 'Bộ phận phụ trách');
     if (ownerDepartmentId == null) fail(422, 'Chọn bộ phận phụ trách', 'REQUIRED');
@@ -158,7 +158,7 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
   });
 
   // Nhật ký làm việc với đối tác gắn một việc (mở từ màn việc): người xem được việc thấy nhật ký nếu được xem nhật ký của đối tác đó
-  // (bộ phận phụ trách / Ban GĐ) hoặc là người ghi / người được giao theo dõi; còn lại chỉ biết số lượng.
+  // (bộ phận phụ trách / Ban TGĐ) hoặc là người ghi / người được giao theo dõi; còn lại chỉ biết số lượng.
   app.get('/api/crm/items/:id/interactions', auth, async (req, res) => {
     const s = await subject(req);
     if (!P.can(s, 'view', 'crm.partner')) fail(403, 'Quản trị hệ thống không xem dữ liệu nghiệp vụ', 'FORBIDDEN');
@@ -291,7 +291,7 @@ module.exports = function mountCrm(app, { prisma, auth, audit, config }) {
     res.status(201).json({ id: row.id, nextDue: row.nextDue });
   });
 
-  // Việc cần theo dõi: của tôi (được giao), hoặc của bộ phận tôi (lãnh đạo / Ban GĐ: mọi bộ phận).
+  // Việc cần theo dõi: của tôi (được giao), hoặc của bộ phận tôi (lãnh đạo / Ban TGĐ: mọi bộ phận).
   app.get('/api/crm/followups', auth, async (req, res) => {
     const s = await subject(req);
     if (s.it) fail(403, 'Quản trị hệ thống không xem dữ liệu nghiệp vụ', 'FORBIDDEN');

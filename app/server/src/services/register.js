@@ -118,7 +118,7 @@ function summarizeDepartments(items, departments, { now = new Date(), dueSoonDay
 function subtotalsByDepartment(items, users, { now = new Date(), dueSoonDays = DEFAULT_SETTINGS.dueSoonDays } = {}) {
   const deptOf = new Map(users.map(u => [u.id, u.departmentId ?? null]));
   const rows = new Map();
-  for (const u of users) if (!rows.has(u.departmentId ?? null)) rows.set(u.departmentId ?? null, countRow({ departmentId: u.departmentId ?? null, name: u.department?.name || 'Chưa có phòng ban', supporting: 0 }));
+  for (const u of users) if (!rows.has(u.departmentId ?? null)) rows.set(u.departmentId ?? null, countRow({ departmentId: u.departmentId ?? null, name: u.department?.name || 'Chưa có bộ phận', supporting: 0 }));
   for (const it of items) {
     const s = deadlineStatus(it, now, dueSoonDays);
     if (s.code === 'CANCELLED') continue;

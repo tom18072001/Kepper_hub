@@ -11,7 +11,7 @@ export function openCreateProject(onCreated) {
   const modal = openModal(`<h2>Tạo dự án</h2><form>
     <div class="grid2"><label class="field">Mã dự án<input name="key" required maxlength="10" pattern="[A-Za-z][A-Za-z0-9]{1,9}" placeholder="VD: MKT" data-testid="project-key"></label>
     <label class="field">Tên dự án<input name="name" required maxlength="160" data-testid="project-name"></label>
-    <label class="field">Phòng ban<select name="departmentId" data-testid="project-department">${depts.map(d => `<option value="${d.id}"${d.id === store.me.departmentId ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>
+    <label class="field">Bộ phận<select name="departmentId" data-testid="project-department">${depts.map(d => `<option value="${d.id}"${d.id === store.me.departmentId ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>
     <label class="field">Ai được xem<select name="visibility" data-testid="project-visibility">${Object.entries(VISIBILITY).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label></div>
     <label class="field">Mô tả<textarea name="description" rows="2"></textarea></label>
     <label class="field">Kiểu dự án<select name="template" data-testid="project-template">
@@ -21,10 +21,10 @@ export function openCreateProject(onCreated) {
     <label class="field mtl-t0">Tháng T0 (bắt đầu Master Timeline)<input type="month" name="t0" data-testid="project-t0"></label>
     <fieldset class="approval-setup"><legend>Quy trình duyệt</legend>
       <label class="field">Số cấp duyệt<select name="tpl" data-testid="project-approval-template">
-        <option value="1" selected>1 cấp — Trưởng phòng duyệt</option><option value="2">2 cấp — Trưởng phòng → Ban giám đốc</option><option value="0">Không cần duyệt</option></select></label>
+        <option value="1" selected>1 cấp — Trưởng phòng duyệt</option><option value="2">2 cấp — Trưởng phòng → Ban Tổng Giám đốc</option><option value="0">Không cần duyệt</option></select></label>
       <div class="grid2">
-        <label class="field" data-lvl="1">Người duyệt cấp 1<select name="ap1" data-testid="project-approver-1"><option value="DEPARTMENT_MANAGER">Trưởng phòng (tự động)</option><option value="PROJECT_LEAD">Trưởng dự án</option>${approverUserOptions()}</select></label>
-        <label class="field" data-lvl="2">Người duyệt cấp 2<select name="ap2" data-testid="project-approver-2"><option value="DIRECTOR">Ban giám đốc (bất kỳ ai)</option><option value="SUPERVISOR">Người giao / PGĐ phụ trách phòng</option>${approverUserOptions()}</select></label>
+        <label class="field" data-lvl="1">Người duyệt cấp 1<select name="ap1" data-testid="project-approver-1"><option value="DEPARTMENT_MANAGER">Trưởng phòng (tự động)</option><option value="PROJECT_LEAD">Người đứng tên dự án</option>${approverUserOptions()}</select></label>
+        <label class="field" data-lvl="2">Người duyệt cấp 2<select name="ap2" data-testid="project-approver-2"><option value="DIRECTOR">Ban Tổng Giám đốc (bất kỳ ai)</option><option value="SUPERVISOR">Người giao / Phó TGĐ phụ trách phòng</option>${approverUserOptions()}</select></label>
         <label class="field" data-lvl="2">Việc mới mặc định cần<select name="defaultLevels" data-testid="project-default-levels"><option value="1">Chỉ cấp 1</option><option value="">Đủ 2 cấp</option></select></label>
       </div>
       <p class="muted xs">Mặc định "Chỉ cấp 1": việc quan trọng trưởng phòng chọn thêm cấp 2, hoặc đặt quy tắc tự động. Có thể đổi người duyệt, thêm quy tắc tự động (theo nhãn / mức ưu tiên) trong Cài đặt dự án; trưởng phòng chọn được mức duyệt cho từng việc.</p>
@@ -53,7 +53,7 @@ export function openCreateProject(onCreated) {
     if (f.template === 'MTL') Object.assign(f, { kind: 'MTL', t0Date: new Date(t0 + '-01T00:00:00+07:00').toISOString() });
     const step = (v, name) => v.startsWith('USER:') ? { approverType: 'USER', approverUserId: Number(v.slice(5)), name } : { approverType: v, name };
     const approvalSteps = [step(ap1, 'Trưởng phòng duyệt'), step(ap2, 'Giám đốc duyệt')].slice(0, Number(tpl));
-    if (approvalSteps[0]?.approverType === 'PROJECT_LEAD') approvalSteps[0].name = 'Trưởng dự án duyệt';
+    if (approvalSteps[0]?.approverType === 'PROJECT_LEAD') approvalSteps[0].name = 'Người đứng tên dự án duyệt';
     if (approvalSteps[0]?.approverType === 'USER') approvalSteps[0].name = 'Duyệt cấp 1';
     if (approvalSteps[1]?.approverType === 'USER') approvalSteps[1].name = 'Duyệt cấp 2';
     try {
@@ -80,7 +80,7 @@ export async function renderProjectSettings(root, id, setCrumbs) {
     <form class="card" id="generalForm"><h3 style="margin-bottom:10px">Thông tin chung</h3>
       <div class="grid2"><label class="field">Tên<input name="name" required value="${esc(p.name)}"></label>
       <label class="field">Ai được xem<select name="visibility">${Object.entries(VISIBILITY).map(([k, v]) => `<option value="${k}"${p.visibility === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
-      <label class="field">Trưởng dự án<select name="leadId" data-testid="settings-lead"><option value="">—</option>${users.map(u => `<option value="${u.id}"${p.leadId === u.id ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select></label>
+      <label class="field">Người đứng tên dự án<select name="leadId" data-testid="settings-lead"><option value="">—</option>${users.map(u => `<option value="${u.id}"${p.leadId === u.id ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select></label>
       <label class="field">Mô tả<input name="description" value="${esc(p.description || '')}"></label></div>
       <div class="row"><button class="btn btn-primary" data-testid="settings-save">Lưu</button><label class="check"><input type="checkbox" name="archived" ${p.archivedAt ? 'checked' : ''}> Lưu trữ dự án (chỉ đọc)</label></div></form>
 
@@ -116,7 +116,7 @@ export async function renderProjectSettings(root, id, setCrumbs) {
         <div><button class="btn btn-primary" data-testid="rec-save">Thêm việc lặp lại</button></div>
       </form></div>
 
-    <div class="card"><h3>Thành viên</h3><p class="muted sm">Chủ dự án quản lý cài đặt; Thành viên tạo và cập nhật việc; Người xem chỉ đọc. Với phạm vi "Cả phòng ban", nhân viên trong phòng ban cũng làm việc được mà không cần thêm.</p>
+    <div class="card"><h3>Thành viên</h3><p class="muted sm">Chủ dự án quản lý cài đặt; Thành viên tạo và cập nhật việc; Người xem chỉ đọc. Với phạm vi "Cả bộ phận", nhân viên trong bộ phận cũng làm việc được mà không cần thêm.</p>
       <div id="membersEditor" data-testid="members-editor">${p.members.map(m => memberRow(m.userId, m.role, users)).join('')}</div>
       <div class="row"><select id="newMember" style="width:auto" data-testid="new-member">${users.filter(u => !p.members.some(m => m.userId === u.id)).map(u => `<option value="${u.id}">${esc(u.fullName)} (${esc(u.username)})</option>`).join('')}</select>
         <button class="btn btn-ghost btn-sm" id="addMember" data-testid="add-member"><svg class="i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Thêm</button><button class="btn btn-primary" id="saveMembers" data-testid="save-members">Lưu thành viên</button></div></div>

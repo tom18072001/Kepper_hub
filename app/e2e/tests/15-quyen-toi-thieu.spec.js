@@ -1,6 +1,6 @@
 // Quyền tối thiểu theo vai trên MỘT việc (bảng chủ dự án chốt 20/11/2026) — dữ liệu GIẢ.
-// Tái hiện lỗi bản thật: việc do TGĐ giao, người chủ trì là tài khoản vai "Giám đốc" không thuộc Ban Giám đốc (mô phỏng PMO).
-// Vai: Ban Giám đốc toàn quyền = giamdoc (seed giả đánh dấu riêng, không theo phòng); PGĐ phụ trách Phòng Kinh doanh = tài khoản giả tạo trong kịch bản;
+// Tái hiện lỗi bản thật: việc do TGĐ giao, người chủ trì là tài khoản vai "Giám đốc" không thuộc Ban Tổng Giám đốc (mô phỏng PMO).
+// Vai: BTGĐ phụ trách toàn công ty = giamdoc (seed giả đánh dấu riêng, không theo phòng); Phó TGĐ phụ trách Phòng Kinh doanh = tài khoản giả tạo trong kịch bản;
 // người chủ trì = tài khoản giả vai director (PMO); người phối hợp = nv.kinhdoanh2; lãnh đạo bộ phận chủ trì = tp.kinhdoanh;
 // thành viên dự án không liên quan = nv.kythuat.
 const { test, expect } = require('@playwright/test');
@@ -23,11 +23,11 @@ const openItem = async (page, projectId, itemId) => {
   return page.locator('#itemPanel');
 };
 
-test('Q1. Chuẩn bị: TGĐ giao việc trong dự án MTL cho tài khoản vai Giám đốc không thuộc Ban Giám đốc', async ({ browser }) => {
+test('Q1. Chuẩn bị: TGĐ giao việc trong dự án MTL cho tài khoản vai Giám đốc không thuộc Ban Tổng Giám đốc', async ({ browser }) => {
   const admin = await as(browser, 'admin');
   const depts = await json(await apiAs(admin, '/api/departments'));
   const D = code => depts.find(d => d.code === code);
-  // Tài khoản giả: PMO vai director (phòng "Ban Giám đốc", KHÔNG phải Ban Tổng Giám đốc) và PGĐ phụ trách Phòng Kinh doanh.
+  // Tài khoản giả: PMO vai director (phòng "Ban Tổng Giám đốc", KHÔNG phải Ban Tổng Giám đốc) và Phó TGĐ phụ trách Phòng Kinh doanh.
   for (const [username, fullName, title] of [[PMO_DIR, 'Trợ lý PMO (giả)', 'Trợ lý – PMO (giả)'], [PGD, 'Phó GĐ Kinh doanh (giả)', 'Phó Tổng Giám đốc (giả)']]) {
     const r = await apiAs(admin, '/api/admin/users', { method: 'POST', data: { username, fullName, displayTitle: title, role: 'director', departmentId: D('BGD').id } });
     expect([201, 200, 409]).toContain(r.status());
@@ -49,7 +49,7 @@ test('Q1. Chuẩn bị: TGĐ giao việc trong dự án MTL cho tài khoản vai
   expect(detail.capabilities.plan).toBe(true);
 });
 
-test('Q2. Người chủ trì (vai Giám đốc, không thuộc BGĐ): không có ô sửa đường găng / mốc / hạn / người giao / đánh giá; API trả 403', async ({ browser }) => {
+test('Q2. Người chủ trì (vai Giám đốc, không thuộc BTGĐ): không có ô sửa đường găng / mốc / hạn / người giao / đánh giá; API trả 403', async ({ browser }) => {
   const lead = await as(browser, PMO_DIR);
   const detail = await json(await apiAs(lead, `/api/items/${ctx.itemId}`));
   expect(detail.capabilities.roles).toEqual(expect.arrayContaining(['L', 'O']));
@@ -127,7 +127,7 @@ test('Q3. Người phối hợp chỉ gửi tài liệu, bình luận; thành vi
   ctx.attId = att.id;
 });
 
-test('Q4. Lãnh đạo bộ phận chủ trì chỉ xem (bình luận được); PGĐ phụ trách sửa kế hoạch, duyệt gia hạn; xoá tệp chỉ người gửi', async ({ browser }) => {
+test('Q4. Lãnh đạo bộ phận chủ trì chỉ xem (bình luận được); Phó TGĐ phụ trách sửa kế hoạch, duyệt gia hạn; xoá tệp chỉ người gửi', async ({ browser }) => {
   const head = await as(browser, 'tp.kinhdoanh');
   const panel = await openItem(head, ctx.projectId, ctx.itemId);
   await expect(panel.getByTestId('my-roles')).toContainText('Lãnh đạo bộ phận');
@@ -144,7 +144,7 @@ test('Q4. Lãnh đạo bộ phận chủ trì chỉ xem (bình luận được);
   const pmo = await as(browser, 'pmo');
   expect((await apiAs(pmo, `/api/items/${ctx.itemId}`, { method: 'PATCH', data: { critical: true } })).status()).toBe(403);
 
-  // PGĐ phụ trách bộ phận chủ trì = Ban Giám đốc của việc: sửa kế hoạch, duyệt gia hạn.
+  // Phó TGĐ phụ trách bộ phận chủ trì = BTGĐ phụ trách của việc: sửa kế hoạch, duyệt gia hạn.
   const pgd = await as(browser, PGD);
   const p3 = await openItem(pgd, ctx.projectId, ctx.itemId);
   await expect(p3.locator('#ipDue')).toHaveCount(1);
@@ -192,7 +192,7 @@ test('Q5. Duyệt: người chủ trì gửi duyệt, người giao chấm mức
   const panel = await openItem(lead, ctx.projectId, ctx.itemId);
   await expect(panel.getByTestId('item-rating').first()).toContainText('Tốt');
   await expect(panel.locator('[data-field="review"]')).toHaveCount(0);
-  // Việc đã hoàn thành: người chủ trì không mở lại; người giao / BGĐ mở lại được.
+  // Việc đã hoàn thành: người chủ trì không mở lại; người giao / BTGĐ mở lại được.
   const started = (await json(await apiAs(lead, `/api/projects/${ctx.projectId}`))).states.find(s => s.category === 'STARTED');
   expect((await apiAs(lead, `/api/items/${ctx.itemId}`, { method: 'PATCH', data: { stateId: started.id } })).status()).toBe(403);
   await json(await apiAs(tgd, `/api/items/${ctx.itemId}`, { method: 'PATCH', data: { stateId: started.id } }));
@@ -209,11 +209,11 @@ test('Q6. Bước giao cho bộ phận chưa có người: lãnh đạo bộ ph�
   expect((await patch({ assigneeIds: [ctx.U('nv.kythuat').id] })).status()).toBe(403); // người phòng khác
   expect((await patch({ dueDate: new Date().toISOString() })).status()).toBe(403); // kế hoạch
   await json(await patch({ assigneeIds: [ctx.U('nv.kinhdoanh1').id] }));
-  // Đã có người chủ trì: phân công lại là của người giao / Ban Giám đốc.
+  // Đã có người chủ trì: phân công lại là của người giao / Ban Tổng Giám đốc.
   expect((await patch({ assigneeIds: [ctx.U('nv.kinhdoanh2').id] })).status()).toBe(403);
 });
 
-test('Q7. Ban Giám đốc toàn quyền (quản trị đánh dấu riêng) sửa việc mọi bộ phận; PGĐ phụ trách chỉ sửa việc bộ phận mình, bộ phận khác chỉ xem', async ({ browser }) => {
+test('Q7. BTGĐ phụ trách toàn công ty (quản trị đánh dấu riêng) sửa việc mọi bộ phận; Phó TGĐ phụ trách chỉ sửa việc bộ phận mình, bộ phận khác chỉ xem', async ({ browser }) => {
   const admin = await as(browser, 'admin');
   const BOARD = 'bgd.toanquyen';
   const r = await apiAs(admin, '/api/admin/users', { method: 'POST', data: { username: BOARD, fullName: 'Phó TGĐ toàn quyền (giả)', displayTitle: 'Phó Tổng Giám đốc (giả)', role: 'director', departmentId: ctx.D('BGD').id } });
@@ -228,7 +228,7 @@ test('Q7. Ban Giám đốc toàn quyền (quản trị đánh dấu riêng) sử
   const board = await as(browser, BOARD);
   expect((await apiAs(board, `/api/items/${step8.id}`, { method: 'PATCH', data: { priority: 'HIGH' } })).status()).toBe(403);
 
-  // Quản trị đánh dấu "Ban Giám đốc toàn quyền" trong hộp Phân quyền (không theo phòng); danh sách tài khoản hiện nhãn.
+  // Quản trị đánh dấu "BTGĐ phụ trách toàn công ty" trong hộp Phân quyền (không theo phòng); danh sách tài khoản hiện nhãn.
   await admin.goto('/#/admin/users');
   await admin.reload(); // trang Tài khoản đã mở sẵn từ lúc đăng nhập: tải lại để có tài khoản vừa tạo
   await admin.getByTestId(`perm-${BOARD}`).click();
@@ -241,7 +241,7 @@ test('Q7. Ban Giám đốc toàn quyền (quản trị đánh dấu riêng) sử
   const me = await json(await apiAs(admin, '/api/me'));
   expect((await apiAs(admin, `/api/admin/users/${me.id ?? me.user?.id}/board`, { method: 'PUT', data: { boardAll: true } })).status()).toBeGreaterThanOrEqual(403);
 
-  // Ban Giám đốc toàn quyền: sửa được việc ở mọi bộ phận (Kinh doanh, Pháp lý), duyệt gia hạn.
+  // BTGĐ phụ trách toàn công ty: sửa được việc ở mọi bộ phận (Kinh doanh, Pháp lý), duyệt gia hạn.
   for (const id of [ctx.itemId, step8.id]) {
     const d = await json(await apiAs(board, `/api/items/${id}`));
     expect(d.capabilities.roles).toContain('B');
@@ -252,7 +252,7 @@ test('Q7. Ban Giám đốc toàn quyền (quản trị đánh dấu riêng) sử
   const p1 = await openItem(board, ctx.projectId, step8.id);
   await expect(p1.locator('#ipDue')).toHaveCount(1);
 
-  // PGĐ phụ trách Phòng Kinh doanh: việc Kinh doanh chủ trì — sửa được; việc Ban Pháp lý chủ trì — chỉ xem (vai Giám đốc), API 403.
+  // Phó TGĐ phụ trách Phòng Kinh doanh: việc Kinh doanh chủ trì — sửa được; việc Ban Pháp lý chủ trì — chỉ xem (vai Giám đốc), API 403.
   const pgd = await as(browser, PGD);
   expect((await json(await apiAs(pgd, `/api/items/${ctx.itemId}`))).capabilities.plan).toBe(true);
   const other = await json(await apiAs(pgd, `/api/items/${step8.id}`));
@@ -265,47 +265,47 @@ test('Q7. Ban Giám đốc toàn quyền (quản trị đánh dấu riêng) sử
   await expect(p2.locator('#ipDue')).toHaveCount(0);
   await expect(p2.locator('textarea#ipTitle')).toHaveCount(0);
 
-  // Bỏ đánh dấu → mất quyền Ban Giám đốc ngay; thay đổi được ghi nhật ký.
+  // Bỏ đánh dấu → mất quyền Ban Tổng Giám đốc ngay; thay đổi được ghi nhật ký.
   await json(await apiAs(admin, `/api/admin/users/${boardId}/board`, { method: 'PUT', data: { boardAll: false } }));
   expect((await apiAs(board, `/api/items/${step8.id}`, { method: 'PATCH', data: { priority: 'LOW' } })).status()).toBe(403);
   expect(JSON.stringify(await json(await apiAs(admin, '/api/admin/audit?action=BOARD_ALL_UPDATE')))).toContain('BOARD_ALL_UPDATE');
 });
 
-test('Q8. Việc mốc / đường găng: Ban Giám đốc của việc duyệt và chấm mức thay người giao; Ban Giám đốc là người chủ trì thì Ban Giám đốc khác duyệt', async ({ browser }) => {
+test('Q8. Việc mốc / đường găng: BTGĐ phụ trách của việc duyệt và chấm mức thay người giao; Ban Tổng Giám đốc là người chủ trì thì Ban Tổng Giám đốc khác duyệt', async ({ browser }) => {
   const U = ctx.U, D = ctx.D;
-  const pmo = await as(browser, 'pmo'); // người giao, không thuộc Ban Giám đốc
+  const pmo = await as(browser, 'pmo'); // người giao, không thuộc Ban Tổng Giám đốc
   const states = (await json(await apiAs(pmo, `/api/projects/${ctx.projectId}`))).states;
   const REVIEW = states.find(s => s.category === 'REVIEW').id;
   const due = new Date(Date.now() + 15 * 86_400_000).toISOString();
   const create = async data => json(await apiAs(pmo, `/api/projects/${ctx.projectId}/items`, { method: 'POST', data: { dueDate: due, ...data } }));
 
-  // a) Việc đường găng, Phòng Kinh doanh chủ trì: người duyệt = Ban Giám đốc toàn quyền + PGĐ phụ trách Kinh doanh; người giao (PMO) không duyệt.
+  // a) Việc đường găng, Phòng Kinh doanh chủ trì: người duyệt = BTGĐ phụ trách toàn công ty + Phó TGĐ phụ trách Kinh doanh; người giao (PMO) không duyệt.
   const crit = await create({ title: 'Ký hợp đồng thuê phòng họp (giả)', leadDepartmentId: D('KD').id, assigneeIds: [U('nv.kinhdoanh1').id], critical: true });
   expect((await apiAs(pmo, `/api/items/${crit.id}`, { method: 'PATCH', data: { stateId: REVIEW } })).status()).toBe(403); // người giao không gửi duyệt thay
   const lead = await as(browser, 'nv.kinhdoanh1');
-  // Người chủ trì bấm "Gửi duyệt" trên panel: thông báo ghi đúng người duyệt (Ban Giám đốc, không phải người giao).
+  // Người chủ trì bấm "Gửi duyệt" trên panel: thông báo ghi đúng người duyệt (Ban Tổng Giám đốc, không phải người giao).
   const lp = await openItem(lead, ctx.projectId, crit.id);
   await lp.getByTestId('submit-approval').click();
-  await expect(lead.locator('.toast', { hasText: 'Đã gửi Ban Giám đốc duyệt' }).first()).toBeVisible();
+  await expect(lead.locator('.toast', { hasText: 'Đã gửi Ban Tổng Giám đốc duyệt' }).first()).toBeVisible();
   const d = await json(await apiAs(pmo, `/api/items/${crit.id}`));
-  expect(d.approvalSteps[0]).toMatchObject({ approverType: 'BOARD', name: 'Ban Giám đốc duyệt' });
+  expect(d.approvalSteps[0]).toMatchObject({ approverType: 'BOARD', name: 'Ban Tổng Giám đốc duyệt' });
   expect(d.stepApprovers['1']).toEqual(expect.arrayContaining(['Trần Minh Giám', 'Phó GĐ Kinh doanh (giả)']));
   expect(d.stepApprovers['1']).not.toContain('Đặng Quốc Minh');
-  expect(d.stage.label).toBe('Chờ Ban Giám đốc duyệt');
+  expect(d.stage.label).toBe('Chờ Ban Tổng Giám đốc duyệt');
   expect(d.canApprove).toBe(false);
   const pending = d.approvals.find(a => a.status === 'PENDING');
   expect((await json(await apiAs(pmo, '/api/approvals/queue'))).some(q => q.item.id === crit.id)).toBe(false);
   expect((await apiAs(pmo, `/api/approvals/${pending.id}/approve`, { method: 'POST', data: { rating: 'GOOD' } })).status()).toBe(403);
-  // "Chờ tôi duyệt" và thông báo "Cần duyệt" tới đúng Ban Giám đốc của việc.
+  // "Chờ tôi duyệt" và thông báo "Cần duyệt" tới đúng BTGĐ phụ trách của việc.
   const tgd = await as(browser, 'giamdoc');
   const pgd = await as(browser, PGD);
   for (const page of [tgd, pgd]) {
     const q = (await json(await apiAs(page, '/api/approvals/queue'))).find(x => x.item.id === crit.id);
-    expect(q).toMatchObject({ ratingRequired: true, stepName: 'Ban Giám đốc duyệt' });
+    expect(q).toMatchObject({ ratingRequired: true, stepName: 'Ban Tổng Giám đốc duyệt' });
     expect((await json(await apiAs(page, '/api/notifications'))).items.some(n => n.type === 'APPROVAL_REQUESTED' && n.link.endsWith(`item=${crit.id}`))).toBe(true);
   }
   expect((await json(await apiAs(pmo, '/api/notifications'))).items.some(n => n.type === 'APPROVAL_REQUESTED' && n.link.endsWith(`item=${crit.id}`))).toBe(false);
-  // Ban Giám đốc toàn quyền duyệt + chấm mức trên giao diện.
+  // BTGĐ phụ trách toàn công ty duyệt + chấm mức trên giao diện.
   const panel = await openItem(tgd, ctx.projectId, crit.id);
   await panel.getByTestId('rating-GOOD').check();
   await panel.getByTestId('approval-comment').fill('Đúng tiến độ găng (giả)');
@@ -315,7 +315,7 @@ test('Q8. Việc mốc / đường găng: Ban Giám đốc của việc duyệt 
   expect(done.state.category).toBe('COMPLETED');
   expect(done.assessment).toMatchObject({ rating: 'GOOD', by: 'Trần Minh Giám', comment: 'Đúng tiến độ găng (giả)' });
 
-  // b) Việc mốc mà Ban Giám đốc toàn quyền chính là người chủ trì → Ban Giám đốc toàn quyền khác duyệt.
+  // b) Việc mốc mà BTGĐ phụ trách toàn công ty chính là người chủ trì → BTGĐ phụ trách toàn công ty khác duyệt.
   const admin = await as(browser, 'admin');
   const board = (await json(await apiAs(admin, '/api/users/directory'))).find(u => u.username === 'bgd.toanquyen');
   await json(await apiAs(admin, `/api/admin/users/${board.id}/board`, { method: 'PUT', data: { boardAll: true } }));

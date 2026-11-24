@@ -11,9 +11,9 @@ export const CATEGORY = {
   BACKLOG: 'Tồn đọng', UNSTARTED: 'Chưa bắt đầu', STARTED: 'Đang thực hiện', REVIEW: 'Chờ duyệt', COMPLETED: 'Hoàn thành', CANCELLED: 'Huỷ',
   OTHER: 'Cột tự do',
 };
-export const ROLE_LABEL = { admin: 'Quản trị hệ thống', director: 'Ban giám đốc', manager: 'Trưởng phòng', deputy: 'Phó phòng', member: 'Nhân viên' };
-export const VISIBILITY = { DEPARTMENT: 'Cả phòng ban', PRIVATE: 'Chỉ thành viên', PUBLIC: 'Toàn công ty (dùng chung)' };
-export const APPROVER = { PROJECT_LEAD: 'Trưởng dự án', DEPARTMENT_MANAGER: 'Trưởng phòng', DIRECTOR: 'Ban giám đốc', SUPERVISOR: 'Người giao / PGĐ phụ trách', USER: 'Người được chỉ định' };
+export const ROLE_LABEL = { admin: 'Quản trị hệ thống', director: 'Ban Tổng Giám đốc', manager: 'Trưởng phòng', deputy: 'Phó phòng', member: 'Nhân viên' };
+export const VISIBILITY = { DEPARTMENT: 'Cả bộ phận', PRIVATE: 'Chỉ thành viên', PUBLIC: 'Toàn công ty (dùng chung)' };
+export const APPROVER = { PROJECT_LEAD: 'Người đứng tên dự án', DEPARTMENT_MANAGER: 'Trưởng phòng', DIRECTOR: 'Ban Tổng Giám đốc', SUPERVISOR: 'Người giao / Phó TGĐ phụ trách', USER: 'Người được chỉ định' };
 
 const DAY = 86_400_000;
 export function fmtDate(value) {

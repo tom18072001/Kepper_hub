@@ -1,4 +1,4 @@
-// Thống kê: phòng ban của việc, chỉ số KPI theo kỳ, điểm tổng hợp, định dạng giờ Việt Nam.
+// Thống kê: bộ phận của việc, chỉ số KPI theo kỳ, điểm tổng hợp, định dạng giờ Việt Nam.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const S = require('./stats');
@@ -10,8 +10,8 @@ const from = at('2026-10-01T00:00:00+07:00'), to = at('2026-10-31T23:59:59.999+0
 const item = (id, category, extra = {}) => ({ id, state: { category }, taskType: 'ADHOC', leadDepartmentId: null, project: { departmentId: 1 }, assignees: [],
   dueDate: null, assignedAt: null, createdAt: at('2026-09-01T09:00:00+07:00'), startedAt: null, completedAt: null, rating: null, ratedAt: null, ...extra });
 
-test('phòng ban của việc = đơn vị chủ trì ?? phòng sở hữu dự án; điều kiện Prisma tương ứng', () => {
-  assert.equal(S.departmentOf(item(1, 'STARTED', { leadDepartmentId: 6, project: { departmentId: 1 } })), 6); // sổ BGĐ giao về phòng KHCN
+test('bộ phận của việc = đơn vị chủ trì ?? phòng sở hữu dự án; điều kiện Prisma tương ứng', () => {
+  assert.equal(S.departmentOf(item(1, 'STARTED', { leadDepartmentId: 6, project: { departmentId: 1 } })), 6); // sổ BTGĐ giao về phòng KHCN
   assert.equal(S.departmentOf(item(2, 'STARTED', { project: { departmentId: 2 } })), 2);
   assert.equal(S.departmentOf({ project: null }), null);
   assert.equal(S.inDepartment(item(1, 'STARTED', { leadDepartmentId: 6 }), '6'), true);
@@ -84,10 +84,10 @@ test('điểm tổng hợp: trọng số, chia lại khi thiếu thành phần, 
   assert.deepEqual(S.normalizeWeights({ onTime: '50', rating: -5, volume: 'x' }), { onTime: 50, rating: 0, volume: 0 });
 });
 
-test('KPI theo phòng chủ trì và cá nhân: việc sổ BGĐ giao về phòng tính cho phòng chủ trì; khối lượng so với bình quân phòng', () => {
+test('KPI theo phòng chủ trì và cá nhân: việc sổ BTGĐ giao về phòng tính cho phòng chủ trì; khối lượng so với bình quân phòng', () => {
   const done = (id, userId, extra = {}) => item(id, 'COMPLETED', { assignees: [{ userId }], assignedAt: at('2026-10-02T08:00:00+07:00'), dueDate: at('2026-10-20T00:00:00+07:00'), completedAt: at('2026-10-09T08:00:00+07:00'), ...extra });
   const items = [
-    // Sổ giao việc Trung tâm (dự án thuộc BGĐ = phòng 1) giao về phòng KHCN (6).
+    // Sổ giao việc Trung tâm (dự án thuộc BTGĐ = phòng 1) giao về phòng KHCN (6).
     done(1, 11, { leadDepartmentId: 6, rating: 'EXCELLENT', ratedAt: at('2026-10-09T08:00:00+07:00') }),
     done(2, 11, { leadDepartmentId: 6 }), done(3, 11, { leadDepartmentId: 6 }), done(4, 11, { leadDepartmentId: 6 }),
     done(5, 12, { leadDepartmentId: 6, rating: 'PASS', ratedAt: at('2026-10-09T08:00:00+07:00') }),
@@ -103,9 +103,9 @@ test('KPI theo phòng chủ trì và cá nhân: việc sổ BGĐ giao về phòn
     { id: 13, fullName: 'Cán bộ C', departmentId: 6, departmentName: 'Phòng KHCN' }, { id: 21, fullName: 'Cán bộ D', departmentId: 2, departmentName: 'Phòng Kinh doanh' },
     { id: 22, fullName: 'Cán bộ E', departmentId: 2, departmentName: 'Phòng Kinh doanh' },
   ];
-  const departments = [{ id: 1, name: 'Ban Giám đốc' }, { id: 2, name: 'Phòng Kinh doanh' }, { id: 6, name: 'Phòng KHCN' }];
+  const departments = [{ id: 1, name: 'Ban Tổng Giám đốc' }, { id: 2, name: 'Phòng Kinh doanh' }, { id: 6, name: 'Phòng KHCN' }];
   const k = S.computeKpi(items, { users, departments, from, to, now, weights: { onTime: 40, rating: 40, volume: 20 } });
-  // Ban Giám đốc không "nhận" việc của sổ; Phòng KHCN có 7 việc.
+  // Ban Tổng Giám đốc không "nhận" việc của sổ; Phòng KHCN có 7 việc.
   assert.deepEqual(k.byDepartment.map(d => d.name), ['Phòng Kinh doanh', 'Phòng KHCN']);
   const khcn = k.byDepartment.find(d => d.id === 6);
   assert.equal(khcn.completed, 6);

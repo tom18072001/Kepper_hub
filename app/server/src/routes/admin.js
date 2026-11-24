@@ -77,7 +77,7 @@ const AUDIT_ACTIONS = {
   HR_ATT_APPROVE: 'Duyệt giải trình chấm công', HR_ATT_REJECT: 'Từ chối giải trình chấm công', HR_ATT_IMPORT: 'Nhập dữ liệu máy chấm công',
 };
 const AUDIT_ENTITIES = {
-  User: 'Tài khoản', Auth: 'Đăng nhập', Department: 'Phòng ban', UserPermission: 'Phân quyền', Label: 'Nhãn', AppSetting: 'Danh mục',
+  User: 'Tài khoản', Auth: 'Đăng nhập', Department: 'Bộ phận', UserPermission: 'Phân quyền', Label: 'Nhãn', AppSetting: 'Danh mục',
   TaskTemplate: 'Mẫu nhóm việc', Delegation: 'Uỷ quyền', WeeklyConfig: 'Thiết lập giao ban', ApiToken: 'Token Claude',
   CrmPartner: 'Đối tác', CrmContact: 'Người liên hệ đối tác', CrmInteraction: 'Nhật ký đối tác', CrmEngagement: 'Hợp đồng / gói thầu', HrmConfig: 'Thiết lập nhân sự',
   HrProfile: 'Hồ sơ nhân sự', HrContract: 'Hợp đồng lao động', HrLeave: 'Đơn nghỉ', HrAttendance: 'Chấm công', WorkItem: 'Công việc', Project: 'Dự án / sổ', Attachment: 'Tệp đính kèm',
@@ -141,18 +141,18 @@ async function assertBoardDept(prisma, role, departmentId, confirmed) {
 }
 async function departmentOf(prisma, value) {
   if (value === undefined) return undefined;
-  const id = optionalInt(value, 'Phòng ban');
+  const id = optionalInt(value, 'Bộ phận');
   if (id == null) return null;
   const dept = await prisma.department.findFirst({ where: { id, isActive: true } });
-  if (!dept) fail(422, 'Phòng ban không tồn tại hoặc đã khoá', 'INVALID_DEPARTMENT');
+  if (!dept) fail(422, 'Bộ phận không tồn tại hoặc đã khoá', 'INVALID_DEPARTMENT');
   return id;
 }
 async function parentOf(prisma, value, id = null) {
-  const parentId = optionalInt(value, 'Phòng ban cha');
+  const parentId = optionalInt(value, 'Bộ phận cha');
   if (parentId == null) return null;
   const all = await prisma.department.findMany({ select: { id: true, parentId: true } });
-  if (!all.some(d => d.id === parentId)) fail(422, 'Phòng ban cha không tồn tại', 'INVALID_PARENT');
-  if (id != null && wouldCreateCycle(all, id, parentId)) fail(422, 'Không thể đặt trực thuộc vòng: phòng ban được chọn làm cấp trên đang trực thuộc (trực tiếp hoặc gián tiếp) phòng ban này', 'DEPARTMENT_CYCLE');
+  if (!all.some(d => d.id === parentId)) fail(422, 'Bộ phận cha không tồn tại', 'INVALID_PARENT');
+  if (id != null && wouldCreateCycle(all, id, parentId)) fail(422, 'Không thể đặt trực thuộc vòng: bộ phận được chọn làm cấp trên đang trực thuộc (trực tiếp hoặc gián tiếp) bộ phận này', 'DEPARTMENT_CYCLE');
   return parentId;
 }
 
@@ -233,7 +233,7 @@ function noSupervisorHere(body) {
 }
 
 module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermission }) {
-  // ---------- Phòng ban ----------
+  // ---------- Bộ phận ----------
   app.get('/api/departments', auth, async (req, res) => {
     const rows = await prisma.department.findMany({ orderBy: [{ isActive: 'desc' }, { name: 'asc' }], include: { _count: { select: { users: true, projects: true } } } });
     const [active, sups] = await Promise.all([
@@ -244,7 +244,7 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
     res.json(rows.map(d => ({ ...d, activeUsers: activeBy.get(d.id) || 0, supervisor: supBy.get(d.supervisorId) || null })));
   });
   app.post('/api/departments', auth, requirePermission('admin.departments', 'OPERATE', 'SYSTEM'), async (req, res) => {
-    const data = { code: text(req.body.code, 'Mã phòng ban', { required: true, max: 30 }).toUpperCase(), name: text(req.body.name, 'Tên phòng ban', { required: true, max: 200 }), parentId: await parentOf(prisma, req.body.parentId) };
+    const data = { code: text(req.body.code, 'Mã bộ phận', { required: true, max: 30 }).toUpperCase(), name: text(req.body.name, 'Tên bộ phận', { required: true, max: 200 }), parentId: await parentOf(prisma, req.body.parentId) };
     noSupervisorHere(req.body);
     const row = await prisma.department.create({ data });
     await audit(req, 'CREATE', 'Department', row.id, null, row);
@@ -253,10 +253,10 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
   app.put('/api/departments/:id', auth, requirePermission('admin.departments', 'OPERATE', 'SYSTEM'), async (req, res) => {
     const id = intParam(req.params.id);
     const old = await prisma.department.findUnique({ where: { id } });
-    if (!old) fail(404, 'Không tìm thấy phòng ban', 'NOT_FOUND');
+    if (!old) fail(404, 'Không tìm thấy bộ phận', 'NOT_FOUND');
     const data = {};
-    if (req.body.code !== undefined) data.code = text(req.body.code, 'Mã phòng ban', { required: true, max: 30 }).toUpperCase();
-    if (req.body.name !== undefined) data.name = text(req.body.name, 'Tên phòng ban', { required: true, max: 200 });
+    if (req.body.code !== undefined) data.code = text(req.body.code, 'Mã bộ phận', { required: true, max: 30 }).toUpperCase();
+    if (req.body.name !== undefined) data.name = text(req.body.name, 'Tên bộ phận', { required: true, max: 200 });
     if (req.body.parentId !== undefined) data.parentId = await parentOf(prisma, req.body.parentId, id);
     if (req.body.isActive !== undefined) data.isActive = !!req.body.isActive;
     if (req.body.supervisorId !== undefined && (optionalInt(req.body.supervisorId, 'Phó Tổng Giám đốc phụ trách') ?? null) !== (old.supervisorId ?? null)) noSupervisorHere(req.body);
@@ -316,11 +316,11 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
     for (const [key, label, max] of [['displayTitle', 'Chức danh', 120], ['email', 'Email', 160], ['phone', 'Điện thoại', 30]])
       if (req.body[key] !== undefined) data[key] = text(req.body[key], label, { max }) || null;
     if (req.body.role !== undefined) data.role = roleOf(req.body.role);
-    // Không tự đổi nhóm tài khoản của chính mình (vd. quản trị IT tự chuyển sang Ban giám đốc để đọc dữ liệu giao ban — QĐ-01).
+    // Không tự đổi vai của chính mình (vd. quản trị IT tự chuyển sang Ban Tổng Giám đốc để đọc dữ liệu giao ban — QĐ-01).
     if (id === req.user.id && data.role !== undefined && data.role !== old.role) fail(403, 'Không tự đổi vai của chính mình — nhờ một quản trị khác', 'SELF_ROLE_CHANGE');
     if (req.body.departmentId !== undefined) {
       // Giữ phòng hiện tại (kể cả phòng đã khoá) khi sửa thông tin khác; chuyển sang phòng mới thì phòng đó phải đang hoạt động.
-      const dept = optionalInt(req.body.departmentId, 'Phòng ban');
+      const dept = optionalInt(req.body.departmentId, 'Bộ phận');
       data.departmentId = dept != null && dept === old.departmentId ? dept : await departmentOf(prisma, req.body.departmentId);
     }
     if (req.body.isActive !== undefined) {
@@ -375,7 +375,7 @@ module.exports = function mountAdmin(app, { prisma, auth, audit, requirePermissi
     const target = await prisma.user.findUnique({ where: { id: intParam(req.params.id) } });
     if (!target) fail(404, 'Không tìm thấy tài khoản', 'NOT_FOUND');
     if (!canResetPassword(req.user, target)) fail(403, 'Không thể reset mật khẩu tài khoản này', 'FORBIDDEN');
-    // Người phụ trách nhân sự (HRM) xem được CCCD, lương của mọi người → reset mật khẩu của họ cũng là thao tác nhạy cảm, báo Ban GĐ.
+    // Người phụ trách nhân sự (HRM) xem được CCCD, lương của mọi người → reset mật khẩu của họ cũng là thao tác nhạy cảm, báo Ban TGĐ.
     const hrCfg = (await prisma.appSetting.findUnique({ where: { key: 'hrm.config' } }))?.value;
     const isHr = Array.isArray(hrCfg?.hrUserIds) && hrCfg.hrUserIds.map(Number).includes(target.id);
     const sensitive = isBoard(target) || isHr;

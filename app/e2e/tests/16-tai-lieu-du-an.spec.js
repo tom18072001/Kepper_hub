@@ -1,7 +1,7 @@
 // Tài liệu (thay mục "Văn thư"): kho tài liệu theo dự án — dữ liệu GIẢ, kho file NAS giả (NAS_ROOT trong playwright.config.js).
 // Menu "Tài liệu"; duyệt kiểu thư mục: Tất cả dự án → dự án → "Theo công việc" (tệp tải lên Hub theo hạng mục → việc) và
 // "Thư mục dự án trên NAS" (mọi tệp có sẵn, kể cả không tải qua Hub — chỉ đọc); bộ lọc dự án, tìm theo tên tệp không dấu.
-// Quyền ở máy chủ: chỉ thành viên dự án + Ban GĐ; người ngoài nhận 404; chặn path traversal. Văn thư, Quy chế nội bộ là tab bên trong.
+// Quyền ở máy chủ: chỉ thành viên dự án + Ban TGĐ; người ngoài nhận 404; chặn path traversal. Văn thư, Quy chế nội bộ là tab bên trong.
 const fs = require('node:fs');
 const path = require('node:path');
 const { test, expect } = require('@playwright/test');
@@ -118,7 +118,7 @@ test('T3. Quyền ở máy chủ: người không là thành viên không thấy
     expect(r.status(), p).toBe(400);
   }
   expect((await apiAs(mem, `/api/documents/projects/${projectId}/nas?path=..`)).status()).toBe(400);
-  // Ban GĐ (không cần là thành viên) xem được.
+  // Ban TGĐ (không cần là thành viên) xem được.
   const pgd = await (await browser.newContext()).newPage();
   await login(pgd, 'giamdoc');
   expect((await apiAs(pgd, `/api/documents/projects/${projectId}/nas?path=02.ThietKe`)).status()).toBe(200);

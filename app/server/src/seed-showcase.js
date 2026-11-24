@@ -1,5 +1,5 @@
 // Dữ liệu TRÌNH DIỄN đầy đủ (dữ liệu GIẢ — không dùng dữ liệu thật, Data Protection Gate) để thử hết tính năng:
-// duyệt nhiều cấp đang chờ ở từng cấp + quy tắc tự động, chia làn theo người, chu kỳ, việc lặp lại, yêu cầu liên phòng ban,
+// duyệt nhiều cấp đang chờ ở từng cấp + quy tắc tự động, chia làn theo người, chu kỳ, việc lặp lại, yêu cầu liên bộ phận,
 // nhãn riêng dự án, bình luận, lịch sử hoàn thành 3 tháng (cho KPI), ghi chú cá nhân, thùng rác.
 // Chạy: npm run seed:showcase   (sau khi đã chạy seed thường với SEED_DEMO=true). Chạy lại không tạo trùng.
 const path = require('node:path');
@@ -150,7 +150,7 @@ async function showcase(prisma) {
   ]) await item(td, it);
   await done(td);
 
-  // ================= 3. Kỹ thuật: Vận hành CNTT (nhận yêu cầu liên phòng ban, không cần duyệt) =================
+  // ================= 3. Kỹ thuật: Vận hành CNTT (nhận yêu cầu liên bộ phận, không cần duyệt) =================
   const ht = await project({ key: 'HT', name: 'Vận hành CNTT', deptCode: 'KT', lead: 'tp.kythuat', intakeEnabled: true,
     members: [['tp.kythuat', 'OWNER'], ['nv.kythuat', 'MEMBER'], ['nv.kythuat2', 'MEMBER']], labels: [{ name: 'Sự cố', color: '#dc2626' }, { name: 'Bảo trì', color: '#475569' }] });
   ht.lead = 'tp.kythuat';
@@ -193,7 +193,7 @@ async function showcase(prisma) {
   return { projects: ['TK', 'TD', 'HT', 'SK25 (thùng rác)'], users: EXTRA_USERS.map(u => u.username), register, centre };
 }
 
-// ================= Sổ giao việc của Ban Giám đốc (theo mẫu "Sổ theo dõi, kiểm soát giao việc") — TÊN GIẢ =================
+// ================= Sổ giao việc của Ban Tổng Giám đốc (theo mẫu "Sổ theo dõi, kiểm soát giao việc") — TÊN GIẢ =================
 async function registerShowcase(prisma) {
   if (await prisma.project.findUnique({ where: { key: 'GV' } })) return 'GV đã có';
   const dept = Object.fromEntries((await prisma.department.findMany()).map(d => [d.code, d]));
@@ -202,7 +202,7 @@ async function registerShowcase(prisma) {
   const need = ['giamdoc', 'tp.kinhdoanh', 'tp.kythuat', 'nv.kinhdoanh1', 'nv.kinhdoanh2', 'nv.kythuat', 'nv.hcns'];
   if (need.some(u => !U[u])) return 'Thiếu tài khoản mẫu';
   const pgd = U.pgd || U.giamdoc, tphc = U['tp.hcns'] || U['tp.kythuat'];
-  const p = await prisma.project.create({ data: { key: 'GV', name: 'Sổ giao việc Ban Giám đốc', departmentId: dept.BGD.id, leadId: U.giamdoc.id, createdById: U.giamdoc.id, visibility: 'PUBLIC',
+  const p = await prisma.project.create({ data: { key: 'GV', name: 'Sổ giao việc Ban Tổng Giám đốc', departmentId: dept.BGD.id, leadId: U.giamdoc.id, createdById: U.giamdoc.id, visibility: 'PUBLIC',
     description: 'Sổ theo dõi, kiểm soát giao việc nội bộ (dữ liệu mẫu, tên giả).', defaultApprovalLevels: 0,
     states: { create: DEFAULT_STATES.map((s, position) => ({ ...s, position, wipLimit: null })) },
     members: { create: [[U.giamdoc, 'OWNER'], [pgd, 'OWNER'], [U['tp.kinhdoanh'], 'MEMBER'], [U['tp.kythuat'], 'MEMBER'], [tphc, 'MEMBER'], [U['nv.kinhdoanh1'], 'MEMBER'], [U['nv.kinhdoanh2'], 'MEMBER'], [U['nv.kythuat'], 'MEMBER'], [U['nv.hcns'], 'MEMBER']].filter(([u], i, a) => a.findIndex(([x]) => x.id === u.id) === i).map(([u, role]) => ({ userId: u.id, role })) } },
@@ -279,11 +279,11 @@ const CENTRE_USERS = [
   { username: 'tp.tnt', fullName: 'Kiều Văn Tài', displayTitle: 'Trưởng phòng Tài năng trẻ', role: 'manager', dept: 'TNT' },
   { username: 'pp.tnt', fullName: 'Doãn Hải Yến', displayTitle: 'Phó trưởng phòng Tài năng trẻ', role: 'deputy', dept: 'TNT' },
   { username: 'cv.tnt1', fullName: 'Châu Ngọc Lan', displayTitle: 'Chuyên viên', role: 'member', dept: 'TNT' },
-  // Ban Giám đốc gồm Giám đốc và các Phó Giám đốc: Phó Giám đốc thứ hai phụ trách Phòng Tài năng trẻ.
+  // Ban Tổng Giám đốc gồm Giám đốc và các Phó Giám đốc: Phó Giám đốc thứ hai phụ trách Phòng Tài năng trẻ.
   { username: 'pgd2', fullName: 'Nghiêm Thế Bảo', displayTitle: 'Phó Giám đốc', role: 'director', dept: 'BGD' },
 ];
 // Bổ sung cán bộ còn thiếu của bộ máy (máy đã có dữ liệu): cùng luồng tạo tài khoản + quyền khởi tạo như khi tạo mới.
-// PGĐ thứ hai vừa tạo thì nhận phụ trách Phòng Tài năng trẻ (nếu phòng đang do PGĐ thứ nhất phụ trách). Trả về tên đăng nhập đã tạo.
+// Phó TGĐ thứ hai vừa tạo thì nhận phụ trách Phòng Tài năng trẻ (nếu phòng đang do Phó TGĐ thứ nhất phụ trách). Trả về tên đăng nhập đã tạo.
 async function ensureCentreStaff(prisma) {
   const root = await prisma.user.findFirst({ where: { isRootAdmin: true } });
   const D = Object.fromEntries((await prisma.department.findMany({ where: { isActive: true } })).map(d => [d.code, d]));
@@ -305,7 +305,7 @@ async function ensureCentreStaff(prisma) {
     await prisma.projectMember.upsert({ where: { projectId_userId: { projectId: tt.id, userId: d.id } }, update: { role: 'OWNER' }, create: { projectId: tt.id, userId: d.id, role: 'OWNER' } });
   return created;
 }
-// Văn phòng (Chánh VP, chuyên viên VP) là thành viên sổ TT: nhập chỉ đạo thay mặt Ban Giám đốc, tổng hợp và xuất sổ toàn Trung tâm.
+// Văn phòng (Chánh VP, chuyên viên VP) là thành viên sổ TT: nhập chỉ đạo thay mặt Ban Tổng Giám đốc, tổng hợp và xuất sổ toàn Trung tâm.
 async function centreOfficeAccess(prisma) {
   const tt = await prisma.project.findUnique({ where: { key: 'TT' } });
   if (!tt) return;
@@ -341,9 +341,9 @@ function centreMaker(prisma, p, D, U, gd, start = 0) {
       extensions: { create: (it.ext || []).map(x => ({ requestedById: U[x.by].id, oldDue: daysFromNow(x.old), newDue: daysFromNow(x.new), reason: x.reason, status: x.status || 'PENDING', decidedById: x.status ? (it.by || gd).id : null, decidedAt: x.status ? daysFromNow(-2) : null, decisionNote: x.note || null })) },
       activities: { create: { actorId: (it.by || gd).id, type: 'CREATED', data: { title: it.title, source: 'SEED' } } },
     } });
-    // Đang chờ duyệt: cấp 1 (lãnh đạo phòng) hoặc cấp 2 (Ban Giám đốc).
+    // Đang chờ duyệt: cấp 1 (lãnh đạo phòng) hoặc cấp 2 (Ban Tổng Giám đốc).
     if (it.waitLevel) await prisma.approvalRequest.create({ data: { workItemId: row.id, totalLevels: 2, currentLevel: it.waitLevel, fromStateId: st('STARTED').id, requestedById: U[it.lead[0]].id,
-      actions: { create: [{ level: 0, actorId: U[it.lead[0]].id, decision: 'SUBMIT', comment: it.submitNote || null }, ...(it.waitLevel === 2 ? [{ level: 1, actorId: U[({ KHCN: 'tp.khcn', TNT: 'tp.tnt', VP: 'cvp' })[it.dept]].id, decision: 'APPROVE', comment: 'Đạt yêu cầu, kính trình Ban Giám đốc' }] : [])] } } });
+      actions: { create: [{ level: 0, actorId: U[it.lead[0]].id, decision: 'SUBMIT', comment: it.submitNote || null }, ...(it.waitLevel === 2 ? [{ level: 1, actorId: U[({ KHCN: 'tp.khcn', TNT: 'tp.tnt', VP: 'cvp' })[it.dept]].id, decision: 'APPROVE', comment: 'Đạt yêu cầu, kính trình Ban Tổng Giám đốc' }] : [])] } } });
     if (cat === 'COMPLETED' && it.rating) await prisma.approvalRequest.create({ data: { workItemId: row.id, totalLevels: 2, currentLevel: 2, status: 'APPROVED', fromStateId: st('STARTED').id, requestedById: U[it.lead[0]].id, closedAt: daysFromNow(it.doneAt ?? -1),
       actions: { create: [{ level: 0, actorId: U[it.lead[0]].id, decision: 'SUBMIT' }, { level: 1, actorId: U[({ KHCN: 'tp.khcn', TNT: 'tp.tnt', VP: 'cvp' })[it.dept]].id, decision: 'APPROVE' }, { level: 2, actorId: (it.by || gd).id, decision: 'APPROVE', comment: it.review || null }] } } });
     return row;
@@ -363,17 +363,17 @@ async function centreShowcase(prisma) {
   const pgd = (await prisma.user.findUnique({ where: { username: 'pgd' } })) || gd;
   for (const d of CENTRE_DEPTS) if (!(await prisma.department.findUnique({ where: { code: d.code } }))) await prisma.department.create({ data: d });
   const D = Object.fromEntries((await prisma.department.findMany()).map(d => [d.code, d]));
-  // PGĐ phụ trách: Văn phòng → Giám đốc; Khoa học Công nghệ → Phó Giám đốc; Tài năng trẻ → Phó Giám đốc thứ hai (ensureCentreStaff).
+  // Phó TGĐ phụ trách: Văn phòng → Giám đốc; Khoa học Công nghệ → Phó Giám đốc; Tài năng trẻ → Phó Giám đốc thứ hai (ensureCentreStaff).
   await prisma.department.update({ where: { id: D.VP.id }, data: { supervisorId: gd.id } });
   for (const c of ['KHCN', 'TNT']) await prisma.department.update({ where: { id: D[c].id }, data: { supervisorId: pgd.id } });
   await ensureCentreStaff(prisma);
   const U = Object.fromEntries((await prisma.user.findMany()).map(u => [u.username, u]));
   const p = await prisma.project.create({ data: {
     key: 'TT', name: 'Sổ giao việc Trung tâm', departmentId: bgd.id, leadId: gd.id, createdById: gd.id, visibility: 'ASSIGNED',
-    description: 'Ban Giám đốc giao nhiệm vụ về các phòng; mỗi người chỉ thấy việc liên quan đến mình (dữ liệu mẫu, tên giả).',
+    description: 'Ban Tổng Giám đốc giao nhiệm vụ về các phòng; mỗi người chỉ thấy việc liên quan đến mình (dữ liệu mẫu, tên giả).',
     states: { create: DEFAULT_STATES.map((st, position) => ({ ...st, position, wipLimit: null })) },
     members: { create: [[gd, 'OWNER'], [pgd, 'OWNER'], [U['cv.vp1'], 'MEMBER']].filter(([u], i, a) => a.findIndex(([x]) => x.id === u.id) === i).map(([u, role]) => ({ userId: u.id, role })) },
-    approvalSteps: { create: [{ level: 1, name: 'Lãnh đạo phòng duyệt', approverType: 'DEPARTMENT_MANAGER' }, { level: 2, name: 'Ban Giám đốc cho ý kiến', approverType: 'SUPERVISOR' }] },
+    approvalSteps: { create: [{ level: 1, name: 'Lãnh đạo phòng duyệt', approverType: 'DEPARTMENT_MANAGER' }, { level: 2, name: 'Ban Tổng Giám đốc cho ý kiến', approverType: 'SUPERVISOR' }] },
   }, include: { states: true } });
   const { make, count } = centreMaker(prisma, p, D, U, gd);
   const doc = (number, summary, extra = {}) => ({ kind: 'BASIS', number, summary, issuer: 'Trung tâm (giả)', issuedOn: daysFromNow(-12), ...extra });
@@ -388,12 +388,12 @@ async function centreShowcase(prisma) {
   await make({ title: 'Chuẩn bị hồ sơ tổng kết chương trình học bổng', dept: 'TNT', lead: ['cv.tnt1'], due: -3, originalDue: -9, given: -30, cat: 'COMPLETED', doneAt: -2, rating: 'PASS', by: pgd, review: 'Đạt, cần chủ động hơn về tiến độ',
     ext: [{ by: 'cv.tnt1', old: -9, new: -3, reason: 'Đơn vị phối hợp gửi hồ sơ chậm', status: 'APPROVED', note: 'Đồng ý' }] });
   await make({ title: 'Soạn thư mời đối tác dự Diễn đàn khởi nghiệp', dept: 'TNT', lead: ['cv.tnt1'], due: 1, given: -2, progress: 50, acceptedBy: 'tp.tnt' });
-  await make({ title: 'Chuẩn bị nội dung giao ban Ban Giám đốc tháng', dept: 'VP', lead: ['cv.vp1'], due: 9, given: -2, progress: 20, pri: 'MEDIUM', source: 'Họp giao ban' });
+  await make({ title: 'Chuẩn bị nội dung giao ban Ban Tổng Giám đốc tháng', dept: 'VP', lead: ['cv.vp1'], due: 9, given: -2, progress: 20, pri: 'MEDIUM', source: 'Họp giao ban' });
   const plan = await make({ title: 'Hội thi Tin học trẻ năm 2027', type: 'PLAN', source: 'Kế hoạch năm', dept: 'KHCN', lead: ['cv.khcn1'], support: ['cv.khcn2'], supportDepts: ['VP'], due: 300, given: -5, progress: 10, planCode: '2.2', planSection: '2. Tổ chức các hội thi, cuộc thi khoa học, công nghệ', out: 'Tổ chức Hội thi; 2.000 thí sinh' });
   for (const [title, due, lead, prog] of [['Ban hành thể lệ Hội thi', 60, 'cv.khcn1', 20], ['Phát động, tuyên truyền Hội thi', 120, 'cv.khcn2', 0], ['Tổ chức Vòng Chung kết', 280, 'cv.khcn1', 0]])
     await make({ title, type: 'PLAN', source: 'Kế hoạch năm', dept: 'KHCN', parentId: plan.id, lead: [lead], due, given: -5, progress: prog, pri: 'MEDIUM', by: U['tp.khcn'] });
   await prisma.project.update({ where: { id: p.id }, data: { nextNumber: count() + 1 } });
-  await ensureCentreStaff(prisma); // PGĐ là chủ sổ TT
+  await ensureCentreStaff(prisma); // Phó TGĐ là chủ sổ TT
   await centreOfficeAccess(prisma);
   const extra = await centreFinal(prisma);
   return `TT: ${count()} việc, ${CENTRE_USERS.length} cán bộ; ${extra}`;
@@ -401,7 +401,7 @@ async function centreShowcase(prisma) {
 
 // ================= GĐ3d: dữ liệu mẫu cuối của Trung tâm — TÊN GIẢ =================
 // Bổ sung một lần (máy mới, hoặc máy đã có sổ TT): Kế hoạch công tác năm 2027 trong sổ TT, các nhiệm vụ thường gặp của
-// Văn phòng / Phòng Tài năng trẻ (nhóm việc có việc nhánh, việc quá hạn, việc chờ phòng tiếp nhận do PGĐ thứ hai giao),
+// Văn phòng / Phòng Tài năng trẻ (nhóm việc có việc nhánh, việc quá hạn, việc chờ phòng tiếp nhận do Phó TGĐ thứ hai giao),
 // và bảng Kanban việc nội bộ cho từng phòng.
 const CENTRE_BOARDS = [
   { code: 'VP', name: 'Việc nội bộ Văn phòng', items: [
@@ -443,7 +443,7 @@ async function centreFinal(prisma) {
     for (const [title, due, lead, cat, progress] of [['ST.1 – Tổng hợp, thẩm định hồ sơ', -10, 'cv.tnt1', 'COMPLETED', 100], ['ST.2 – Họp Hội đồng xét chọn', 15, 'pp.tnt', 'STARTED', 20], ['ST.3 – Truyền thông, lễ trao giải', 40, 'cv.tnt1', 'UNSTARTED', 0]])
       await make({ title, dept: 'TNT', parentId: award.id, lead: [lead], by: U['tp.tnt'], due, given: -18, cat, progress, doneAt: -11, pri: 'MEDIUM' });
     await make({ title: 'Rà soát hệ thống quy chế, quy định nội bộ; đề xuất sửa đổi, thay thế', dept: 'VP', lead: ['pcvp'], due: -2, given: -25, progress: 70, coord: 'Các phòng',
-      out: 'Danh mục quy chế đã phân loại kèm đề xuất', reports: [{ by: 'pcvp', progress: 70, content: 'Đã phân loại 18/24 văn bản', diff: 'Một số phòng chưa gửi góp ý', prop: 'Đề nghị Ban Giám đốc nhắc các phòng gửi góp ý trong tuần', at: -3 }] });
+      out: 'Danh mục quy chế đã phân loại kèm đề xuất', reports: [{ by: 'pcvp', progress: 70, content: 'Đã phân loại 18/24 văn bản', diff: 'Một số phòng chưa gửi góp ý', prop: 'Đề nghị Ban Tổng Giám đốc nhắc các phòng gửi góp ý trong tuần', at: -3 }] });
     await make({ title: 'Cải tạo, sửa chữa cơ sở vật chất tầng 1', dept: 'VP', lead: ['cv.vp1'], due: 4, given: -30, progress: 70, coord: 'Đơn vị thi công', out: 'Hạng mục cải tạo hoàn thành, nghiệm thu',
       docs: [doc('46/QĐ-TT (giả)', 'Phê duyệt kế hoạch lựa chọn nhà thầu cải tạo')] });
     await make({ title: 'Phương án tiếp nhận và khai thác không gian tầng 7', dept: 'VP', by: pgd2, due: 14, given: -1, pri: 'MEDIUM', source: 'Phát sinh', out: 'Phương án tiếp nhận và khai thác' });
@@ -470,7 +470,7 @@ async function centreFinal(prisma) {
     if (!key) continue;
     const board = await prisma.project.create({ data: {
       key, name: b.name, departmentId: dept.id, leadId: lead.id, createdById: lead.id, visibility: 'DEPARTMENT',
-      description: `Bảng Kanban cho việc nội bộ của ${dept.name} (dữ liệu mẫu, tên giả). Việc Ban Giám đốc giao về phòng nằm ở "Việc phòng được giao".`,
+      description: `Bảng Kanban cho việc nội bộ của ${dept.name} (dữ liệu mẫu, tên giả). Việc Ban Tổng Giám đốc giao về phòng nằm ở "Việc phòng được giao".`,
       states: { create: DEFAULT_STATES.map((s, position) => ({ ...s, position })) },
       members: { create: staff.map(u => ({ userId: u.id, role: ['manager', 'deputy'].includes(u.role) ? 'OWNER' : 'MEMBER' })) },
     }, include: { states: true } });

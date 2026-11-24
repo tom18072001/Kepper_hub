@@ -1,4 +1,4 @@
-// KPI & phân tích thống kê: chỉ Ban giám đốc xem / xuất; nhân viên, trưởng phòng, admin IT bị 403 và không thấy menu — dữ liệu GIẢ.
+// KPI & phân tích thống kê: chỉ Ban Tổng Giám đốc xem / xuất; nhân viên, trưởng phòng, admin IT bị 403 và không thấy menu — dữ liệu GIẢ.
 const { test, expect } = require('@playwright/test');
 const { login, apiAs } = require('./helpers');
 
@@ -8,7 +8,7 @@ async function as(browser, username) {
   return page;
 }
 
-test('Ban giám đốc mở trang KPI & phân tích, xuất Excel', async ({ browser }) => {
+test('Ban Tổng Giám đốc mở trang KPI & phân tích, xuất Excel', async ({ browser }) => {
   const director = await as(browser, 'giamdoc');
   const r = await apiAs(director, '/api/kpi/analytics?from=2026-01-01&to=2026-12-31');
   expect(r.status()).toBe(200);
@@ -34,6 +34,6 @@ test('nhân viên, trưởng phòng, admin IT: API 403 và không có menu KPI &
   }
   const staff = await as(browser, 'nv.kinhdoanh2');
   await staff.goto('/#/kpi');
-  await expect(staff.getByTestId('an-forbidden')).toContainText('chỉ dành cho Ban giám đốc');
+  await expect(staff.getByTestId('an-forbidden')).toContainText('chỉ dành cho Ban Tổng Giám đốc');
   await expect(staff.getByTestId('an-tiles')).toHaveCount(0);
 });

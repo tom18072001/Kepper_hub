@@ -19,9 +19,9 @@ test('24. Thông tin cá nhân: đổi / xoá ảnh đại diện, cây tổ ch�
   await expect(page.locator('#userPanel')).not.toContainText('Danh mục');
   await page.getByTestId('nav-me').click();
   await expect(page.getByTestId('profile')).toContainText('nv.phaply');
-  // Nhân viên Ban Pháp lý: trên là lãnh đạo Ban Pháp lý và Ban Giám đốc.
+  // Nhân viên Ban Pháp lý: trên là lãnh đạo Ban Pháp lý và Ban Tổng Giám đốc.
   await expect(page.getByTestId('profile-org')).toContainText('Lãnh đạo Ban Pháp lý');
-  await expect(page.getByTestId('profile-org')).toContainText('Ban Giám đốc');
+  await expect(page.getByTestId('profile-org')).toContainText('Ban Tổng Giám đốc');
   await page.locator('#pfFile').setInputFiles({ name: 'anh.png', mimeType: 'image/png', buffer: pngSquare() });
   await expect(page.locator('.toast', { hasText: 'Đã đổi ảnh đại diện' })).toBeVisible();
   await expect(page.locator('#meAvatar')).toHaveAttribute('src', /^\/avatars\/[0-9a-f-]{36}\.jpg$/);

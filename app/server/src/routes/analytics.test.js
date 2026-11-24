@@ -1,4 +1,4 @@
-// KPI & phân tích thống kê: quyền (403 cho mọi người trừ Ban giám đốc) kiểm qua HTTP thật trên cả 2 endpoint,
+// KPI & phân tích thống kê: quyền (403 cho mọi người trừ Ban Tổng Giám đốc) kiểm qua HTTP thật trên cả 2 endpoint,
 // kiểm tra khoảng ngày, lọc phòng, chặn xuất qua token Claude, nội dung tệp Excel. Dữ liệu GIẢ.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -13,7 +13,7 @@ const DAY = 86_400_000;
 const user = (role, extra = {}) => ({ id: 1, username: role, fullName: 'Người ' + role, role, departmentId: 2, permissions: ROLE_PROFILES[role], ...extra });
 const status = u => { try { assertAnalyticsAccess(u); return 200; } catch (e) { return e.status; } };
 
-test('assertAnalyticsAccess: Ban giám đốc qua; nhân viên, trưởng / phó phòng, admin IT, quản trị gốc, quyền phạm vi phòng → 403', () => {
+test('assertAnalyticsAccess: Ban Tổng Giám đốc qua; nhân viên, trưởng / phó phòng, admin IT, quản trị gốc, quyền phạm vi phòng → 403', () => {
   assert.equal(status(user('director')), 200);
   for (const role of ['member', 'manager', 'deputy', 'admin']) assert.equal(status(user(role)), 403, role);
   assert.equal(status(user('admin', { isRootAdmin: true })), 403);
@@ -61,7 +61,7 @@ async function server() {
   return { audits, close: () => new Promise(r => srv.close(r)), get: (path, who, headers = {}) => fetch(base + path, { headers: { 'x-user': who, ...headers } }) };
 }
 
-test('HTTP: mọi tài khoản không phải Ban giám đốc nhận 403 ở CẢ HAI endpoint, không ghi nhật ký xem / xuất', async () => {
+test('HTTP: mọi tài khoản không phải Ban Tổng Giám đốc nhận 403 ở CẢ HAI endpoint, không ghi nhật ký xem / xuất', async () => {
   const s = await server();
   try {
     for (const who of ['nv', 'tp', 'pp', 'admin', 'root']) for (const path of ['/api/kpi/analytics', '/api/kpi/analytics.xlsx']) {
@@ -73,7 +73,7 @@ test('HTTP: mọi tài khoản không phải Ban giám đốc nhận 403 ở C�
   } finally { await s.close(); }
 });
 
-test('HTTP: Ban giám đốc xem JSON (no-store, có nhật ký), lọc phòng, 422 khi khoảng ngày sai', async () => {
+test('HTTP: Ban Tổng Giám đốc xem JSON (no-store, có nhật ký), lọc phòng, 422 khi khoảng ngày sai', async () => {
   const s = await server();
   try {
     const res = await s.get('/api/kpi/analytics?from=2026-10-01&to=2026-10-31', 'giamdoc');
@@ -96,7 +96,7 @@ test('HTTP: Ban giám đốc xem JSON (no-store, có nhật ký), lọc phòng, 
   } finally { await s.close(); }
 });
 
-test('HTTP: Ban giám đốc tải Excel; qua token Claude bị chặn 403', async () => {
+test('HTTP: Ban Tổng Giám đốc tải Excel; qua token Claude bị chặn 403', async () => {
   const s = await server();
   try {
     const res = await s.get('/api/kpi/analytics.xlsx?from=2026-10-01&to=2026-10-31', 'giamdoc');

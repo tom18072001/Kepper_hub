@@ -1,7 +1,7 @@
 // Tài liệu — kho tài liệu theo dự án, duyệt như thư mục:
 //   Tất cả dự án / <Dự án> / { Theo công việc (tệp tải lên Hub: hạng mục → việc → việc nhánh) | Thư mục dự án trên NAS (chỉ đọc) }
 // Bộ lọc dự án + tìm theo tên tệp. Văn thư (văn bản đến / đi) và Quy chế, quy định nội bộ là các tab cạnh đây (views/vanthu.js).
-// Quyền do máy chủ quyết (routes/documents.js): chỉ thành viên dự án và Ban Giám đốc thấy tài liệu của dự án.
+// Quyền do máy chủ quyết (routes/documents.js): chỉ thành viên dự án và Ban Tổng Giám đốc thấy tài liệu của dự án.
 import { api, download, openPreview } from '../api.js';
 import { store } from '../store.js';
 import { esc, fmtDate, fmtDateTime, toast, errorMessage, debounce } from '../util.js';
@@ -71,7 +71,7 @@ export async function renderDocuments(root, params, setCrumbs) {
     const list = projects.filter(x => !st.q || fold(`${x.key} ${x.name}`).includes(fold(st.q)));
     body.innerHTML = table(list.map(x => folderRow(`${x.key} · ${x.name}`, link({ p: x.id }),
       [x.hubFiles ? `${x.hubFiles} tệp tải lên Hub` : 'Chưa có tệp tải lên', x.nasFolder ? `NAS: ${esc(x.nasFolder)}` : '', x.archived ? 'đã đóng' : ''].filter(Boolean).join(' · '), `doc-project-${x.key}`)),
-    projects.length ? 'Không có dự án khớp.' : 'Bạn chưa là thành viên dự án nào. Tài liệu dự án chỉ hiện với thành viên dự án và Ban Giám đốc.');
+    projects.length ? 'Không có dự án khớp.' : 'Bạn chưa là thành viên dự án nào. Tài liệu dự án chỉ hiện với thành viên dự án và Ban Tổng Giám đốc.');
     return bindRows();
   }
   const projCrumb = [`${project.key} · ${project.name}`, link({ p: project.id })];
