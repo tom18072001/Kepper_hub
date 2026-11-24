@@ -1,4 +1,4 @@
-// Tài liệu dự án: quyền xem (thành viên + Ban GĐ), duyệt thư mục NAS chỉ đọc, chặn path traversal / symlink ra ngoài, tìm theo tên.
+// Tài liệu dự án: quyền xem (thành viên + Ban TGĐ), duyệt thư mục NAS chỉ đọc, chặn path traversal / symlink ra ngoài, tìm theo tên.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -29,7 +29,7 @@ const real = { ...PD.fsp };
 const restore = () => Object.assign(PD.fsp, real);
 const waitFor = async (cond, ms = 3000) => { const end = Date.now() + ms; while (!cond()) { if (Date.now() > end) throw new Error('hết giờ chờ'); await new Promise(r => setTimeout(r, 5)); } };
 
-test('quyền xem tài liệu dự án: thành viên, trưởng dự án, Ban GĐ; không cho quản trị IT, người ngoài, dự án đã xoá', () => {
+test('quyền xem tài liệu dự án: thành viên, trưởng dự án, Ban TGĐ; không cho quản trị IT, người ngoài, dự án đã xoá', () => {
   const project = { id: 1, leadId: 7, deletedAt: null };
   assert.equal(PD.canViewDocs({ id: 5, role: 'member' }, project, { role: 'MEMBER' }), true);
   assert.equal(PD.canViewDocs({ id: 5, role: 'member' }, project, { role: 'VIEWER' }), true);

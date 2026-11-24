@@ -1,7 +1,7 @@
 # Hướng dẫn sử dụng Kepler Hub — dành cho nhân viên
 
 > Tài liệu này dành cho **mọi nhân viên**. Chỉ nói những gì nhân viên thấy và làm được.
-> Ban Giám đốc, lãnh đạo bộ phận, PMO và thư ký giao ban đọc thêm [Hướng dẫn cho lãnh đạo](lanh-dao.md).
+> Ban Tổng Giám đốc, lãnh đạo bộ phận, PMO và thư ký giao ban đọc thêm [Hướng dẫn cho lãnh đạo](lanh-dao.md).
 >
 > Ảnh chụp từ **bản cài thử, dữ liệu giả** (tên người, dự án "Khu nhà ở Bình Minh (giả)" đều là mẫu).
 > Ô đỏ có số trong ảnh là chỗ bạn bấm, theo thứ tự.
@@ -216,7 +216,7 @@ Gõ cho Claude:
 
 > **Tôi là ai trong Kepler Hub? Tôi được làm gì qua Claude?**
 
-Claude gọi `kepper_whoami` và trả lời: họ tên, tài khoản, bộ phận, vai trò giao ban, hạn nộp báo cáo tuần. Kiểm tra đúng tài khoản của bạn trước khi nhờ Claude làm gì khác.
+Claude gọi `kepper_whoami` và trả lời: họ tên, tài khoản, bộ phận, vai, kiêm nhiệm giao ban (thư ký, PMO), hạn nộp báo cáo tuần. Kiểm tra đúng tài khoản của bạn trước khi nhờ Claude làm gì khác.
 
 Tên hoặc bộ phận không đúng của bạn: dừng lại, vào **Kết nối Claude → Máy đã kết nối** thu hồi kết nối đó, rồi kết nối lại bằng tài khoản của chính bạn.
 
@@ -238,7 +238,7 @@ Trên mỗi việc, bạn chỉ thấy và sửa phần thuộc vai của mình.
 
 ![Vai của bạn trên việc](anh/04-vai-cua-toi.png)
 
-Hạn, mốc, đường găng, người chủ trì… là **kế hoạch** của việc: do người giao và Ban Giám đốc sửa. Muốn đổi hạn thì **Xin gia hạn**; có ý kiến khác thì bình luận cho người giao.
+Hạn, mốc, đường găng, người chủ trì… là **kế hoạch** của việc: do người giao và Ban Tổng Giám đốc sửa. Muốn đổi hạn thì **Xin gia hạn**; có ý kiến khác thì bình luận cho người giao.
 
 ### 4.2 Xem việc của tôi
 
@@ -283,7 +283,7 @@ Checklist đã bỏ; bước nhỏ của một việc giờ là **việc nhánh*
 
 1. Mở việc → **Xin gia hạn** (1).
 2. Chọn hạn mới (hoặc bấm +3 / +7 / +14 ngày), ghi lý do → **Gửi đề nghị**.
-3. Ban Giám đốc của việc quyết định. Trong lúc chờ, việc ghi "chờ Ban Giám đốc quyết định".
+3. BTGĐ phụ trách của việc quyết định. Trong lúc chờ, việc ghi "chờ Ban Tổng Giám đốc quyết định".
 
 ![Nút Xin gia hạn](anh/04-xin-gia-han-nut.png)
 
@@ -293,7 +293,7 @@ Checklist đã bỏ; bước nhỏ của một việc giờ là **việc nhánh*
 
 1. Mở việc → bấm **Gửi duyệt** (1). (Hoặc báo tiến độ 100%, hoặc bấm **✓ Gửi duyệt** ở Cập nhật nhanh.)
 2. Việc sang **Chờ duyệt**, chưa tính là hoàn thành.
-3. **Ai duyệt:** việc thường → **người giao**; việc **mốc** hoặc **đường găng** → **Ban Giám đốc của việc**. Bạn không tự duyệt việc của mình.
+3. **Ai duyệt:** việc thường → **người giao**; việc **mốc** hoặc **đường găng** → **BTGĐ phụ trách của việc**. Bạn không tự duyệt việc của mình.
 
 ![Gửi duyệt](anh/04-gui-duyet.png)
 
@@ -375,7 +375,7 @@ Sổ văn bản **đến, đi, nội bộ** của công ty. Văn bản vào sổ
 
 Với nhân viên:
 
-- **Vào sổ** do văn thư (người Ban Giám đốc chỉ định), Ban Giám đốc, hoặc lãnh đạo bộ phận (văn bản nội bộ của bộ phận) làm. Bạn nhận được văn bản giấy / email: **chuyển bản scan cho văn thư HCNS**, không tự chép vào thư mục VanBanDen.
+- **Vào sổ** do văn thư (người Ban Tổng Giám đốc chỉ định), Ban Tổng Giám đốc, hoặc lãnh đạo bộ phận (văn bản nội bộ của bộ phận) làm. Bạn nhận được văn bản giấy / email: **chuyển bản scan cho văn thư HCNS**, không tự chép vào thư mục VanBanDen.
 - Văn bản **giao bạn xử lý**: bạn nhận thông báo. Menu **Nghiệp vụ → Văn thư → tab Tôi xử lý**.
 
 ![Văn thư — Tôi xử lý](anh/07-van-thu-toi-xu-ly.png)
@@ -420,7 +420,7 @@ Menu **Nghiệp vụ → Nhân sự** → **Của tôi**:
 
 ## 9. Đối tác (CRM)
 
-Danh bạ nhà thầu, tư vấn, cơ quan, ngân hàng, nhà cung cấp. Mỗi đối tác thuộc **một bộ phận phụ trách**; người liên hệ, nhật ký làm việc, hợp đồng chỉ bộ phận đó, người phụ trách và Ban Giám đốc xem.
+Danh bạ nhà thầu, tư vấn, cơ quan, ngân hàng, nhà cung cấp. Mỗi đối tác thuộc **một bộ phận phụ trách**; người liên hệ, nhật ký làm việc, hợp đồng chỉ bộ phận đó, người phụ trách và Ban Tổng Giám đốc xem.
 
 1. Menu **Nghiệp vụ → Đối tác**. Gõ để lọc ngay (không dấu vẫn ra), tích **Bộ phận tôi phụ trách** để thu hẹp.
 

@@ -2,12 +2,12 @@
 // việc cần theo dõi, hợp đồng / gói thầu. Quyền do máy chủ quyết (lib/policy.js crm.*) — giao diện chỉ ẩn nút theo cờ "can".
 import { api } from '../api.js';
 import { store, deptName } from '../store.js';
-import { $, esc, fmtDate, fmtDateTime, toast, openModal, closeModal, confirmDialog, errorMessage, dateInput, fromDateInput, debounce, replaceHashParams } from '../util.js';
+import { $, esc, fmtDate, fmtDateTime, toast, openModal, closeModal, confirmDialog, errorMessage, dateInput, fromDateInput, debounce, replaceHashParams, isItUser } from '../util.js';
 
 let meta = null;
 const getMeta = async () => (meta ||= await api('/api/crm/meta'));
 const opts = (map, cur) => Object.entries(map).map(([k, v]) => `<option value="${k}"${k === cur ? ' selected' : ''}>${esc(v)}</option>`).join('');
-const userOpts = (cur, { blank = true } = {}) => (blank ? '<option value="">—</option>' : '') + store.users.filter(u => u.role !== 'admin')
+const userOpts = (cur, { blank = true } = {}) => (blank ? '<option value="">—</option>' : '') + store.users.filter(u => !isItUser(u))
   .map(u => `<option value="${u.id}"${Number(cur) === u.id ? ' selected' : ''}>${esc(u.fullName)}${u.departmentId ? ' · ' + esc(deptName(u.departmentId)) : ''}</option>`).join('');
 const stars = n => (n ? '★'.repeat(n) + '<span class="muted">' + '★'.repeat(5 - n) + '</span>' : '<span class="muted">—</span>');
 const statusPill = s => `<span class="pill ${s.code === 'ACTIVE' ? 'ok' : s.code === 'PAUSED' ? 'warn' : 'info'}">${esc(s.label)}</span>`;
@@ -122,7 +122,7 @@ async function renderPartner(root, id, setCrumbs, m) {
         <dt>Điện thoại</dt><dd>${esc(p.phone || '—')}</dd><dt>Email</dt><dd>${esc(p.email || '—')}</dd><dt>Website</dt><dd>${esc(p.website || '—')}</dd>
         <dt>Bộ phận phụ trách</dt><dd>${esc(p.ownerDepartment.name || '')}</dd><dt>Người phụ trách</dt><dd>${esc(p.ownerUser?.fullName || '—')}</dd>
         ${p.rating !== undefined ? `<dt>Đánh giá nội bộ</dt><dd>${stars(p.rating)}</dd>` : ''}${p.note !== undefined ? `<dt>Nhận xét nội bộ</dt><dd class="pre">${esc(p.note || '—')}</dd>` : ''}</dl>
-        ${p.can.detail ? '' : '<p class="muted sm">Người liên hệ, nhật ký làm việc và hợp đồng chỉ bộ phận phụ trách, người phụ trách và Ban giám đốc xem.</p>'}</section>
+        ${p.can.detail ? '' : '<p class="muted sm">Người liên hệ, nhật ký làm việc và hợp đồng chỉ bộ phận phụ trách, người phụ trách và Ban Tổng Giám đốc xem.</p>'}</section>
       ${p.contacts ? `<section class="card pg-section" data-testid="crm-contacts"><div class="row"><h3 class="grow">Người liên hệ</h3><button class="btn btn-sm" id="cNew" data-testid="crm-contact-new">Thêm</button></div>
         ${p.contacts.length ? `<div class="pg-scroll"><table class="table"><tbody>${p.contacts.map(c => `<tr><td><b>${esc(c.fullName)}</b>${c.isPrimary ? ' <span class="pill info">Đầu mối</span>' : ''}<div class="muted xs">${esc(c.title || '')}</div></td>
           <td>${esc(c.phone || '')}<div class="muted xs">${esc(c.email || '')}</div></td><td class="actions"><button class="btn btn-ghost btn-sm" data-cedit="${c.id}">Sửa</button><button class="btn btn-ghost btn-sm" data-cdel="${c.id}">Xoá</button></td></tr>`).join('')}</tbody></table></div>`

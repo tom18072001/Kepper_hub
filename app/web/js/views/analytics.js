@@ -1,4 +1,4 @@
-// KPI & phân tích thống kê công việc — chỉ Ban giám đốc (quyền reports.kpi toàn tổ chức; máy chủ trả 403 cho người khác).
+// KPI & phân tích thống kê công việc — chỉ Ban Tổng Giám đốc (quyền reports.kpi toàn tổ chức; máy chủ trả 403 cho người khác).
 // Thời gian làm (bắt đầu → xong), giao → được duyệt, đánh giá Tốt / Trung bình / Kém sau duyệt, xu hướng, biểu đồ kiểm soát đúng hạn,
 // việc kéo dài bất thường. Luôn hiện cỡ mẫu (n); nhóm dưới 5 việc ghi "mẫu nhỏ". Không xếp hạng người: sắp theo phòng, tên.
 import { api, download } from '../api.js';
@@ -49,7 +49,7 @@ export async function renderAnalytics(root, params, setCrumbs) {
   setCrumbs('KPI & phân tích');
   // Máy chủ vẫn trả 403; ở đây chỉ để người không có quyền thấy lời giải thích thay vì lỗi thô.
   if (!can('reports.kpi')) {
-    root.innerHTML = `<div class="page-head"><h1>KPI & phân tích</h1></div><div class="card empty" data-testid="an-forbidden">Trang này chỉ dành cho Ban giám đốc. Số liệu của chính bạn xem ở <a href="#/my">Việc của tôi</a>.</div>`;
+    root.innerHTML = `<div class="page-head"><h1>KPI & phân tích</h1></div><div class="card empty" data-testid="an-forbidden">Trang này chỉ dành cho Ban Tổng Giám đốc. Số liệu của chính bạn xem ở <a href="#/my">Việc của tôi</a>.</div>`;
     return;
   }
   const P = periods();
@@ -64,7 +64,7 @@ export async function renderAnalytics(root, params, setCrumbs) {
     for (const [k, val] of [...u]) if (!val) u.delete(k); location.hash = '#/kpi?' + u; };
   const tile = (value, label, sub = '') => `<div class="kpi"><div class="v">${value}</div><div class="l">${label}</div>${sub ? `<div class="muted xs">${sub}</div>` : ''}</div>`;
 
-  root.innerHTML = `<div class="page-head"><h1>KPI & phân tích</h1><span class="muted xs">Bảo mật · chỉ Ban giám đốc · lúc ${new Date(r.generatedAt).toLocaleTimeString('vi-VN')}</span></div>
+  root.innerHTML = `<div class="page-head"><h1>KPI & phân tích</h1><span class="muted xs">Bảo mật · chỉ Ban Tổng Giám đốc · lúc ${new Date(r.generatedAt).toLocaleTimeString('vi-VN')}</span></div>
     <div class="filters st-filters an-filters" role="group" aria-label="Kỳ phân tích">
       <select id="anPeriod" aria-label="Kỳ" data-testid="an-period">${KEYS.map(k => `<option value="${k}"${k === key ? ' selected' : ''}>${P[k][0]}</option>`).join('')}<option value="custom"${key === 'custom' ? ' selected' : ''}>Tuỳ chọn</option></select>
       <input type="date" id="anFrom" value="${esc(from)}" aria-label="Từ ngày"${key === 'custom' ? '' : ' disabled'}> – <input type="date" id="anTo" value="${esc(to)}" aria-label="Đến ngày"${key === 'custom' ? '' : ' disabled'}>

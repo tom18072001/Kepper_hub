@@ -1,5 +1,5 @@
 // Danh mục dùng chung: nguồn giao việc, ngưỡng "sắp đến hạn", trọng số KPI, mẫu nhóm việc (vd. "Nhiệm vụ chuẩn – Cuộc thi/Hội thi").
-// Thiết lập: Ban giám đốc / quản trị. Mẫu nhóm việc: lãnh đạo phòng (quản lý dự án) tạo được và sửa mẫu của mình.
+// Thiết lập: Ban Tổng Giám đốc / quản trị. Mẫu nhóm việc: lãnh đạo phòng (quản lý dự án) tạo được và sửa mẫu của mình.
 import { api } from '../api.js';
 import { store } from '../store.js';
 import { $, $$, esc, toast, errorMessage, confirmDialog } from '../util.js';
@@ -18,12 +18,12 @@ export async function renderCatalog(root, setCrumbs) {
     const owner = t.id ? (t.createdByName ? `Mẫu của ${esc(t.createdByName)}` : 'Mẫu dùng chung') : 'Mẫu mới';
     return `<div class="card tpl-card" data-tpl="${t.id ?? ''}"><div class="row"><input name="name" value="${esc(t.name || '')}" placeholder="Tên mẫu" class="grow" ${tro} aria-label="Tên mẫu" data-testid="tpl-name">
         ${editable ? `<button class="btn btn-primary btn-sm" data-save-tpl>Lưu mẫu</button>${t.id ? '<button class="btn btn-ghost btn-sm" data-del-tpl>Xoá</button>' : ''}` : ''}</div>
-      <div class="muted xs tpl-owner">${owner}${t.id && !editable ? (t.createdById ? ' · chỉ người tạo, Ban giám đốc hoặc quản trị được sửa' : ' · chỉ Ban giám đốc hoặc quản trị được sửa') : ''}</div>
+      <div class="muted xs tpl-owner">${owner}${t.id && !editable ? (t.createdById ? ' · chỉ người tạo, Ban Tổng Giám đốc hoặc quản trị được sửa' : ' · chỉ Ban Tổng Giám đốc hoặc quản trị được sửa') : ''}</div>
       <div class="tbl-scroll"><table class="table tpl-table"><thead><tr><th class="num">#</th><th>Việc nhánh · sản phẩm đầu ra</th><th>Hạn so với ngày mốc</th>${editable ? '<th><span class="sr-only">Thao tác</span></th>' : ''}</tr></thead><tbody>
         ${(t.items || []).map((i, k) => tplRow(i, k, tro)).join('')}</tbody></table></div>
       ${editable ? '<button class="btn btn-ghost btn-sm" data-add-row>+ Thêm việc nhánh</button>' : ''}</div>`;
   };
-  const notice = settings.canEdit ? '' : `<span class="muted sm">${settings.canCreateTemplate ? 'Thiết lập do Ban giám đốc hoặc quản trị sửa. Bạn tạo được mẫu nhóm việc và sửa mẫu của mình.' : 'Chỉ Ban giám đốc hoặc quản trị được sửa.'}</span>`;
+  const notice = settings.canEdit ? '' : `<span class="muted sm">${settings.canCreateTemplate ? 'Thiết lập do Ban Tổng Giám đốc hoặc quản trị sửa. Bạn tạo được mẫu nhóm việc và sửa mẫu của mình.' : 'Chỉ Ban Tổng Giám đốc hoặc quản trị được sửa.'}</span>`;
   root.innerHTML = `<div class="page-head"><h1>Danh mục dùng chung</h1>${notice}</div>
     <div class="dash-grid catalog-grid">
       <form class="card" id="setForm"><h3>Thiết lập</h3>

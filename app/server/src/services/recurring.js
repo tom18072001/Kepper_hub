@@ -5,7 +5,7 @@ const bus = require('./bus');
 
 const H7 = 7 * 3_600_000, DAY = 86_400_000, RUN_HOUR = 7;
 const FREQUENCIES = ['DAILY', 'WEEKLY', 'MONTHLY'];
-const SYSTEM_ACTOR = Object.freeze({ id: null, isSystem: true, fullName: 'Hệ thống', permissions: [] });
+const SYSTEM_ACTOR = Object.freeze({ id: null, isSystem: true, fullName: 'Hệ thống' });
 
 function localParts(date) {
   const x = new Date(date.getTime() + H7);
@@ -70,7 +70,7 @@ async function runDue(prisma, now = new Date()) {
   let created = 0;
   for (const rule of rules) {
     try {
-      const actor = (rule.createdById && await prisma.user.findFirst({ where: { id: rule.createdById, isActive: true }, include: { permissions: true } })) || SYSTEM_ACTOR;
+      const actor = (rule.createdById && await prisma.user.findFirst({ where: { id: rule.createdById, isActive: true } })) || SYSTEM_ACTOR;
       if (await createFromRule(prisma, rule, actor, now)) created++;
     } catch (error) {
       console.error(JSON.stringify({ level: 'error', msg: 'recurring_failed', ruleId: rule.id, error: error.message }));

@@ -1,8 +1,8 @@
-// Nhập MTL tổng từ Excel trên MÁY CHẠY, thay mặt PMO do Ban GĐ / chủ dự án chỉ định — cùng lõi và quy tắc với nút "Nhập MTL từ Excel".
+// Nhập MTL tổng từ Excel trên MÁY CHẠY, thay mặt PMO do Ban TGĐ / chủ dự án chỉ định — cùng lõi và quy tắc với nút "Nhập MTL từ Excel".
 // Tệp MTL thật là dữ liệu Bảo mật: chỉ đặt trên máy chạy, xoá sau khi nhập; KHÔNG đưa vào git.
 //   docker compose exec -T app node scripts/import-mtl.js --file /tmp/mtl.xlsx --key NOXH --name "Dự án NƠXH Dương Xá" \
 //        --t0 2026-10-01 --dept BGD --pmo huong.ptt --sheet "MTL overall" [--dry-run]
-// Chưa có dự án mã --key thì tạo dự án MTL (T0 = --t0, phòng ban chủ quản --dept, PMO làm trưởng dự án + được chỉ định PMO).
+// Chưa có dự án mã --key thì tạo dự án MTL (T0 = --t0, bộ phận chủ quản --dept, PMO làm trưởng dự án + được chỉ định PMO).
 // Có rồi: nhập / cập nhật kế hoạch theo tên (mặc định "MTL — <sheet>"), giữ kế hoạch gốc trừ khi --rebaseline.
 const fs = require('node:fs');
 const { PrismaClient } = require('@prisma/client');
@@ -21,7 +21,7 @@ async function main() {
     if (!file || !fs.existsSync(file) || !key) throw new Error('Thiếu --file <đường dẫn .xlsx> hoặc --key <mã dự án>');
     const pmo = await prisma.user.findFirst({ where: { username: String(arg('pmo') || '').toLowerCase(), isActive: true } });
     if (!pmo) throw new Error('Không có tài khoản PMO ' + arg('pmo'));
-    // --aliases '{"kinh doanh":"BGD"}': cách gọi đầu mối riêng của công ty → mã phòng ban (thiết lập mtl.ownerAliases, dùng chung với nút nhập trên web).
+    // --aliases '{"kinh doanh":"BGD"}': cách gọi đầu mối riêng của công ty → mã bộ phận (thiết lập mtl.ownerAliases, dùng chung với nút nhập trên web).
     if (arg('aliases')) {
       const v = JSON.parse(arg('aliases'));
       await prisma.appSetting.upsert({ where: { key: 'mtl.ownerAliases' }, update: { value: v }, create: { key: 'mtl.ownerAliases', value: v } });
@@ -30,7 +30,7 @@ async function main() {
     if (!project) {
       const dept = await prisma.department.findFirst({ where: { code: String(arg('dept') || '').toUpperCase(), isActive: true } });
       const t0 = arg('t0') && /^\d{4}-\d{2}-01$/.test(arg('t0')) ? new Date(arg('t0') + 'T00:00:00+07:00') : null;
-      if (!dept || !t0) throw new Error('Tạo dự án mới cần --dept <mã phòng ban> và --t0 YYYY-MM-01 (tháng T0 của MTL)');
+      if (!dept || !t0) throw new Error('Tạo dự án mới cần --dept <mã bộ phận> và --t0 YYYY-MM-01 (tháng T0 của MTL)');
       // Chạy thử khi chưa có dự án: dùng dự án tạm trong bộ nhớ (không ghi gì) để xem trước cách tách đầu mối, ngày theo T.
       if (has('dry-run')) project = { id: -1, key, name: String(arg('name') || key), t0Date: t0, departmentId: dept.id, wouldCreate: true };
       else project = await prisma.$transaction(async tx => {

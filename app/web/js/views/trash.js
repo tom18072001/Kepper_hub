@@ -10,7 +10,7 @@ export async function renderTrash(root, setCrumbs) {
   setCrumbs('Thùng rác');
   const t = await api('/api/trash');
   root.innerHTML = `<div class="page-head"><h1>Thùng rác</h1><span class="muted sm">Khôi phục được trong ${t.days} ngày kể từ lúc xoá; sau đó hệ thống xoá hẳn, kể cả tệp đính kèm.</span></div>
-    ${t.projects.length ? `<div class="card" style="margin-bottom:16px"><h3>Dự án đã xoá</h3><table class="table" data-testid="trash-projects"><thead><tr><th>Dự án</th><th>Phòng ban</th><th>Số việc</th><th>Xoá bởi</th><th>Xoá lúc</th><th>Thời hạn</th><th></th></tr></thead><tbody>
+    ${t.projects.length ? `<div class="card" style="margin-bottom:16px"><h3>Dự án đã xoá</h3><table class="table" data-testid="trash-projects"><thead><tr><th>Dự án</th><th>Bộ phận</th><th>Số việc</th><th>Xoá bởi</th><th>Xoá lúc</th><th>Thời hạn</th><th></th></tr></thead><tbody>
       ${t.projects.map(p => `<tr data-testid="trash-project-${esc(p.key)}"><td><span class="code">${esc(p.key)}</span> <b>${esc(p.name)}</b></td><td>${esc(p.department || '')}</td><td class="num">${p.items}</td><td>${esc(p.deletedBy || '')}</td><td class="muted sm">${fmtDateTime(p.deletedAt)}</td>
         <td><span class="pill">${left(p.purgeAt)}</span></td><td class="actions"><button class="btn btn-ghost btn-sm" data-restore-project="${p.id}" data-testid="restore-project">Khôi phục</button></td></tr>`).join('')}</tbody></table></div>` : ''}
     <div class="card"><h3>Công việc đã xoá</h3>${t.items.length ? `<table class="table" data-testid="trash-items"><thead><tr><th>Mã</th><th>Công việc</th><th>Dự án</th><th>Xoá bởi</th><th>Xoá lúc</th><th>Thời hạn</th><th></th></tr></thead><tbody>

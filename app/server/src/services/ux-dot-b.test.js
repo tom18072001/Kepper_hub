@@ -1,4 +1,4 @@
-// Đợt B review UX: phạm vi số liệu "phòng ban" (B5 / N6) và gộp "Loại nhiệm vụ" vào "Nguồn giao việc" (B4). Dữ liệu giả.
+// Đợt B review UX: phạm vi số liệu "bộ phận" (B5 / N6) và gộp "Loại nhiệm vụ" vào "Nguồn giao việc" (B4). Dữ liệu giả.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const S = require('./stats');
@@ -7,7 +7,7 @@ const W = require('./workitems');
 const OPEN = { category: 'STARTED' }, DONE = { category: 'COMPLETED' };
 const item = (o) => ({ leadDepartmentId: null, project: { departmentId: 1 }, state: OPEN, assignees: [], supporters: [], ...o });
 
-test('thống kê phòng ban: việc phòng khác chủ trì mà người trong phòng làm → đếm riêng, không cộng vào phòng', () => {
+test('thống kê bộ phận: việc phòng khác chủ trì mà người trong phòng làm → đếm riêng, không cộng vào phòng', () => {
   const items = [
     item({ leadDepartmentId: 2, assignees: [{ user: { departmentId: 1 } }] }), // phòng 2 chủ trì, người phòng 1 chủ trì → ngoài phạm vi phòng 1
     item({ leadDepartmentId: 3, supporters: [{ user: { departmentId: 1 } }] }), // phòng 1 chỉ phối hợp → ngoài phạm vi

@@ -11,9 +11,20 @@ export const CATEGORY = {
   BACKLOG: 'Tồn đọng', UNSTARTED: 'Chưa bắt đầu', STARTED: 'Đang thực hiện', REVIEW: 'Chờ duyệt', COMPLETED: 'Hoàn thành', CANCELLED: 'Huỷ',
   OTHER: 'Cột tự do',
 };
-export const ROLE_LABEL = { admin: 'Quản trị hệ thống', director: 'Ban giám đốc', manager: 'Trưởng phòng', deputy: 'Phó phòng', member: 'Nhân viên' };
-export const VISIBILITY = { DEPARTMENT: 'Cả phòng ban', PRIVATE: 'Chỉ thành viên', PUBLIC: 'Toàn công ty (dùng chung)' };
-export const APPROVER = { PROJECT_LEAD: 'Trưởng dự án', DEPARTMENT_MANAGER: 'Trưởng phòng', DIRECTOR: 'Ban giám đốc', SUPERVISOR: 'Người giao / PGĐ phụ trách', USER: 'Người được chỉ định' };
+// Một trục vai (server: lib/permissions.js). Đây là nơi DUY NHẤT trên giao diện so giá trị vai — nơi khác gọi các hàm dưới
+// (test quét mã server/src/lib/role-matrix.test.js chặn so chuỗi vai ở tệp khác). 'deputy' là giá trị cũ, đã gộp vào Lãnh đạo bộ phận.
+export const ROLE_OPTIONS = ['director', 'manager', 'member', 'admin'];
+export const roleKey = u => (u?.role === 'deputy' ? 'manager' : u?.role) || null;
+export const isItUser = u => !!u && (!!u.isRootAdmin || u.role === 'admin');
+export const isBoardUser = u => !!u && !isItUser(u) && roleKey(u) === 'director';
+export const isLeaderUser = u => !!u && !isItUser(u) && roleKey(u) === 'manager';
+// Thứ bậc hiển thị: 0 Ban Tổng Giám đốc, 1 Lãnh đạo bộ phận, 2 Nhân viên, 3 quản trị.
+export const roleRank = u => (isBoardUser(u) ? 0 : isLeaderUser(u) ? 1 : isItUser(u) ? 3 : 2);
+// Lãnh đạo (để chọn người duyệt / người giao): Ban Tổng Giám đốc hoặc Lãnh đạo bộ phận.
+export const isLeadershipUser = u => isBoardUser(u) || isLeaderUser(u);
+export const ROLE_LABEL = { director: 'Ban Tổng Giám đốc', manager: 'Lãnh đạo bộ phận', member: 'Nhân viên', admin: 'Quản trị hệ thống', deputy: 'Lãnh đạo bộ phận' };
+export const VISIBILITY = { DEPARTMENT: 'Cả bộ phận', PRIVATE: 'Chỉ thành viên', PUBLIC: 'Toàn công ty (dùng chung)' };
+export const APPROVER = { PROJECT_LEAD: 'Người đứng tên dự án', DEPARTMENT_MANAGER: 'Lãnh đạo bộ phận chủ trì', DIRECTOR: 'BTGĐ phụ trách', USER: 'Người được chỉ định' };
 
 const DAY = 86_400_000;
 export function fmtDate(value) {

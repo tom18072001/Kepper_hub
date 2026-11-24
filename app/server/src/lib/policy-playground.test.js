@@ -23,7 +23,7 @@ test('IT không có quyền trên CRM / HRM', () => {
     assert.equal(P.can(S.it, a, d, { departmentId: OWN, targetUserId: 1, ownerUserId: 1, participant: true }), false, `${d} ${a}`);
 });
 
-test('CRM: danh bạ tổ chức mọi người xem; chi tiết chỉ bộ phận phụ trách + người phụ trách + Ban GĐ', () => {
+test('CRM: danh bạ tổ chức mọi người xem; chi tiết chỉ bộ phận phụ trách + người phụ trách + Ban TGĐ', () => {
   const c = { departmentId: OWN, ownerUserId: 8 };
   allow('crm.partner', 'view', c, ['director', 'hr', 'leader', 'member', 'outsider', 'owner']);
   allow('crm.partner', 'edit', c, ['director', 'leader', 'member', 'owner']);
@@ -42,13 +42,13 @@ test('CRM: không gửi ra ngoài (mail / Viber) người liên hệ, nhật ký
   for (const d of ['crm.contact', 'crm.interaction', 'crm.engagement']) for (const r of ROLES) assert.equal(P.can(S[r], 'external', d, { departmentId: OWN }), false);
 });
 
-test('HRM hồ sơ: tự xem; HR, Ban GĐ xem đủ; lãnh đạo bộ phận chỉ trường cơ bản; tự sửa liên hệ', () => {
+test('HRM hồ sơ: tự xem; HR, Ban TGĐ xem đủ; lãnh đạo bộ phận chỉ trường cơ bản; tự sửa liên hệ', () => {
   const t = { targetUserId: 6, departmentId: OWN };
   allow('hrm.profile', 'view', t, ['director', 'hr', 'leader', 'member']);
   allow('hrm.profile', 'view', { ...t, field: 'private' }, ['director', 'hr', 'member']);
   allow('hrm.profile', 'edit', t, ['hr']);
   allow('hrm.profile', 'edit', { ...t, op: 'contact' }, ['hr', 'member']);
-  allow('hrm.identity', 'view', t, ['hr', 'member']); // Ban GĐ không cần số CCCD
+  allow('hrm.identity', 'view', t, ['hr', 'member']); // Ban TGĐ không cần số CCCD
   allow('hrm.identity', 'edit', t, ['hr']);
   allow('hrm.contract', 'view', t, ['director', 'hr', 'member']);
   allow('hrm.contract', 'edit', t, ['hr']);
@@ -57,7 +57,7 @@ test('HRM hồ sơ: tự xem; HR, Ban GĐ xem đủ; lãnh đạo bộ phận ch
   assert.deepEqual(P.NEVER_AI_FIELDS['hrm.contract'], ['salary']);
 });
 
-test('HRM nghỉ phép: tự lập; lãnh đạo bộ phận duyệt nhân viên; đơn của lãnh đạo: Ban GĐ; không tự duyệt', () => {
+test('HRM nghỉ phép: tự lập; lãnh đạo bộ phận duyệt nhân viên; đơn của lãnh đạo: Ban TGĐ; không tự duyệt', () => {
   const t = { targetUserId: 6, departmentId: OWN };
   allow('hrm.leave', 'view', t, ['director', 'hr', 'leader', 'member']);
   allow('hrm.leave', 'edit', { ...t, op: 'create' }, ['hr', 'member']);
@@ -66,22 +66,22 @@ test('HRM nghỉ phép: tự lập; lãnh đạo bộ phận duyệt nhân viên
   const lt = { targetUserId: 5, departmentId: OWN, targetLeader: true };
   allow('hrm.leave', 'edit', { ...lt, op: 'approve' }, ['director']); // trưởng bộ phận không tự duyệt
   const dt = { targetUserId: 2, departmentId: 9, targetLeader: true };
-  allow('hrm.leave', 'edit', { ...dt, op: 'approve' }, []); // Ban GĐ không tự duyệt đơn của mình
-  allow('hrm.leave', 'edit', { ...dt, targetDirector: true, op: 'approve' }, ['hr']); // một Ban GĐ duy nhất: người phụ trách nhân sự ghi nhận
+  allow('hrm.leave', 'edit', { ...dt, op: 'approve' }, []); // Ban TGĐ không tự duyệt đơn của mình
+  allow('hrm.leave', 'edit', { ...dt, targetDirector: true, op: 'approve' }, ['hr']); // một Ban TGĐ duy nhất: người phụ trách nhân sự ghi nhận
 });
 
-test('HRM chấm công: tự chấm / giải trình; duyệt: lãnh đạo bộ phận, HR, Ban GĐ (không tự duyệt); HR nhập máy chấm công không cho chính mình', () => {
+test('HRM chấm công: tự chấm / giải trình; duyệt: lãnh đạo bộ phận, HR, Ban TGĐ (không tự duyệt); HR nhập máy chấm công không cho chính mình', () => {
   const t = { targetUserId: 6, departmentId: OWN };
   allow('hrm.attendance', 'view', t, ['director', 'hr', 'leader', 'member']);
   allow('hrm.attendance', 'edit', { ...t, op: 'check' }, ['member']);
   allow('hrm.attendance', 'edit', { ...t, op: 'explain' }, ['member']);
   allow('hrm.attendance', 'edit', { ...t, op: 'approve' }, ['director', 'hr', 'leader']);
   allow('hrm.attendance', 'edit', { ...t, op: 'hr' }, ['director', 'hr']);
-  allow('hrm.attendance', 'edit', { targetUserId: 3, departmentId: 5, op: 'hr' }, ['director']); // chấm công của chính người phụ trách nhân sự: Ban GĐ nhập
+  allow('hrm.attendance', 'edit', { targetUserId: 3, departmentId: 5, op: 'hr' }, ['director']); // chấm công của chính người phụ trách nhân sự: Ban TGĐ nhập
   allow('hrm.attendance', 'edit', { targetUserId: 3, departmentId: 5, op: 'approve' }, ['director']);
 });
 
-test('HRM: người phụ trách nhân sự không tự sửa hồ sơ / hợp đồng / CCCD của chính mình — Ban GĐ làm', () => {
+test('HRM: người phụ trách nhân sự không tự sửa hồ sơ / hợp đồng / CCCD của chính mình — Ban TGĐ làm', () => {
   const own = { targetUserId: 3, departmentId: 5, targetHr: true };
   allow('hrm.profile', 'edit', own, ['director']);
   allow('hrm.profile', 'edit', { ...own, op: 'contact' }, ['director', 'hr']);
@@ -89,10 +89,10 @@ test('HRM: người phụ trách nhân sự không tự sửa hồ sơ / hợp �
   allow('hrm.identity', 'edit', own, ['director']);
   allow('hrm.identity', 'view', own, ['hr']);
   const other = { targetUserId: 6, departmentId: OWN };
-  allow('hrm.contract', 'edit', other, ['hr']); // Ban GĐ không sửa hợp đồng người thường
+  allow('hrm.contract', 'edit', other, ['hr']); // Ban TGĐ không sửa hợp đồng người thường
 });
 
-test('HRM thiết lập: chỉ Ban GĐ chỉ định người phụ trách nhân sự', () => {
+test('HRM thiết lập: chỉ Ban TGĐ chỉ định người phụ trách nhân sự', () => {
   allow('hrm.config', 'view', {}, ['director', 'hr', 'leader', 'member', 'outsider', 'owner']);
   allow('hrm.config', 'edit', {}, ['director', 'hr']);
   allow('hrm.config', 'edit', { field: 'roles' }, ['director']);

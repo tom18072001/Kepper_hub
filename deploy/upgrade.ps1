@@ -8,6 +8,14 @@ $ErrorActionPreference = "Continue"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 $stamp = Get-Date -Format "yyyyMMdd-HHmm"
 
+Write-Host "==> 0/5 Kiểm phân quyền trên CSDL đang chạy (dừng ở đây thì app cũ vẫn chạy) — deploy/precheck-roles-db.sh"
+# Lần nâng cấp LÊN bản "một hệ quy chiếu" (20261124064031_mot_truc_vai): lấy mã mới TRƯỚC (git pull) rồi mới chạy script này — bản cũ chưa có bước 0.
+if (-not (docker compose ps -q postgres)) { throw "Không đọc được CSDL (container postgres không chạy) — DỪNG nâng cấp. Bật postgres rồi chạy lại." }
+# cmd /c chuyển NGUYÊN byte của tệp vào sh (PowerShell 5.1 nối ống sẽ thêm CRLF làm sh lỗi).
+cmd /c "docker compose exec -T postgres sh -s < deploy\precheck-roles-db.sh"
+if ($LASTEXITCODE -eq 1) { throw "Kiểm phân quyền chưa đạt — DỪNG nâng cấp (đổi vai các tài khoản được liệt kê trên màn Quản trị rồi chạy lại)." }
+if ($LASTEXITCODE -ne 0) { throw "Không đọc được CSDL khi kiểm phân quyền (mã $LASTEXITCODE) — DỪNG nâng cấp." }
+
 Write-Host "==> 1/5 Sao lưu CSDL + tệp đính kèm trước khi nâng cấp"
 docker compose build backup | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Build image sao lưu lỗi (cần mạng để cài age) — DỪNG nâng cấp." }
@@ -43,6 +51,12 @@ for ($i = 0; $i -lt 36; $i++) {
   $id = docker compose ps -q app
   if ($id) { $h = docker inspect -f "{{.State.Health.Status}}" $id; if ($h -eq "healthy") { $ok = $true; break } }
 }
+if ($ok) {
+  # Healthy chưa đủ: container phải chạy đúng image vừa build (tag trong Config.Image), không phải image cũ.
+  $runImg = docker inspect -f "{{.Image}}" $id
+  $newImg = docker image inspect -f "{{.Id}}" (docker inspect -f "{{.Config.Image}}" $id)
+  if ($runImg -ne $newImg) { Write-Host "!! Bản mới CHƯA chạy: app đang chạy $runImg, image vừa build $newImg — app cũ vẫn phục vụ." -ForegroundColor Red; exit 1 }
+}
 if (-not $ok) {
   Write-Host "!! App chưa sẵn sàng sau 3 phút. 40 dòng log cuối:" -ForegroundColor Red
   docker compose logs app --tail 40
@@ -53,4 +67,4 @@ if (-not $ok) {
   Write-Host "     docker compose up -d --no-build app"
   exit 1
 }
-Write-Host "OK — Kepler Hub đã nâng cấp. Image cũ giữ ở $rollback (xoá khi ổn định: docker image rm $rollback)." -ForegroundColor Green
+Write-Host "OK — Kepler Hub đã nâng cấp. Bản mới: $runImg. Image cũ giữ ở $rollback (xoá khi ổn định: docker image rm $rollback)." -ForegroundColor Green

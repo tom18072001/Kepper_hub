@@ -22,15 +22,15 @@ test('QĐ-01: quản trị IT không có quyền nào trên dữ liệu nghiệp
   for (const d of Object.keys(P.DATASETS)) for (const a of P.ACTIONS) assert.equal(P.can(S.it, a, d, { departmentId: OWN, item: { projectManager: true } }, { aiEnabled: true }), false, `${d} ${a}`);
 });
 
-test('Báo cáo tuần: lập / gửi đúng bộ phận; Ban GĐ không lập; thư ký nhập thay; xem bộ phận khác chỉ người nhận đầy đủ', () => {
+test('Báo cáo tuần: lập / gửi đúng bộ phận; Ban TGĐ không lập; thư ký nhập thay; xem bộ phận khác chỉ người nhận đầy đủ', () => {
   allow('weekly.report', 'view', { departmentId: OWN }, ['director', 'secretary', 'pmo', 'leader', 'member']);
   allow('weekly.report', 'edit', { departmentId: OWN }, ['secretary', 'leader', 'member']);
   allow('weekly.report', 'view', { departmentId: OTHER }, ['director', 'secretary', 'pmo', 'outsider']);
   allow('weekly.report', 'edit', { departmentId: OTHER }, ['secretary', 'outsider']);
-  allow('weekly.report', 'edit', { departmentId: 9 }, ['secretary', 'pmo']); // phòng Ban GĐ: giám đốc không tự lập (thành viên khác của phòng vẫn là thành viên)
+  allow('weekly.report', 'edit', { departmentId: 9 }, ['secretary', 'pmo']); // phòng Ban TGĐ: giám đốc không tự lập (thành viên khác của phòng vẫn là thành viên)
 });
 
-test('Tổng hợp: trưởng / phó nhận bản tóm tắt (Điều 5); chi tiết chỉ Ban GĐ, thư ký, PMO', () => {
+test('Tổng hợp: trưởng / phó nhận bản tóm tắt (Điều 5); chi tiết chỉ Ban TGĐ, thư ký, PMO', () => {
   allow('weekly.summary', 'view', {}, ['director', 'secretary', 'pmo', 'leader']);
   allow('weekly.summary.detail', 'view', {}, ['director', 'secretary', 'pmo']);
   allow('weekly.meeting', 'edit', {}, ['director', 'secretary']);
@@ -39,7 +39,7 @@ test('Tổng hợp: trưởng / phó nhận bản tóm tắt (Điều 5); chi ti
   allow('weekly.roles', 'edit', {}, ['director']);
 });
 
-test('Thông báo muộn / vắng: lãnh đạo xem bộ phận mình; ghi chú lý do chỉ người tạo, thư ký, Ban GĐ', () => {
+test('Thông báo muộn / vắng: lãnh đạo xem bộ phận mình; ghi chú lý do chỉ người tạo, thư ký, Ban TGĐ', () => {
   allow('weekly.notice', 'view', { departmentId: OWN, createdById: 99 }, ['director', 'secretary', 'pmo', 'leader']);
   allow('weekly.notice', 'view', { departmentId: OWN, createdById: 6 }, ['director', 'secretary', 'pmo', 'leader', 'member']);
   allow('weekly.notice', 'view', { departmentId: OWN, createdById: 6, field: 'note' }, ['director', 'secretary', 'member']);
@@ -47,24 +47,25 @@ test('Thông báo muộn / vắng: lãnh đạo xem bộ phận mình; ghi chú 
   allow('weekly.notice', 'edit', { departmentId: OWN, createdById: 6, op: 'delete' }, ['secretary', 'member']);
 });
 
-test('MTL: % chỉ người chủ trì; kế hoạch hạng mục: người giao / BGĐ; thao tác cả dự án: người quản lý dự án', () => {
+test('MTL: % chỉ người chủ trì; kế hoạch hạng mục: người giao / BTGĐ; thao tác cả dự án: người quản lý dự án', () => {
   const item = { assigneeIds: [6], leadLeaderIds: [5], projectManager: false };
   allow('mtl.progress', 'edit', { item }, ['member']); // S.member là người chủ trì (userId 6); lãnh đạo bộ phận không còn cập nhật thay
   allow('mtl.progress', 'edit', { item: { ...item, projectManager: true } }, ['member']); // PMO không cập nhật % thay người chủ trì
   allow('mtl.plan', 'edit', { item }, []);
   allow('mtl.plan', 'edit', { item: { ...item, projectManager: true } }, ROLES.filter(r => r !== 'it'));
-  // Kế hoạch một hạng mục: người giao / Ban Giám đốc của việc (task-access tính it.boss); quản lý dự án không tự có quyền này.
+  // Kế hoạch một hạng mục: người giao / BTGĐ phụ trách của việc (task-access tính it.boss); quản lý dự án không tự có quyền này.
   allow('mtl.plan', 'edit', { item: { ...item, projectManager: true }, op: 'item' }, []);
   allow('mtl.plan', 'edit', { item: { ...item, boss: true }, op: 'item' }, ROLES.filter(r => r !== 'it'));
   for (const op of ['child', 'detail', 'assign']) allow('mtl.plan', 'edit', { item, op }, []);
-  // Xuất ra tệp: quản lý dự án, Ban GĐ; lãnh đạo bộ phận phần bộ phận mình.
+  // Xuất ra tệp: quản lý dự án, Ban TGĐ; lãnh đạo bộ phận phần bộ phận mình.
   allow('mtl.plan', 'export', { item }, ['director']);
   allow('mtl.progress', 'export', { item, op: 'dept' }, ['director', 'leader']);
   allow('mtl.plan', 'export', { item: { ...item, projectManager: true } }, ROLES.filter(r => r !== 'it'));
 });
 
-test('KPI cá nhân: chính mình, lãnh đạo bộ phận mình, Ban GĐ, quản lý dự án; không bao giờ gửi ra ngoài', () => {
-  allow('kpi.person', 'view', { departmentId: OWN }, ['director', 'leader']);
+test('KPI cá nhân: chỉ Ban Tổng Giám đốc và chính mình; không bao giờ gửi ra ngoài', () => {
+  allow('kpi.person', 'view', { departmentId: OWN }, ['director']);
+  allow('kpi.person', 'view', { departmentId: OWN, projectManager: true }, ['director']);
   allow('kpi.person', 'view', { departmentId: OTHER }, ['director']);
   allow('kpi.person', 'view', { departmentId: OTHER, self: true }, ROLES.filter(r => r !== 'it'));
   for (const r of ROLES) assert.equal(P.can(S[r], 'external', 'kpi.person', {}), false);

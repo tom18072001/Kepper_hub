@@ -59,8 +59,8 @@ function addWorkdays(day, n, cfg) {
 }
 const dueFor = (urgency, receivedDay, cfg) => addWorkdays(receivedDay, DUE_WORKDAYS[urgency] ?? 7, cfg);
 
-// Quyền xem (Điều 5): Công khai / Nội bộ — mọi cán bộ; Hạn chế — văn thư, Ban GĐ, người xử lý, bộ phận xử lý, Pháp chế khi được chuyển;
-// Bảo mật cao — Ban GĐ, văn thư vào sổ, người xử lý và danh sách đích danh.
+// Quyền xem (Điều 5): Công khai / Nội bộ — mọi cán bộ; Hạn chế — văn thư, Ban TGĐ, người xử lý, bộ phận xử lý, Pháp chế khi được chuyển;
+// Bảo mật cao — Ban TGĐ, văn thư vào sổ, người xử lý và danh sách đích danh.
 function canView(doc, s) {
   if (s.it) return false; // quản trị IT không đọc nội dung nghiệp vụ
   if (doc.security === 'CONG_KHAI' || doc.security === 'NOI_BO') return true;
@@ -68,7 +68,7 @@ function canView(doc, s) {
   if (doc.security === 'BAO_MAT_CAO') return (doc.viewerIds || []).includes(s.userId);
   return s.clerk || (doc.departmentId != null && doc.departmentId === s.departmentId) || (doc.toLegal && s.legal);
 }
-// Vào sổ, sửa, hủy: văn thư (do Ban GĐ chỉ định) và Ban GĐ; dãy D7 thêm lãnh đạo bộ phận đó (đầu mối văn thư bộ phận).
+// Vào sổ, sửa, hủy: văn thư (do Ban TGĐ chỉ định) và Ban TGĐ; dãy D7 thêm lãnh đạo bộ phận đó (đầu mối văn thư bộ phận).
 const canRegister = (s, series, deptId = null) => !s.it && (s.director || s.clerk || (series === 'D7' && s.leader && deptId === s.departmentId));
 // Đổi trạng thái: người vào sổ được mọi bước; người xử lý / lãnh đạo bộ phận xử lý được các bước xử lý của mình.
 const HANDLER_STEPS = new Set(['PROCESSING', 'DONE']);

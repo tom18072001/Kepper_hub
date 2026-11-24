@@ -2,7 +2,7 @@
 // nhập MTL tổng / MTL bộ phận từ Excel, cài đặt T0 và ngưỡng cảnh báo, KPI tiến độ theo bộ phận / người.
 import { api, download } from '../api.js';
 import { store, deptLink, personLink } from '../store.js';
-import { $, $$, esc, fmtDate, toast, openModal, closeModal, errorMessage, uiPref, replaceHashParams, ago } from '../util.js';
+import { $, $$, esc, fmtDate, toast, openModal, closeModal, errorMessage, uiPref, replaceHashParams, ago, isBoardUser, isLeaderUser, isLeadershipUser } from '../util.js';
 import { icon } from '../icons.js';
 
 const TONE = { NOT_DUE: '', LATE_START: 'warn', ON_TRACK: 'ok', BEHIND: 'warn', AHEAD: 'info', OVERDUE: 'danger', DONE_ON_TIME: 'ok', DONE_LATE: 'warn', CANCELLED: '', NO_PLAN: '' };
@@ -70,7 +70,7 @@ export function latestDraw(body) {
 
 // ---------- Thanh thao tác của dự án MTL ----------
 // Lãnh đạo bộ phận (trưởng / phó, có quyền duyệt): tự tải và nhập MTL của bộ phận mình. Máy chủ kiểm tra lại.
-const isDeptLeader = () => store.me?.departmentId != null && ['UNIT', 'SYSTEM'].includes(store.me?.permissions?.['work.approve']?.operate);
+const isDeptLeader = () => isBoardUser(store.me) || (isLeaderUser(store.me) && store.me?.departmentId != null);
 export function mtlActions(project) {
   if (project.rights.canManage) return `<button class="menu-item" data-mtl="import" data-testid="mtl-import">${icon('upload')}<span>Nhập MTL từ Excel</span></button>
     <button class="menu-item" data-mtl="template" data-testid="mtl-template">${icon('download')}<span>Tải mẫu MTL bộ phận</span></button>
@@ -151,11 +151,11 @@ export async function drawMtlOverview(body, project) {
     <section class="card"><div class="mtl-h"><h3>Mốc chính <svg class="gl gl-ms" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .6 11.4 6 6 11.4.6 6Z" fill="currentColor"/></svg></h3></div><div class="tbl-scroll"><table class="table" data-testid="mtl-milestones"><thead><tr><th>Bước</th><th>Mốc</th><th>Kế hoạch</th><th>Thực tế / dự báo</th><th>Trạng thái</th></tr></thead><tbody>${ms || '<tr><td colspan="5" class="muted">—</td></tr>'}</tbody></table></div></section>
   </div>`;
   body.onclick = e => { const r = e.target.closest('tr[data-href]'); if (r && !e.target.closest('a,[data-person],[data-dept-link]')) location.hash = r.dataset.href; };
-  // KPI theo người: chỉ Ban lãnh đạo / trưởng bộ phận (máy chủ chặn người khác).
-  if (project.rights.canManage || store.me.permissions?.['work.approve']?.operate) api(`/api/projects/${project.id}/mtl-kpi`).then(k => {
+  // KPI theo người: chỉ Ban Tổng Giám đốc (chủ dự án chốt 24/11/2026); người khác không thấy phần này (máy chủ chỉ trả KPI của chính mình).
+  if (isBoardUser(store.me)) api(`/api/projects/${project.id}/mtl-kpi`).then(k => {
     const el = $('#mtlPeople', body); if (!el || !k.rows.length) return;
     el.hidden = false;
-    el.innerHTML = `<div class="mtl-h"><h3>KPI tiến độ theo người chủ trì</h3><span class="muted xs">${k.scope === 'UNIT' ? 'bộ phận của bạn' : 'mọi bộ phận'} · chỉ để tham khảo · lần xem được ghi nhật ký</span></div>
+    el.innerHTML = `<div class="mtl-h"><h3>KPI tiến độ theo người chủ trì</h3><span class="muted xs">mọi bộ phận · chỉ Ban Tổng Giám đốc xem · chỉ để tham khảo · lần xem được ghi nhật ký</span></div>
       <div class="tbl-scroll"><table class="table" data-testid="mtl-people"><thead><tr><th>Người</th><th>Bộ phận</th><th class="num">Hạng mục</th><th class="num">SPI</th><th class="num">Đúng hạn</th><th class="num">Chậm</th><th class="num">Trễ</th><th class="num">KPI</th></tr></thead>
       <tbody>${k.rows.map(r => `<tr><td><b>${personLink({ id: r.id, fullName: r.fullName })}</b>${r.title ? `<div class="muted xs">${esc(r.title)}</div>` : ''}</td><td class="muted sm">${esc(r.department)}</td><td class="num">${r.items}</td>
         <td class="num"><span class="pill ${spiTone(r.spi)}">${r.spi == null ? '—' : num(r.spi, 2)}</span></td><td class="num">${r.onTimeRate == null ? '—' : r.onTimeRate + '%'}</td><td class="num">${r.behind}</td><td class="num">${r.overdue}</td><td class="num"><b class="${scoreTone(r.score)}-t">${r.score ?? '—'}</b></td></tr>`).join('')}</tbody></table></div>`;
@@ -284,7 +284,7 @@ export async function drawMtlPlan(body, project, params) {
 }
 
 // ---------- Khối MTL trong chi tiết hạng mục ----------
-// c = capabilities của việc: dự báo hoàn thành — người chủ trì; đường găng, mốc, kế hoạch gốc — người giao / Ban Giám đốc.
+// c = capabilities của việc: dự báo hoàn thành — người chủ trì; đường găng, mốc, kế hoạch gốc — người giao / Ban Tổng Giám đốc.
 export function mtlPanelBlock(d, project, c = {}) {
   if (project.kind !== 'MTL') return '';
   const st = d.mtl || {};
@@ -330,7 +330,7 @@ function importDialog(project, done) {
     ${pmo ? '' : '<p class="sm"><b>Cách nhanh nhất:</b> tải MTL bộ phận (Excel) đã điền sẵn → thêm dòng → chọn tệp ở đây → Xem trước → Nhập. Nhập lại chỉ thêm bước mới; bước đã có giữ nguyên. Chỉ gắn được dòng vào bước mình chủ trì.</p>'}
     <p class="muted sm">Bảng cần dòng tiêu đề <b>Bước | Hạng mục công việc | Đầu mối | Bắt đầu (T) | Kết thúc (T) | Thời lượng | Đường găng | Mốc</b>.
       Thời gian ghi theo <b>tháng T</b> (tính từ T0) hoặc ngày cụ thể. MTL bộ phận thêm cột <b>Thuộc bước</b> để gắn vào hạng mục của MTL tổng.
-      Nhập lại cùng kế hoạch <b>chỉ thêm bước mới; bước đã có giữ nguyên</b> (sửa kế hoạch một bước: người giao / Ban Giám đốc trên chi tiết bước; kế hoạch gốc: "Điều chỉnh kế hoạch gốc"). Tệp chỉ đọc rồi xoá, không lưu.</p>
+      Nhập lại cùng kế hoạch <b>chỉ thêm bước mới; bước đã có giữ nguyên</b> (sửa kế hoạch một bước: người giao / Ban Tổng Giám đốc trên chi tiết bước; kế hoạch gốc: "Điều chỉnh kế hoạch gốc"). Tệp chỉ đọc rồi xoá, không lưu.</p>
     <div class="grid2">
       <label class="field">Tệp .xlsx<input type="file" name="file" accept=".xlsx" required data-testid="mtl-import-file"></label>
       <label class="field"${pmo ? '' : ' hidden'}>Loại<select name="kind" data-testid="mtl-import-kind">${pmo ? '<option value="MASTER">MTL tổng (dự án)</option>' : ''}<option value="DEPARTMENT">MTL bộ phận</option></select></label>

@@ -3,12 +3,12 @@
 import { api, download } from '../api.js';
 import { store, deptName } from '../store.js';
 import { docTabs } from './tai-lieu.js';
-import { esc, fmtDate, fmtDateTime, toast, openModal, closeModal, confirmDialog, errorMessage, debounce, replaceHashParams } from '../util.js';
+import { esc, fmtDate, fmtDateTime, toast, openModal, closeModal, confirmDialog, errorMessage, debounce, replaceHashParams, isItUser } from '../util.js';
 
 let meta = null;
 const getMeta = async (fresh = false) => (meta = !fresh && meta ? meta : await api('/api/vanthu/meta'));
 const opts = (map, cur) => Object.entries(map).map(([k, v]) => `<option value="${esc(k)}"${k === cur ? ' selected' : ''}>${esc(typeof v === 'string' ? v : v.label)}</option>`).join('');
-const userOpts = cur => '<option value="">— chưa giao —</option>' + store.users.filter(u => u.role !== 'admin' && u.isActive !== false)
+const userOpts = cur => '<option value="">— chưa giao —</option>' + store.users.filter(u => !isItUser(u) && u.isActive !== false)
   .map(u => `<option value="${u.id}"${Number(cur) === u.id ? ' selected' : ''}>${esc(u.fullName)}${u.departmentId ? ' · ' + esc(deptName(u.departmentId)) : ''}</option>`).join('');
 const formObj = form => Object.fromEntries(new FormData(form).entries());
 const vnDay = d => new Date(new Date(d).getTime() + 7 * 3600e3).toISOString().slice(0, 10);
@@ -226,8 +226,8 @@ async function renderDoc(root, id, setCrumbs, m) {
 
 async function renderSettings(root, setCrumbs, m) {
   setCrumbs('<a href="#/vanthu">Văn thư</a> / Thiết lập');
-  if (!m.me.director) { root.innerHTML = '<div class="empty">Chỉ Ban Giám đốc thiết lập văn thư.</div>'; return; }
-  const people = (ids, name) => `<select name="${name}" multiple size="6">${store.users.filter(u => u.role !== 'admin').map(u => `<option value="${u.id}"${ids.includes(u.id) ? ' selected' : ''}>${esc(u.fullName)}${u.departmentId ? ' · ' + esc(deptName(u.departmentId)) : ''}</option>`).join('')}</select>`;
+  if (!m.me.director) { root.innerHTML = '<div class="empty">Chỉ Ban Tổng Giám đốc thiết lập văn thư.</div>'; return; }
+  const people = (ids, name) => `<select name="${name}" multiple size="6">${store.users.filter(u => !isItUser(u)).map(u => `<option value="${u.id}"${ids.includes(u.id) ? ' selected' : ''}>${esc(u.fullName)}${u.departmentId ? ' · ' + esc(deptName(u.departmentId)) : ''}</option>`).join('')}</select>`;
   root.innerHTML = `<div class="page-head"><h1>Thiết lập văn thư</h1><span class="muted sm">Pháp nhân có dãy số riêng. Văn thư được vào sổ mọi dãy; Pháp chế nhận văn bản có thời hạn pháp lý.</span></div>
     <form class="card pg-section pg-grid" id="vtCfg">
       <label class="field span2">Pháp nhân <span class="muted xs">(mỗi dòng: MÃ · Tên — pháp nhân đầu tiên là công ty mẹ, dãy D6 ký hiệu TGĐ)</span>

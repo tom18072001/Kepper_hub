@@ -1,5 +1,5 @@
 // Tổng thể công việc: mọi việc trên tất cả dự án của một người (chủ trì / phối hợp / người giao) hoặc một phòng.
-// Mở bằng cách bấm tên người / phòng ở bất kỳ đâu, hoặc chọn ở đầu trang. Phạm vi: BGĐ — mọi người; lãnh đạo phòng — phòng mình; cán bộ — chính mình.
+// Mở bằng cách bấm tên người / phòng ở bất kỳ đâu, hoặc chọn ở đầu trang. Phạm vi: BTGĐ — mọi người; lãnh đạo phòng — phòng mình; cán bộ — chính mình.
 import { api } from '../api.js';
 import { store, workScope, personLink, deptLink } from '../store.js';
 import { $, $$, esc, fmtDate, dueCountdown, uiPref, replaceHashParams, debounce } from '../util.js';

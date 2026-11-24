@@ -22,7 +22,7 @@ function failedLogin(name, u) {
 module.exports = function mountAuth(app, { prisma, config, auth, audit }) {
   app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body || {};
-    const u = await prisma.user.findUnique({ where: { username: String(username || '').trim().toLowerCase() }, include: { department: true, permissions: true } });
+    const u = await prisma.user.findUnique({ where: { username: String(username || '').trim().toLowerCase() }, include: { department: true } });
     // So khớp bất đồng bộ (không chặn máy chủ khi nhiều người đăng nhập cùng lúc); tiêu chí đăng nhập giữ nguyên.
     if (!u || !u.isActive || !(await bcrypt.compare(String(password || ''), u.passwordHash))) {
       if (audit) { const f = failedLogin(String(username || '').trim().toLowerCase(), u); await audit(req, 'LOGIN_FAILED', 'Auth', f.entityId, null, f.value); }
@@ -36,7 +36,7 @@ module.exports = function mountAuth(app, { prisma, config, auth, audit }) {
   });
 
   app.get('/api/me', auth, async (req, res) => {
-    const u = await prisma.user.findUnique({ where: { id: req.user.id }, include: { department: true, permissions: true } });
+    const u = await prisma.user.findUnique({ where: { id: req.user.id }, include: { department: true } });
     res.json(publicUser(u));
   });
 

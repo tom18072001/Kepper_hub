@@ -1,3 +1,4 @@
+import { isItUser } from './util.js';
 // Trạng thái dùng chung của ứng dụng (người dùng hiện tại, danh mục).
 import { api } from './api.js';
 import { setAvatarDirectory } from './util.js';
@@ -24,7 +25,7 @@ export async function createProjectLabel(projectId, name) {
   if (!store.labels.some(l => l.id === label.id)) store.labels.push(label);
   return label;
 }
-export const isItAdmin = () => !!store.me && (store.me.isRootAdmin || store.me.role === 'admin');
+export const isItAdmin = () => isItUser(store.me);
 export const userById = id => store.users.find(u => u.id === Number(id));
 export const deptName = id => store.departments.find(d => d.id === Number(id))?.name || '—';
 // Phạm vi xem "Tổng thể công việc" (khớp services/work.js): SYSTEM mọi người / phòng; UNIT phòng mình; SELF chính mình.

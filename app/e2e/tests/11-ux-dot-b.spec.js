@@ -219,7 +219,7 @@ test('B3 + B4 + B5 + N2. Dự án MTL: tab mặc định, Lịch trong "Khác", 
   await expect(pmo.getByTestId('saved-views')).toHaveAttribute('aria-label', /Bộ lọc đã lưu/);
 
   // B4: form tạo việc (PMO): giai đoạn + việc cha, ưu tiên mặc định "Bình thường", Trạng thái trong "Thêm thông tin",
-  // Chủ trì 1 người theo phòng ban + "Giao cho tôi", Phối hợp; một trường "Nguồn giao việc"; nút luôn ở đáy; Esc hỏi lại khi đã nhập.
+  // Chủ trì 1 người theo bộ phận + "Giao cho tôi", Phối hợp; một trường "Nguồn giao việc"; nút luôn ở đáy; Esc hỏi lại khi đã nhập.
   await pmo.getByTestId('new-item').click();
   const modal = pmo.locator('#modal');
   await expect(modal.getByLabel('Tiêu đề')).toBeFocused();

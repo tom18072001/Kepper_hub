@@ -33,7 +33,7 @@ function tToDates(t0Date, startT, endT) {
   const end = new Date(monthStart(t0Date, Math.floor(endT) + 1).getTime() - 1); // 23:59:59.999 ngày cuối tháng
   return { start, end };
 }
-// Kế hoạch gốc cho hạng mục lập trên ứng dụng (việc con lãnh đạo bộ phận chi tiết hoá, việc Ban GĐ giao đột xuất) — không qua nhập MTL:
+// Kế hoạch gốc cho hạng mục lập trên ứng dụng (việc con lãnh đạo bộ phận chi tiết hoá, việc Ban TGĐ giao đột xuất) — không qua nhập MTL:
 // lần đầu có hạn thì kế hoạch gốc = [ngày bắt đầu (không có: hôm nay), hạn]. Không có kế hoạch gốc = "Chưa có kế hoạch" → hạng mục
 // biến khỏi báo cáo tuần, cập nhật nhanh, KPI, cảnh báo. Đổi kế hoạch gốc sau đó: gia hạn / lập lại kế hoạch (có lý do, ghi nhật ký).
 function initialBaseline(start, due, now = new Date()) {

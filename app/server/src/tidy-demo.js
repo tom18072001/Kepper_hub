@@ -1,7 +1,7 @@
 // Đưa máy đang chạy về đúng bộ máy GĐ3 (Trung tâm) và bỏ thiết kế mẫu cũ — theo yêu cầu chủ dự án (17/10/2026):
-//   Ban Giám đốc: Giám đốc + các Phó Giám đốc. Ba phòng: Văn phòng (Chánh / Phó Chánh VP, chuyên viên),
+//   Ban Tổng Giám đốc: Giám đốc + các Phó Giám đốc. Ba phòng: Văn phòng (Chánh / Phó Chánh VP, chuyên viên),
 //   Phòng Khoa học Công nghệ, Phòng Tài năng trẻ (trưởng phòng, phó phòng, chuyên viên).
-// Thiết kế cũ = 3 phòng mẫu Kinh doanh / Kỹ thuật / Hành chính – Nhân sự, mọi dự án của chúng, "Sổ giao việc Ban Giám đốc" (GV,
+// Thiết kế cũ = 3 phòng mẫu Kinh doanh / Kỹ thuật / Hành chính – Nhân sự, mọi dự án của chúng, "Sổ giao việc Ban Tổng Giám đốc" (GV,
 // mẫu GĐ2c giao cho các phòng cũ) và dự án thử rỗng đặt tên toàn chữ số (vd. "123").
 // Cách bỏ giống hệt thao tác trong ứng dụng, KHÔNG xoá hẳn gì:
 //   - dự án cũ → Thùng rác (khôi phục được trong 7 ngày, sau đó hệ thống tự xoá hẳn như mọi dự án bị xoá);

@@ -1,6 +1,6 @@
 // Tài liệu — kho tài liệu theo dự án: (1) tệp nhân viên tải lên Hub trong các việc (theo cây hạng mục → việc → việc nhánh) và
 // (2) mọi tệp có sẵn trong thư mục dự án trên kho file NAS (duyệt CHỈ ĐỌC, kể cả tệp không tải qua Hub).
-// Quyền: chỉ thành viên dự án và Ban Giám đốc (lib/project-docs.js canViewDocs) — kiểm ở máy chủ cho mọi API dưới đây;
+// Quyền: chỉ thành viên dự án và Ban Tổng Giám đốc (lib/project-docs.js canViewDocs) — kiểm ở máy chủ cho mọi API dưới đây;
 // dự án không được xem trả 404 (không lộ sự tồn tại). Tải tệp ghi nhật ký (audit DOWNLOAD); Claude (token) không tải nội dung tệp.
 const { pipeline } = require('node:stream');
 const storage = require('../lib/storage');
@@ -12,10 +12,10 @@ const { typeOf } = require('../lib/files');
 const { assertNotVia } = require('../lib/tokens');
 
 module.exports = function mountDocuments(app, { prisma, auth, audit }) {
-  // Dự án người dùng được xem tài liệu: Ban GĐ — mọi dự án chưa xoá; người khác — dự án mình là thành viên / trưởng dự án.
+  // Dự án người dùng được xem tài liệu: Ban Tổng Giám đốc — mọi dự án chưa xoá; người khác — dự án mình là thành viên / trưởng dự án.
   async function visibleProjects(user) {
     const where = { deletedAt: null };
-    if (!(user.role === 'director')) where.OR = [{ members: { some: { userId: user.id } } }, { leadId: user.id }];
+    if (!PD.isBoard(user)) where.OR = [{ members: { some: { userId: user.id } } }, { leadId: user.id }];
     const rows = await prisma.project.findMany({ where, select: { id: true, key: true, name: true, kind: true, archivedAt: true, leadId: true, deletedAt: true }, orderBy: [{ archivedAt: { sort: 'asc', nulls: 'first' } }, { name: 'asc' }] });
     const members = await prisma.projectMember.findMany({ where: { userId: user.id, projectId: { in: rows.map(r => r.id) } }, select: { projectId: true } });
     const mine = new Set(members.map(m => m.projectId));
@@ -65,7 +65,7 @@ module.exports = function mountDocuments(app, { prisma, auth, audit }) {
     });
   });
 
-  // Tải / xem nhanh tệp tải lên Hub từ mục Tài liệu. Quyền = quyền xem tài liệu dự án (thành viên + Ban GĐ) — rộng hơn quyền xem
+  // Tải / xem nhanh tệp tải lên Hub từ mục Tài liệu. Quyền = quyền xem tài liệu dự án (thành viên + Ban TGĐ) — rộng hơn quyền xem
   // đầy đủ từng việc (người không liên quan tới việc chỉ xem tóm tắt trong panel việc), theo quyết định của chủ dự án 24/11/2026.
   app.get('/api/documents/files/:fid', auth, async (req, res) => {
     assertNotVia(req);

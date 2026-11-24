@@ -16,7 +16,7 @@ async function reg(page, data) {
 }
 
 test('C1.2 Văn thư trống: "Chưa có văn bản trong sổ năm này" kèm nút "Vào sổ văn bản đầu tiên" — chỉ người được vào sổ thấy nút', async ({ browser }) => {
-  // Cán bộ (không phải văn thư / Ban GĐ / lãnh đạo bộ phận): thấy câu trống, không có nút vào sổ.
+  // Cán bộ (không phải văn thư / Ban TGĐ / lãnh đạo bộ phận): thấy câu trống, không có nút vào sổ.
   const staff = await (await browser.newContext()).newPage();
   await login(staff, 'nv.kinhdoanh1');
   await go(staff, '#/vanthu?book=DI');

@@ -3,8 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const TA = require('./task-access');
 
-// Tài khoản giả: 1 TGĐ, 2 PGĐ phụ trách bộ phận chủ trì, 3 người giao, 4 chủ trì, 5 phối hợp, 6 lãnh đạo bộ phận chủ trì,
-// 7 PMO (vai director, không thuộc Ban Giám đốc), 8 thành viên không liên quan, 9 lãnh đạo phòng của người chủ trì (phòng khác),
+// Tài khoản giả: 1 TGĐ, 2 Phó TGĐ phụ trách bộ phận chủ trì, 3 người giao, 4 chủ trì, 5 phối hợp, 6 lãnh đạo bộ phận chủ trì,
+// 7 PMO (vai director, không thuộc Ban Tổng Giám đốc), 8 thành viên không liên quan, 9 lãnh đạo phòng của người chủ trì (phòng khác),
 // 10 lãnh đạo phòng phối hợp, 11 người nhập thay, 12 quản trị IT, 13 chủ dự án (OWNER).
 const U = {
   tgd: { id: 1, role: 'director' }, pgd: { id: 2, role: 'director' }, assigner: { id: 3, role: 'member' }, lead: { id: 4, role: 'member' },
@@ -24,7 +24,7 @@ const capsOf = (who, it = item(), c = {}) => {
   return TA.taskCapabilities(who, it, base);
 };
 
-test('vai trên một việc: A, B (TGĐ + PGĐ phụ trách), L, S, D, O, U', () => {
+test('vai trên một việc: A, B (TGĐ + Phó TGĐ phụ trách), L, S, D, O, U', () => {
   assert.deepEqual(capsOf(U.assigner).roles, ['A']);
   assert.deepEqual(capsOf(U.tgd).roles, ['B', 'O']); // TGĐ có vai director → cũng là O, nhưng quyền theo B
   assert.deepEqual(capsOf(U.pgd).roles, ['B', 'O']);
@@ -39,7 +39,7 @@ test('vai trên một việc: A, B (TGĐ + PGĐ phụ trách), L, S, D, O, U', (
   assert.deepEqual(capsOf(U.lead, item(), { staffLeaderIds: [4, 9] }).roles, ['L']);
 });
 
-test('vai director KHÔNG tự động là Ban Giám đốc: PMO xem toàn bộ, không sửa kế hoạch việc người khác giao', () => {
+test('thành viên Ban Tổng Giám đốc chưa có phạm vi phụ trách: xem toàn bộ, không sửa kế hoạch việc người khác giao', () => {
   const c = capsOf(U.pmo);
   assert.equal(c.view, 'FULL');
   for (const k of ['plan', 'assign', 'assigner', 'delete', 'recur', 'progress', 'children', 'docsGive', 'docsBack', 'rebaseline', 'decideExtension']) assert.equal(c[k], false, k);
@@ -52,7 +52,7 @@ test('vai director KHÔNG tự động là Ban Giám đốc: PMO xem toàn bộ,
 
 // Ma trận chính: mỗi dòng = một quyền; cột = vai. true = được, false = không.
 const MATRIX = {
-  //               A      B(TGĐ) B(PGĐ) L      S      D      Dstaff O(PMO) U      SL
+  //               A      B(TGĐ) B(Phó TGĐ) L      S      D      Dstaff O(PMO) U      SL
   plan:           [true,  true,  true,  false, false, false, false, false, false, false],
   assign:         [true,  true,  true,  false, false, false, false, false, false, false],
   assigner:       [true,  true,  true,  false, false, false, false, false, false, false],
@@ -101,7 +101,7 @@ test('trường theo phần: kế hoạch (A, B), tiến độ (L), sản phẩm
   assert.throws(() => TA.assertCap(capsOf(U.assigner), 'review'), e => e.status === 422 && e.code === 'REVIEW_REMOVED');
 });
 
-test('việc chưa có người giao: kế hoạch chỉ Ban Giám đốc; không ai tự nhận làm người giao (kiểm ở route)', () => {
+test('việc chưa có người giao: kế hoạch chỉ Ban Tổng Giám đốc; không ai tự nhận làm người giao (kiểm ở route)', () => {
   const it = item({ assignedById: null });
   assert.equal(capsOf(U.assigner, it).plan, false);
   assert.equal(capsOf(U.lead, it).plan, false);
@@ -110,7 +110,7 @@ test('việc chưa có người giao: kế hoạch chỉ Ban Giám đốc; khôn
   assert.equal(capsOf(U.pgd, it).plan, true);
 });
 
-test('trạng thái: người chủ trì Chưa bắt đầu → Đang thực hiện → Gửi duyệt; người giao / BGĐ mọi trạng thái', () => {
+test('trạng thái: người chủ trì Chưa bắt đầu → Đang thực hiện → Gửi duyệt; người giao / BTGĐ mọi trạng thái', () => {
   const l = capsOf(U.lead), a = capsOf(U.assigner);
   assert.equal(l.state, 'WORK');
   assert.equal(a.state, 'ALL');
@@ -118,11 +118,11 @@ test('trạng thái: người chủ trì Chưa bắt đầu → Đang thực hi�
   assert.equal(TA.canMove(l, 'STARTED', 'REVIEW'), true);
   assert.equal(TA.canMove(l, 'STARTED', 'COMPLETED'), true); // máy chủ đưa vào "Chờ duyệt"
   assert.equal(TA.canMove(l, 'STARTED', 'CANCELLED'), false);
-  assert.equal(TA.canMove(l, 'STARTED', 'OTHER'), false); // "Tạm dừng" (MTL) là của người giao / BGĐ
+  assert.equal(TA.canMove(l, 'STARTED', 'OTHER'), false); // "Tạm dừng" (MTL) là của người giao / BTGĐ
   assert.equal(TA.canMove(l, 'REVIEW', 'STARTED'), false);
-  assert.equal(TA.canMove(l, 'COMPLETED', 'STARTED'), false); // mở lại: người giao / BGĐ
+  assert.equal(TA.canMove(l, 'COMPLETED', 'STARTED'), false); // mở lại: người giao / BTGĐ
   for (const [f, t] of [['STARTED', 'CANCELLED'], ['COMPLETED', 'STARTED'], ['STARTED', 'OTHER'], ['CANCELLED', 'UNSTARTED'], ['REVIEW', 'STARTED']]) assert.equal(TA.canMove(a, f, t), true);
-  // Người giao / BGĐ không gửi duyệt thay người chủ trì (vào "Chờ duyệt" hay chọn "Hoàn thành" khi chưa duyệt); duyệt qua phiếu.
+  // Người giao / BTGĐ không gửi duyệt thay người chủ trì (vào "Chờ duyệt" hay chọn "Hoàn thành" khi chưa duyệt); duyệt qua phiếu.
   for (const [f, t] of [['STARTED', 'REVIEW'], ['STARTED', 'COMPLETED'], ['UNSTARTED', 'COMPLETED']]) assert.equal(TA.canMove(a, f, t), false, `${f} → ${t}`);
   assert.equal(TA.canMove(capsOf(U.tgd), 'STARTED', 'COMPLETED'), false);
   // Người giao đồng thời là người chủ trì (tự giao cho mình): gửi duyệt được.
@@ -158,7 +158,7 @@ test('dự án MTL: điều chỉnh kế hoạch gốc theo kế hoạch (A, B);
   assert.equal(capsOf(U.deptLead, item(), mtl).children, false);
 });
 
-test('việc trong thùng rác / dự án lưu trữ: chỉ xem (khôi phục: người giao, BGĐ)', () => {
+test('việc trong thùng rác / dự án lưu trữ: chỉ xem (khôi phục: người giao, BTGĐ)', () => {
   const trashed = item({ archivedAt: new Date() });
   const a = capsOf(U.assigner, trashed);
   assert.equal(a.plan, false);
@@ -169,16 +169,16 @@ test('việc trong thùng rác / dự án lưu trữ: chỉ xem (khôi phục: n
   assert.equal(ro.plan || ro.comment || ro.delete, false);
 });
 
-test('Ban Giám đốc toàn quyền (đánh dấu riêng) — mọi việc; PGĐ phụ trách — chỉ việc bộ phận mình phụ trách chủ trì', () => {
-  // Người 2 là PGĐ phụ trách phòng 50; việc của phòng 60 (PGĐ phụ trách khác) → người 2 chỉ là O (vai director), không sửa kế hoạch.
+test('BTGĐ phụ trách toàn công ty (đánh dấu riêng) — mọi việc; Phó TGĐ phụ trách — chỉ việc bộ phận mình phụ trách chủ trì', () => {
+  // Người 2 là Phó TGĐ phụ trách phòng 50; việc của phòng 60 (Phó TGĐ phụ trách khác) → người 2 chỉ là O (vai director), không sửa kế hoạch.
   const other = { supervisorId: 99, leadDeptId: 60, leadLeaderIds: [], staffLeaderIds: [] };
   assert.equal(capsOf(U.pgd, item(), other).plan, false);
   assert.equal(capsOf(U.pgd, item(), other).view, 'FULL'); // vai director: xem toàn bộ
   assert.equal(capsOf(U.pgd, item(), other).decideExtension, false);
-  // Ban Giám đốc toàn quyền (topIds) sửa được việc ở mọi bộ phận.
+  // BTGĐ phụ trách toàn công ty (topIds) sửa được việc ở mọi bộ phận.
   assert.equal(capsOf(U.tgd, item(), other).plan, true);
   assert.equal(capsOf(U.tgd, item(), other).decideExtension, true);
-  // Cùng phòng với người được đánh dấu không có nghĩa là Ban Giám đốc: chỉ ai có trong danh sách.
+  // Cùng phòng với người được đánh dấu không có nghĩa là Ban Tổng Giám đốc: chỉ ai có trong danh sách.
   assert.equal(capsOf(U.pgd, item(), { ...other, topIds: [1] }).plan, false);
   assert.equal(capsOf(U.pgd, item(), { ...other, topIds: [1, 2] }).plan, true);
 });
@@ -196,7 +196,7 @@ test('quyền cho từng khoá PATCH', () => {
   assert.equal(TA.capForField('overrideWip'), null);
 });
 
-test('ngữ cảnh một việc: phòng chủ trì kế thừa từ việc cha, PGĐ phụ trách, lãnh đạo phòng người chủ trì', () => {
+test('ngữ cảnh một việc: phòng chủ trì kế thừa từ việc cha, Phó TGĐ phụ trách, lãnh đạo phòng người chủ trì', () => {
   const org = { topIds: [1], supervisor: new Map([[50, 2]]), deptOf: new Map([[4, 60]]), leaders: d => ({ 50: [6], 60: [9], 70: [10] }[d] || []) };
   const c = TA.itemContext(org, { project: { kind: 'MTL', departmentId: 99, leadId: 7 }, rights: RIGHTS, member: { role: 'MEMBER' },
     item: { leadDepartmentId: null, assigneeIds: [4], supportDepartmentIds: [70] }, chain: [{ leadDepartmentId: null }, { leadDepartmentId: 50 }] });
@@ -205,7 +205,7 @@ test('ngữ cảnh một việc: phòng chủ trì kế thừa từ việc cha, 
   assert.deepEqual(c.leadLeaderIds, [6]);
   assert.deepEqual(c.staffLeaderIds, [9]);
   assert.deepEqual(c.supportLeaderIds, [10]);
-  // Dự án thường không giao cho bộ phận: PGĐ phụ trách / lãnh đạo theo phòng của dự án, nhưng không có "bước giao cho bộ phận".
+  // Dự án thường không giao cho bộ phận: Phó TGĐ phụ trách / lãnh đạo theo phòng của dự án, nhưng không có "bước giao cho bộ phận".
   const k = TA.itemContext(org, { project: { kind: 'KANBAN', departmentId: 50 }, rights: RIGHTS, item: { leadDepartmentId: null, assigneeIds: [] } });
   assert.equal(k.leadDeptId, null);
   assert.equal(k.supervisorId, 2);

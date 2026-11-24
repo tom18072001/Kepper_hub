@@ -67,7 +67,7 @@ export async function drawIntake(body, current, { reload }) {
   body.innerHTML = '<div class="empty">Đang tải…</div>';
   const rows = await api(`/api/projects/${project.id}/intake`);
   const pending = rows.filter(r => r.status === 'PENDING');
-  body.innerHTML = `<p class="muted sm" style="margin-top:0">Yêu cầu do các phòng ban gửi qua mục <b>Gửi yêu cầu</b>. Tiếp nhận sẽ tạo việc trong cột đầu tiên; từ chối cần lý do và người gửi được thông báo.</p>
+  body.innerHTML = `<p class="muted sm" style="margin-top:0">Yêu cầu do các bộ phận gửi qua mục <b>Gửi yêu cầu</b>. Tiếp nhận sẽ tạo việc trong cột đầu tiên; từ chối cần lý do và người gửi được thông báo.</p>
     <h3 style="margin:10px 0">Chờ xử lý <span class="muted sm">${pending.length}</span></h3>
     ${pending.map(r => `<div class="card" style="margin-bottom:10px" data-testid="intake-${r.id}">
       <div class="row"><b class="grow">${esc(r.title)}</b>${prioChip(r.priority)}<span class="muted sm">${esc(r.requesterName || '')} · ${esc(r.requesterDepartment || '')} · ${fmtDate(r.createdAt)}</span></div>
@@ -103,7 +103,7 @@ function requestRows(mine) {
 export async function renderRequests(root, setCrumbs) {
   setCrumbs('Gửi yêu cầu');
   const [targets, mine] = await Promise.all([api('/api/intake/targets'), api('/api/intake/mine')]);
-  root.innerHTML = `<div class="page-head"><h1>Gửi yêu cầu tới phòng ban khác</h1></div>
+  root.innerHTML = `<div class="page-head"><h1>Gửi yêu cầu tới bộ phận khác</h1></div>
     <div class="dash-grid">
       <form class="card" id="intakeForm"><h3 style="margin-bottom:10px">Yêu cầu mới</h3>
         ${targets.length ? `<label class="field">Gửi tới<select name="projectId" required data-testid="intake-target">${targets.map(t => `<option value="${t.id}">${esc(t.department.name)} — ${esc(t.name)}</option>`).join('')}</select></label>
@@ -112,7 +112,7 @@ export async function renderRequests(root, setCrumbs) {
         <div class="grid2"><label class="field">Mức ưu tiên<select name="priority">${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}"${k === 'MEDIUM' ? ' selected' : ''}>${v.label}</option>`).join('')}</select></label>
         <label class="field">Hạn mong muốn<input type="date" name="dueDate"></label></div>
         <p class="muted xs">Không đưa mật khẩu, số tài khoản hay giấy tờ tuỳ thân vào yêu cầu.</p>
-        <button class="btn btn-primary" data-testid="intake-submit">Gửi yêu cầu</button>` : '<div class="empty">Chưa có phòng ban nào mở nhận yêu cầu.</div>'}
+        <button class="btn btn-primary" data-testid="intake-submit">Gửi yêu cầu</button>` : '<div class="empty">Chưa có bộ phận nào mở nhận yêu cầu.</div>'}
       </form>
       <div class="card"><h3 style="margin-bottom:10px">Yêu cầu tôi đã gửi</h3>
         <table class="table" data-testid="my-requests"><tbody id="myRequests">${requestRows(mine)}</tbody></table></div>

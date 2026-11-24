@@ -3,7 +3,7 @@
 import { api, download } from '../api.js';
 import { store, can, personLink } from '../store.js';
 import { icon } from '../icons.js';
-import { $, esc, fmtDate, CATEGORY, dateInput, toast, errorMessage, replaceHashParams } from '../util.js';
+import { $, esc, fmtDate, CATEGORY, dateInput, toast, errorMessage, replaceHashParams, isLeaderUser } from '../util.js';
 
 const DAY = 86_400_000;
 const iso = d => d.toISOString().slice(0, 10);
@@ -165,15 +165,15 @@ export async function renderDashboard(root, params, setCrumbs) {
   const rFrom = rp === 'custom' ? params.get('from') : P[rp][1], rTo = rp === 'custom' ? (params.get('to') || params.get('from')) : P[rp][2];
   const t = d.totals, maxTp = Math.max(1, ...d.throughput.map(w => w.completed)), maxLoad = Math.max(1, ...d.workload.map(w => w.open));
   const catTotal = Object.values(d.byCategory).reduce((a, b) => a + b, 0) || 1;
-  const deptLabel = d.scope === 'UNIT' ? 'phòng ban của tôi' : d.departmentId ? store.departments.find(x => x.id === d.departmentId)?.name : '';
-  const isLeader = store.me.permissions?.['work.approve']?.operate === 'UNIT'; // lãnh đạo phòng: có hộp "Việc phòng được giao"
+  const deptLabel = d.scope === 'UNIT' ? 'bộ phận của tôi' : d.departmentId ? store.departments.find(x => x.id === d.departmentId)?.name : '';
+  const isLeader = isLeaderUser(store.me) && store.me.departmentId != null; // lãnh đạo phòng: có hộp "Việc phòng được giao"
   const showDepts = d.byDepartment.length > 1 || d.scope === 'SYSTEM';
   const canApprove = can('work.approve', 'operate');
   const canExport = can('reports.export', 'operate');
   const types = d.byTaskType || {};
   const dirty = d.scope === 'SYSTEM' && !!deptParam; // "Xoá lọc" chỉ cho bộ lọc số liệu; kỳ báo cáo không lọc số liệu trên trang
   const deptHref = id => { const u = new URLSearchParams(params); u.delete('item'); u.set('departmentId', id); return '#/dashboard?' + u; };
-  // Đầu trang: phạm vi số liệu (Ban Giám đốc) + Xoá lọc. Thanh dưới: xuất báo cáo Word theo kỳ (không lọc số liệu trên trang).
+  // Đầu trang: phạm vi số liệu (Ban Tổng Giám đốc) + Xoá lọc. Thanh dưới: xuất báo cáo Word theo kỳ (không lọc số liệu trên trang).
   const scopeCtl = d.scope === 'SYSTEM' ? `<span class="st-field st-scope"><select id="dashDept" aria-label="Phạm vi số liệu" data-testid="dash-dept"><option value="">Toàn Trung tâm</option>${store.departments.filter(x => x.isActive).map(x => `<option value="${x.id}"${String(x.id) === deptParam ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>${clearBtn(dirty, 'dash-clear')}</span>` : '';
   const reportBar = canExport ? `<div class="filters st-filters st-reportbar" role="group" aria-labelledby="repLbl" data-testid="dash-report">
       <span class="st-lbl" id="repLbl">Báo cáo Word</span>
@@ -213,7 +213,7 @@ export async function renderDashboard(root, params, setCrumbs) {
       <div class="card" id="dashDueSoon"><h3>Đến hạn trong 7 ngày <span class="muted sm">${t.dueSoon}</span></h3>${listRows(d.dueSoonItems || [], o => `<span class="due">${fmtDate(o.dueDate)}</span>`) || '<div class="empty">Không có việc sắp đến hạn.</div>'}</div>
       <div class="card"><h3>Việc đang làm quá 7 ngày</h3>
         ${d.aging.map(a => `<div class="hbar" style="grid-template-columns:70px 1fr 60px"><a class="code" href="#/projects/${a.projectId}?item=${a.id}">${esc(a.code)}</a><span>${esc(a.title)}</span><b>${a.days} ngày</b></div>`).join('') || '<div class="empty">Không có việc tồn lâu.</div>'}</div>
-      ${showDepts ? `<div class="card" id="dashDepartments"><h3>Theo phòng chủ trì</h3><div class="tbl-scroll"><table class="table" data-testid="dash-departments"><thead><tr><th>Phòng ban</th><th class="num">Đang mở</th><th class="num">Chờ tiếp nhận</th><th class="num">Hoàn thành</th><th class="num">Quá hạn</th></tr></thead><tbody>
+      ${showDepts ? `<div class="card" id="dashDepartments"><h3>Theo phòng chủ trì</h3><div class="tbl-scroll"><table class="table" data-testid="dash-departments"><thead><tr><th>Bộ phận</th><th class="num">Đang mở</th><th class="num">Chờ tiếp nhận</th><th class="num">Hoàn thành</th><th class="num">Quá hạn</th></tr></thead><tbody>
         ${d.byDepartment.map(x => `<tr><td>${d.scope === 'SYSTEM' && !d.departmentId ? `<a href="${esc(deptHref(x.id))}" title="Xem dashboard của phòng">${esc(x.name)}</a>` : esc(x.name)}</td>${cnt(x.open)}${cnt(x.pendingAccept || 0)}${cnt(x.completed)}${cnt(x.overdue, true)}</tr>`).join('') || '<tr><td colspan="5" class="empty">Chưa có số liệu.</td></tr>'}</tbody></table></div>
         <p class="muted xs">Việc tính cho đơn vị chủ trì; việc không giao về phòng nào tính cho phòng sở hữu dự án / sổ.</p></div>` : ''}
     </div></div>`;

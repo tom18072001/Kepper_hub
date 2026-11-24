@@ -1,5 +1,5 @@
 // Playground HRM — thiết lập, vai trò, tính ngày nghỉ, chấm công. Quyền: lib/policy.js (hrm.*).
-const { permissionScope } = require('../lib/permissions');
+const { permissionScope, isBoard, isDeptLeader } = require('../lib/permissions');
 const P = require('../lib/policy');
 const WK = require('./weekly');
 const WD = require('./weekly-data');
@@ -27,15 +27,15 @@ async function hrmConfig(prisma) {
     annualDays: Number.isInteger(v.annualDays) && v.annualDays >= 12 && v.annualDays <= 30 ? v.annualDays : DEFAULTS.annualDays,
   };
 }
-// Subject của policy + hr (người phụ trách nhân sự do Ban GĐ chỉ định; không suy từ phòng ban — tránh tự nâng quyền).
+// Subject của policy + hr (người phụ trách nhân sự do Ban TGĐ chỉ định; không suy từ bộ phận — tránh tự nâng quyền).
 async function subjectOf(prisma, user, cfg = null) {
   const s = await WD.rolesOf(prisma, user);
   const c = cfg || await hrmConfig(prisma);
   return { ...s, hr: !s.it && c.hrUserIds.includes(user.id) };
 }
-// Người đó có phải lãnh đạo bộ phận (trưởng / phó: quyền "Xem tổng hợp") — đơn của họ do Ban GĐ duyệt.
-const isLeader = user => !!user && !!permissionScope(user, 'reports.summary', 'VIEW');
-const isDirector = user => user?.role === 'director';
+// Người đó có phải lãnh đạo (vai Lãnh đạo bộ phận hoặc Ban Tổng Giám đốc) — đơn của lãnh đạo bộ phận do BTGĐ duyệt.
+const isDirector = user => isBoard(user);
+const isLeader = user => isDeptLeader(user) || isBoard(user);
 
 // ---------- Ngày công ----------
 const isWorkday = (day, cfg) => cfg.workDays.includes(WK.weekday(day)) && !cfg.holidays.includes(day);
@@ -157,7 +157,7 @@ function sheetTotals(sheet) {
 }
 
 // ---------- Duyệt ----------
-// Ngữ cảnh policy của người bị xét (hrm.*): bộ phận, lãnh đạo / Ban GĐ, người phụ trách nhân sự.
+// Ngữ cảnh policy của người bị xét (hrm.*): bộ phận, lãnh đạo / Ban TGĐ, người phụ trách nhân sự.
 const targetCtx = (u, cfg, extra = {}) => ({ targetUserId: u.id, departmentId: u.departmentId, targetLeader: isLeader(u) || isDirector(u), targetDirector: isDirector(u),
   targetHr: cfg.hrUserIds.includes(u.id), ...extra });
 // Đơn nghỉ và giải trình chấm công CHỜ người dùng (subject s) duyệt — một nguồn cho Nhân sự → Chờ duyệt, "Chờ tôi duyệt" và số đếm huy hiệu.
@@ -168,7 +168,7 @@ async function pendingDecisions(prisma, s, cfg) {
     prisma.hrAttendance.findMany({ where: { adjustStatus: 'PENDING', userId: { not: s.userId } }, orderBy: { day: 'asc' }, take: 300 }),
   ]);
   const ids = [...new Set([...leaves, ...atts].map(r => r.userId))];
-  const users = ids.length ? Object.fromEntries((await prisma.user.findMany({ where: { id: { in: ids } }, include: { permissions: true, department: { select: { id: true, name: true } } } })).map(u => [u.id, u])) : {};
+  const users = ids.length ? Object.fromEntries((await prisma.user.findMany({ where: { id: { in: ids } }, include: { department: { select: { id: true, name: true } } } })).map(u => [u.id, u])) : {};
   const can = (u, scope) => !!u && P.can(s, 'view', scope, targetCtx(u, cfg)) && P.can(s, 'edit', scope, targetCtx(u, cfg, { op: 'approve' }));
   return { leaves: leaves.filter(l => can(users[l.userId], 'hrm.leave')), atts: atts.filter(r => can(users[r.userId], 'hrm.attendance')), users };
 }

@@ -21,13 +21,13 @@ test('chuyển trạng thái: các bước trung gian giữ nguyên; "Hoàn thà
 });
 
 test('chuỗi duyệt: cấp 1 luôn là người giao, các cấp dự án dời lên; phiếu cũ giữ nguyên', () => {
-  const project = [{ level: 2, name: 'BGĐ', approverType: 'DIRECTOR' }, { level: 1, name: 'Trưởng phòng', approverType: 'DEPARTMENT_MANAGER' }];
+  const project = [{ level: 2, name: 'BTGĐ', approverType: 'DIRECTOR' }, { level: 1, name: 'Trưởng phòng', approverType: 'DEPARTMENT_MANAGER' }];
   const chain = R.chainOf(project, true);
   assert.deepEqual(chain.map(s => [s.level, s.approverType]), [[1, 'ASSIGNER'], [2, 'DEPARTMENT_MANAGER'], [3, 'DIRECTOR']]);
   assert.deepEqual(R.chainOf([], true).map(s => s.approverType), ['ASSIGNER']); // dự án không cấu hình duyệt: chỉ người giao
   assert.deepEqual(R.chainOf(project, false).map(s => [s.level, s.approverType]), [[1, 'DEPARTMENT_MANAGER'], [2, 'DIRECTOR']]);
   assert.equal(project[0].level, 2, 'không sửa mảng gốc');
-  assert.equal(R.stepAt(chain, 3).name, 'BGĐ');
+  assert.equal(R.stepAt(chain, 3).name, 'BTGĐ');
 });
 
 test('khâu "Chờ người giao duyệt" cho phiếu mới; phiếu cũ vẫn tính khâu theo bước dự án', () => {
@@ -51,7 +51,7 @@ test('tiến độ con x/y không tính việc huỷ; việc cha bị chặn khi
   assert.deepEqual(R.assertChildrenDone([{ state: { category: 'COMPLETED' } }, { state: { category: 'CANCELLED' } }]), { done: 1, total: 1, open: 0 });
 });
 
-// Công ty giả: phòng 10 (trưởng 2, phó 3), phòng 20 (trưởng 5); PGĐ 7 phụ trách phòng 10; BGĐ 7, 8; người 9 đã nghỉ.
+// Công ty giả: phòng 10 (trưởng 2, phó 3), phòng 20 (trưởng 5); Phó TGĐ 7 phụ trách phòng 10; BTGĐ 7, 8; người 9 đã nghỉ.
 const active = new Map([[1, { departmentId: 10 }], [2, { departmentId: 10 }], [3, { departmentId: 10 }], [4, { departmentId: 10 }], [5, { departmentId: 20 }], [6, { departmentId: 20 }], [7, { departmentId: 1 }], [8, { departmentId: 1 }]]);
 const ctx = (over = {}) => ({ active, leaders: d => ({ 10: [2, 3], 20: [5] })[d] || [], projectLeadId: 6, supervisorOf: d => (d === 10 ? 7 : null), directors: [7, 8], ...over });
 
@@ -65,7 +65,7 @@ test('người duyệt cấp người giao: đúng người giao, không bao gi�
   assert.deepEqual(R.assignerApprovers({ assignedById: 2, assigneeIds: [2] }, ctx()), { ids: [3], reason: 'DEPT_LEADER' });
   // Cả lãnh đạo bộ phận cùng chủ trì → trưởng dự án.
   assert.deepEqual(R.assignerApprovers({ assignedById: 2, assigneeIds: [2, 3] }, ctx()), { ids: [6], reason: 'PROJECT_LEAD' });
-  // … trưởng dự án cũng chủ trì → PGĐ phụ trách bộ phận → Ban Giám đốc.
+  // … trưởng dự án cũng chủ trì → Phó TGĐ phụ trách bộ phận → Ban Tổng Giám đốc.
   assert.deepEqual(R.assignerApprovers({ assignedById: 2, assigneeIds: [2, 3, 6] }, ctx()), { ids: [7], reason: 'SUPERVISOR' });
   assert.deepEqual(R.assignerApprovers({ assignedById: 2, assigneeIds: [2, 3, 6, 7] }, ctx()), { ids: [8], reason: 'DIRECTOR' });
   // Người giao đã nghỉ → lãnh đạo bộ phận chủ trì (theo phòng chủ trì của việc nếu có).
@@ -74,7 +74,7 @@ test('người duyệt cấp người giao: đúng người giao, không bao gi�
     assert.ok(!R.assignerApprovers(item, ctx()).ids.some(id => item.assigneeIds.includes(id)), 'không chứa người chủ trì');
 });
 
-test('việc mốc / đường găng: cấp 1 là Ban Giám đốc của việc (thay người giao); việc thường vẫn người giao', () => {
+test('việc mốc / đường găng: cấp 1 là BTGĐ phụ trách của việc (thay người giao); việc thường vẫn người giao', () => {
   const project = [{ level: 1, name: 'Trưởng phòng', approverType: 'DEPARTMENT_MANAGER' }];
   assert.deepEqual(R.chainOf(project, true, { board: true }).map(s => [s.level, s.approverType]), [[1, 'BOARD'], [2, 'DEPARTMENT_MANAGER']]);
   assert.deepEqual(R.chainOf(project, true).map(s => s.approverType), ['ASSIGNER', 'DEPARTMENT_MANAGER']);
@@ -84,25 +84,25 @@ test('việc mốc / đường găng: cấp 1 là Ban Giám đốc của việc 
   assert.equal(R.isGradeStep(R.BOARD_STEP), true);
   assert.equal(R.isGradeStep(R.ASSIGNER_STEP), true);
   assert.equal(R.isGradeStep({ approverType: 'DIRECTOR' }), false);
-  // Khâu: chờ Ban Giám đốc duyệt.
-  assert.equal(stageOf({ state: { category: 'REVIEW' }, pendingApproval: { currentLevel: 1, withAssigner: true, withBoard: true } }, project).label, 'Chờ Ban Giám đốc duyệt');
+  // Khâu: chờ Ban Tổng Giám đốc duyệt.
+  assert.equal(stageOf({ state: { category: 'REVIEW' }, pendingApproval: { currentLevel: 1, withAssigner: true, withBoard: true } }, project).label, 'Chờ Ban Tổng Giám đốc duyệt');
 });
 
-test('người duyệt cấp Ban Giám đốc: Ban Giám đốc toàn quyền + PGĐ phụ trách bộ phận chủ trì; không gồm người chủ trì, không gồm người giao', () => {
+test('người duyệt cấp Ban Tổng Giám đốc: BTGĐ phụ trách toàn công ty + Phó TGĐ phụ trách bộ phận chủ trì; không gồm người chủ trì, không gồm người giao', () => {
   const b = (item, over = {}) => R.boardApprovers(item, ctx({ topIds: [8], ...over }));
-  // Việc phòng 10 (PGĐ 7 phụ trách): BGĐ toàn quyền 8 + PGĐ 7; người giao 2 không duyệt.
+  // Việc phòng 10 (Phó TGĐ 7 phụ trách): BTGĐ toàn công ty 8 + Phó TGĐ 7; người giao 2 không duyệt.
   assert.deepEqual(b({ assignedById: 2, leadDepartmentId: 10, assigneeIds: [1] }), { ids: [8, 7], reason: 'BOARD' });
-  // Việc phòng 20 (chưa có PGĐ phụ trách): chỉ BGĐ toàn quyền — PGĐ phụ trách phòng khác không duyệt.
+  // Việc phòng 20 (chưa có Phó TGĐ phụ trách): chỉ BTGĐ toàn công ty — Phó TGĐ phụ trách phòng khác không duyệt.
   assert.deepEqual(b({ assignedById: 2, leadDepartmentId: 20, assigneeIds: [5] }), { ids: [8], reason: 'BOARD' });
-  // Ban Giám đốc đồng thời là người chủ trì → Ban Giám đốc khác duyệt.
+  // Ban Tổng Giám đốc đồng thời là người chủ trì → Ban Tổng Giám đốc khác duyệt.
   assert.deepEqual(b({ assignedById: 2, leadDepartmentId: 20, assigneeIds: [8] }, { topIds: [8, 7] }), { ids: [7], reason: 'BOARD' });
   // Người đã nghỉ không duyệt; chưa có ai → người giao duyệt như việc thường (phiếu không kẹt).
   assert.deepEqual(b({ assignedById: 2, leadDepartmentId: 20, assigneeIds: [5] }, { topIds: [9] }), { ids: [2], reason: 'BOARD_FALLBACK_ASSIGNER' });
-  // Vai director (7, 8 trong `directors`) không tự là Ban Giám đốc toàn quyền.
+  // Vai director (7, 8 trong `directors`) không tự là BTGĐ phụ trách toàn công ty.
   assert.deepEqual(b({ assignedById: 2, leadDepartmentId: 20, assigneeIds: [5] }, { topIds: [] }).ids, [2]);
 });
 
-test('quyết định duyệt: cấp Ban Giám đốc cũng bắt buộc chấm mức', () => {
+test('quyết định duyệt: cấp Ban Tổng Giám đốc cũng bắt buộc chấm mức', () => {
   assert.equal(code(() => R.checkDecision({ step: R.BOARD_STEP, decision: 'APPROVE', userId: 8, assigneeIds: [1], requestedById: 1 })), 'RATING_REQUIRED');
   assert.equal(code(() => R.checkDecision({ step: R.BOARD_STEP, decision: 'APPROVE', rating: 'GOOD', userId: 8, assigneeIds: [1], requestedById: 1 })), null);
   assert.equal(code(() => R.checkDecision({ step: R.BOARD_STEP, decision: 'APPROVE', rating: 'GOOD', userId: 1, assigneeIds: [1], requestedById: 1 })), 'SELF_APPROVAL');

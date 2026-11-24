@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
 const { fail, intParam, optionalInt, optionalDate, text } = require('../lib/http');
-const { permissionScope, isItAdmin } = require('../lib/permissions');
+const { permissionScope, isItAdmin, NOT_IT_WHERE, isBoard } = require('../lib/permissions');
 const { verifyUpload } = require('../lib/files');
 const { loadProject, visibleProjectsWhere, itemVisibleWhere } = require('../services/access');
 const TA = require('../services/task-access');
@@ -19,8 +19,16 @@ const bus = require('../services/bus');
 const M = require('../services/mtl');
 const A = require('../services/alerts');
 
-// Xem KPI theo người: Ban lãnh đạo (SYSTEM) mọi người; trưởng / phó bộ phận (UNIT) bộ phận mình.
-const kpiScope = user => (isItAdmin(user) ? null : permissionScope(user, 'reports.kpi', 'VIEW') === 'SYSTEM' || permissionScope(user, 'work.approve', 'OPERATE') === 'SYSTEM' ? 'SYSTEM' : permissionScope(user, 'work.approve', 'OPERATE') === 'UNIT' ? 'UNIT' : null);
+// KPI theo người (dữ liệu cá nhân, kpi.person — chủ dự án chốt 24/11/2026 "Chỉ Ban TGĐ"): Ban Tổng Giám đốc xem mọi người; mọi người
+// khác (lãnh đạo bộ phận, PMO / chủ dự án, nhân viên) chỉ xem KPI của CHÍNH MÌNH; quản trị hệ thống không xem.
+const kpiScope = user => (isItAdmin(user) ? null : isBoard(user) ? 'SYSTEM' : 'SELF');
+// Ai được xem KPI của ai (hàm thuần, test trong role-matrix.test.js): trả { scope, target } — target = id một người (null = mọi người).
+function kpiTarget(user, queryUser) {
+  const scope = kpiScope(user);
+  const only = queryUser === undefined ? null : intParam(queryUser, 'Người');
+  if (!scope || (scope === 'SELF' && only != null && only !== user.id)) fail(403, 'KPI theo người chỉ Ban Tổng Giám đốc xem; mỗi người xem KPI của chính mình', 'FORBIDDEN');
+  return { scope, target: scope === 'SELF' ? user.id : only };
+}
 
 module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
   const upload = multer({ dest: path.join(config.uploadTmpDir, 'workhub-import'), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
@@ -33,7 +41,7 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
   const computeProject = (project, user, day) => MP.computeProject(prisma, project, user, day);
   const isDeptLeader = async (user, departmentId) => departmentId != null && (await approval.deptLeaderIds(prisma, departmentId)).includes(user.id);
 
-  // Lõi nhập MTL — dùng chung cho API (trên) và scripts/import-mtl.js (chạy trên máy chạy, thay mặt PMO đã được Ban GĐ chỉ định).
+  // Lõi nhập MTL — dùng chung cho API (trên) và scripts/import-mtl.js (chạy trên máy chạy, thay mặt PMO đã được Ban TGĐ chỉ định).
   // req: { user, body: { sheet, planName, dryRun, rebaseline }, ip, headers } — quyền đã kiểm tra trước khi gọi.
   async function importMtl(req, { project, kind, departmentId, asLeader, buf, fileName }) {
     const fileHash = crypto.createHash('sha256').update(buf).digest('hex');
@@ -57,7 +65,7 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
     const aliasRow = await prisma.appSetting.findUnique({ where: { key: 'mtl.ownerAliases' } });
     const ownerAliases = Object.fromEntries(Object.entries(aliasRow?.value && typeof aliasRow.value === 'object' ? aliasRow.value : {}).map(([k, v]) => [M.norm(k), String(v)]));
     if (departmentId != null && !departments.some(d => d.id === departmentId)) fail(422, 'Bộ phận không hợp lệ', 'INVALID_DEPARTMENT');
-    const people = kind === 'DEPARTMENT' ? await prisma.user.findMany({ where: { isActive: true, role: { not: 'admin' }, isRootAdmin: false, departmentId }, select: { id: true, fullName: true, username: true } }) : [];
+    const people = kind === 'DEPARTMENT' ? await prisma.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE, departmentId }, select: { id: true, fullName: true, username: true } }) : [];
     // MTL bộ phận không ghi tên: bộ phận đã có đúng một kế hoạch → cập nhật kế hoạch đó (tải mẫu → sửa → nhập lại).
     const deptPlans = kind === 'DEPARTMENT' ? await prisma.plan.findMany({ where: { projectId: project.id, kind: 'DEPARTMENT', departmentId }, select: { name: true } }) : [];
     const planName = (!asLeader && text(req.body.planName, 'Tên kế hoạch', { max: 160 }))
@@ -70,7 +78,7 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
     // MTL bộ phận: khớp "Thuộc bước" với hạng mục MTL tổng (kế hoạch MASTER mới nhất).
     const master = kind === 'DEPARTMENT' ? await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, plan: { kind: 'MASTER' } }, select: { id: true, planCode: true, title: true, progress: true, leadDepartmentId: true, assignees: { select: { userId: true } }, supportDepartments: { select: { departmentId: true } }, state: { select: { category: true } }, _count: { select: { children: { where: { archivedAt: null } } } } }, orderBy: { id: 'desc' } }) : [];
     const masterByCode = new Map(); for (const m of master) if (m.planCode && !masterByCode.has(m.planCode)) masterByCode.set(m.planCode, m);
-    // Nhập lại MTL chỉ THÊM bước mới; bước đã có giữ nguyên (kế hoạch đã giao là chỉ đạo — sửa qua người giao / Ban Giám đốc,
+    // Nhập lại MTL chỉ THÊM bước mới; bước đã có giữ nguyên (kế hoạch đã giao là chỉ đạo — sửa qua người giao / Ban Tổng Giám đốc,
     // kế hoạch gốc qua "Điều chỉnh kế hoạch gốc"). Không còn tuỳ chọn đặt lại kế hoạch gốc khi nhập.
     if (req.body.rebaseline === '1' || req.body.rebaseline === 'true') fail(422, 'Nhập lại MTL chỉ thêm bước mới — điều chỉnh kế hoạch gốc từng hạng mục bằng "Điều chỉnh kế hoạch gốc"', 'REBASELINE_REMOVED');
     const unmatchedOwners = new Map(), unmatchedParents = new Set();
@@ -138,7 +146,7 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
         { type: 'MTL_ASSIGN', title: `Bộ phận được giao chủ trì ${n} hạng mục MTL ${project.key} — cần phân công người phụ trách`, body: project.name, link: `#/projects/${project.id}?view=mtl` }, req.user.id);
       // Dự án dùng chung: cán bộ các bộ phận có hạng mục trở thành thành viên (cowork, cập nhật hạng mục của bộ phận mình).
       const deptIds = [...new Set(plan.flatMap(p => [p.leadDepartmentId, ...p.supportDepartmentIds]).filter(Boolean))];
-      const staff = await tx.user.findMany({ where: { isActive: true, role: { not: 'admin' }, isRootAdmin: false, departmentId: { in: deptIds } }, select: { id: true } });
+      const staff = await tx.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE, departmentId: { in: deptIds } }, select: { id: true } });
       await tx.projectMember.createMany({ data: staff.map(u => ({ projectId: project.id, userId: u.id, role: 'MEMBER' })), skipDuplicates: true });
       await audit(req, 'MTL_IMPORT', 'Plan', planRow.id, null, { projectId: project.id, kind, departmentId, sheet: sheet.name, fileHash, created, kept, byDepartmentLeader: asLeader }, tx);
       return { planId: planRow.id, created, kept, updated: 0, rebased: 0, members: staff.length };
@@ -239,7 +247,7 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
     const id = intParam(req.params.id);
     const { project, caps } = await TA.loadTask(prisma, req.user, id);
     if (project.kind !== 'MTL') fail(422, 'Chỉ dùng cho hạng mục Master Timeline', 'NOT_MTL');
-    TA.assertCap(caps, 'rebaseline'); // kế hoạch gốc là kế hoạch: người giao, Ban Giám đốc
+    TA.assertCap(caps, 'rebaseline'); // kế hoạch gốc là kế hoạch: người giao, Ban Tổng Giám đốc
     const reason = text(req.body.reason, 'Lý do điều chỉnh', { required: true, max: 500 });
     const item = await prisma.workItem.findUnique({ where: { id }, select: { id: true, startT: true, endT: true, baselineStart: true, baselineEnd: true } });
     let data;
@@ -263,14 +271,12 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
 
   // ---------- KPI tiến độ theo người (chủ trì) ----------
   app.get('/api/projects/:id/mtl-kpi', auth, async (req, res) => {
-    const { project, rights } = await mtlProject(req);
-    // PMO (người quản lý dự án) xem KPI theo người trong dự án mình điều phối.
-    const scope = kpiScope(req.user) || (rights.canManage ? 'SYSTEM' : null);
-    if (!scope) fail(403, 'KPI theo người dành cho Ban lãnh đạo và trưởng bộ phận', 'FORBIDDEN');
+    const { project } = await mtlProject(req);
+    const { scope, target } = kpiTarget(req.user, req.query.user);
     const now = new Date();
     const { items, cfg, actualOf } = await computeProject(project, req.user, now);
     const leaves = M.leavesOf(items);
-    const users = await prisma.user.findMany({ where: { id: { in: [...new Set(leaves.flatMap(i => i.assignees.map(a => a.id)))] }, ...(scope === 'UNIT' ? { departmentId: req.user.departmentId } : {}) },
+    const users = await prisma.user.findMany({ where: { id: { in: [...new Set(leaves.flatMap(i => i.assignees.map(a => a.id)))] }, ...(target != null ? { AND: [{ id: target }] } : {}) },
       select: { id: true, fullName: true, displayTitle: true, departmentId: true, department: { select: { name: true } } } });
     const rows = users.map(u => ({ id: u.id, fullName: u.fullName, title: u.displayTitle, departmentId: u.departmentId, department: u.department?.name || '', ...M.kpiOf(leaves.filter(i => i.assignees.some(a => a.id === u.id)), actualOf, now, cfg) }))
       .sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
@@ -311,3 +317,4 @@ module.exports = function mountMtl(app, { prisma, auth, audit, config }) {
   });
 };
 module.exports.kpiScope = kpiScope;
+module.exports.kpiTarget = kpiTarget;

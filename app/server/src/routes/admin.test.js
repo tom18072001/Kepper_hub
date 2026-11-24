@@ -1,56 +1,47 @@
-// GĐ3b — quản trị: đổi vai trò áp hồ sơ quyền, bàn giao khi nghỉ việc, nhật ký (che nội dung nghiệp vụ, lọc), phòng ban vòng.
+// GĐ3b — quản trị: đổi vai (quyền theo vai, ghi nhật ký số quyền thêm / bớt), bàn giao khi nghỉ việc, nhật ký (che nội dung nghiệp vụ, lọc), bộ phận vòng.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const admin = require('./admin');
 const { failedLogin } = require('./auth');
-const { ROLE_PROFILES, canGrant } = require('../lib/permissions');
+const { ROLE_PROFILES } = require('../lib/permissions');
 
-const { profileDiff, grantsToCheck, sensitiveGrants, profileMismatch, wouldCreateCycle, planHandover, presentAudit, auditWhere, runHandover } = admin;
+const { profileDiff, roleNotices, wouldCreateCycle, planHandover, presentAudit, auditWhere, runHandover } = admin;
 const g = (permissionKey, action, scope) => ({ permissionKey, action, scope });
 
-test('đổi vai trò: khác biệt quyền giữa Nhân viên và Phó phòng / Trưởng phòng → Nhân viên', () => {
-  const up = profileDiff(ROLE_PROFILES.member, ROLE_PROFILES.deputy);
+test('đổi vai: khác biệt quyền giữa bảng quyền của hai vai (ghi nhật ký khi đổi vai)', () => {
+  const up = profileDiff(ROLE_PROFILES.member, ROLE_PROFILES.manager);
   assert.deepEqual(up.added.map(x => x.permissionKey).sort(), ['projects.manage', 'reports.export', 'reports.summary', 'work.approve', 'work.delete']);
   assert.equal(up.removed.length, 0);
   assert.equal(up.mismatch, true);
   const down = profileDiff(ROLE_PROFILES.manager, ROLE_PROFILES.member);
-  assert.ok(down.removed.some(x => x.permissionKey === 'work.approve'), 'TP → NV phải bỏ quyền duyệt');
+  assert.ok(down.removed.some(x => x.permissionKey === 'work.approve'), 'Lãnh đạo bộ phận → Nhân viên phải bỏ quyền duyệt');
   assert.equal(down.added.length, 0);
   // Đổi phạm vi được tính là "đổi", không phải thêm + bỏ.
   const scope = profileDiff([g('work.view', 'VIEW', 'UNIT')], [g('work.view', 'VIEW', 'SYSTEM')]);
   assert.deepEqual(scope.changed, [{ permissionKey: 'work.view', action: 'VIEW', scope: 'SYSTEM', from: 'UNIT', to: 'SYSTEM' }]);
-  assert.equal(profileDiff(ROLE_PROFILES.manager, ROLE_PROFILES.deputy).mismatch, false);
+  assert.equal(profileDiff(ROLE_PROFILES.manager, ROLE_PROFILES.manager).mismatch, false);
 });
 
-test('áp hồ sơ vai trò: kiểm tra canGrant từng quyền, quyền rác luôn gỡ được', () => {
-  const diff = profileDiff([g('work.view', 'VIEW', 'UNIT'), g('old.removed', 'VIEW', 'UNIT')], ROLE_PROFILES.director);
-  const checked = grantsToCheck(diff);
-  assert.ok(!checked.some(x => x.permissionKey === 'old.removed'));
-  assert.ok(checked.some(x => x.permissionKey === 'work.view' && x.scope === 'UNIT') && checked.some(x => x.permissionKey === 'work.view' && x.scope === 'SYSTEM'));
-  // Trưởng phòng (không phải quản trị) không tự nâng người khác lên Ban giám đốc.
-  const manager = { id: 9, role: 'manager', departmentId: 2, permissions: ROLE_PROFILES.manager };
-  assert.equal(checked.every(x => canGrant(manager, x)), false);
-  // Admin IT có quyền phân quyền vẫn cấp được quyền nghiệp vụ cho người khác (giữ luồng cũ).
-  const it = { id: 1, role: 'admin', permissions: ROLE_PROFILES.admin };
-  assert.equal(checked.every(x => canGrant(it, x)), true);
+test('thông báo Ban TGĐ: MỌI lần đổi vai, chuyển vào / ra bộ phận BTGĐ, xác nhận lệch vai / bộ phận (đặc tả 5.1(4), mục 10)', () => {
+  const base = { username: 'x', fullName: 'X (giả)' };
+  const titles = c => roleNotices({ ...base, ...c }).map(n => n.title);
+  assert.equal(titles({ oldRole: 'member', newRole: 'manager' }).length, 1, 'Nhân viên → Lãnh đạo bộ phận vẫn báo');
+  assert.match(titles({ oldRole: 'member', newRole: 'manager' })[0], /Nhân viên → Lãnh đạo bộ phận/);
+  assert.match(titles({ oldRole: 'director', newRole: 'member' })[0], /Ban Tổng Giám đốc → Nhân viên/);
+  assert.deepEqual(titles({ oldRole: 'deputy', newRole: 'manager' }), [], 'Phó phòng cũ = Lãnh đạo bộ phận: không phải đổi vai');
+  assert.deepEqual(titles({ oldRole: 'member', newRole: 'member' }), [], 'sửa tên, chức danh: không báo');
+  assert.match(titles({ oldRole: 'member', newRole: 'member', newInBoardDept: true })[0], /vào bộ phận Ban Tổng Giám đốc/);
+  assert.match(titles({ oldRole: 'director', newRole: 'director', oldInBoardDept: true })[0], /ra khỏi bộ phận Ban Tổng Giám đốc/);
+  assert.equal(titles({ oldRole: 'director', newRole: 'director', oldInBoardDept: true, mismatch: 'Vai Ban Tổng Giám đốc nhưng không thuộc bộ phận Ban Tổng Giám đốc' }).length, 2);
+  // Tạo tài khoản = gán vai: MỌI vai đều báo, đúng một thông báo (thêm một nếu xác nhận lệch vai / bộ phận).
+  for (const role of ['director', 'manager', 'member', 'admin']) assert.equal(titles({ created: true, newRole: role }).length, 1, 'tạo ' + role);
+  assert.match(titles({ created: true, newRole: 'director' })[0], /vai Ban Tổng Giám đốc/);
+  assert.match(titles({ created: true, newRole: 'admin' })[0], /vai Quản trị hệ thống/);
+  assert.match(titles({ created: true, newRole: 'member', newInBoardDept: true })[0], /bộ phận Ban Tổng Giám đốc/);
+  assert.equal(titles({ created: true, newRole: 'member', newInBoardDept: true, mismatch: 'lệch' }).length, 2);
 });
 
-test('báo Giám đốc: chỉ khi cấp quyền nghiệp vụ phạm vi toàn tổ chức', () => {
-  assert.deepEqual(sensitiveGrants(profileDiff(ROLE_PROFILES.member, ROLE_PROFILES.manager)), []);
-  assert.deepEqual(sensitiveGrants(profileDiff(ROLE_PROFILES.member, [...ROLE_PROFILES.member, g('admin.audit', 'VIEW', 'SYSTEM')])), []);
-  const s = sensitiveGrants(profileDiff(ROLE_PROFILES.member, [g('work.view', 'VIEW', 'SYSTEM'), g('work.edit', 'OPERATE', 'UNIT'), g('reports.dashboard', 'VIEW', 'UNIT')]));
-  assert.deepEqual(s, [g('work.view', 'VIEW', 'SYSTEM')]);
-  assert.equal(sensitiveGrants(profileDiff([], ROLE_PROFILES.director)).length, ROLE_PROFILES.director.length);
-});
-
-test('cảnh báo lệch quyền so với hồ sơ vai trò (không áp cho quản trị gốc)', () => {
-  assert.equal(profileMismatch({ role: 'deputy' }, ROLE_PROFILES.member), true);
-  assert.equal(profileMismatch({ role: 'member' }, ROLE_PROFILES.member), false);
-  assert.equal(profileMismatch({ role: 'admin', isRootAdmin: true }, []), false);
-  assert.equal(profileMismatch({ role: 'admin' }, ROLE_PROFILES.admin), false);
-});
-
-test('phòng ban: chặn đặt trực thuộc thành vòng', () => {
+test('bộ phận: chặn đặt trực thuộc thành vòng', () => {
   const depts = [{ id: 1, parentId: null }, { id: 2, parentId: 1 }, { id: 3, parentId: 2 }, { id: 4, parentId: null }];
   assert.equal(wouldCreateCycle(depts, 1, 2), true); // A ↔ B
   assert.equal(wouldCreateCycle(depts, 1, 3), true); // cháu
@@ -93,7 +84,7 @@ function fakeTx({ items, leadersByDept = {}, directors = [], supervised = [] }) 
   } };
 }
 
-test('bàn giao: trả việc giao về phòng cho lãnh đạo phòng, việc thường báo người giao, thu hồi uỷ quyền, bỏ PGĐ phụ trách', async () => {
+test('bàn giao: trả việc giao về phòng cho lãnh đạo phòng, việc thường báo người giao, thu hồi uỷ quyền, bỏ Phó TGĐ phụ trách', async () => {
   const P = { id: 3, key: 'SO', leadId: 2, departmentId: 1 };
   const items = [
     { id: 11, number: 1, title: 'Việc A', projectId: 3, project: P, dispatchStatus: 'ACCEPTED', leadDepartmentId: 6, assignedById: 2, assignees: [{ userId: 29 }], supporters: [] },
@@ -108,7 +99,7 @@ test('bàn giao: trả việc giao về phòng cho lãnh đạo phòng, việc t
   const notices = log.filter(l => l[0] === 'notify');
   assert.deepEqual(notices[0], ['notify', [16, 17], 'Cần phân công lại SO-1 (cán bộ nghỉ việc)']); // lãnh đạo phòng chủ trì (không gồm người nghỉ)
   assert.deepEqual(notices[1], ['notify', [16], 'Cần phân công lại SO-2 (cán bộ nghỉ việc)']); // người giao
-  assert.deepEqual(notices[2][1], [2, 12]); // Giám đốc: phòng mất PGĐ phụ trách
+  assert.deepEqual(notices[2][1], [2, 12]); // Giám đốc: phòng mất Phó TGĐ phụ trách
   assert.deepEqual(log.filter(l => l[0] === 'unassign').map(l => l[1]), [11, 12, 13]);
   assert.deepEqual(log.filter(l => l[0] === 'unsupport').map(l => l[1]), [14]);
   assert.equal(log.filter(l => l[0] === 'activity' && l[2] === 'HANDOVER').length, 4);

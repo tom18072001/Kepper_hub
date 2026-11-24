@@ -16,7 +16,7 @@ function createAuth(prisma, secret) {
     // Token cá nhân cho Claude (MCP): cùng danh tính + quyền của người tạo; phạm vi theo lib/tokens.js.
     if (T.isToken(token)) {
       try {
-        const row = await prisma.apiToken.findUnique({ where: { hash: T.sha256(token) }, include: { user: { include: { permissions: true } } } });
+        const row = await prisma.apiToken.findUnique({ where: { hash: T.sha256(token) }, include: { user: true } });
         const now = new Date();
         if (!row || row.revokedAt || row.expiresAt < now || !row.user?.isActive || row.sessionVersion !== Number(row.user.sessionVersion || 0))
           return res.status(401).json({ error: 'Kết nối Claude không hợp lệ, đã hết hạn hoặc đã thu hồi — kết nối lại ở trang "Kết nối Claude" của Kepler Hub', code: 'TOKEN_INVALID' });
@@ -32,7 +32,7 @@ function createAuth(prisma, secret) {
     }
     try {
       const payload = jwt.verify(token, secret);
-      const user = await prisma.user.findUnique({ where: { id: payload.id }, include: { permissions: true } });
+      const user = await prisma.user.findUnique({ where: { id: payload.id } });
       if (!user || !user.isActive) return res.status(401).json({ error: 'Tài khoản không tồn tại hoặc đã bị khóa' });
       if (!Number.isInteger(payload.sessionVersion) || payload.sessionVersion !== Number(user.sessionVersion || 0)) return res.status(401).json({ error: 'Phiên đăng nhập đã bị thu hồi' });
       req.user = user;

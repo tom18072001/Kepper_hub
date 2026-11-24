@@ -19,7 +19,7 @@ model Department {
   parent       Department?  @relation("DeptTree", fields: [parentId], references: [id])
   children     Department[] @relation("DeptTree")
   isActive     Boolean      @default(true)
-  supervisorId Int? // Phó Giám đốc phụ trách phòng: nhận phiếu trình của phòng ở cấp Ban Giám đốc
+  supervisorId Int? // Phó Tổng Giám đốc phụ trách bộ phận (phạm vi phụ trách của một thành viên BTGĐ; nhập ở tài khoản)
   createdAt    DateTime     @default(now())
   users        User[]
   projects     Project[]
@@ -33,12 +33,12 @@ model User {
   displayTitle   String?
   email          String?
   phone          String?
-  role           String                @default("member") // admin | director | manager | deputy (phó phòng) | member
+  role           String                @default("member") // VAI (một trục): director Ban Tổng Giám đốc | manager Lãnh đạo bộ phận | member Nhân viên | admin Quản trị hệ thống
   departmentId   Int?
   department     Department?           @relation(fields: [departmentId], references: [id])
   isRootAdmin    Boolean               @default(false)
   isActive       Boolean               @default(true)
-  boardAll       Boolean               @default(false) // "Ban Giám đốc toàn quyền": Ban Giám đốc của MỌI việc (quản trị chọn trong Phân quyền; mặc định không ai)
+  boardAll       Boolean               @default(false) // Phạm vi phụ trách "Toàn công ty" của thành viên BTGĐ (quản trị chọn ở tài khoản; mặc định không ai)
   deactivatedAt  DateTime? // thời điểm khoá tài khoản; ghi chú cá nhân bị xoá sau 30 ngày kể từ mốc này
   mustChangePw   Boolean               @default(true)
   sessionVersion Int                   @default(0)
@@ -144,7 +144,7 @@ model ApprovalStep {
   project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   level          Int
   name           String
-  approverType   String // PROJECT_LEAD | DEPARTMENT_MANAGER | DIRECTOR | USER
+  approverType   String // PROJECT_LEAD Người đứng tên dự án | DEPARTMENT_MANAGER Lãnh đạo bộ phận chủ trì | DIRECTOR BTGĐ phụ trách | USER
   approverUserId Int?
 
   @@unique([projectId, level])

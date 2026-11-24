@@ -1,33 +1,34 @@
 // Tạo dự án và cài đặt dự án: thông tin chung, cột trạng thái + WIP, thành viên, quy trình duyệt nhiều cấp.
 import { api } from '../api.js';
 import { store, reloadProjects, labelsFor } from '../store.js';
-import { $, $$, esc, VISIBILITY, APPROVER, CATEGORY, PRIORITY, toast, openModal, closeModal, formData, errorMessage, fmtDateTime, labelChip, multiSelect, readMulti, bindMulti } from '../util.js';
+import { $, $$, esc, VISIBILITY, APPROVER, CATEGORY, PRIORITY, toast, openModal, closeModal, formData, errorMessage, fmtDateTime, labelChip, multiSelect, readMulti, bindMulti, isItUser, isLeadershipUser, isBoardUser } from '../util.js';
 import { scheduleFields, bindSchedule, readSchedule, openRepeatDialog } from './recurring-form.js';
 import { renderProjectNav } from '../main.js';
 
 export function openCreateProject(onCreated) {
-  const system = store.me.isRootAdmin || store.me.permissions['projects.manage']?.operate === 'SYSTEM';
+  // Quản lý dự án toàn công ty = vai Ban Tổng Giám đốc: chỉ vai này tạo dự án MTL (ma trận 5.4).
+  const system = isBoardUser(store.me);
   const depts = store.departments.filter(d => d.isActive && (system || d.id === store.me.departmentId));
   const modal = openModal(`<h2>Tạo dự án</h2><form>
     <div class="grid2"><label class="field">Mã dự án<input name="key" required maxlength="10" pattern="[A-Za-z][A-Za-z0-9]{1,9}" placeholder="VD: MKT" data-testid="project-key"></label>
     <label class="field">Tên dự án<input name="name" required maxlength="160" data-testid="project-name"></label>
-    <label class="field">Phòng ban<select name="departmentId" data-testid="project-department">${depts.map(d => `<option value="${d.id}"${d.id === store.me.departmentId ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>
+    <label class="field">Bộ phận<select name="departmentId" data-testid="project-department">${depts.map(d => `<option value="${d.id}"${d.id === store.me.departmentId ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>
     <label class="field">Ai được xem<select name="visibility" data-testid="project-visibility">${Object.entries(VISIBILITY).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label></div>
     <label class="field">Mô tả<textarea name="description" rows="2"></textarea></label>
     <label class="field">Kiểu dự án<select name="template" data-testid="project-template">
-      <option value="MTL" selected>Theo Master Timeline — hạng mục theo tháng T, đường găng, mốc; dùng chung giữa các bộ phận</option>
+      ${system ? '<option value="MTL" selected>Theo Master Timeline — hạng mục theo tháng T, đường găng, mốc; dùng chung giữa các bộ phận</option>' : ''}
       <option value="">Quy trình công việc — Tồn đọng → Cần làm → Đang làm → Chờ duyệt → Hoàn thành</option>
       <option value="WEEK">Lịch tuần — cột Thứ 2 … Cuối tuần, không duyệt (vd. ai ở / không ở văn phòng)</option></select></label>
     <label class="field mtl-t0">Tháng T0 (bắt đầu Master Timeline)<input type="month" name="t0" data-testid="project-t0"></label>
     <fieldset class="approval-setup"><legend>Quy trình duyệt</legend>
       <label class="field">Số cấp duyệt<select name="tpl" data-testid="project-approval-template">
-        <option value="1" selected>1 cấp — Trưởng phòng duyệt</option><option value="2">2 cấp — Trưởng phòng → Ban giám đốc</option><option value="0">Không cần duyệt</option></select></label>
+        <option value="1" selected>1 cấp — Lãnh đạo bộ phận duyệt</option><option value="2">2 cấp — Lãnh đạo bộ phận → BTGĐ phụ trách</option><option value="0">Không cần duyệt</option></select></label>
       <div class="grid2">
-        <label class="field" data-lvl="1">Người duyệt cấp 1<select name="ap1" data-testid="project-approver-1"><option value="DEPARTMENT_MANAGER">Trưởng phòng (tự động)</option><option value="PROJECT_LEAD">Trưởng dự án</option>${approverUserOptions()}</select></label>
-        <label class="field" data-lvl="2">Người duyệt cấp 2<select name="ap2" data-testid="project-approver-2"><option value="DIRECTOR">Ban giám đốc (bất kỳ ai)</option><option value="SUPERVISOR">Người giao / PGĐ phụ trách phòng</option>${approverUserOptions()}</select></label>
+        <label class="field" data-lvl="1">Người duyệt cấp 1<select name="ap1" data-testid="project-approver-1"><option value="DEPARTMENT_MANAGER">Lãnh đạo bộ phận chủ trì (tự động)</option><option value="PROJECT_LEAD">Người đứng tên dự án</option>${approverUserOptions()}</select></label>
+        <label class="field" data-lvl="2">Người duyệt cấp 2<select name="ap2" data-testid="project-approver-2"><option value="DIRECTOR">BTGĐ phụ trách (toàn công ty / Phó TGĐ phụ trách bộ phận chủ trì)</option>${approverUserOptions()}</select></label>
         <label class="field" data-lvl="2">Việc mới mặc định cần<select name="defaultLevels" data-testid="project-default-levels"><option value="1">Chỉ cấp 1</option><option value="">Đủ 2 cấp</option></select></label>
       </div>
-      <p class="muted xs">Mặc định "Chỉ cấp 1": việc quan trọng trưởng phòng chọn thêm cấp 2, hoặc đặt quy tắc tự động. Có thể đổi người duyệt, thêm quy tắc tự động (theo nhãn / mức ưu tiên) trong Cài đặt dự án; trưởng phòng chọn được mức duyệt cho từng việc.</p>
+      <p class="muted xs">Mặc định "Chỉ cấp 1": việc quan trọng lãnh đạo bộ phận chọn thêm cấp 2, hoặc đặt quy tắc tự động. Có thể đổi người duyệt, thêm quy tắc tự động (theo nhãn / mức ưu tiên) trong Cài đặt dự án; lãnh đạo bộ phận chọn được mức duyệt cho từng việc.</p>
     </fieldset>
     <p class="muted xs">Dự án MTL: cột Chưa bắt đầu, Đang thực hiện, Chờ duyệt, Hoàn thành, Tạm dừng, Huỷ; sau khi tạo, vào "Khác → Nhập MTL từ Excel". Dự án quy trình: Tồn đọng, Cần làm, Đang làm (giới hạn 5), Chờ duyệt, Hoàn thành, Huỷ.</p>
     <p class="error" id="projError"></p>
@@ -52,8 +53,8 @@ export function openCreateProject(onCreated) {
     const { tpl, ap1, ap2, defaultLevels, t0, ...f } = formData(e.target);
     if (f.template === 'MTL') Object.assign(f, { kind: 'MTL', t0Date: new Date(t0 + '-01T00:00:00+07:00').toISOString() });
     const step = (v, name) => v.startsWith('USER:') ? { approverType: 'USER', approverUserId: Number(v.slice(5)), name } : { approverType: v, name };
-    const approvalSteps = [step(ap1, 'Trưởng phòng duyệt'), step(ap2, 'Giám đốc duyệt')].slice(0, Number(tpl));
-    if (approvalSteps[0]?.approverType === 'PROJECT_LEAD') approvalSteps[0].name = 'Trưởng dự án duyệt';
+    const approvalSteps = [step(ap1, 'Lãnh đạo bộ phận duyệt'), step(ap2, 'BTGĐ duyệt')].slice(0, Number(tpl));
+    if (approvalSteps[0]?.approverType === 'PROJECT_LEAD') approvalSteps[0].name = 'Người đứng tên dự án duyệt';
     if (approvalSteps[0]?.approverType === 'USER') approvalSteps[0].name = 'Duyệt cấp 1';
     if (approvalSteps[1]?.approverType === 'USER') approvalSteps[1].name = 'Duyệt cấp 2';
     try {
@@ -64,9 +65,9 @@ export function openCreateProject(onCreated) {
   };
 }
 
-// Người duyệt được chọn đích danh: chỉ trưởng phòng / ban giám đốc (tài khoản không phải admin IT).
+// Người duyệt được chọn đích danh: chỉ lãnh đạo bộ phận / Ban Tổng Giám đốc (tài khoản không phải admin IT).
 function approverUserOptions(selected) {
-  const list = store.users.filter(u => ['director', 'manager'].includes(u.role));
+  const list = store.users.filter(isLeadershipUser);
   return list.length ? `<optgroup label="Chọn đích danh">${list.map(u => `<option value="USER:${u.id}"${selected === u.id ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</optgroup>` : '';
 }
 
@@ -80,7 +81,7 @@ export async function renderProjectSettings(root, id, setCrumbs) {
     <form class="card" id="generalForm"><h3 style="margin-bottom:10px">Thông tin chung</h3>
       <div class="grid2"><label class="field">Tên<input name="name" required value="${esc(p.name)}"></label>
       <label class="field">Ai được xem<select name="visibility">${Object.entries(VISIBILITY).map(([k, v]) => `<option value="${k}"${p.visibility === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
-      <label class="field">Trưởng dự án<select name="leadId" data-testid="settings-lead"><option value="">—</option>${users.map(u => `<option value="${u.id}"${p.leadId === u.id ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select></label>
+      <label class="field">Người đứng tên dự án<select name="leadId" data-testid="settings-lead"><option value="">—</option>${users.map(u => `<option value="${u.id}"${p.leadId === u.id ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select></label>
       <label class="field">Mô tả<input name="description" value="${esc(p.description || '')}"></label></div>
       <div class="row"><button class="btn btn-primary" data-testid="settings-save">Lưu</button><label class="check"><input type="checkbox" name="archived" ${p.archivedAt ? 'checked' : ''}> Lưu trữ dự án (chỉ đọc)</label></div></form>
 
@@ -97,7 +98,7 @@ export async function renderProjectSettings(root, id, setCrumbs) {
       ${p.approvalSteps.length ? `<label class="field" style="max-width:460px;margin-top:10px">Việc mới mặc định cần<select id="defaultLevels" data-testid="default-levels"><option value="">Đủ ${p.approvalSteps.length} cấp</option>${Array.from({ length: p.approvalSteps.length }, (_, n) => `<option value="${n}"${p.defaultApprovalLevels === n ? ' selected' : ''}>${n === 0 ? 'Không cần duyệt' : `${n} cấp đầu (${p.approvalSteps.slice(0, n).map(x => esc(x.name)).join(' → ')})`}</option>`).join('')}</select></label>` : ''}
       <div class="row"><button class="btn btn-ghost btn-sm" id="addStep" data-testid="add-step"><svg class="i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Thêm cấp duyệt</button><button class="btn btn-primary" id="saveSteps" data-testid="save-steps">Lưu quy trình duyệt</button></div>
       ${p.approvalSteps.length ? `<h4 style="margin:22px 0 6px">Quy tắc tự động</h4>
-      <p class="muted sm">Việc khớp quy tắc sẽ tự lấy số cấp duyệt tương ứng (nhiều quy tắc khớp → lấy số cấp cao nhất). Trưởng phòng vẫn chọn tay được cho từng việc; chọn tay luôn được ưu tiên.</p>
+      <p class="muted sm">Việc khớp quy tắc sẽ tự lấy số cấp duyệt tương ứng (nhiều quy tắc khớp → lấy số cấp cao nhất). Lãnh đạo bộ phận vẫn chọn tay được cho từng việc; chọn tay luôn được ưu tiên.</p>
       <div id="rulesEditor" data-testid="rules-editor">${p.approvalRules.map(r => ruleRow(r, p)).join('')}</div>
       <div class="row"><button class="btn btn-ghost btn-sm" id="addRule" data-testid="add-rule">+ Thêm quy tắc</button><button class="btn btn-primary" id="saveRules" data-testid="save-rules">Lưu quy tắc</button></div>` : ''}
     </div>
@@ -116,7 +117,7 @@ export async function renderProjectSettings(root, id, setCrumbs) {
         <div><button class="btn btn-primary" data-testid="rec-save">Thêm việc lặp lại</button></div>
       </form></div>
 
-    <div class="card"><h3>Thành viên</h3><p class="muted sm">Chủ dự án quản lý cài đặt; Thành viên tạo và cập nhật việc; Người xem chỉ đọc. Với phạm vi "Cả phòng ban", nhân viên trong phòng ban cũng làm việc được mà không cần thêm.</p>
+    <div class="card"><h3>Thành viên</h3><p class="muted sm">Chủ dự án quản lý cài đặt; Thành viên tạo và cập nhật việc; Người xem chỉ đọc. Với phạm vi "Cả bộ phận", nhân viên trong bộ phận cũng làm việc được mà không cần thêm.</p>
       <div id="membersEditor" data-testid="members-editor">${p.members.map(m => memberRow(m.userId, m.role, users)).join('')}</div>
       <div class="row"><select id="newMember" style="width:auto" data-testid="new-member">${users.filter(u => !p.members.some(m => m.userId === u.id)).map(u => `<option value="${u.id}">${esc(u.fullName)} (${esc(u.username)})</option>`).join('')}</select>
         <button class="btn btn-ghost btn-sm" id="addMember" data-testid="add-member"><svg class="i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Thêm</button><button class="btn btn-primary" id="saveMembers" data-testid="save-members">Lưu thành viên</button></div></div>
@@ -251,7 +252,7 @@ function ruleRow(r, p) {
 function stepRow(s, users) {
   return `<div class="row" data-row style="margin-bottom:6px"><span class="pill">Cấp</span>
     <select name="type" style="width:auto" data-testid="step-type">${Object.entries(APPROVER).map(([k, v]) => `<option value="${k}"${s.approverType === k ? ' selected' : ''}>${v}</option>`).join('')}</select>
-    <select name="user" style="width:auto" class="${s.approverType === 'USER' ? '' : 'hidden'}"><option value="">— Chọn người —</option>${users.filter(u => u.role !== 'admin').map(u => `<option value="${u.id}"${s.approverUserId === u.id ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select>
+    <select name="user" style="width:auto" class="${s.approverType === 'USER' ? '' : 'hidden'}"><option value="">— Chọn người —</option>${users.filter(u => !isItUser(u)).map(u => `<option value="${u.id}"${s.approverUserId === u.id ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select>
     <input name="name" value="${esc(s.name)}" placeholder="Tên bước (tuỳ chọn)" class="grow" style="width:auto" maxlength="60" data-testid="step-name">
     ${s.approvers ? `<span class="muted xs" title="Người sẽ duyệt ở cấp này">${s.approvers.length ? 'Người duyệt: ' + esc(s.approvers.map(a => a.fullName).join(', ')) : '<span class="due overdue">Chưa có người duyệt</span>'}</span>` : ''}
     <button type="button" class="btn btn-ghost btn-sm" data-remove>Xoá</button></div>`;

@@ -1,4 +1,4 @@
-// Khớp tên đơn vị ghi tự do (Kế hoạch năm, sổ Excel) với phòng ban trong hệ thống:
+// Khớp tên đơn vị ghi tự do (Kế hoạch năm, sổ Excel) với bộ phận trong hệ thống:
 // không phân biệt hoa thường / dấu, bỏ tiền tố "Phòng/Ban/Tổ", mở các viết tắt thông dụng, so khớp bằng nhau hoặc chứa nhau.
 // Ví dụ: "Phòng KHCN" ↔ "Phòng Khoa học Công nghệ", "VP" ↔ "Văn phòng", "Phòng TNT" ↔ "Phòng Tài năng trẻ".
 const { norm } = require('./plan-parser');

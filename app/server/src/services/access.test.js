@@ -6,7 +6,7 @@ const { ROLE_PROFILES } = require('../lib/permissions');
 const as = (role, departmentId, extra = {}) => ({ id: 10, role, departmentId, permissions: ROLE_PROFILES[role], ...extra });
 const project = (visibility, departmentId = 1, extra = {}) => ({ id: 1, departmentId, visibility, archivedAt: null, ...extra });
 
-test('nhân viên làm việc được trong dự án phòng ban mình, không thấy dự án phòng khác', () => {
+test('nhân viên làm việc được trong dự án bộ phận mình, không thấy dự án phòng khác', () => {
   const staff = as('member', 1);
   assert.deepEqual(projectRights(staff, project('DEPARTMENT', 1), null), { canView: true, canEdit: true, canManage: false, canDelete: false, memberRole: null });
   assert.equal(projectRights(staff, project('DEPARTMENT', 2), null).canView, false);

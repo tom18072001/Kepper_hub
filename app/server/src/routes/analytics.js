@@ -1,4 +1,4 @@
-// KPI & phân tích thống kê công việc (services/analytics.js) — chỉ Ban giám đốc (quyền reports.kpi phạm vi toàn tổ chức).
+// KPI & phân tích thống kê công việc (services/analytics.js) — chỉ Ban Tổng Giám đốc (quyền reports.kpi phạm vi toàn tổ chức).
 // Nhân viên, trưởng / phó phòng, admin IT (QĐ 16/10/2026: không xem nội dung nghiệp vụ): 403.
 // Dữ liệu "Bảo mật" (đánh giá cá nhân — kpi.person): mỗi lần xem / xuất ghi nhật ký; tệp Excel có dấu người xuất; không xuất qua token Claude.
 const ExcelJS = require('exceljs');
@@ -10,7 +10,7 @@ const A = require('../services/analytics');
 const { RATINGS } = require('../services/task-rules');
 
 function assertAnalyticsAccess(user) {
-  if (permissionScope(user, 'reports.kpi', 'VIEW') !== 'SYSTEM') fail(403, 'Chỉ Ban giám đốc được xem KPI và phân tích thống kê', 'FORBIDDEN');
+  if (permissionScope(user, 'reports.kpi', 'VIEW') !== 'SYSTEM') fail(403, 'Chỉ Ban Tổng Giám đốc được xem KPI và phân tích thống kê', 'FORBIDDEN');
 }
 
 function rangeOf(query, now) {
@@ -25,7 +25,7 @@ function rangeOf(query, now) {
 async function load(prisma, user, query) {
   const now = new Date();
   const { from, to } = rangeOf(query, now);
-  const departmentId = optionalInt(query.departmentId, 'Phòng ban');
+  const departmentId = optionalInt(query.departmentId, 'Bộ phận');
   const range = { gte: from, lte: to };
   let items = await prisma.workItem.findMany({
     where: { archivedAt: null, project: { archivedAt: null, deletedAt: null },

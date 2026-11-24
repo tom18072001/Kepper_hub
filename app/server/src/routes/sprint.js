@@ -7,7 +7,7 @@
 const ExcelJS = require('exceljs');
 const MG = require('../services/mtl-guard');
 const { fail, intParam } = require('../lib/http');
-const { isItAdmin } = require('../lib/permissions');
+const { isItAdmin, NOT_IT_WHERE } = require('../lib/permissions');
 const { Prisma } = require('@prisma/client');
 const bus = require('../services/bus');
 const { loadProject, visibleProjectsWhere } = require('../services/access');
@@ -226,7 +226,7 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
     const { project, rights } = await loadProject(prisma, req.user, intParam(req.params.id));
     if (project.kind !== 'MTL') fail(422, 'Dự án này không theo Master Timeline', 'NOT_MTL');
     const departmentId = intParam(req.query.departmentId, 'Bộ phận');
-    // Quy định xuất MTL (lib/policy.js mtl.plan · export): quản lý dự án, Ban GĐ; lãnh đạo bộ phận chỉ bộ phận mình.
+    // Quy định xuất MTL (lib/policy.js mtl.plan · export): quản lý dự án, Ban TGĐ; lãnh đạo bộ phận chỉ bộ phận mình.
     MG.mtlExportGuard(req.user, project, rights, { deptLeader: departmentId === req.user.departmentId && await isDeptLeader(req.user, departmentId) });
     const department = await prisma.department.findFirst({ where: { id: departmentId, isActive: true }, select: { id: true, name: true, code: true } });
     if (!department) fail(422, 'Bộ phận không hợp lệ', 'INVALID_DEPARTMENT');
@@ -235,7 +235,7 @@ module.exports = function mountSprint(app, { prisma, auth, audit }) {
     const plans = await prisma.plan.findMany({ where: { projectId: project.id }, select: { id: true, kind: true, departmentId: true, name: true } });
     const deptPlanIds = new Set(plans.filter(p => p.kind === 'DEPARTMENT' && p.departmentId === departmentId).map(p => p.id));
     const masterPlanIds = new Set(plans.filter(p => p.kind === 'MASTER').map(p => p.id));
-    const staff = await prisma.user.findMany({ where: { isActive: true, role: { not: 'admin' }, isRootAdmin: false, departmentId }, select: { fullName: true }, orderBy: { fullName: 'asc' } });
+    const staff = await prisma.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE, departmentId }, select: { fullName: true }, orderBy: { fullName: 'asc' } });
     const own = items.filter(i => deptPlanIds.has(i.planId));
     const masterOf = i => masterPlanIds.has(i.planId) && (i.leadDepartmentId === departmentId || i.supportDepartmentIds.includes(departmentId));
     const masters = items.filter(masterOf);

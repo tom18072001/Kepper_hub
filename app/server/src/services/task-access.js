@@ -1,20 +1,20 @@
 // PHÂN QUYỀN TỐI THIỂU TRÊN MỘT VIỆC — một nguồn quyền duy nhất ở máy chủ (bảng chủ dự án chốt 20/11/2026).
-// Nguyên tắc: kế hoạch là chỉ đạo của Ban Giám đốc qua người giao; ai làm phần nào thì chỉ thấy và sửa phần đó.
+// Nguyên tắc: kế hoạch là chỉ đạo của Ban Tổng Giám đốc qua người giao; ai làm phần nào thì chỉ thấy và sửa phần đó.
 //
 // Vai của người dùng trên MỘT việc:
 //   A  người giao (assignedById)
-//   B  Ban Giám đốc của việc = "Ban Giám đốc toàn quyền" (người dùng quản trị đánh dấu riêng — User.boardAll, KHÔNG theo phòng;
-//      mặc định không ai) — Ban Giám đốc của MỌI việc; + PGĐ phụ trách bộ phận chủ trì của việc (Department.supervisorId) —
-//      chỉ với việc do bộ phận mình phụ trách chủ trì. Vai hệ thống "director" KHÔNG tự động là B.
+//   B  BTGĐ phụ trách của việc: thành viên Ban Tổng Giám đốc (vai) có phạm vi phụ trách "Toàn công ty" (User.boardAll) — mọi việc;
+//      hoặc phụ trách bộ phận chủ trì của việc (Department.supervisorId) — chỉ việc do bộ phận đó chủ trì
+//      (lib/permissions.js; hệ quy chiếu một trục vai, chủ dự án duyệt 24/11/2026).
 //   L  người chủ trì · S  người phối hợp
 //   D  lãnh đạo bộ phận chủ trì (Dl) hoặc lãnh đạo phòng của người chủ trì — xem toàn bộ, không sửa kế hoạch
-//   O  chủ dự án / PMO: người quản lý dự án, thành viên vai OWNER, trưởng dự án, tài khoản vai director không thuộc B
+//   O  chủ dự án (người quản lý dự án, thành viên vai OWNER, người đứng tên dự án) và thành viên BTGĐ — xem đầy đủ, bình luận
 //   U  thành viên dự án không thuộc các vai trên — chỉ xem TÓM TẮT (tên, người chủ trì, hạn, trạng thái, %)
 //
 // taskCapabilities() là hàm THUẦN (không chạm CSDL, test ma trận trong task-access.test.js). Route nạp ngữ cảnh bằng loadTask()
 // rồi kiểm bằng assertCap(); payload chi tiết việc trả `capabilities` để giao diện chỉ dựng ô nhập / nút khi có quyền.
 const { fail } = require('../lib/http');
-const { permissionScope, isItAdmin } = require('../lib/permissions');
+const { isItAdmin, isBoard, isDeptApprover, DEPT_APPROVER_WHERE, NOT_IT_WHERE } = require('../lib/permissions');
 
 // ---------- Trường của việc theo phần ----------
 // Kế hoạch: A, B (việc chưa có người giao: chỉ B).
@@ -36,29 +36,29 @@ const WORK_TO = ['BACKLOG', 'UNSTARTED', 'STARTED', 'REVIEW', 'COMPLETED'];
 
 const MESSAGES = {
   view: 'Bạn chỉ xem được tóm tắt việc này (tên, người chủ trì, hạn, trạng thái, %)',
-  plan: 'Kế hoạch của việc (tên, mô tả, hạn, mốc, đường găng, ưu tiên, nguồn, nhãn, kế hoạch gốc…) do người giao hoặc Ban Giám đốc sửa',
-  assign: 'Chỉ người giao hoặc Ban Giám đốc đổi người chủ trì / người phối hợp',
+  plan: 'Kế hoạch của việc (tên, mô tả, hạn, mốc, đường găng, ưu tiên, nguồn, nhãn, kế hoạch gốc…) do người giao hoặc Ban Tổng Giám đốc sửa',
+  assign: 'Chỉ người giao hoặc Ban Tổng Giám đốc đổi người chủ trì / người phối hợp',
   assignOwnDept: 'Lãnh đạo bộ phận chủ trì chỉ chọn người trong phòng mình cho bước giao cho bộ phận mà chưa có người',
-  assigner: 'Chỉ người giao (chuyển giao) hoặc Ban Giám đốc đổi người giao',
+  assigner: 'Chỉ người giao (chuyển giao) hoặc Ban Tổng Giám đốc đổi người giao',
   selfAssigner: 'Không tự nhận làm người giao của việc chưa có người giao',
-  delete: 'Chỉ người giao hoặc Ban Giám đốc xoá việc',
-  recur: 'Chỉ người giao hoặc Ban Giám đốc đặt lặp lại việc',
-  state: 'Bạn không đổi được trạng thái này — người chủ trì: Chưa bắt đầu → Đang thực hiện → Gửi duyệt; người giao / Ban Giám đốc: duyệt hoàn thành (qua phiếu duyệt), tạm dừng, huỷ, mở lại',
+  delete: 'Chỉ người giao hoặc Ban Tổng Giám đốc xoá việc',
+  recur: 'Chỉ người giao hoặc Ban Tổng Giám đốc đặt lặp lại việc',
+  state: 'Bạn không đổi được trạng thái này — người chủ trì: Chưa bắt đầu → Đang thực hiện → Gửi duyệt; người giao / Ban Tổng Giám đốc: duyệt hoàn thành (qua phiếu duyệt), tạm dừng, huỷ, mở lại',
   progress: 'Tiến độ, khó khăn, kiến nghị, dự báo hoàn thành do người chủ trì cập nhật',
   submit: 'Chỉ người chủ trì gửi duyệt / nộp sản phẩm',
   extension: 'Chỉ người chủ trì đề nghị gia hạn',
-  decideExtension: 'Chỉ Ban Giám đốc của việc (Ban Giám đốc toàn quyền, PGĐ phụ trách bộ phận chủ trì) duyệt đề nghị gia hạn',
-  children: 'Chỉ người chủ trì, người giao hoặc Ban Giám đốc tạo việc nhánh',
-  comment: 'Chỉ người liên quan đến việc (người giao, Ban Giám đốc, chủ trì, phối hợp, lãnh đạo bộ phận, chủ dự án / PMO) bình luận',
-  docsGive: 'Văn bản "Căn cứ giao việc" và tài liệu bên giao do người giao hoặc Ban Giám đốc gửi',
+  decideExtension: 'Chỉ BTGĐ phụ trách của việc (BTGĐ phụ trách toàn công ty, Phó TGĐ phụ trách bộ phận chủ trì) duyệt đề nghị gia hạn',
+  children: 'Chỉ người chủ trì, người giao hoặc Ban Tổng Giám đốc tạo việc nhánh',
+  comment: 'Chỉ người liên quan đến việc (người giao, Ban Tổng Giám đốc, chủ trì, phối hợp, lãnh đạo bộ phận, chủ dự án / PMO) bình luận',
+  docsGive: 'Văn bản "Căn cứ giao việc" và tài liệu bên giao do người giao hoặc Ban Tổng Giám đốc gửi',
   docsBack: 'Sản phẩm, tài liệu bên thực hiện do người chủ trì / người phối hợp gửi',
   deleteFile: 'Chỉ người đã gửi tệp / văn bản này được xoá',
-  answer: 'Chỉ người giao, Ban Giám đốc hoặc lãnh đạo bộ phận chủ trì trả lời kiến nghị',
-  forward: 'Chỉ lãnh đạo bộ phận chủ trì trình kiến nghị lên Ban Giám đốc',
+  answer: 'Chỉ người giao, Ban Tổng Giám đốc hoặc lãnh đạo bộ phận chủ trì trả lời kiến nghị',
+  forward: 'Chỉ lãnh đạo bộ phận chủ trì trình kiến nghị lên Ban Tổng Giám đốc',
   supportStaff: 'Chỉ lãnh đạo phòng phối hợp được cử cán bộ phối hợp',
-  approvalLevels: 'Chỉ Ban Giám đốc hoặc người quản lý dự án đổi mức duyệt của việc',
-  completedAt: 'Chỉ người giao hoặc Ban Giám đốc sửa ngày hoàn thành thực tế',
-  rebaseline: 'Chỉ người giao hoặc Ban Giám đốc điều chỉnh kế hoạch gốc',
+  approvalLevels: 'Chỉ Ban Tổng Giám đốc hoặc người quản lý dự án đổi mức duyệt của việc',
+  completedAt: 'Chỉ người giao hoặc Ban Tổng Giám đốc sửa ngày hoàn thành thực tế',
+  rebaseline: 'Chỉ người giao hoặc Ban Tổng Giám đốc điều chỉnh kế hoạch gốc',
   review: 'Ô "Đánh giá của người giao" viết tay đã bỏ — đánh giá là mức chấm và nhận xét khi duyệt hoàn thành',
 };
 
@@ -82,7 +82,7 @@ function rolesOf(user, item, ctx = {}) {
   // Lãnh đạo phòng của người chủ trì (không tính chính người chủ trì — vai director được xem là lãnh đạo phòng của mình).
   const D = Dl || (!L && has(ctx.staffLeaderIds, uid));
   const SL = has(ctx.supportLeaderIds, uid);
-  const O = !!r.canManage || ctx.memberRole === 'OWNER' || (ctx.project?.leadId != null && Number(ctx.project.leadId) === Number(uid)) || user?.role === 'director';
+  const O = !!r.canManage || ctx.memberRole === 'OWNER' || (ctx.project?.leadId != null && Number(ctx.project.leadId) === Number(uid)) || isBoard(user);
   return { A, B, L, S, D, Dl, SL, O };
 }
 
@@ -113,7 +113,7 @@ function taskCapabilities(user, item, ctx = {}) {
   const write = !!r.canEdit && !r.delegated;
   const live = write && !item.archivedAt;
   const open = live && !CLOSED.includes(item.category);
-  const boss = A || B; // kế hoạch là chỉ đạo của Ban Giám đốc qua người giao
+  const boss = A || B; // kế hoạch là chỉ đạo của Ban Tổng Giám đốc qua người giao
   const plan = live && boss;
   Object.assign(caps, {
     plan,
@@ -125,7 +125,7 @@ function taskCapabilities(user, item, ctx = {}) {
     recur: plan,
     state: live && boss ? 'ALL' : open && L ? 'WORK' : null,
     progress: open && L,
-    submit: open && L, // gửi duyệt là bước của người chủ trì (người giao / BGĐ duyệt, tạm dừng, huỷ, mở lại)
+    submit: open && L, // gửi duyệt là bước của người chủ trì (người giao / BTGĐ duyệt, tạm dừng, huỷ, mở lại)
     extension: open && L,
     decideExtension: write && B,
     children: (live && boss) || (open && L),
@@ -145,7 +145,7 @@ function taskCapabilities(user, item, ctx = {}) {
 }
 
 // Đổi trạng thái: người chủ trì trong nhóm đang làm và GỬI DUYỆT (vào "Chờ duyệt" / chọn "Hoàn thành" khi chưa duyệt);
-// người giao / Ban Giám đốc: duyệt (qua phiếu), tạm dừng, huỷ, mở lại — không gửi duyệt thay người chủ trì.
+// người giao / Ban Tổng Giám đốc: duyệt (qua phiếu), tạm dừng, huỷ, mở lại — không gửi duyệt thay người chủ trì.
 const SUBMIT_TO = ['REVIEW', 'COMPLETED'];
 function canMove(caps, fromCategory, toCategory) {
   if (!caps?.state) return false;
@@ -180,21 +180,22 @@ function assertMove(caps, fromCategory, toCategory) {
 }
 
 // ---------- Nạp ngữ cảnh từ CSDL ----------
-// Ngữ cảnh tổ chức (nạp một lần cho cả danh sách): Ban Giám đốc toàn quyền, PGĐ phụ trách từng phòng, lãnh đạo từng phòng
+// Ngữ cảnh tổ chức (nạp một lần cho cả danh sách): BTGĐ phụ trách toàn công ty, Phó TGĐ phụ trách từng phòng, lãnh đạo từng phòng
 // (kể cả uỷ quyền), phòng của từng người.
 async function orgContext(db, now = new Date()) {
   const [depts, approvers, delegations, active] = await Promise.all([
     db.department.findMany({ select: { id: true, supervisorId: true } }),
-    db.user.findMany({ where: { isActive: true, permissions: { some: { permissionKey: 'work.approve' } } }, include: { permissions: true } }),
+    db.user.findMany({ where: { ...DEPT_APPROVER_WHERE, isActive: true } }),
     db.delegation.findMany({ where: { revokedAt: null, startsAt: { lte: now }, endsAt: { gte: now } }, select: { fromUserId: true, toUserId: true } }),
-    db.user.findMany({ where: { isActive: true, isRootAdmin: false, role: { not: 'admin' } }, select: { id: true, departmentId: true, boardAll: true } }),
+    db.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE }, select: { id: true, departmentId: true, boardAll: true, role: true, isRootAdmin: true } }),
   ]);
   const activeIds = new Set(active.map(u => u.id));
+  const boardIds = new Set(active.filter(isBoard).map(u => u.id)); // phạm vi phụ trách chỉ có nghĩa với vai BTGĐ
   const deptOf = new Map(active.map(u => [u.id, u.departmentId]));
-  const supervisor = new Map(depts.filter(d => d.supervisorId != null && activeIds.has(d.supervisorId)).map(d => [d.id, d.supervisorId]));
+  const supervisor = new Map(depts.filter(d => d.supervisorId != null && boardIds.has(d.supervisorId)).map(d => [d.id, d.supervisorId]));
   const byDept = new Map();
   for (const u of approvers) {
-    if (u.departmentId == null || !permissionScope(u, 'work.approve', 'OPERATE')) continue;
+    if (!isDeptApprover(u)) continue;
     if (!byDept.has(u.departmentId)) byDept.set(u.departmentId, []);
     byDept.get(u.departmentId).push(u.id);
   }
@@ -207,8 +208,8 @@ async function orgContext(db, now = new Date()) {
     }
     return leaderCache.get(deptId);
   };
-  // Ban Giám đốc toàn quyền: chỉ tài khoản đang hoạt động, không phải quản trị IT.
-  return { topIds: active.filter(u => u.boardAll).map(u => u.id), supervisor, leaders, deptOf };
+  // BTGĐ phụ trách Toàn công ty: chỉ tài khoản vai BTGĐ đang hoạt động.
+  return { topIds: active.filter(u => u.boardAll && boardIds.has(u.id)).map(u => u.id), supervisor, leaders, deptOf };
 }
 
 // Ngữ cảnh của MỘT việc (đồng bộ, dùng lại orgContext). chain = tổ tiên [cha, ông, …] (để lấy phòng chủ trì kế thừa).

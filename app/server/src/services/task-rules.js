@@ -10,14 +10,14 @@ const { fail } = require('../lib/http');
 const RATINGS = { EXCELLENT: 'Xuất sắc', GOOD: 'Tốt', PASS: 'Đạt', NEEDS_IMPROVEMENT: 'Cần cải thiện', POOR: 'Kém' };
 // Bước duyệt ảo của người giao (cấp 1 của phiếu withAssigner).
 const ASSIGNER_STEP = Object.freeze({ level: 1, name: 'Người giao duyệt', approverType: 'ASSIGNER', virtual: true });
-// Việc MỐC hoặc trên ĐƯỜNG GĂNG (chủ dự án chốt 20/11/2026): cấp 1 = Ban Giám đốc của việc duyệt + chấm mức, thay người giao.
-const BOARD_STEP = Object.freeze({ level: 1, name: 'Ban Giám đốc duyệt', approverType: 'BOARD', virtual: true });
-// Bước duyệt chấm mức hoàn thành (cấp 1 của phiếu mới): người giao, hoặc Ban Giám đốc với việc mốc / đường găng.
+// Việc MỐC hoặc trên ĐƯỜNG GĂNG (chủ dự án chốt 20/11/2026): cấp 1 = BTGĐ phụ trách của việc duyệt + chấm mức, thay người giao.
+const BOARD_STEP = Object.freeze({ level: 1, name: 'Ban Tổng Giám đốc duyệt', approverType: 'BOARD', virtual: true });
+// Bước duyệt chấm mức hoàn thành (cấp 1 của phiếu mới): người giao, hoặc Ban Tổng Giám đốc với việc mốc / đường găng.
 const isGradeStep = step => step?.approverType === 'ASSIGNER' || step?.approverType === 'BOARD';
-// Việc do Ban Giám đốc duyệt hoàn thành: mốc hoặc đường găng.
+// Việc do Ban Tổng Giám đốc duyệt hoàn thành: mốc hoặc đường găng.
 const isBoardItem = item => !!(item?.critical || item?.milestone);
 
-// Chuỗi bước duyệt của một phiếu: phiếu mới = [người giao (việc mốc / găng: Ban Giám đốc), ...bước dự án dời lên 1 cấp];
+// Chuỗi bước duyệt của một phiếu: phiếu mới = [người giao (việc mốc / găng: Ban Tổng Giám đốc), ...bước dự án dời lên 1 cấp];
 // phiếu cũ = bước dự án.
 function chainOf(projectSteps, withAssigner = true, { board = false } = {}) {
   const steps = [...projectSteps].sort((a, b) => a.level - b.level);
@@ -51,7 +51,7 @@ function completionTarget({ fromCategory, toCategory, approved, allowDirect = fa
 // Người duyệt cấp "người giao" của một việc.
 //   item: { assignedById, reporterId, leadDepartmentId, assigneeIds: number[] }
 //   ctx:  { active: Map<userId, { departmentId }>, leaders(deptId) → ids lãnh đạo bộ phận có quyền duyệt,
-//           projectLeadId, supervisorOf(deptId) → PGĐ phụ trách, directors: ids Ban Giám đốc }
+//           projectLeadId, supervisorOf(deptId) → Phó TGĐ phụ trách, directors: ids Ban Tổng Giám đốc }
 // Trả { ids, reason }: ASSIGNER = người giao; DEPT_LEADER / PROJECT_LEAD / SUPERVISOR / DIRECTOR = thay vì việc tự giao
 // (hoặc người giao đã nghỉ). Không bao giờ chứa người chủ trì.
 function assignerApprovers(item, ctx) {
@@ -69,10 +69,10 @@ function assignerApprovers(item, ctx) {
     || { ids: [], reason: 'NONE' };
 }
 
-// Người duyệt cấp "Ban Giám đốc" của việc mốc / đường găng: Ban Giám đốc toàn quyền + PGĐ phụ trách bộ phận chủ trì.
-//   ctx: { active, topIds: ids Ban Giám đốc toàn quyền, supervisorOf(deptId), projectDepartmentId } (+ như assignerApprovers để dự phòng)
-// Không bao giờ chứa người chủ trì: Ban Giám đốc đồng thời là người chủ trì → Ban Giám đốc khác duyệt.
-// Chưa có ai (chưa đánh dấu Ban Giám đốc toàn quyền, phòng chưa có PGĐ phụ trách) → người giao duyệt như việc thường (phiếu không bị kẹt).
+// Người duyệt cấp "Ban Tổng Giám đốc" của việc mốc / đường găng: BTGĐ phụ trách toàn công ty + Phó TGĐ phụ trách bộ phận chủ trì.
+//   ctx: { active, topIds: ids BTGĐ phụ trách toàn công ty, supervisorOf(deptId), projectDepartmentId } (+ như assignerApprovers để dự phòng)
+// Không bao giờ chứa người chủ trì: Ban Tổng Giám đốc đồng thời là người chủ trì → Ban Tổng Giám đốc khác duyệt.
+// Chưa có ai (chưa đánh dấu BTGĐ phụ trách toàn công ty, phòng chưa có Phó TGĐ phụ trách) → người giao duyệt như việc thường (phiếu không bị kẹt).
 function boardApprovers(item, ctx) {
   const assignees = new Set(item.assigneeIds || []);
   const ok = id => id != null && ctx.active.has(id) && !assignees.has(id);
@@ -86,7 +86,7 @@ function boardApprovers(item, ctx) {
 // Kiểm tra một quyết định duyệt (ngoài việc người dùng có nằm trong danh sách người duyệt của cấp hay không).
 function checkDecision({ step, decision, rating, comment, userId, assigneeIds = [], requestedById }) {
   if (assigneeIds.includes(userId)) fail(403, 'Người chủ trì không tự duyệt việc của mình', 'SELF_APPROVAL');
-  // Cấp chấm mức (người giao / Ban Giám đốc) duyệt phiếu của người khác gửi; các cấp dự án thì không tự duyệt phiếu mình gửi.
+  // Cấp chấm mức (người giao / Ban Tổng Giám đốc) duyệt phiếu của người khác gửi; các cấp dự án thì không tự duyệt phiếu mình gửi.
   if (!isGradeStep(step) && requestedById === userId) fail(403, 'Không thể tự duyệt việc do chính mình gửi duyệt', 'SELF_APPROVAL');
   if (decision === 'REJECT' && !String(comment || '').trim()) fail(422, 'Trả lại phải ghi lý do', 'REASON_REQUIRED');
   if (decision === 'APPROVE' && isGradeStep(step)) {

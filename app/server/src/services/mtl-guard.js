@@ -4,13 +4,13 @@
 //   • tạo việc: việc gốc (bước MTL tổng) chỉ người quản lý dự án; việc nhánh do người chủ trì tạo thì máy chủ tự đặt cấu trúc;
 //   • thao tác hàng loạt (nhập Excel, ghi chú → việc) và xuất tệp theo lib/policy.js.
 const { fail, optionalInt } = require('../lib/http');
-const { isItAdmin } = require('../lib/permissions');
+const { isItAdmin, isBoard } = require('../lib/permissions');
 const Policy = require('../lib/policy');
 
-// Trường người không phải người giao / Ban Giám đốc của việc cha không được tự đặt khi thêm việc nhánh (máy chủ tự tính / kế thừa).
+// Trường người không phải người giao / BTGĐ phụ trách của việc cha không được tự đặt khi thêm việc nhánh (máy chủ tự tính / kế thừa).
 const CREATE_STRIP = ['progress', 'weight', 'critical', 'milestone', 'planCode', 'planSection', 'stateId', 'leadDepartmentId', 'supportDepartmentIds', 'approvalLevels'];
 
-const subjectOf = user => ({ userId: user.id, it: isItAdmin(user), director: user.role === 'director' });
+const subjectOf = user => ({ userId: user.id, it: isItAdmin(user), director: isBoard(user) });
 
 async function itemCtx(client, itemId) {
   const it = await client.workItem.findUnique({ where: { id: itemId }, select: { parentId: true, leadDepartmentId: true, progress: true,
@@ -29,7 +29,7 @@ async function mtlGuard(client, user, project, rights, itemId, { manualPct = fal
 }
 
 // Tạo việc trong dự án MTL. Việc gốc (bước MTL tổng): người quản lý dự án. Việc nhánh: quyền "tạo việc nhánh" của việc cha
-// (task-access: người chủ trì, người giao, Ban Giám đốc) đã kiểm ở route; `planParent` = người tạo là người giao / BGĐ của việc cha.
+// (task-access: người chủ trì, người giao, Ban Tổng Giám đốc) đã kiểm ở route; `planParent` = người tạo là người giao / BTGĐ của việc cha.
 // Người chủ trì thêm việc nhánh: bỏ các trường cấu trúc (kế thừa); việc nhánh đầu tiên nhận % hiện tại của cha để tiến độ không tụt.
 async function mtlCreateGuard(client, user, project, rights, input = {}, { planParent = false } = {}) {
   if (project.kind !== 'MTL') return input;
@@ -51,7 +51,7 @@ function mtlBulkGuard(user, project, rights) {
   Policy.assertCan(subjectOf(user), 'edit', 'mtl.plan', { item: { projectManager: !!rights.canManage } });
 }
 
-// Xuất dữ liệu MTL ra tệp: người quản lý dự án, Ban GĐ; lãnh đạo bộ phận chỉ phần bộ phận mình (deptLeader = true).
+// Xuất dữ liệu MTL ra tệp: người quản lý dự án, Ban TGĐ; lãnh đạo bộ phận chỉ phần bộ phận mình (deptLeader = true).
 function mtlExportGuard(user, project, rights, { deptLeader = false } = {}) {
   if (project.kind !== 'MTL') return;
   Policy.assertCan(subjectOf(user), 'export', 'mtl.plan', { op: deptLeader ? 'dept' : undefined, item: { projectManager: !!rights.canManage, leadLeaderIds: deptLeader ? [user.id] : [] } });

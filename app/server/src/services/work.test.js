@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const W = require('./work');
 
 const P = (key, action, scope) => ({ permissionKey: key, action, scope });
-const director = { id: 1, departmentId: 9, role: 'user', permissions: [P('work.view', 'VIEW', 'SYSTEM'), P('work.approve', 'OPERATE', 'SYSTEM')] };
-const lead = { id: 2, departmentId: 5, role: 'user', permissions: [P('work.view', 'VIEW', 'UNIT'), P('work.approve', 'OPERATE', 'UNIT')] };
-const staff = { id: 3, departmentId: 5, role: 'user', permissions: [P('work.view', 'VIEW', 'UNIT')] };
+const director = { id: 1, departmentId: 9, role: 'director', permissions: [P('work.view', 'VIEW', 'SYSTEM'), P('work.approve', 'OPERATE', 'SYSTEM')] };
+const lead = { id: 2, departmentId: 5, role: 'manager', permissions: [P('work.view', 'VIEW', 'UNIT'), P('work.approve', 'OPERATE', 'UNIT')] };
+const staff = { id: 3, departmentId: 5, role: 'member', permissions: [P('work.view', 'VIEW', 'UNIT')] };
 const itAdmin = { id: 4, role: 'admin', permissions: [] };
 
 test('phạm vi xem việc theo vai trò', () => {

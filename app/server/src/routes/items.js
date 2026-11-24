@@ -2,7 +2,7 @@
 // Quyền trên từng việc: services/task-access.js (một nguồn duy nhất, bảng quyền tối thiểu theo vai 20/11/2026).
 const { fail, intParam, optionalInt, optionalDate, text, oneOf } = require('../lib/http');
 const { sanitizeHtml, htmlToText, mentions } = require('../lib/rich-text');
-const { isItAdmin } = require('../lib/permissions');
+const { isItAdmin, rolesWith } = require('../lib/permissions');
 const TA = require('../services/task-access');
 const MTL = require('../services/mtl');
 const { loadProject, projectRights, itemVisibleWhere, canSeeItem, isRegisterWriter, ITEM_ACCESS_SELECT } = require('../services/access');
@@ -90,15 +90,15 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
 
   // Phạm vi tạo việc của người xem (giao diện ẩn nút "Tạo việc" / giới hạn ô "Việc cha" TRƯỚC khi điền form — cùng luật với POST bên dưới):
   //   root: được tạo việc gốc; parents: null = việc cha nào cũng được (máy chủ vẫn kiểm từng lần), hoặc danh sách id việc được thêm việc nhánh.
-  // Việc nhánh: người chủ trì, người giao, Ban Giám đốc của việc cha (services/task-access.js).
-  // Việc gốc: dự án MTL — người quản lý dự án; sổ của đơn vị — Ban Giám đốc / người quản lý / thành viên sổ; dự án thường — thành viên.
+  // Việc nhánh: người chủ trì, người giao, BTGĐ phụ trách của việc cha (services/task-access.js).
+  // Việc gốc: dự án MTL — người quản lý dự án; sổ của đơn vị — Ban Tổng Giám đốc / người quản lý / thành viên sổ; dự án thường — thành viên.
   app.get('/api/projects/:id/create-scope', auth, async (req, res) => {
     const { project, rights, member } = await loadProject(prisma, req.user, intParam(req.params.id));
     if (!rights.canEdit) return res.json({ root: false, parents: [] });
     const root = project.kind === 'MTL' ? rights.canManage && !isItAdmin(req.user)
       : project.visibility === 'ASSIGNED' ? rights.canManage || isRegisterWriter(member) : true;
     const org = await TA.orgContext(prisma);
-    if (org.topIds.includes(req.user.id)) return res.json({ root, parents: null }); // TGĐ: Ban Giám đốc của mọi việc
+    if (org.topIds.includes(req.user.id)) return res.json({ root, parents: null }); // TGĐ: Ban Tổng Giám đốc của mọi việc
     const rows = await prisma.workItem.findMany({ where: { projectId: project.id, archivedAt: null, state: { category: { notIn: ['COMPLETED', 'CANCELLED'] } }, AND: [itemVisibleWhere(req.user)] },
       select: TA.TASK_SELECT });
     const parents = rows.filter(r => TA.taskCapabilities(req.user, TA.taskOf(r), TA.itemContext(org, { project, rights, member, item: TA.taskOf(r) })).children).map(r => r.id);
@@ -110,14 +110,14 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
     const parentId = optionalInt(req.body?.parentId, 'Việc cha');
     let body = { ...(req.body || {}) }, planParent = true;
     if (parentId) {
-      // Việc nhánh: người chủ trì (chia việc của mình — khi đó là người giao của việc nhánh), người giao, Ban Giám đốc của việc cha.
+      // Việc nhánh: người chủ trì (chia việc của mình — khi đó là người giao của việc nhánh), người giao, BTGĐ phụ trách của việc cha.
       const parent = await TA.loadTask(prisma, req.user, parentId, { need: 'children' });
       if (parent.project.id !== project.id) fail(422, 'Việc cha không thuộc dự án');
       planParent = parent.caps.plan;
       if (!planParent) { delete body.assignedById; delete body.leadDepartmentId; delete body.supportDepartmentIds; }
     } else if (project.visibility === 'ASSIGNED' && !rights.canManage && !isRegisterWriter(member)) {
-      // Sổ giao việc của đơn vị: việc gốc do Ban Giám đốc / người quản lý sổ / thành viên sổ giao.
-      fail(403, 'Chỉ Ban Giám đốc / người quản lý sổ được giao việc mới — bạn có thể thêm việc nhánh trong việc mình chủ trì', 'FORBIDDEN');
+      // Sổ giao việc của đơn vị: việc gốc do Ban Tổng Giám đốc / người quản lý sổ / thành viên sổ giao.
+      fail(403, 'Chỉ Ban Tổng Giám đốc / người quản lý sổ được giao việc mới — bạn có thể thêm việc nhánh trong việc mình chủ trì', 'FORBIDDEN');
     }
     const created = await prisma.$transaction(async tx => {
       const input = await mtlCreateGuard(tx, req.user, project, rights, body, { planParent });
@@ -182,7 +182,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
     const isLeadLeader = caps.leadLeader;
     // Đánh giá = mức chấm + nhận xét lúc duyệt (cấp người giao). Ô "Đánh giá của người giao" cũ chỉ còn hiện đọc.
     const graded = item.rating ? item.approvals.flatMap(r => r.actions).filter(a => a.decision === 'APPROVE' && a.rating).sort((a, b) => b.id - a.id)[0] : null;
-    const approverNames = Object.fromEntries((await prisma.user.findMany({ where: { isActive: true, permissions: { some: { permissionKey: 'work.approve' } } }, select: { id: true, fullName: true } })).map(u => [u.id, u.fullName]));
+    const approverNames = Object.fromEntries((await prisma.user.findMany({ where: { isActive: true, isRootAdmin: false, role: { in: rolesWith('work.approve', 'OPERATE') } }, select: { id: true, fullName: true } })).map(u => [u.id, u.fullName]));
     const depts = Object.fromEntries((await prisma.department.findMany({ where: { id: { in: [item.leadDepartmentId, ...item.supportDepartments.map(d => d.departmentId)].filter(Boolean) } }, select: { id: true, name: true } })).map(d => [d.id, d.name]));
     // Đường dẫn cha (việc con nhiều cấp): [gốc, …, cha]. Sổ giao việc của đơn vị: việc tổ tiên người dùng không thấy thì ẩn tiêu đề.
     const chain = item.parentId ? await tree.ancestors(prisma, item.parentId, { ...ITEM_ACCESS_SELECT, number: true, title: true }) : [];
@@ -221,7 +221,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
         accept: item.dispatchStatus === 'PENDING' && (caps.assign || caps.assignOwnDept) && !item.archivedAt,
         reassign: item.dispatchStatus === 'ACCEPTED' && caps.assign,
         decideExtension: caps.decideExtension, answer: caps.answer, isLeadLeader, isAssigner,
-        // Kiến nghị: lãnh đạo bộ phận (không phải người giao / BGĐ) trình lên BGĐ; người giao / BGĐ trả lời cả kiến nghị phòng đã trình.
+        // Kiến nghị: lãnh đạo bộ phận (không phải người giao / BTGĐ) trình lên BTGĐ; người giao / BTGĐ trả lời cả kiến nghị phòng đã trình.
         bgd: isAssigner || roles.has('B'), forward: caps.forward,
         // Người thực hiện = người chủ trì (báo cáo tiến độ, nộp sản phẩm, xin gia hạn). Người phối hợp gửi tài liệu, bình luận.
         work: caps.progress || (isAssignee && caps.submit), support: isSupporter, supportLead: caps.supportStaff,
@@ -239,7 +239,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       children: item.children.map(({ children: grand, ...c }) => ({ ...c, assignees: c.assignees.map(a => a.user), stage: stageOf({ ...c, pendingApproval: c.approvals[0] }, allSteps), childProgress: rules.childProgress(grand),
         childCount: kidCount.get(c.id) || 0, actual: rolled.get(c.id) ?? c.progress })),
       ancestors, depth: chain.length, maxDepth: tree.MAX_DEPTH, descendantCount: descIds.length,
-      // Người duyệt thực tế từng bước của RIÊNG việc này (việc giao về phòng: lãnh đạo phòng chủ trì, PGĐ phụ trách…).
+      // Người duyệt thực tế từng bước của RIÊNG việc này (việc giao về phòng: lãnh đạo phòng chủ trì, Phó TGĐ phụ trách…).
       stepApprovers: await (async () => {
         const ctx = await approval.approvalContext(prisma);
         const who = pending ? approval.withDoers(item, pending.requestedById) : item;
@@ -312,7 +312,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
         const p = Number(body.progress);
         if (Number.isFinite(p) && Math.round(p) !== item.progress) await tx.progressReport.create({ data: { workItemId: id, authorId: req.user.id, progress: Math.max(0, Math.min(100, Math.round(p))), content: `Cập nhật tiến độ ${Math.round(p)}%` } });
       }
-      // Loại nhiệm vụ, đơn vị chủ trì: kế hoạch (người giao, Ban Giám đốc) — đã kiểm ở trên.
+      // Loại nhiệm vụ, đơn vị chủ trì: kế hoạch (người giao, Ban Tổng Giám đốc) — đã kiểm ở trên.
       if (body.taskType !== undefined || body.leadDepartmentId !== undefined) {
         if (body.taskType !== undefined) data.taskType = oneOf(body.taskType, W.TASK_TYPES, 'Loại nhiệm vụ') || item.taskType;
         if (body.leadDepartmentId !== undefined) {
@@ -365,7 +365,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
         if (data.parentId && data.parentId !== item.parentId) await tree.assertCanNest(tx, data.parentId, id); // chặn vòng cha–con, trần cấp
       }
       Object.assign(data, await W.registerFields(tx, body, { user: req.user, rights, project }));
-      // Ngày hoàn thành thực tế: người giao / Ban Giám đốc chỉnh được (vd. nhập bù); chỉ áp cho việc đã hoàn thành.
+      // Ngày hoàn thành thực tế: người giao / Ban Tổng Giám đốc chỉnh được (vd. nhập bù); chỉ áp cho việc đã hoàn thành.
       if (body.completedAt !== undefined) {
         if (item.state.category !== 'COMPLETED') fail(409, 'Việc chưa hoàn thành', 'NOT_COMPLETED');
         data.completedAt = optionalDate(body.completedAt, 'Ngày hoàn thành') || item.completedAt;
@@ -451,7 +451,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       if (item.archivedAt) fail(409, 'Việc đã được lưu trữ', 'ARCHIVED');
       const toState = await tx.workflowState.findFirst({ where: { id: intParam(req.body.stateId, 'Trạng thái'), projectId: project.id } });
       if (!toState) fail(422, 'Trạng thái không hợp lệ', 'INVALID_STATE');
-      // Kéo thẻ trên Bảng: cùng luật đổi trạng thái với panel (người chủ trì: đang làm → gửi duyệt; người giao / BGĐ: mọi trạng thái).
+      // Kéo thẻ trên Bảng: cùng luật đổi trạng thái với panel (người chủ trì: đang làm → gửi duyệt; người giao / BTGĐ: mọi trạng thái).
       TA.assertMove(caps, item.state.category, toState.category);
       if (toState.id !== item.stateId) await mtlGuard(tx, req.user, project, rights, id, { toState });
       const t = await W.transition(tx, { project, rights, item, toState, overrideWip: req.body.overrideWip });
@@ -478,7 +478,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       const row = await tx.comment.create({ data: { workItemId: id, authorId: req.user.id, bodyHtml, bodyText } });
       await activity(tx, id, req.user.id, 'COMMENT', { commentId: row.id });
       const names = mentions(bodyText);
-      const mentioned = names.length ? await tx.user.findMany({ where: { username: { in: names }, isActive: true }, include: { permissions: true, memberships: { where: { projectId: project.id } } } }) : [];
+      const mentioned = names.length ? await tx.user.findMany({ where: { username: { in: names }, isActive: true }, include: { memberships: { where: { projectId: project.id } } } }) : [];
       const access = project.visibility === 'ASSIGNED' ? await tx.workItem.findUnique({ where: { id }, select: ITEM_ACCESS_SELECT }) : null;
       const parentAccess = access?.parentId ? await tree.ancestors(tx, access.parentId, ITEM_ACCESS_SELECT) : null;
       const allowed = mentioned.filter(u => projectRights(u, project, u.memberships[0]).canView && (!access || canSeeItem(u, project, u.memberships[0], access, parentAccess))).map(u => u.id);

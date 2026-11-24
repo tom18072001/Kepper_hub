@@ -41,7 +41,7 @@ export async function renderMyKpi(el) {
       <details class="mk-how"><summary>Cách tính</summary>
         <p>Tính trên việc bạn chủ trì. <b>Đúng / trễ hạn</b>: việc có hạn trong kỳ đã tới hạn hoặc đã xong. <b>Xếp loại</b>: Xuất sắc 100 · Tốt 85 · Hoàn thành 70 · Không hoàn thành 0.
         <b>Điểm tổng hợp</b> = ${w.onTime ?? 40}% đúng hạn + ${w.rating ?? 40}% xếp loại + ${w.volume ?? 20}% khối lượng (số việc hoàn thành so với bình quân cán bộ cùng phòng, chỉ tính khi phòng có từ ${d.minPeers ?? 3} cán bộ có số liệu); thành phần chưa có dữ liệu được bỏ qua và chia lại trọng số; chưa có việc tới hạn hay được xếp loại thì chưa chấm điểm.
-        Số liệu chỉ bạn và Ban giám đốc xem được, dùng để tham khảo. Thấy chưa đúng, hãy báo lãnh đạo phòng.</p></details>
+        Số liệu chỉ bạn và Ban Tổng Giám đốc xem được, dùng để tham khảo. Thấy chưa đúng, hãy báo lãnh đạo phòng.</p></details>
     </section>`;
     el.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => {
       key = b.dataset.k;

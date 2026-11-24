@@ -18,9 +18,9 @@ module.exports = function mountAttachments(app, { prisma, auth, audit, config })
   const upload = multer({ dest: path.join(config.uploadTmpDir, 'workhub-upload'), limits: { fileSize: MAX_FILE_BYTES, files: 5 } });
 
   app.post('/api/items/:id/attachments', auth, async (req, res, next) => {
-    // Kiểm tra quyền TRƯỚC khi nhận tệp: tài liệu bên giao (người giao, Ban Giám đốc) hoặc bên thực hiện (chủ trì, phối hợp).
+    // Kiểm tra quyền TRƯỚC khi nhận tệp: tài liệu bên giao (người giao, Ban Tổng Giám đốc) hoặc bên thực hiện (chủ trì, phối hợp).
     const ctx = await TA.loadTask(prisma, req.user, intParam(req.params.id));
-    if (!ctx.caps.docsGive && !ctx.caps.docsBack) TA.assertCap(ctx.caps, 'docsBack', 'Chỉ người giao, Ban Giám đốc, người chủ trì hoặc người phối hợp gửi tệp cho việc này');
+    if (!ctx.caps.docsGive && !ctx.caps.docsBack) TA.assertCap(ctx.caps, 'docsBack', 'Chỉ người giao, Ban Tổng Giám đốc, người chủ trì hoặc người phối hợp gửi tệp cho việc này');
     req.itemCtx = { ...ctx, itemId: ctx.task.id };
     next();
   }, upload.array('files', 5), async (req, res) => {

@@ -1,4 +1,4 @@
-// Phân tích thống kê công việc cho Ban giám đốc (trang KPI & phân tích, GET /api/kpi/analytics + xuất Excel).
+// Phân tích thống kê công việc cho Ban Tổng Giám đốc (trang KPI & phân tích, GET /api/kpi/analytics + xuất Excel).
 // Chủ dự án chốt 24/11/2026:
 //  - Thời gian xử lý hiện HAI chỉ số: "thời gian làm" = bắt đầu làm → hoàn thành, CHỈ việc có ghi nhận lúc bắt đầu
 //    (không có thì không tính, không lấy ngày giao thay); "giao → được duyệt" = mốc sớm hơn trong (ngày giao ?? ngày tạo, ngày bắt đầu)
@@ -189,7 +189,7 @@ function analyze(items, { users = [], departments = [], from, to, now = new Date
   const outliers = fence == null ? null : {
     fence: r1(fence),
     completed: done.map(i => [i, workDays(i)]).filter(([, d]) => d != null && d > fence).sort((a, c) => c[1] - a[1]).map(([i, d]) => row(i, d)),
-    // Việc đang mở chưa bắt đầu: tuổi tính từ ngày giao, gắn notStarted để Ban GĐ biết việc nào đứng từ lúc giao.
+    // Việc đang mở chưa bắt đầu: tuổi tính từ ngày giao, gắn notStarted để Ban TGĐ biết việc nào đứng từ lúc giao.
     open: live.filter(S.isOpen).map(i => [i, (ms(now) - ms(i.startedAt ?? i.assignedAt ?? i.createdAt)) / DAY])
       .filter(([, d]) => Number.isFinite(d) && d > fence).sort((a, c) => c[1] - a[1]).map(([i, d]) => ({ ...row(i, d), notStarted: !i.startedAt })),
   };

@@ -1,8 +1,8 @@
-// KPI theo phòng ban và theo cá nhân trong một kỳ (mặc định: tháng hiện tại, giờ Việt Nam) + KPI của chính mình.
+// KPI theo bộ phận và theo cá nhân trong một kỳ (mặc định: tháng hiện tại, giờ Việt Nam) + KPI của chính mình.
 // Số liệu theo người là dữ liệu cá nhân: KPI phòng / cá nhân chỉ quyền reports.kpi (ban giám đốc); mỗi cán bộ xem được số liệu của mình.
 // Dùng để tham khảo, chưa gắn lương thưởng.
 const { fail, optionalInt, optionalDate } = require('../lib/http');
-const { permissionScope, isItAdmin } = require('../lib/permissions');
+const { permissionScope, isItAdmin, NOT_IT_WHERE } = require('../lib/permissions');
 const { visibleProjectsWhere, itemVisibleWhere } = require('../services/access');
 const { getSettings } = require('../services/register');
 const S = require('../services/stats');
@@ -39,16 +39,16 @@ function rangeOf(query, now) {
 }
 
 module.exports = function mountKpi(app, { prisma, auth, audit }) {
-  require('./analytics')(app, { prisma, auth, audit }); // KPI & phân tích thống kê (Ban giám đốc)
+  require('./analytics')(app, { prisma, auth, audit }); // KPI & phân tích thống kê (Ban Tổng Giám đốc)
   app.get('/api/kpi', auth, async (req, res) => {
-    if (permissionScope(req.user, 'reports.kpi', 'VIEW') !== 'SYSTEM') fail(403, 'Chỉ Ban giám đốc được xem KPI', 'FORBIDDEN');
+    if (permissionScope(req.user, 'reports.kpi', 'VIEW') !== 'SYSTEM') fail(403, 'Chỉ Ban Tổng Giám đốc được xem KPI', 'FORBIDDEN');
     const now = new Date();
     const { from, to } = rangeOf(req.query, now);
-    const departmentId = optionalInt(req.query.departmentId, 'Phòng ban');
+    const departmentId = optionalInt(req.query.departmentId, 'Bộ phận');
     const { kpiWeights } = await getSettings(prisma);
     const weights = S.normalizeWeights(kpiWeights);
 
-    // Tôn trọng quyền xem: chỉ đếm việc người xem thấy được (Ban giám đốc: toàn bộ).
+    // Tôn trọng quyền xem: chỉ đếm việc người xem thấy được (Ban Tổng Giám đốc: toàn bộ).
     const items = await loadItems(prisma, { from, to, where: [{ project: visibleProjectsWhere(req.user) }, itemVisibleWhere(req.user)] });
     const departments = await prisma.department.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } });
     const userIds = [...new Set(items.flatMap(i => i.assignees.map(a => a.userId)))];
@@ -74,7 +74,7 @@ module.exports = function mountKpi(app, { prisma, auth, audit }) {
     const weights = S.normalizeWeights(kpiWeights);
     // Cán bộ cùng phòng (để so khối lượng với bình quân phòng); chỉ trả về số liệu tổng hợp của phòng, không trả số liệu từng người khác.
     const peers = req.user.departmentId != null
-      ? await prisma.user.findMany({ where: { departmentId: req.user.departmentId, role: { not: 'admin' }, isRootAdmin: false }, select: USER_SELECT })
+      ? await prisma.user.findMany({ where: { departmentId: req.user.departmentId, ...NOT_IT_WHERE }, select: USER_SELECT })
       : await prisma.user.findMany({ where: { id: req.user.id }, select: USER_SELECT });
     if (!peers.some(u => u.id === req.user.id)) peers.push(...await prisma.user.findMany({ where: { id: req.user.id }, select: USER_SELECT }));
     const items = await loadItems(prisma, { from, to, where: [{ assignees: { some: { userId: { in: peers.map(u => u.id) } } } }] });

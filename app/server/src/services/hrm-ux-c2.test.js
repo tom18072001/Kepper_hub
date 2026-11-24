@@ -38,7 +38,7 @@ const users = [
   { id: 1, departmentId: 5, role: 'manager', permissions: leaderGrant }, // lãnh đạo bộ phận 5 (người duyệt)
   { id: 2, departmentId: 5, role: 'member', permissions: [] }, // nhân viên bộ phận 5
   { id: 3, departmentId: 6, role: 'member', permissions: [] }, // nhân viên bộ phận khác
-  { id: 4, departmentId: 5, role: 'manager', permissions: leaderGrant }, // phó bộ phận 5: đơn do Ban GĐ duyệt
+  { id: 4, departmentId: 5, role: 'manager', permissions: leaderGrant }, // phó bộ phận 5: đơn do Ban TGĐ duyệt
   { id: 9, departmentId: 1, role: 'director', permissions: [] },
 ];
 const db = fakeDb({
@@ -57,7 +57,7 @@ test('Chờ tôi duyệt (Nhân sự): lãnh đạo bộ phận thấy đơn / g
   assert.deepEqual(p.atts.map(a => a.id), [21]);
 });
 
-test('Chờ tôi duyệt (Nhân sự): Ban GĐ duyệt đơn của lãnh đạo bộ phận; nhân viên thường và quản trị hệ thống: không có gì', async () => {
+test('Chờ tôi duyệt (Nhân sự): Ban TGĐ duyệt đơn của lãnh đạo bộ phận; nhân viên thường và quản trị hệ thống: không có gì', async () => {
   const d = await H.pendingDecisions(db, subject(9, { director: true }), cfg);
   assert.deepEqual(d.leaves.map(l => l.id).sort(), [11, 12, 13, 14]);
   assert.equal((await H.pendingDecisions(db, subject(2), cfg)).leaves.length, 0);

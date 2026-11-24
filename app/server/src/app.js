@@ -234,7 +234,7 @@ function loadConfig(env = process.env) {
     webDir: env.WEB_DIR ? path.resolve(env.WEB_DIR) : path.join(__dirname, '..', '..', 'web'),
     uploadTmpDir: env.UPLOAD_TMP_DIR || require('node:os').tmpdir(),
     enableCron: env.ENABLE_CRON !== 'false',
-    // Module tuỳ chọn: MODULES=crm,hrm,vanthu (vanthu: sổ văn bản theo QyĐ-GA-01). Mặc định tắt — bản chạy thật không có CRM / HRM cho tới khi Ban GĐ quyết.
+    // Module tuỳ chọn: MODULES=crm,hrm,vanthu (vanthu: sổ văn bản theo QyĐ-GA-01). Mặc định tắt — bản chạy thật không có CRM / HRM cho tới khi Ban TGĐ quyết.
     modules: String(env.MODULES || '').split(',').map(s => s.trim().toLowerCase()).filter(m => ['crm', 'hrm', 'vanthu'].includes(m)),
     // Tên công ty hiện trên thanh đầu trang (đặt trong .env của máy chạy — không ghi tên thật vào mã nguồn).
     orgName: String(env.ORG_NAME || '').trim().slice(0, 60),

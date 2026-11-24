@@ -4,20 +4,19 @@ const path = require('node:path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
-const { grantInitialPermissions } = require('./lib/permissions');
+const { NOT_IT_WHERE, syncRoleGrants } = require('./lib/permissions');
 const { DEFAULT_PASSWORD, MIN_PASSWORD_LENGTH } = require('./lib/passwords');
 const { DEFAULT_STATES } = require('./routes/projects');
 
 const DEPARTMENTS = [
-  { code: 'BGD', name: 'Ban Giám đốc' }, { code: 'KD', name: 'Phòng Kinh doanh' },
+  { code: 'BGD', name: 'Ban Tổng Giám đốc' }, { code: 'KD', name: 'Phòng Kinh doanh' },
   { code: 'KT', name: 'Phòng Kỹ thuật' }, { code: 'HCNS', name: 'Phòng Hành chính – Nhân sự' },
   // Kepper: bộ phận theo đầu mối trong Master Timeline.
   { code: 'PL', name: 'Ban Pháp lý' }, { code: 'TC', name: 'Ban Tài chính' }, { code: 'TK', name: 'Ban Thiết kế' },
   { code: 'QLXD', name: 'Ban Quản lý xây dựng' }, { code: 'GR', name: 'Ban Đối ngoại – GPMB' },
 ];
 const USERS = [
-  // boardAll: "Ban Giám đốc toàn quyền" (Ban Giám đốc của mọi việc, services/task-access.js) — chỉ dữ liệu GIẢ; máy chạy thật do quản trị chọn.
-  // PMO cùng phòng "Ban Giám đốc" nhưng KHÔNG được đánh dấu: không phải Ban Giám đốc của việc.
+  // boardAll: BTGĐ phụ trách Toàn công ty (services/task-access.js) — chỉ dữ liệu GIẢ; máy chạy thật do quản trị chọn (Phạm vi phụ trách).
   { username: 'giamdoc', fullName: 'Trần Minh Giám', displayTitle: 'Giám đốc', role: 'director', dept: 'BGD', boardAll: true },
   { username: 'tp.kinhdoanh', fullName: 'Lê Thu Hà', displayTitle: 'Trưởng phòng Kinh doanh', role: 'manager', dept: 'KD' },
   { username: 'nv.kinhdoanh1', fullName: 'Phạm Văn An', displayTitle: 'Chuyên viên kinh doanh', role: 'member', dept: 'KD' },
@@ -26,6 +25,7 @@ const USERS = [
   { username: 'nv.kythuat', fullName: 'Vũ Đức Cường', displayTitle: 'Kỹ sư', role: 'member', dept: 'KT' },
   { username: 'nv.hcns', fullName: 'Hoàng Mai Lan', displayTitle: 'Chuyên viên nhân sự', role: 'member', dept: 'HCNS' },
   // Kepper (tên GIẢ)
+  // PMO (kiêm nhiệm, vai Nhân viên) ngồi chung bộ phận BTGĐ trong dữ liệu GIẢ — Quản trị sẽ hiện cảnh báo lệch vai / bộ phận BTGĐ.
   { username: 'pmo', fullName: 'Đặng Quốc Minh', displayTitle: 'Điều phối dự án (PMO)', role: 'member', dept: 'BGD' },
   { username: 'tb.phaply', fullName: 'Lý Thanh Hằng', displayTitle: 'Trưởng ban Pháp lý', role: 'manager', dept: 'PL' },
   { username: 'nv.phaply', fullName: 'Tô Minh Khoa', displayTitle: 'Chuyên viên pháp lý', role: 'member', dept: 'PL' },
@@ -50,9 +50,9 @@ async function seed(prisma = new PrismaClient(), env = process.env) {
   await require('./services/register').ensureDefaults(prisma);
   if (String(env.SEED_DEMO) !== 'true') return out;
   if (await prisma.project.count()) return seedModules(prisma, env, out);
-  // Máy chạy thật: dữ liệu mẫu tạo tài khoản Ban GĐ mẫu với mật khẩu công khai trong README → phải xác nhận rõ.
+  // Máy chạy thật: dữ liệu mẫu tạo tài khoản Ban TGĐ mẫu với mật khẩu công khai trong README → phải xác nhận rõ.
   if (env.NODE_ENV === 'production' && env.ALLOW_DEMO_SEED !== 'yes')
-    throw new Error('SEED_DEMO=true trên máy chạy sẽ tạo tài khoản mẫu (vd. giamdoc — Ban GĐ) với mật khẩu công khai. Đặt SEED_DEMO=false, hoặc ALLOW_DEMO_SEED=yes nếu đây là máy dùng thử.');
+    throw new Error('SEED_DEMO=true trên máy chạy sẽ tạo tài khoản mẫu (vd. giamdoc — Ban TGĐ) với mật khẩu công khai. Đặt SEED_DEMO=false, hoặc ALLOW_DEMO_SEED=yes nếu đây là máy dùng thử.');
 
   const root = await prisma.user.findFirst({ where: { isRootAdmin: true } });
   const dept = {};
@@ -64,7 +64,7 @@ async function seed(prisma = new PrismaClient(), env = process.env) {
       if (existing) return existing;
       const created = await tx.user.create({ data: { username: u.username, fullName: u.fullName, displayTitle: u.displayTitle, role: u.role, boardAll: !!u.boardAll,
         departmentId: dept[u.dept].id, passwordHash: bcrypt.hashSync(DEFAULT_PASSWORD, 10), mustChangePw: true } });
-      await grantInitialPermissions(tx, created, root.id);
+      await syncRoleGrants(tx, created, root.id);
       return created;
     });
   }
@@ -198,7 +198,7 @@ async function seedKepper(prisma, { root, users, dept }) {
     }
     await tx.project.update({ where: { id: project.id }, data: { nextNumber: n + 1 } });
     // Dự án dùng chung: mọi cán bộ các bộ phận là thành viên; PMO là chủ dự án.
-    const staff = await tx.user.findMany({ where: { isActive: true, role: { not: 'admin' }, isRootAdmin: false }, select: { id: true } });
+    const staff = await tx.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE }, select: { id: true } });
     await tx.projectMember.createMany({ data: staff.map(u => ({ projectId: project.id, userId: u.id, role: u.id === users.pmo.id || u.id === users.giamdoc.id ? 'OWNER' : 'MEMBER' })), skipDuplicates: true });
   });
 }

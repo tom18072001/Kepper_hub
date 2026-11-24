@@ -4,13 +4,12 @@
 // Đường dẫn ảnh là mã ngẫu nhiên (uuid) chỉ trả cho người đã đăng nhập — <img> không gửi được token nên ảnh phục vụ không qua auth.
 const { fail } = require('../lib/http');
 const storage = require('../lib/storage');
-const { ROLES, isItAdmin } = require('../lib/permissions');
+const { ROLES, isItAdmin, isBoard, roleOf, roleRank, NOT_IT_WHERE } = require('../lib/permissions');
 
-const ACTIVE = { isActive: true, isRootAdmin: false, role: { not: 'admin' } };
+const ACTIVE = { isActive: true, ...NOT_IT_WHERE };
 const AVATAR_RE = /^[0-9a-f-]{36}\.(png|jpg|webp)$/;
 const MAX_AVATAR = 400 * 1024;
 const avatarUrl = u => (u?.avatarFile ? '/' + u.avatarFile : null);
-const RANK = { director: 0, manager: 1, deputy: 2, member: 3 };
 
 // Nhận diện ảnh theo chữ ký tệp (không tin phần mở rộng / mime trình duyệt gửi).
 function imageKind(buf) {
@@ -20,38 +19,39 @@ function imageKind(buf) {
   return null;
 }
 
-// Cây tổ chức của một người: các tầng phía trên (Ban GĐ → Phó GĐ phụ trách → lãnh đạo bộ phận cấp trên → lãnh đạo bộ phận),
-// đồng cấp trong bộ phận, phía dưới (lãnh đạo: người trong bộ phận + lãnh đạo bộ phận con; Ban GĐ: lãnh đạo các bộ phận phụ trách).
+// Cây tổ chức của một người (theo VAI — lib/permissions.js roleRank: 0 Ban Tổng Giám đốc, 1 Lãnh đạo bộ phận, 2 Nhân viên):
+// các tầng phía trên (Ban Tổng Giám đốc → Phó Tổng Giám đốc phụ trách → lãnh đạo bộ phận cấp trên → lãnh đạo bộ phận), đồng cấp trong
+// bộ phận, phía dưới (lãnh đạo bộ phận: người trong bộ phận + lãnh đạo bộ phận con; BTGĐ: lãnh đạo các bộ phận phụ trách).
 function orgOf(me, users, depts) {
-  const person = u => ({ id: u.id, fullName: u.fullName, displayTitle: u.displayTitle, role: u.role, roleLabel: ROLES[u.role]?.label || u.role,
+  const person = u => ({ id: u.id, fullName: u.fullName, displayTitle: u.displayTitle, role: u.role, roleLabel: ROLES[roleOf(u)]?.label || u.role,
     department: depts.get(u.departmentId)?.name || null, avatarUrl: avatarUrl(u) });
-  const inDept = (id, roles) => users.filter(u => u.departmentId === id && roles.includes(u.role) && u.id !== me.id);
+  const leadersOf = id => users.filter(u => u.departmentId === id && roleRank(u) === 1 && u.id !== me.id);
   const above = [], seen = new Set([me.id]);
   const push = (label, list) => { const l = list.filter(u => !seen.has(u.id)); l.forEach(u => seen.add(u.id)); if (l.length) above.unshift({ label, people: l.map(person) }); };
   const dept = depts.get(me.departmentId);
-  const rank = RANK[me.role] ?? 3;
-  if (dept && rank >= 2) push(`Lãnh đạo ${dept.name}`, inDept(dept.id, rank === 3 ? ['manager', 'deputy'] : ['manager']));
-  // Bộ phận cấp trên (cây phòng ban), rồi Phó GĐ phụ trách, rồi Ban GĐ.
+  const rank = roleRank(me) ?? 2;
+  if (dept && rank === 2) push(`Lãnh đạo ${dept.name}`, leadersOf(dept.id));
+  // Bộ phận cấp trên (cây bộ phận), rồi Phó Tổng Giám đốc phụ trách, rồi Ban Tổng Giám đốc.
   let d = dept, guard = 0, supervisor = null;
   while (d && guard++ < 10) {
     supervisor = supervisor ?? d.supervisorId;
     const parent = d.parentId ? depts.get(d.parentId) : null;
-    if (parent) push(`Lãnh đạo ${parent.name}`, inDept(parent.id, ['manager']));
+    if (parent) push(`Lãnh đạo ${parent.name}`, leadersOf(parent.id));
     d = parent;
   }
-  if (rank >= 1 && supervisor) push('Phó Giám đốc phụ trách', users.filter(u => u.id === supervisor));
-  if (rank >= 1) push('Ban Giám đốc', users.filter(u => u.role === 'director' && u.id !== supervisor));
+  if (rank >= 1 && supervisor) push('Phó Tổng Giám đốc phụ trách', users.filter(u => u.id === supervisor && isBoard(u)));
+  if (rank >= 1) push('Ban Tổng Giám đốc', users.filter(u => isBoard(u) && u.id !== supervisor));
   // above: tầng cao nhất trước (unshift theo thứ tự đi lên).
-  const peers = dept ? users.filter(u => u.departmentId === dept.id && u.id !== me.id && (RANK[u.role] ?? 3) === rank) : [];
+  const peers = dept ? users.filter(u => u.departmentId === dept.id && u.id !== me.id && roleRank(u) === rank) : [];
   let below = [];
-  if (rank === 1 || rank === 2) {
-    below.push({ label: `Thành viên ${dept?.name || 'bộ phận'}`, people: users.filter(u => u.departmentId === me.departmentId && (RANK[u.role] ?? 3) > rank).map(person) });
+  if (rank === 1) {
+    below.push({ label: `Thành viên ${dept?.name || 'bộ phận'}`, people: users.filter(u => u.departmentId === me.departmentId && roleRank(u) > rank).map(person) });
     const kids = [...depts.values()].filter(x => x.parentId === me.departmentId);
-    for (const k of kids) below.push({ label: `Lãnh đạo ${k.name}`, people: inDept(k.id, ['manager']).map(person) });
+    for (const k of kids) below.push({ label: `Lãnh đạo ${k.name}`, people: leadersOf(k.id).map(person) });
   } else if (rank === 0) {
     const mine = [...depts.values()].filter(x => x.supervisorId === me.id);
     const list = (mine.length ? mine : [...depts.values()].filter(x => !x.parentId && x.id !== me.departmentId));
-    below = list.map(k => ({ label: k.name, people: inDept(k.id, ['manager', 'deputy']).map(person) }));
+    below = list.map(k => ({ label: k.name, people: leadersOf(k.id).map(person) }));
   }
   return { above, me: person(me), peers: peers.map(person), below: below.filter(b => b.people.length) };
 }
@@ -60,7 +60,7 @@ module.exports = function mountProfile(app, { prisma, auth, audit }) {
   app.get('/api/me/profile', auth, async (req, res) => {
     const me = await prisma.user.findUnique({ where: { id: req.user.id }, include: { department: true } });
     const out = { id: me.id, username: me.username, fullName: me.fullName, displayTitle: me.displayTitle, email: me.email, phone: me.phone,
-      role: me.role, roleLabel: ROLES[me.role]?.label || me.role, department: me.department ? { id: me.department.id, name: me.department.name } : null,
+      role: me.role, roleLabel: ROLES[roleOf(me)]?.label || me.role, department: me.department ? { id: me.department.id, name: me.department.name } : null,
       createdAt: me.createdAt, lastLoginAt: me.lastLoginAt, avatarUrl: avatarUrl(me), org: null };
     if (!isItAdmin(req.user)) {
       const [users, depts] = await Promise.all([
@@ -68,6 +68,8 @@ module.exports = function mountProfile(app, { prisma, auth, audit }) {
         prisma.department.findMany({ where: { isActive: true }, select: { id: true, name: true, parentId: true, supervisorId: true } }),
       ]);
       out.org = orgOf(me, users, new Map(depts.map(d => [d.id, d])));
+      const D = require('../services/duties');
+      out.duties = D.dutiesFor(me, await D.dutyConfig(prisma));
     }
     res.setHeader('Cache-Control', 'private, no-store');
     res.json(out);

@@ -218,7 +218,7 @@ function buildPrefill({ week: f, deptId, items = [], memberIds = new Set(), prev
   //    chưa khởi động mà có nguy cơ chậm → III; sắp bắt đầu → IV; chưa bắt đầu (chưa tới kỳ) → không báo cáo.
   for (const i of cand) put(i);
   // Nguyên nhân / giải pháp của tuần trước (bản đã nộp) cho cùng hạng mục còn chậm: điền sẵn để bộ phận xem lại, sửa nếu đã khác —
-  // không phải gõ lại mỗi tuần. Đề nghị hỗ trợ không chép (mỗi tuần Ban GĐ kết luận riêng).
+  // không phải gõ lại mỗi tuần. Đề nghị hỗ trợ không chép (mỗi tuần Ban TGĐ kết luận riêng).
   if (prev) {
     const last = new Map();
     for (const r of [...(prev.results || []), ...(prev.ongoing || []), ...(prev.risks || [])]) if (r && (r.cause || r.solution)) last.set(r.itemId ? `i${r.itemId}` : `k${r.key}`, r);

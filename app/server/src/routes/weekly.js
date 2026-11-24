@@ -1,9 +1,10 @@
 // Kepper GĐ2b — Báo cáo tuần bộ phận (BM-TH-01), báo nộp muộn / vắng, tổng hợp giao ban, Action Log, chấm điểm tuân thủ.
 // MỌI quyết định quyền đi qua lib/policy.js (ma trận vai trò × dữ liệu × hành động); vai trò suy ra bằng weekly-data.rolesOf()
-// từ vai trò + phòng ban của tài khoản, bộ phận thư ký và danh sách PMO do Ban GĐ chọn. Quản trị IT không xem nội dung nghiệp vụ.
+// từ vai trò + phòng ban của tài khoản, bộ phận thư ký và danh sách PMO do Ban TGĐ chọn. Quản trị IT không xem nội dung nghiệp vụ.
 const crypto = require('node:crypto');
 const { fail, intParam } = require('../lib/http');
 const P = require('../lib/policy');
+const { SYSTEM_VIEWER } = require('../lib/permissions');
 const { visibleProjectsWhere, itemVisibleWhere, loadItem } = require('../services/access');
 const A = require('../services/alerts');
 const { notify } = require('../services/events');
@@ -37,7 +38,7 @@ const { stripForeignActions } = WS;
 const COMPLIANCE_KEY = month => `weekly.compliance.${month}`;
 // Phạm vi BỘ PHẬN (mục S10): đọc mọi việc như người xem toàn hệ thống — chỉ để tính tập việc phải báo cáo của bộ phận và dòng
 // "Hệ thống tự bổ sung" lúc nộp; không bao giờ trả thẳng cho người dùng (đầu ra lọc theo quyền xem: hideUnseen bên dưới).
-const DEPT_SCOPE = Object.freeze({ id: 0, role: 'system', departmentId: null, permissions: [{ permissionKey: 'work.view', action: 'VIEW', scope: 'SYSTEM' }] });
+const DEPT_SCOPE = SYSTEM_VIEWER; // mọi việc (rồi lọc theo bộ phận) — lib/permissions.js
 
 module.exports = function mountWeekly(app, { prisma, auth, audit }) {
   const subjectOf = async req => {
@@ -130,7 +131,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     return { prefill, members, memberIds, prev, items, cand, hasPrev: !!prev, actions };
   }
 
-  // Ẩn / hiện theo NGƯỜI XEM (không theo người nộp): người xem tổng hợp đầy đủ (Ban GĐ, thư ký, PMO) thấy mọi dòng; người khác chỉ thấy
+  // Ẩn / hiện theo NGƯỜI XEM (không theo người nộp): người xem tổng hợp đầy đủ (Ban TGĐ, thư ký, PMO) thấy mọi dòng; người khác chỉ thấy
   // dòng gắn việc họ xem được — kể cả dòng do trưởng phòng / thư ký nhập (báo cáo bộ phận mọi thành viên đều xem). API, MCP dùng chung.
   const seeWhich = async (user, ids) => new Set(ids.length ? (await prisma.workItem.findMany({ where: { id: { in: [...new Set(ids)] }, project: visibleProjectsWhere(user), AND: [itemVisibleWhere(user)] }, select: { id: true } })).map(i => i.id) : []);
   const seenIn = (user, data) => seeWhich(user, [...WK.allRows(data), ...(data?.plans || [])].map(r => r.itemId).filter(Boolean));
@@ -144,7 +145,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
   app.get('/api/weekly/report', auth, async (req, res) => {
     const s = await subjectOf(req);
     const week = weekParam(req.query.week);
-    if (!req.query.departmentId && s.director) fail(422, 'Ban giám đốc không lập báo cáo tuần — xem bản Tổng hợp', 'DIRECTOR_NO_REPORT');
+    if (!req.query.departmentId && s.director) fail(422, 'Ban TGĐ không lập báo cáo tuần — xem bản Tổng hợp', 'DIRECTOR_NO_REPORT');
     const departmentId = req.query.departmentId ? intParam(req.query.departmentId, 'Bộ phận') : req.user.departmentId;
     if (!departmentId) fail(422, 'Tài khoản chưa thuộc bộ phận nào — liên hệ quản trị để gán bộ phận', 'NO_DEPARTMENT');
     const acc = await deptAccess(s, departmentId, 'view');
@@ -154,7 +155,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
       meetingOf(week), approval.deptLeaderIds(prisma, departmentId),
       prisma.weeklyNotice.findMany({ where: { week, departmentId }, orderBy: { id: 'asc' } }),
     ]);
-    // Người chỉ được XEM (Ban GĐ, PMO) không thấy nháp chưa nộp của bộ phận khác.
+    // Người chỉ được XEM (Ban TGĐ, PMO) không thấy nháp chưa nộp của bộ phận khác.
     const saved0 = acc.canEdit || savedRaw?.firstSubmittedAt ? savedRaw : null;
     const saved = saved0 && { ...saved0, data: await hideUnseen(s, req.user, saved0.data) };
     // Thư ký (xem đầy đủ + sửa): dòng gắn việc họ không xem được → chỉ sửa giải trình, không bỏ được (K2) — giao diện ẩn nút "Bỏ".
@@ -389,7 +390,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     }
     const n = await prisma.weeklyNotice.create({ data });
     await audit(req, 'WEEKLY_NOTICE', 'WeeklyNotice', n.id, null, { departmentId, week, type: n.type, reason: n.reason, receivedAt: n.receivedAt });
-    // Báo thư ký / Ban GĐ (Điều 6, 7). Thông báo chỉ ghi nhãn lý do — ghi chú tự do không rời bảng WeeklyNotice.
+    // Báo thư ký / Ban TGĐ (Điều 6, 7). Thông báo chỉ ghi nhãn lý do — ghi chú tự do không rời bảng WeeklyNotice.
     const S = WK.scheduleOf(week, await meetingOf(week));
     await notify(prisma, await D.managerIds(prisma), { type: 'WEEKLY_NOTICE', title: n.type === 'LATE' ? `${dept.name} báo nộp báo cáo tuần muộn` : `${dept.name} báo vắng giao ban ${WK.fmtD(S.meetingDay)}`, body: WK.REASONS[n.reason], link: '#/tuan/bao' }, req.user.id);
     const names = await userNames(prisma, [n.createdById, n.substituteId]);
@@ -421,14 +422,14 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     const secret = new Set(ids.length ? (await prisma.workItem.findMany({ where: { id: { in: ids }, project: { visibility: { in: ['PRIVATE', 'ASSIGNED'] } } }, select: { id: true } })).map(i => i.id) : []);
     const { view, text, fullText } = WK.summaryView(sum, { full, departmentId: s.departmentId, canSee: id => !!ok?.has(id), isSecret: id => secret.has(id) });
     let out = view;
-    // Ghi chú lý do vắng / muộn (có thể là DLCN nhạy cảm): chỉ Ban GĐ, thư ký (policy weekly.notice · field note) — PMO không thấy.
+    // Ghi chú lý do vắng / muộn (có thể là DLCN nhạy cảm): chỉ Ban TGĐ, thư ký (policy weekly.notice · field note) — PMO không thấy.
     if (full && !P.can(s, 'view', 'weekly.notice', { field: 'note', departmentId: -1, createdById: -1 }))
       out = { ...out, rows: out.rows.map(r => ({ ...r, absent: r.absent ? { ...r.absent, note: '' } : null, late: (r.late || []).map(l => ({ ...l, note: '' })) })) };
     res.setHeader('Cache-Control', 'private, no-store');
     const m = await meetingOf(week);
     res.json({ ...out, names: full ? names : {}, departments: all.map(d => ({ id: d.id, name: d.name })), configured, canManage: s.manage, canDetail: full,
       // text: BẢN GỬI EMAIL (không có danh sách mục I, II; không nêu tên dòng tự bổ sung) — mọi người dùng, API và MCP kepper_weekly_summary.
-      // fullText: bản đầy đủ I, II, III — chỉ người xem đầy đủ, chỉ dùng nội bộ Ban GĐ, không gửi email.
+      // fullText: bản đầy đủ I, II, III — chỉ người xem đầy đủ, chỉ dùng nội bộ Ban TGĐ, không gửi email.
       text, ...(fullText ? { fullText } : {}),
       ...(s.manage ? { actionsVersion: sha256(m?.data?.actions || []) } : {}) });
   });
@@ -459,9 +460,9 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
       if (b.actions !== undefined && b.baseActions !== sha256(existing?.data?.actions || []))
         fail(409, 'Action Log vừa được người khác cập nhật — tải lại trước khi lưu', 'MEETING_CONFLICT');
       const data = { ...(existing?.data || {}) };
-      // Đổi lịch (tuần nghỉ, hạn nộp, ngày họp) sau hạn nộp làm đổi điểm đã phát sinh → chỉ TGĐ / Ban GĐ.
+      // Đổi lịch (tuần nghỉ, hạn nộp, ngày họp) sau hạn nộp làm đổi điểm đã phát sinh → chỉ TGĐ / Ban TGĐ.
       const schedChange = ['skip', 'deadlineDay', 'meetingDay'].some(k => b[k] !== undefined && (k === 'skip' ? !!b[k] !== !!data[k] : (b[k] || null) !== (data[k] || null)));
-      if (schedChange && now > WK.scheduleOf(week, existing).deadline && !s.director) fail(403, 'Đã qua hạn nộp — chỉ Ban giám đốc đổi lịch của tuần này', 'FORBIDDEN');
+      if (schedChange && now > WK.scheduleOf(week, existing).deadline && !s.director) fail(403, 'Đã qua hạn nộp — chỉ Ban TGĐ đổi lịch của tuần này', 'FORBIDDEN');
       if (b.skip !== undefined) data.skip = !!b.skip; // tuần nghỉ Tết / lễ: không giao ban, không chấm điểm
       if (b.deadlineDay !== undefined) { if (b.deadlineDay && (!WK.isDay(b.deadlineDay) || b.deadlineDay > week || b.deadlineDay < WK.addDays(week, -4))) fail(422, 'Hạn nộp phải là một ngày từ thứ Hai đến thứ Sáu của tuần báo cáo', 'INVALID_DATE'); data.deadlineDay = b.deadlineDay || null; }
       if (b.meetingDay !== undefined) { if (b.meetingDay && (!WK.isDay(b.meetingDay) || b.meetingDay <= week || b.meetingDay > WK.addDays(week, 10))) fail(422, 'Ngày giao ban phải sau thứ Sáu của tuần báo cáo', 'INVALID_DATE'); data.meetingDay = b.meetingDay || null; }
@@ -520,7 +521,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     res.json({ ok: true, publishedAt: saved.publishedAt, updatedAt: saved.updatedAt, actionsVersion: sha256(saved.data?.actions || []), data: saved.data, schedule: WK.scheduleOf(week, saved) });
   });
 
-  // ---------- Thiết lập: bộ phận phải nộp (thứ tự trình bày), tuần bắt đầu chấm điểm; vai trò giao ban (chỉ Ban GĐ) ----------
+  // ---------- Thiết lập: bộ phận phải nộp (thứ tự trình bày), tuần bắt đầu chấm điểm; vai trò giao ban (chỉ Ban TGĐ) ----------
   app.put('/api/weekly/config', auth, async (req, res) => {
     const s = await subjectOf(req);
     P.assertCan(s, 'edit', 'weekly.config');
@@ -533,13 +534,13 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     const secIn = b.secretaryDepartmentId === undefined ? sec : Number(b.secretaryDepartmentId) || null;
     const pmoIn = b.pmoUserIds === undefined ? pmo : [...new Set((Array.isArray(b.pmoUserIds) ? b.pmoUserIds : []).map(Number).filter(Number.isInteger))];
     if (secIn !== sec || JSON.stringify(pmoIn) !== JSON.stringify(pmo)) {
-      P.assertCan(s, 'edit', 'weekly.roles'); // ai làm thư ký / PMO: chỉ Ban GĐ quyết
+      P.assertCan(s, 'edit', 'weekly.roles'); // ai làm thư ký / PMO: chỉ Ban TGĐ quyết
       if (secIn != null && !all.has(secIn)) fail(422, 'Bộ phận thư ký không hợp lệ', 'INVALID_VALUE');
       const ok = new Set((await prisma.user.findMany({ where: { id: { in: pmoIn }, ...ACTIVE_USER }, select: { id: true } })).map(u => u.id));
       if (pmoIn.some(id => !ok.has(id))) fail(422, 'Danh sách PMO có tài khoản không hợp lệ', 'INVALID_VALUE');
       sec = secIn; pmo = pmoIn;
     }
-    // Danh sách PMO chỉ ghi khi Ban GĐ đã chọn (chưa chọn → giữ chế độ khởi tạo, xem weekly-data.rolesOf).
+    // Danh sách PMO chỉ ghi khi Ban TGĐ đã chọn (chưa chọn → giữ chế độ khởi tạo, xem weekly-data.rolesOf).
     const value = { departments, startWeek, secretaryDepartmentId: sec, ...(before.pmoConfigured || b.pmoUserIds !== undefined ? { pmoUserIds: pmo } : {}), ...(before.points ? { points: before.points } : {}) };
     await prisma.appSetting.upsert({ where: { key: D.CONFIG_KEY }, create: { key: D.CONFIG_KEY, value, updatedById: req.user.id }, update: { value, updatedById: req.user.id } });
     // Danh sách phải nộp đã chụp của tuần hiện tại (chưa phát hành kết luận) đi theo thiết lập mới; các tuần đã qua giữ nguyên.

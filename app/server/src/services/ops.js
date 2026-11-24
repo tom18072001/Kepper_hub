@@ -1,5 +1,6 @@
 // Giám sát vận hành tối thiểu cho máy chạy đơn lẻ: báo quản trị IT khi sao lưu quá hạn / lỗi hoặc một job lịch chạy lỗi.
 // Chỉ thông tin hệ thống (giờ, tên job, mã lỗi) — không có dữ liệu nghiệp vụ, đúng QĐ-01 (IT không xem nội dung nghiệp vụ).
+const { IT_WHERE } = require('../lib/permissions');
 const { notify } = require('./events');
 const { KEY: JOBS_KEY } = require('./jobs');
 
@@ -38,7 +39,7 @@ async function runOpsCheck(prisma, now = new Date()) {
   const serious = problems.filter(p => !/chưa mã hoá|ngoài máy|thử khôi phục|Tài khoản mẫu/.test(p));
   if (!serious.length && new Date(now.getTime() + 7 * 3_600_000).getUTCDay() !== 1) return { problems: problems.length, notified: 0 };
   if (!problems.length) return { problems: 0, notified: 0 };
-  const admins = await prisma.user.findMany({ where: { isActive: true, OR: [{ isRootAdmin: true }, { role: 'admin' }] }, select: { id: true } });
+  const admins = await prisma.user.findMany({ where: { isActive: true, ...IT_WHERE }, select: { id: true } });
   const notified = await notify(prisma, admins.map(a => a.id), { type: 'SYSTEM_OPS', title: 'Kiểm tra vận hành Kepler Hub', body: problems.join(' '), link: '#/admin/audit' });
   return { problems: problems.length, notified };
 }

@@ -9,6 +9,11 @@ BRANCH="${1:-}"
 stamp="$(date +%Y%m%d-%H%M)"
 if docker compose version >/dev/null 2>&1; then DC="docker compose"; else DC="docker-compose"; fi
 
+echo "==> 0/5 Kiểm phân quyền trên CSDL đang chạy (dừng ở đây thì app cũ vẫn chạy)"
+rc=0; sh deploy/precheck-roles.sh || rc=$?
+if [ "$rc" = 1 ]; then echo "!! Kiểm phân quyền chưa đạt — DỪNG nâng cấp (đổi vai các tài khoản được liệt kê trên màn Quản trị rồi chạy lại)."; exit 1; fi
+if [ "$rc" != 0 ]; then echo "!! Không đọc được CSDL khi kiểm phân quyền (mã $rc) — DỪNG nâng cấp."; exit 1; fi
+
 echo "==> 1/5 Sao lưu CSDL + tệp đính kèm trước khi nâng cấp"
 $DC build backup >/dev/null || { echo "!! Build image sao lưu lỗi — DỪNG nâng cấp."; exit 1; }
 $DC run --rm -e BACKUP_ONCE=1 backup || { echo "!! Sao lưu lỗi — DỪNG nâng cấp (dữ liệu hiện tại không đổi)."; exit 1; }
@@ -35,7 +40,12 @@ i=0
 while [ $i -lt 36 ]; do
   sleep 5; i=$((i + 1))
   id="$($DC ps -q app || true)"
-  [ -n "$id" ] && [ "$(docker inspect -f '{{.State.Health.Status}}' "$id")" = healthy ] && { echo "OK — đã nâng cấp. Image cũ: ${rollback:-không có} (xoá khi ổn định: docker image rm $rollback)"; exit 0; }
+  if [ -n "$id" ] && [ "$(docker inspect -f '{{.State.Health.Status}}' "$id")" = healthy ]; then
+    # Healthy chưa đủ: container phải chạy đúng image vừa build (tag trong Config.Image), không phải image cũ.
+    run_img="$(docker inspect -f '{{.Image}}' "$id")"; new_img="$(docker image inspect -f '{{.Id}}' "$(docker inspect -f '{{.Config.Image}}' "$id")" 2>/dev/null || true)"
+    if [ "$run_img" != "$new_img" ]; then echo "!! Bản mới CHƯA chạy: app đang chạy $run_img, image vừa build $new_img — app cũ vẫn phục vụ."; exit 1; fi
+    echo "OK — đã nâng cấp. Bản mới: $run_img. Image cũ: ${rollback:-không có} (xoá khi ổn định: docker image rm $rollback)"; exit 0
+  fi
 done
 echo "!! App chưa sẵn sàng sau 3 phút. 40 dòng log cuối:"; $DC logs app --tail 40
 echo "!! Quay lại bản cũ:"

@@ -180,7 +180,7 @@ test('11. Ghi chú cá nhân riêng tư: người khác (kể cả cấp trên, 
   }
 });
 
-test('12. Admin IT chỉ quản trị: không thấy dự án, công việc, dashboard, KPI; giám đốc xem KPI phòng ban & cá nhân; nhân viên không thấy khối lượng việc theo tên', async ({ browser }) => {
+test('12. Admin IT chỉ quản trị: không thấy dự án, công việc, dashboard, KPI; giám đốc xem KPI bộ phận & cá nhân; nhân viên không thấy khối lượng việc theo tên', async ({ browser }) => {
   const admin = await (await browser.newContext()).newPage();
   await login(admin, 'admin');
   await expect(admin.locator('#crumbs')).toContainText('Tài khoản');

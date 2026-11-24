@@ -9,13 +9,13 @@
 //       "vanthu": { "entities": [{ "code": "HLD", "name": "..." }], "clerks": ["user"], "legal": ["user"] },
 //       "hrm": { "hr": ["user"], "workStart": "08:00", "workEnd": "17:00", "lunchStart": "12:00", "lunchEnd": "13:00", "workDays": [1,2,3,4,5], "holidays": ["2026-11-24"], "annualDays": 12 },
 //       "weekly": { "secretaryDepartmentCode": "TH" } } }
-// Chạy lại được nhiều lần: phòng ban trùng mã thì cập nhật tên / cấp trên; tài khoản đã có thì GIỮ NGUYÊN (không đổi mật khẩu, quyền).
+// Chạy lại được nhiều lần: bộ phận trùng mã thì cập nhật tên / cấp trên; tài khoản đã có thì GIỮ NGUYÊN (không đổi mật khẩu, quyền).
 // settings: ghi đè đúng các khoá có trong tệp, giữ nguyên khoá khác đã đặt trên giao diện.
 // Tài khoản mới: mật khẩu mặc định của hệ thống + bắt đổi ở lần đăng nhập đầu, quyền theo vai trò — giống tạo trong trang Quản trị.
 const fs = require('node:fs');
 const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
-const { ROLES, grantInitialPermissions } = require('../src/lib/permissions');
+const { ROLES, DEFAULT_ROLE, isBoard, syncRoleGrants } = require('../src/lib/permissions');
 const { DEFAULT_PASSWORD } = require('../src/lib/passwords');
 
 const args = process.argv.slice(2);
@@ -32,7 +32,7 @@ async function main() {
     const depts = input.departments || [];
     for (const d of depts) {
       const code = clean(d.code, 30)?.toUpperCase(); const name = clean(d.name, 200);
-      if (!code || !name) { report.errors.push(`Phòng ban thiếu mã / tên: ${JSON.stringify(d)}`); continue; }
+      if (!code || !name) { report.errors.push(`Bộ phận thiếu mã / tên: ${JSON.stringify(d)}`); continue; }
       const old = await tx.department.findUnique({ where: { code } });
       if (old) { await tx.department.update({ where: { code }, data: { name } }); report.departments.updated++; }
       else { await tx.department.create({ data: { code, name } }); report.departments.created++; }
@@ -47,23 +47,23 @@ async function main() {
     for (const u of input.users || []) {
       const username = String(u.username || '').trim().toLowerCase();
       if (!/^[a-z0-9._-]{3,50}$/.test(username)) { report.errors.push(`Tài khoản không hợp lệ: ${u.username}`); continue; }
-      if (!ROLES[u.role || 'member']) { report.errors.push(`Vai trò không hợp lệ cho ${username}: ${u.role}`); continue; }
+      if (!ROLES[u.role || DEFAULT_ROLE]) { report.errors.push(`Vai trò không hợp lệ cho ${username}: ${u.role}`); continue; }
       if (await tx.user.findUnique({ where: { username } })) { report.users.skipped++; continue; }
       const dept = u.departmentCode ? await tx.department.findUnique({ where: { code: String(u.departmentCode).toUpperCase() } }) : null;
       if (u.departmentCode && !dept) { report.errors.push(`Không có phòng ${u.departmentCode} cho ${username}`); continue; }
       const created = await tx.user.create({ data: {
         username, fullName: clean(u.fullName, 120) || username, displayTitle: clean(u.displayTitle, 120), email: clean(u.email, 160),
-        phone: clean(u.phone, 30), role: u.role || 'member', departmentId: dept?.id ?? null, passwordHash: hash, mustChangePw: true,
+        phone: clean(u.phone, 30), role: u.role || DEFAULT_ROLE, departmentId: dept?.id ?? null, passwordHash: hash, mustChangePw: true,
       } });
-      const granted = await grantInitialPermissions(tx, created, root?.id ?? null);
+      await syncRoleGrants(tx, created, root?.id ?? null);
       await tx.auditLog.create({ data: { userId: root?.id ?? null, action: 'CREATE', entity: 'User', entityId: String(created.id),
-        newValue: JSON.stringify({ username, role: created.role, departmentId: created.departmentId, granted, via: 'import-org' }) } });
+        newValue: JSON.stringify({ username, role: created.role, departmentId: created.departmentId, via: 'import-org' }) } });
       report.users.created++;
     }
-    for (const d of depts) { // PGĐ phụ trách — sau khi tài khoản đã có
+    for (const d of depts) { // Phó TGĐ phụ trách — sau khi tài khoản đã có
       if (!d.supervisorUsername) continue;
       const sup = await tx.user.findUnique({ where: { username: String(d.supervisorUsername).toLowerCase() } });
-      if (!sup || sup.role !== 'director') { report.errors.push(`PGĐ phụ trách ${d.supervisorUsername} không phải tài khoản Ban giám đốc`); continue; }
+      if (!sup || !isBoard(sup)) { report.errors.push(`Phó TGĐ phụ trách ${d.supervisorUsername} không phải tài khoản Ban Tổng Giám đốc`); continue; }
       await tx.department.update({ where: { code: String(d.code).toUpperCase() }, data: { supervisorId: sup.id } });
     }
     const st = input.settings || {};

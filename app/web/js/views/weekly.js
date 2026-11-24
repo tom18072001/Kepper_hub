@@ -4,7 +4,7 @@
 // Báo cáo tự điền sẵn từ MTL + kế hoạch tuần trước + Action Log giao ban; tự lưu nháp; gửi một lần — % ghi ngược vào MTL.
 import { api } from '../api.js';
 import { store } from '../store.js';
-import { $, $$, esc, toast, errorMessage, debounce } from '../util.js';
+import { $, $$, esc, toast, errorMessage, debounce, isItUser } from '../util.js';
 import { rerender } from '../main.js';
 
 const DAY = 86_400_000, H7 = 7 * 3_600_000;
@@ -71,11 +71,11 @@ export async function renderWeekly(root, tab, params, setCrumbs) {
   if (tab === 'tien-do') { location.replace('#/home'); return; }
   ctx = ctx && ctx.userId === store.me.id ? ctx : { ...(await api('/api/weekly/context')), userId: store.me.id };
   st.tab = TABS.some(t => t[0] === tab) ? tab : '';
-  // Bộ phận / vai trò lấy theo tài khoản — không phải chọn. Ban GĐ không nộp; thư ký mở báo cáo bộ phận khác chỉ để nhập thay (?d=).
+  // Bộ phận / vai trò lấy theo tài khoản — không phải chọn. Ban TGĐ không nộp; thư ký mở báo cáo bộ phận khác chỉ để nhập thay (?d=).
   st.dept = (ctx.me.canOnBehalf && Number(params.get('d'))) || (ctx.me.mustReport ? ctx.me.departmentId : null);
   st.showNop = !!st.dept;
   if ((st.tab === 'tong-hop' && !ctx.me.canSummary) || (st.tab === 'diem' && !ctx.me.canCompliance)) st.tab = '';
-  // Trang mở đầu theo vai trò: Ban GĐ, thư ký, PMO không thuộc bộ phận phải nộp → Tổng hợp.
+  // Trang mở đầu theo vai trò: Ban TGĐ, thư ký, PMO không thuộc bộ phận phải nộp → Tổng hợp.
   if (!tab && !params.get('d') && !params.has('nop') && ctx.me.canSummary && (!ctx.me.mustReport || ctx.me.secretary || !ctx.required.includes(ctx.me.departmentId))) st.tab = 'tong-hop';
   if (st.tab === '' && !st.showNop) st.tab = ctx.me.canSummary ? 'tong-hop' : 'bao';
   st.week = ctx.weeks.includes(params.get('w')) ? params.get('w') : ctx.week;
@@ -406,10 +406,10 @@ async function drawNotices(body) {
   const list = await api(`/api/weekly/notices?week=${st.week}`);
   st.schedule = st.week === ctx.week ? ctx.schedule : null;
   const S = scheduleNow() || {};
-  // Báo cho bộ phận của mình (theo tài khoản); thư ký / PMO báo thay được cho bộ phận khác. Ban GĐ không phải báo.
+  // Báo cho bộ phận của mình (theo tài khoản); thư ký / PMO báo thay được cho bộ phận khác. Ban TGĐ không phải báo.
   const mine = ctx.me.canOnBehalf ? ctx.departments : ctx.me.mustReport ? ctx.departments.filter(d => d.id === ctx.me.departmentId) : [];
   const dept = mine.some(d => d.id === st.dept) ? st.dept : mine[0]?.id;
-  const people = deptId => store.users.filter(u => u.departmentId === Number(deptId) && u.role !== 'admin' && u.id !== store.me.id);
+  const people = deptId => store.users.filter(u => u.departmentId === Number(deptId) && !isItUser(u) && u.id !== store.me.id);
   body.innerHTML = `
     <div><h1>Báo nộp muộn hoặc vắng mặt</h1>
       <p class="wk-lead"><b>Nộp muộn:</b> báo trước 17:30 ${S.deadlineDay ? `${wday(S.deadlineDay)} ${fmtD(S.deadlineDay)}` : 'thứ Sáu'}, nộp chậm nhất 12:00 hôm sau. <b>Vắng giao ban:</b> báo trước 17:30 thứ Sáu (đột xuất: trước 08:00 ngày họp), cử người dự thay. Vắng vẫn nộp báo cáo đúng hạn.</p></div>
@@ -424,7 +424,7 @@ async function drawNotices(body) {
       ${ctx.me.canOnBehalf ? '<label class="wk-f" style="max-width:280px">Giờ nhận tin (thư ký nhập hộ tin nhắn báo — để trống nếu là giờ hiện tại)<input type="datetime-local" id="nReceived" data-testid="wk-n-received"></label>' : ''}
       <ul class="wk-errs" id="nErrs" hidden></ul>
       <div class="wk-actions"><button class="btn btn-primary" type="button" id="nSend" data-testid="wk-n-send">Gửi thông báo</button><span class="wk-note">Thư ký giao ban và Ban Giám đốc nhận thông báo ngay.</span></div>
-    </section>` : `<div class="wk-empty">${ctx.me.director ? 'Ban giám đốc nhận thông báo, không cần báo muộn / vắng.' : 'Tài khoản chưa thuộc bộ phận nào.'}</div>`}
+    </section>` : `<div class="wk-empty">${ctx.me.director ? 'Ban TGĐ nhận thông báo, không cần báo muộn / vắng.' : 'Tài khoản chưa thuộc bộ phận nào.'}</div>`}
     <section class="wk-card"><h2>Thông báo trong tuần ${fmtD(addDays(st.week, -4))} – ${fmtDY(st.week)}</h2>
       ${list.length ? `<div class="wk-table"><table><thead><tr><th>Bộ phận</th><th>Loại</th><th>Lý do</th><th>Giờ nộp dự kiến / người dự thay</th><th>Người báo · lúc</th><th></th></tr></thead><tbody data-testid="wk-n-list">
         ${list.map(n => `<tr><td><b>${esc(deptName(n.departmentId))}</b></td><td>${esc(n.typeLabel)}</td><td>${esc(n.reasonLabel)}${n.note ? `<br><span class="wk-note">${esc(n.note)}</span>` : ''}</td>
@@ -495,10 +495,10 @@ async function drawSummary(body) {
         ${s.publishedAt ? '' : `<span id="pubLock" style="${NOTE_CSS}" data-testid="wk-publish-lock" ${open ? 'hidden' : ''}>Chưa tới giờ giao ban: nút mở lúc ${at}. Action Log vẫn soạn và lưu trước được.</span>`}</div>
         <div id="pubConfirm"></div>` : ''}</section>
     ${s.canDetail ? `<section class="wk-card"><h2>Chi tiết từng bộ phận</h2><div style="display:grid;gap:10px">${s.rows.map(r => deptDetail(r, f, names)).join('')}</div></section>`
-      : `<section class="wk-card"><h2>Báo cáo bộ phận mình</h2><p class="wk-note">Trưởng / phó bộ phận nhận bản tổng hợp mức tóm tắt (QC-TH-01 Điều 5); chi tiết các bộ phận khác do thư ký giao ban và Ban giám đốc xem.</p>${s.rows.filter(r => r.id === ctx.me.departmentId).map(r => deptDetail(r, f, names)).join('')}</section>`}
+      : `<section class="wk-card"><h2>Báo cáo bộ phận mình</h2><p class="wk-note">Trưởng / phó bộ phận nhận bản tổng hợp mức tóm tắt (QC-TH-01 Điều 5); chi tiết các bộ phận khác do thư ký giao ban và Ban TGĐ xem.</p>${s.rows.filter(r => r.id === ctx.me.departmentId).map(r => deptDetail(r, f, names)).join('')}</section>`}
     <section class="wk-card"><div class="wk-actions"><button class="btn btn-primary" type="button" id="copySum" data-testid="wk-copy">Sao chép bản tổng hợp</button>
       <span class="wk-note" id="copyMsg" role="status" aria-live="polite">Bản gửi email (bản tóm tắt): tình trạng nộp, số việc xong / đang làm / nguy cơ chậm từng bộ phận, Action Log, việc có nguy cơ chậm và yêu cầu hỗ trợ. Dán vào email công ty hoặc nhóm chat đã được phê duyệt gửi TGĐ và các trưởng bộ phận. Không có danh sách việc xong / đang làm, không có họ tên người phụ trách.</span></div>
-      ${s.fullText ? `<div class="wk-actions" style="margin-top:8px"><button class="btn" type="button" id="copyFull" data-testid="wk-copy-full">Sao chép bản đầy đủ</button><span class="wk-note">Chỉ dùng nội bộ Ban GĐ — <b>không gửi email</b>, không dán vào nhóm chat chung (có danh sách việc của mọi bộ phận).</span></div>` : ''}
+      ${s.fullText ? `<div class="wk-actions" style="margin-top:8px"><button class="btn" type="button" id="copyFull" data-testid="wk-copy-full">Sao chép bản đầy đủ</button><span class="wk-note">Chỉ dùng nội bộ Ban TGĐ — <b>không gửi email</b>, không dán vào nhóm chat chung (có danh sách việc của mọi bộ phận).</span></div>` : ''}
       <textarea id="copyFallback" rows="8" hidden readonly></textarea></section>
     ${M ? setupHtml(s) : ''}`;
   drawActions();
@@ -528,7 +528,7 @@ function helpHtml(h, M) {
 function drawActions() {
   const box = $('#wkActList'); if (!box) return;
   const M = st.sum.canManage, a = st.actions;
-  const people = deptId => store.users.filter(u => u.departmentId === Number(deptId) && u.role !== 'admin');
+  const people = deptId => store.users.filter(u => u.departmentId === Number(deptId) && !isItUser(u));
   if (!a.length) { box.innerHTML = '<div class="wk-empty">Chưa có việc nào trong Action Log.</div>'; return; }
   box.innerHTML = `<div class="wk-table"><table><thead><tr><th style="width:40%">Việc</th><th>Bộ phận</th><th>Phụ trách</th><th>Hạn</th>${M ? '<th></th>' : ''}</tr></thead><tbody data-testid="wk-act-list">${a.map((x, i) => M
     ? `<tr data-ai="${i}"><td><textarea data-ak="task" rows="1" data-testid="wk-act-task-${i}">${esc(x.task)}</textarea></td>
@@ -558,8 +558,8 @@ function setupHtml(s) {
       <div class="wk-order"><b style="font-size:.9rem">Bộ phận phải nộp — theo thứ tự trình bày tại giao ban</b>${ctx.configured ? '' : '<span class="wk-note">Chưa thiết lập: đang lấy tự động các bộ phận chủ trì hạng mục MTL. Chọn đúng 5 bộ phận theo quy chế rồi bấm Lưu.</span>'}
         <ol id="setOrder">${order.map(o => `<li data-id="${o.id}"><label><input type="checkbox" ${o.on ? 'checked' : ''} data-testid="wk-set-dept-${o.id}"> ${esc(deptName(o.id))}</label><button class="btn x" type="button" data-up>↑</button><button class="btn x" type="button" data-down>↓</button></li>`).join('')}</ol></div>
       <div class="wk-grid">
-        <label class="wk-f">Bộ phận thư ký giao ban (Tổng hợp & Nhân sự)${ctx.me.canRoles ? `<select id="setSecretary" data-testid="wk-set-secretary">${opts([['', '— Chưa chọn —'], ...ctx.departments.map(d => [d.id, d.name])], ctx.secretaryDepartmentId || '')}</select>` : `<span class="wk-ro">${esc(deptName(ctx.secretaryDepartmentId) || '— Ban giám đốc chưa chọn —')}</span>`}</label>
-        <label class="wk-f">PMO (xem đầy đủ, không sửa — Ban giám đốc chỉ định)${ctx.me.canRoles ? `<select id="setPmo" multiple size="4" data-testid="wk-set-pmo">${store.users.filter(u => u.role !== 'admin').map(u => `<option value="${u.id}"${ctx.pmoUserIds.includes(u.id) ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select>` : `<span class="wk-ro">${esc(ctx.pmoUserIds.map(id => store.users.find(u => u.id === id)?.fullName).filter(Boolean).join(', ') || '—')}</span>`}</label>
+        <label class="wk-f">Bộ phận thư ký giao ban (Tổng hợp & Nhân sự)${ctx.me.canRoles ? `<select id="setSecretary" data-testid="wk-set-secretary">${opts([['', '— Chưa chọn —'], ...ctx.departments.map(d => [d.id, d.name])], ctx.secretaryDepartmentId || '')}</select>` : `<span class="wk-ro">${esc(deptName(ctx.secretaryDepartmentId) || '— Ban TGĐ chưa chọn —')}</span>`}</label>
+        <label class="wk-f">PMO (xem đầy đủ, không sửa — Ban TGĐ chỉ định)${ctx.me.canRoles ? `<select id="setPmo" multiple size="4" data-testid="wk-set-pmo">${store.users.filter(u => !isItUser(u)).map(u => `<option value="${u.id}"${ctx.pmoUserIds.includes(u.id) ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select>` : `<span class="wk-ro">${esc(ctx.pmoUserIds.map(id => store.users.find(u => u.id === id)?.fullName).filter(Boolean).join(', ') || '—')}</span>`}</label>
         <label class="wk-f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="setSkip" ${md.skip ? 'checked' : ''} data-testid="wk-set-skip"> Tuần này nghỉ (Tết, lễ) — không giao ban, không chấm điểm</label>
         <label class="wk-f">Tuần bắt đầu chấm điểm tuân thủ<input type="date" id="setStart" value="${esc(ctx.startWeek || '')}" step="7"></label>
         <label class="wk-f">Hạn nộp tuần này (nghỉ lễ thứ Sáu → ngày làm việc liền trước)<input type="date" id="setDeadline" value="${esc(md.deadlineDay || '')}" placeholder="${S.to}"></label>
@@ -650,7 +650,7 @@ function bindSummary(body, s) {
       const ok = () => {
         copy.style.minWidth = `${copy.offsetWidth}px`; // giữ bề rộng nút khi đổi chữ — không xô dòng ghi chú bên cạnh
         copy.textContent = 'Đã sao chép ✓';
-        msg.textContent = full ? 'Đã sao chép bản đầy đủ ✓ — chỉ dùng nội bộ Ban GĐ, không gửi email.' : 'Đã sao chép ✓ — dán vào email công ty hoặc nhóm chat đã được phê duyệt.';
+        msg.textContent = full ? 'Đã sao chép bản đầy đủ ✓ — chỉ dùng nội bộ Ban TGĐ, không gửi email.' : 'Đã sao chép ✓ — dán vào email công ty hoặc nhóm chat đã được phê duyệt.';
         clearTimeout(copy._t); copy._t = setTimeout(() => { copy.textContent = label; }, 2500);
         logCopy();
       };

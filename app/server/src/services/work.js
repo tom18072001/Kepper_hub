@@ -4,7 +4,7 @@ const { permissionScope, isItAdmin } = require('../lib/permissions');
 const { deadlineStatus } = require('./register');
 const S = require('./stats');
 
-// Phạm vi xem việc của người khác: Ban Giám đốc (SYSTEM) — mọi người, mọi phòng; lãnh đạo phòng (UNIT) — phòng mình
+// Phạm vi xem việc của người khác: Ban Tổng Giám đốc (SYSTEM) — mọi người, mọi phòng; lãnh đạo phòng (UNIT) — phòng mình
 // và cán bộ trong phòng; còn lại (SELF) — chỉ chính mình. Admin IT không có dữ liệu nghiệp vụ (null).
 function workScope(user) {
   if (!user || isItAdmin(user)) return null;
