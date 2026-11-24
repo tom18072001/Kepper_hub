@@ -1,6 +1,6 @@
 # Đề xuất: Quy chế, quy định nội bộ — metadata, phê duyệt của Tổng Giám đốc, cấp được xem
 
-> Trạng thái: **CHỜ CHỦ DỰ ÁN DUYỆT** (giai đoạn 1 — chưa sửa mã). Rà trên `main` 0a3ca5c (24/11/2026), dùng mô hình phân quyền
+> Trạng thái: **ĐÃ DUYỆT 24/11/2026** — chủ dự án đồng ý cả 5 khuyến nghị ở mục 9 (9.1–9.5). Rà trên `main` 0a3ca5c (24/11/2026), dùng mô hình phân quyền
 > "một hệ quy chiếu" đã duyệt 24/11/2026 (PR #41). Giai đoạn 2 (sửa mã) chỉ bắt đầu sau khi chủ dự án duyệt **và** PR #41 merge.
 > Tài liệu không chứa tên người, số liệu thật.
 
