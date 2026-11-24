@@ -329,12 +329,15 @@ function finalize(data, f) {
 }
 // Lúc nộp, sau khi máy chủ tính lại tình trạng: dòng gắn việc về đúng phần — xong → I, đã bắt đầu (Phần III ghi %, việc vừa bấm bắt đầu)
 // → II. Bản lưu khớp với điều người đọc thấy; dòng chưa bắt đầu, hết nguy cơ (vd. vừa gia hạn) giữ ở III, không vào số liệu giao ban.
-function regroup(data) {
+// items = false (tuần đã họp, đóng băng): không xếp lại dòng gắn việc.
+// Dòng gắn việc: phần do máy quyết hoàn toàn theo tình trạng (K1) — xong → I; đã bắt đầu → II; chưa bắt đầu → III (nguy cơ / đăng ký mà chưa làm).
+function regroup(data, { items = true } = {}) {
   const out = { ...data, results: [...data.results], ongoing: [...data.ongoing], risks: [...(data.risks || [])] };
-  const move = (from, to, test) => { for (const r of out[from].filter(x => x.itemId && test(x))) { out[from].splice(out[from].indexOf(r), 1); out[to].push(to === 'ongoing' ? { start: '', next: '', ...r } : r); } };
-  move('ongoing', 'results', r => r.status === DONE);
-  move('risks', 'results', r => r.status === DONE);
-  move('risks', 'ongoing', r => rowStarted(r));
+  const placeOfRow = r => (r.status === DONE ? 'results' : rowStarted(r) ? 'ongoing' : 'risks');
+  if (items) for (const from of ['results', 'ongoing', 'risks']) for (const r of out[from].filter(x => x.itemId && placeOfRow(x) !== from)) {
+    const to = placeOfRow(r);
+    out[from].splice(out[from].indexOf(r), 1); out[to].push(to === 'ongoing' ? { start: '', next: '', ...r } : r);
+  }
   // Dòng tự do: bắt buộc / đã đăng ký mà chưa làm → III (tổng hợp cũng xếp ở III); ở III mà đã làm → II.
   const free = (from, to, test) => { for (const r of out[from].filter(x => !x.itemId && x.task && test(x))) { out[from].splice(out[from].indexOf(r), 1); out[to].push(to === 'ongoing' ? { start: '', next: '', ...r } : r); } };
   free('results', 'risks', r => r.status !== DONE && !rowStarted(r) && (r.mandatory || r.planned));
@@ -390,7 +393,9 @@ function briefFor(view, canSee, ownDeptId = null) {
   const hideHelp = h => h.itemId && (h.fromId === ownDeptId ? !canSee(h.itemId) : !!h.secret);
   return { ...view, rows: view.rows.map(r => (r.report ? { ...r, report: viewFor(r.report, canSee) } : r)),
     risks: (view.risks || []).map(x => (x.itemId && !canSee(x.itemId) ? { departmentId: x.departmentId, department: x.department, risk: x.risk, hidden: true, task: '', ref: '', solution: '', due: '', pct: '', itemId: null } : x)),
-    helps: (view.helps || []).map(g => ({ ...g, list: g.list.map(h => (hideHelp(h) ? hiddenHelp(h) : h)) })) };
+    helps: (view.helps || []).map(g => ({ ...g, list: g.list.map(h => (hideHelp(h) ? hiddenHelp(h) : h)) })),
+    // K5: kết luận giao ban chỉ giữ cho yêu cầu hỗ trợ người xem được thấy (kết luận ghi tay có thể nhắc tên việc kín).
+    meeting: { ...(view.meeting || {}), conclusions: Object.fromEntries(Object.entries(view.meeting?.conclusions || {}).filter(([k]) => (view.helps || []).some(g => g.list.some(h => h.key === k && !hideHelp(h))))) } };
 }
 // Bản không có dòng tự bổ sung.
 const withoutAuto = (data, keep = () => false) => (data ? { ...data, results: (data.results || []).filter(r => !isAuto(r) || keep(r)),

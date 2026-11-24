@@ -241,7 +241,9 @@ export function buildServer({ call = createSession() } = {}) {
       data.plans = [...(data.plans || []), ...addPlans.map(p => ({ ...p, basis: p.basis || 'KH tháng', ownerIds: p.ownerIds || [] }))];
       if (other !== undefined) data.other = other;
       const saved = await call('/api/weekly/report', { method: 'PUT', body: { week: d.week, data, baseUpdatedAt: d.report?.updatedAt || null } });
-      return { savedAt: saved.updatedAt, missingKeys: missing, next: 'Mở Kepler Hub → Báo cáo tuần, kiểm tra và bấm "Gửi" (Claude không nộp thay).' };
+      // Máy chủ bỏ qua thay đổi trên dòng người dùng không có quyền thêm / sửa / bỏ → báo lại (không im lặng).
+      return { savedAt: saved.updatedAt, missingKeys: missing, ignored: saved.ignored || 0, removed: saved.removed || 0, ...(saved.warning ? { warning: saved.warning } : {}),
+        next: 'Mở Kepler Hub → Báo cáo tuần, kiểm tra và bấm "Gửi" (Claude không nộp thay).' };
     }));
 
   // ---------- Playground CRM (đối tác) — chỉ khi Kepper bật module CRM ----------

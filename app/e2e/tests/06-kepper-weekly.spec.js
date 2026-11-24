@@ -430,6 +430,18 @@ test('21. Mục S10 — việc Giám đốc giao trưởng phòng qua sổ, nhâ
   const late = await apiAs(nv, '/api/weekly/submit', { method: 'POST', headers: { 'content-type': 'application/json' }, data: { week: ctx.week, data: nvOld.data, baseUpdatedAt: nvOld.updatedAt } });
   expect(late.status()).toBe(409); expect((await late.json()).code).toBe('REPORT_CONFLICT');
   expect((await json(gd, `/api/weekly/report?week=${ctx.week}&departmentId=${kt}`)).report.data.other).toBe('Trưởng phòng vừa sửa (giả)');
+  // Vòng 6 — mục 4: nhân viên mở trang khi CHƯA có báo cáo (tuần cũ), trưởng phòng lưu nháp, nhân viên nộp với baseUpdatedAt = null → 409.
+  const w0 = addDays(ctx.week, -21);
+  const nvW0 = await json(nv, `/api/weekly/report?week=${w0}`);
+  expect(nvW0.report).toBe(null);
+  const tpW0 = (await json(tp, `/api/weekly/report?week=${w0}`)).prefill;
+  tpW0.other = 'Trưởng phòng lưu trước (giả)';
+  await json(tp, '/api/weekly/report', { method: 'PUT', headers: { 'content-type': 'application/json' }, data: { week: w0, data: tpW0, baseUpdatedAt: null } });
+  const nullBase = await apiAs(nv, '/api/weekly/submit', { method: 'POST', headers: { 'content-type': 'application/json' }, data: { week: w0, data: nvW0.prefill, baseUpdatedAt: null } });
+  expect(nullBase.status()).toBe(409); expect((await nullBase.json()).code).toBe('REPORT_CONFLICT');
+  // Vòng 6 — mục 8: thư ký nhận cờ noDelete cho dòng của việc mình không xem được (giao diện ẩn nút "Bỏ").
+  const secView = (await json(hc, `/api/weekly/report?week=${ctx.week}&departmentId=${kt}`)).report.data;
+  expect(rowsOf(secView).find(r => r.itemId === item.id).noDelete).toBe(true);
   // Vòng 4 — bản NHÁP hai người cùng sửa (tuần sau): trưởng phòng nháp có dòng việc trong sổ (Vướng + giải pháp) và Phần IV gắn việc đó;
   // nhân viên (không xem được việc) tự lưu → dòng và Phần IV của trưởng phòng giữ NGUYÊN.
   const w2 = addDays(ctx.week, 7);
