@@ -29,6 +29,10 @@ jobs:
       - name: Unit test
         working-directory: app/server
         run: npm test
+      - name: Script triển khai máy ảo (cú pháp, dọn tag quay lại — docker giả)
+        run: |
+          sh -n deploy/vm-deploy.sh && sh -n deploy/prune-rollback-tags.sh
+          sh deploy/prune-rollback-tags.test.sh
       - name: Migration khớp schema
         working-directory: app/server
         run: |

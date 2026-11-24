@@ -25,15 +25,14 @@ else
   sh deploy/precheck-roles.sh
   echo "==> Sao lưu CSDL trước"
   docker compose exec -T -e BACKUP_ONCE=1 backup sh /deploy/backup.sh || echo "!! Không chạy được sao lưu tay — kiểm tra $DATA/backups trước khi tiếp tục"
-  # Giữ image app đang chạy để quay lại (build sẽ ghi đè tag kepper-app:<APP_VERSION>). Chỉ giữ 2 tag rollback gần nhất.
+  # Giữ image app đang chạy để quay lại (build sẽ ghi đè tag kepper-app:<APP_VERSION>). Chỉ giữ 2 tag rollback-<giờ> gần nhất do
+  # script này tạo; tag đặt tay (vd. rollback-pr40-…, pre-…) không bị đụng — deploy/prune-rollback-tags.sh.
   cid="$(docker compose ps -q app 2>/dev/null || true)"
   if [ -n "$cid" ]; then
     rollback="kepper-app:rollback-$(date +%Y%m%d-%H%M%S)"
     docker image tag "$(docker inspect -f '{{.Image}}' "$cid")" "$rollback"
     echo "    image cũ để quay lại: $rollback"
-    docker image ls kepper-app --format '{{.Tag}}' | grep '^rollback-' | sort -r | tail -n +3 | while read -r t; do
-      docker image rm "kepper-app:$t" >/dev/null 2>&1 && echo "    xoá tag cũ: kepper-app:$t" || true
-    done
+    sh deploy/prune-rollback-tags.sh 2 || echo "!! Không dọn được tag quay lại cũ — bỏ qua (xem: docker image ls kepper-app)"
   fi
 fi
 echo "==> Build và chạy (app, postgres, backup, caddy)"
