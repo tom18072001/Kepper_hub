@@ -11,9 +11,10 @@ export const CATEGORY = {
   BACKLOG: 'Tồn đọng', UNSTARTED: 'Chưa bắt đầu', STARTED: 'Đang thực hiện', REVIEW: 'Chờ duyệt', COMPLETED: 'Hoàn thành', CANCELLED: 'Huỷ',
   OTHER: 'Cột tự do',
 };
-export const ROLE_LABEL = { admin: 'Quản trị hệ thống', director: 'Ban Tổng Giám đốc', manager: 'Trưởng phòng', deputy: 'Phó phòng', member: 'Nhân viên' };
+// Một trục vai (lib/permissions.js ROLES). 'deputy' là giá trị cũ, đã gộp vào Lãnh đạo bộ phận.
+export const ROLE_LABEL = { director: 'Ban Tổng Giám đốc', manager: 'Lãnh đạo bộ phận', member: 'Nhân viên', admin: 'Quản trị hệ thống', deputy: 'Lãnh đạo bộ phận' };
 export const VISIBILITY = { DEPARTMENT: 'Cả bộ phận', PRIVATE: 'Chỉ thành viên', PUBLIC: 'Toàn công ty (dùng chung)' };
-export const APPROVER = { PROJECT_LEAD: 'Người đứng tên dự án', DEPARTMENT_MANAGER: 'Trưởng phòng', DIRECTOR: 'Ban Tổng Giám đốc', SUPERVISOR: 'Người giao / Phó TGĐ phụ trách', USER: 'Người được chỉ định' };
+export const APPROVER = { PROJECT_LEAD: 'Người đứng tên dự án', DEPARTMENT_MANAGER: 'Lãnh đạo bộ phận chủ trì', DIRECTOR: 'BTGĐ phụ trách', USER: 'Người được chỉ định' };
 
 const DAY = 86_400_000;
 export function fmtDate(value) {

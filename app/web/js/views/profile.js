@@ -82,7 +82,8 @@ export async function renderProfile(root, setCrumbs) {
           ${row('Họ và tên', esc(p.fullName))}
           ${row('Chức danh', esc(p.displayTitle || ''))}
           ${row('Bộ phận', esc(p.department?.name || ''))}
-          ${row('Vai trò', esc(p.roleLabel))}
+          ${row('Vai', esc(p.roleLabel))}
+          ${p.duties?.length ? `<div data-testid="profile-duties">${row('Kiêm nhiệm', esc(p.duties.join(', ')))}</div>` : ''}
           ${row('Email', esc(p.email || ''))}
           ${row('Điện thoại', esc(p.phone || ''))}
           ${row('Tạo tài khoản', esc(fmtDate(p.createdAt)))}

@@ -31,40 +31,26 @@ async function renderTokens(root) {
   };
 }
 
-// ---------- Quyền: nhãn tiếng Việt + so sánh với hồ sơ vai trò ----------
+// ---------- Quyền theo vai (một hệ quy chiếu: quyền suy hoàn toàn từ vai, không chỉnh từng người) ----------
 let catalogCache = null;
 const getCatalog = async () => (catalogCache ||= await api('/api/permissions/catalog'));
-const ACTION_TEXT = { VIEW: 'Xem', OPERATE: 'Thao tác' }, SCOPE_TEXT = { UNIT: 'Bộ phận', SYSTEM: 'Toàn tổ chức' };
-const slot = g => g.permissionKey + '|' + g.action;
-function grantName(cat, g) {
-  const p = cat.permissions.find(x => x.key === g.permissionKey);
-  return `${esc(p ? p.label : g.permissionKey)} <span class="muted xs">· ${ACTION_TEXT[g.action] || esc(g.action)}</span>`;
+const ACTION_TEXT = { VIEW: 'Xem', OPERATE: 'Thao tác' }, SCOPE_TEXT = { UNIT: 'Bộ phận mình', SYSTEM: 'Toàn công ty' };
+const BOARD_DEPT_CODES = ['BTGD', 'BGD'];
+const deptById = id => store.departments.find(d => d.id === Number(id)) || null;
+// Cùng quy tắc với server (lib/permissions.js boardDeptMismatch): vai BTGĐ nên trùng đúng thành viên bộ phận Ban Tổng Giám đốc.
+function boardMismatch(role, departmentId) {
+  if (role === 'admin') return null;
+  const inBoard = BOARD_DEPT_CODES.includes(String(deptById(departmentId)?.code || '').toUpperCase());
+  if (role === 'director' && !inBoard) return 'Vai Ban Tổng Giám đốc nhưng không thuộc bộ phận Ban Tổng Giám đốc';
+  if (role !== 'director' && inBoard) return 'Thuộc bộ phận Ban Tổng Giám đốc nhưng không có vai Ban Tổng Giám đốc';
+  return null;
 }
-// Cùng quy tắc với server (routes/admin.js profileDiff): thêm / bỏ / đổi phạm vi theo từng ô quyền + hành động.
-function diffGrants(current = [], target = []) {
-  const cur = new Map(current.map(g => [slot(g), g.scope])), next = new Map(target.map(g => [slot(g), g.scope]));
-  const rows = [];
-  for (const [k, scope] of next) {
-    const [permissionKey, action] = k.split('|');
-    if (!cur.has(k)) rows.push({ kind: 'add', permissionKey, action, to: scope });
-    else if (cur.get(k) !== scope) rows.push({ kind: 'change', permissionKey, action, from: cur.get(k), to: scope });
-  }
-  for (const [k, scope] of cur) if (!next.has(k)) { const [permissionKey, action] = k.split('|'); rows.push({ kind: 'remove', permissionKey, action, from: scope }); }
-  const order = new Map(permOrder);
-  return rows.sort((a, b) => (order.get(a.permissionKey) ?? 99) - (order.get(b.permissionKey) ?? 99));
+function scopeText(u) {
+  if (u.role !== 'director') return '<span class="muted">—</span>';
+  const names = (u.supervisedDepartmentIds || []).map(id => esc(deptById(id)?.name || '#' + id));
+  const parts = [u.boardAll ? '<span class="pill info" title="Phạm vi phụ trách: Toàn công ty — BTGĐ phụ trách của mọi việc" data-testid="board-all-pill">Toàn công ty</span>' : '', names.join(', ')].filter(Boolean);
+  return parts.length ? parts.join(' ') : '<span class="muted xs">Chưa phụ trách</span>';
 }
-function diffSummary(rows) {
-  const n = k => rows.filter(r => r.kind === k).length;
-  return [n('add') && `thêm ${n('add')}`, n('remove') && `bỏ ${n('remove')}`, n('change') && `đổi phạm vi ${n('change')}`].filter(Boolean).join(', ');
-}
-function diffTable(cat, rows, testid = 'perm-diff') {
-  if (!rows.length) return '<p class="muted sm">Không có khác biệt.</p>';
-  const tag = { add: '<span class="pill ok">Thêm</span>', remove: '<span class="pill warn">Bỏ</span>', change: '<span class="pill">Đổi phạm vi</span>' };
-  return `<table class="table diff-table" data-testid="${testid}"><thead><tr><th>Thay đổi</th><th>Quyền</th><th>Phạm vi</th></tr></thead><tbody>
-    ${rows.map(r => `<tr class="diff-${r.kind}"><td>${tag[r.kind]}</td><td>${grantName(cat, r)}</td><td class="sm">${r.kind === 'add' ? SCOPE_TEXT[r.to] : r.kind === 'remove' ? `<s>${SCOPE_TEXT[r.from]}</s>` : `${SCOPE_TEXT[r.from]} → <b>${SCOPE_TEXT[r.to]}</b>`}</td></tr>`).join('')}</tbody></table>`;
-}
-let permOrder = [];
-function rememberOrder(cat) { permOrder = cat.permissions.map((p, i) => [p.key, i]); }
 
 // ---------- Tài khoản ----------
 async function renderUsers(root) {
@@ -72,14 +58,16 @@ async function renderUsers(root) {
   adminUsersCache = null;
   const canEdit = can('admin.users', 'operate'), canPerm = can('admin.permissions');
   root.innerHTML = `<div class="page-head"><h1>Tài khoản</h1>${canEdit ? `<button class="btn btn-primary" id="addUser" data-testid="add-user">${ICON.plus}Tạo tài khoản</button>` : ''}</div>
-    <div class="admin-scroll"><table class="table admin-cards adm-users" data-testid="users-table"><thead><tr><th>Tài khoản</th><th>Họ tên</th><th>Nhóm</th><th>Bộ phận</th><th>Trạng thái</th><th>Đăng nhập gần nhất</th><th></th></tr></thead><tbody>
+    <p class="muted sm">Mỗi tài khoản có đúng một <b>vai</b>: Ban Tổng Giám đốc, Lãnh đạo bộ phận, Nhân viên hoặc Quản trị hệ thống. Quyền đi theo vai; thành viên Ban Tổng Giám đốc có thêm <b>phạm vi phụ trách</b>.</p>
+    <div class="admin-scroll"><table class="table admin-cards adm-users" data-testid="users-table"><thead><tr><th>Tài khoản</th><th>Họ tên</th><th>Vai</th><th>Bộ phận</th><th>Phụ trách</th><th>Trạng thái</th><th>Đăng nhập gần nhất</th><th></th></tr></thead><tbody>
     ${users.map(u => `<tr data-testid="user-${esc(u.username)}"><td class="card-title" data-label="Tài khoản"><b>${esc(u.username)}</b>${u.isRootAdmin ? ' <span class="pill">Gốc</span>' : ''}</td>
       <td class="adm-name" data-label="Họ tên"><span>${esc(u.fullName)}<span class="muted xs adm-block">${esc(u.displayTitle || '')}</span></span></td>
-      <td data-label="Nhóm"><span>${ROLE_LABEL[u.role] || esc(u.role)}${u.boardAll ? ' <span class="pill info" title="Ban Tổng Giám đốc của mọi việc (chọn trong Phân quyền)" data-testid="board-all-pill">BTGĐ toàn công ty</span>' : ''}${u.profileMismatch ? ` <span class="pill warn" title="Quyền hiện tại khác quyền mặc định của vai — mở Phân quyền để xem và khôi phục" data-testid="mismatch-${esc(u.username)}">Lệch quyền</span>` : ''}</span></td>
+      <td data-label="Vai"><span>${ROLE_LABEL[u.role] || esc(u.role)}${u.boardMismatch ? ` <span class="pill warn" title="${esc(u.boardMismatch)}" data-testid="board-mismatch-${esc(u.username)}">Lệch bộ phận BTGĐ</span>` : ''}</span></td>
       <td data-label="Bộ phận"><span>${esc(u.department?.name || '—')}${u.department && store.departments.find(d => d.id === u.department.id)?.isActive === false ? ' <span class="muted xs">(đã khoá)</span>' : ''}</span></td>
+      <td data-label="Phụ trách" class="sm"><span>${scopeText(u)}</span></td>
       <td data-label="Trạng thái">${u.isActive ? (u.mustChangePw ? '<span class="pill">Chờ đổi mật khẩu</span>' : '<span class="pill">Hoạt động</span>') : '<span class="pill">Đã khoá</span>'}</td>
       <td class="muted sm" data-label="Đăng nhập gần nhất">${u.lastLoginAt ? fmtDateTime(u.lastLoginAt) : '—'}</td>
-      <td class="actions">${canEdit && !u.isRootAdmin ? `<button class="btn btn-ghost btn-sm" data-edit="${u.id}" data-testid="edit-${esc(u.username)}">Sửa</button><button class="btn btn-ghost btn-sm" data-reset="${u.id}">Reset MK</button>` : ''}${canPerm && !u.isRootAdmin ? `<button class="btn btn-ghost btn-sm" data-perm="${u.id}" data-testid="perm-${esc(u.username)}">Phân quyền</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
+      <td class="actions">${canEdit && !u.isRootAdmin ? `<button class="btn btn-ghost btn-sm" data-edit="${u.id}" data-testid="edit-${esc(u.username)}">Sửa</button><button class="btn btn-ghost btn-sm" data-reset="${u.id}">Reset MK</button>` : ''}${canPerm && !u.isRootAdmin ? `<button class="btn btn-ghost btn-sm" data-perm="${u.id}" data-testid="perm-${esc(u.username)}">${u.role === 'director' ? 'Quyền & phụ trách' : 'Quyền'}</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   root.onclick = async e => {
     if (e.target.closest('#addUser')) return userForm(root);
     const edit = e.target.closest('[data-edit]'); if (edit) return userForm(root, users.find(u => u.id === Number(edit.dataset.edit)));
@@ -91,11 +79,11 @@ async function renderUsers(root) {
         await api(`/api/admin/users/${u.id}/reset-password`, { method: 'POST' }).then(() => toast('Đã reset mật khẩu', 'ok')).catch(err => toast(errorMessage(err), 'err'));
       return;
     }
-    const perm = e.target.closest('[data-perm]'); if (perm) return permissionEditor(root, Number(perm.dataset.perm), users);
+    const perm = e.target.closest('[data-perm]'); if (perm) return roleViewer(root, users.find(u => u.id === Number(perm.dataset.perm)));
   };
 }
 
-// Ô chọn bộ phận: phòng đang hoạt động + phòng hiện tại của tài khoản kể cả khi đã khoá (không làm mất phòng khi sửa).
+// Ô chọn bộ phận: bộ phận đang hoạt động + bộ phận hiện tại của tài khoản kể cả khi đã khoá (không làm mất bộ phận khi sửa).
 function departmentOptions(currentId) {
   return store.departments.filter(d => d.isActive || d.id === currentId)
     .map(d => `<option value="${d.id}"${currentId === d.id ? ' selected' : ''}>${esc(d.name)}${d.isActive ? '' : ' (đã khoá)'}</option>`).join('');
@@ -107,49 +95,45 @@ function countsBox(w) {
     ${item(w.supportOpen, 'việc đang phối hợp')}
     ${item(w.approvalsPending, 'yêu cầu duyệt đang chờ')}
     ${item(w.delegationsFrom + w.delegationsTo, 'uỷ quyền còn hiệu lực', w.delegationsFrom + w.delegationsTo ? `${w.delegationsFrom} giao đi · ${w.delegationsTo} nhận` : '')}
-    ${item(w.supervisedDepartments, 'phòng đang làm Phó TGĐ phụ trách')}</div>`;
+    ${item(w.supervisedDepartments, 'bộ phận đang phụ trách (Phó TGĐ)')}</div>`;
 }
 const hasWork = w => !!(w.leadOpen || w.supportOpen || w.delegationsFrom || w.delegationsTo || w.supervisedDepartments);
 
 function userForm(root, user = null) {
-  const canPermWrite = can('admin.permissions', 'operate');
   const modal = openModal(`<h2>${user ? 'Sửa tài khoản ' + esc(user.username) : 'Tạo tài khoản'}</h2><form>
     <div class="grid2"><label class="field">Tài khoản<input name="username" required value="${esc(user?.username || '')}" pattern="[a-z0-9._\\-]{3,50}" title="Chữ thường, số, . _ -" data-testid="user-username"></label>
     <label class="field">Họ tên<input name="fullName" required value="${esc(user?.fullName || '')}" data-testid="user-fullname"></label>
-    <label class="field">Chức danh<input name="displayTitle" value="${esc(user?.displayTitle || '')}"></label>
+    <label class="field">Chức danh <span class="muted xs">(vd. Trưởng phòng, Phó trưởng ban — chỉ để hiển thị)</span><input name="displayTitle" value="${esc(user?.displayTitle || '')}"></label>
     <label class="field">Email<input name="email" type="email" value="${esc(user?.email || '')}"></label>
-    <label class="field">Vai<select name="role" data-testid="user-role">${Object.entries(ROLE_LABEL).map(([k, v]) => `<option value="${k}"${(user?.role || 'member') === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+    <label class="field">Vai<select name="role" data-testid="user-role">${Object.entries(ROLE_LABEL).filter(([k]) => k !== 'deputy').map(([k, v]) => `<option value="${k}"${((user?.role === 'deputy' ? 'manager' : user?.role) || 'member') === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
     <label class="field">Bộ phận<select name="departmentId" data-testid="user-department"><option value="">— Không thuộc bộ phận —</option>${departmentOptions(user?.departmentId ?? null)}</select></label>
     ${user ? `<label class="check"><input type="checkbox" name="isActive" ${user.isActive ? 'checked' : ''} data-testid="user-active"> Đang hoạt động</label>` : '<label class="field">Mật khẩu ban đầu<input name="password" type="password" placeholder="Để trống: mật khẩu mặc định" autocomplete="new-password"></label>'}</div>
-    ${user ? '<div id="roleBox" class="hidden"></div><div id="lockBox" class="hidden"></div>' : '<p class="muted xs">Quyền ban đầu được cấp theo vai; có thể chỉnh ở mục Phân quyền.</p>'}
+    <div id="boardBox" class="hidden"></div>
+    ${user ? '<div id="roleBox" class="hidden"></div><div id="lockBox" class="hidden"></div>' : '<p class="muted xs">Quyền đi theo vai (xem nút "Quyền" ở danh sách tài khoản).</p>'}
     <p class="error" id="userError"></p>
     <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Huỷ</button><button class="btn btn-primary" data-testid="user-save">Lưu</button></div></form>`);
   modal.querySelector('[data-close]').onclick = () => closeModal();
   const form = modal.querySelector('form');
-  let grantsCache = null, workload = null;
-
-  // Đổi Vai: hỏi có áp quyền mặc định của vai trò mới không, kèm bảng khác biệt.
-  const roleBox = $('#roleBox', modal), lockBox = $('#lockBox', modal);
-  async function showRoleBox() {
-    const role = form.elements.role.value;
-    if (!user || role === user.role) { roleBox.classList.add('hidden'); roleBox.innerHTML = ''; return; }
-    roleBox.className = 'admin-box';
-    if (!canPermWrite) { roleBox.innerHTML = `<h4>Đổi nhóm sang ${esc(ROLE_LABEL[role])}</h4><p class="muted sm">Bạn không có quyền Phân quyền: quyền hiện tại của tài khoản được giữ nguyên. Báo người phụ trách phân quyền dùng "Khôi phục quyền theo vai trò".</p>`; return; }
-    roleBox.innerHTML = '<p class="muted sm">Đang so sánh quyền…</p>';
-    try {
-      const [cat, data] = await Promise.all([getCatalog(), grantsCache || api(`/api/admin/users/${user.id}/permissions`)]);
-      grantsCache = data; rememberOrder(cat);
-      if (form.elements.role.value !== role) return;
-      const rows = diffGrants(data.grants, cat.roleProfiles[role] || []);
-      roleBox.innerHTML = `<h4>Áp quyền mặc định của vai trò mới?</h4>
-        <p class="muted sm">${esc(ROLE_LABEL[user.role] || user.role)} → <b>${esc(ROLE_LABEL[role])}</b>. ${rows.length ? `Quyền hiện tại sẽ được thay bằng quyền mặc định của nhóm mới (${diffSummary(rows)}):` : 'Quyền hiện tại đã trùng quyền mặc định của nhóm mới.'}</p>
-        ${rows.length ? `${diffTable(cat, rows)}
-        <label class="check"><input type="radio" name="applyProfile" value="1" checked data-testid="apply-profile-yes"> Áp quyền mặc định của vai trò mới (khuyến nghị)</label>
-        <label class="check"><input type="radio" name="applyProfile" value="0" data-testid="apply-profile-no"> Giữ nguyên quyền hiện tại</label>
-        ${role === 'director' ? '<p class="muted xs">Tài khoản Ban Tổng Giám đốc có quyền xem, duyệt công việc toàn tổ chức — Ban Tổng Giám đốc sẽ được thông báo.</p>' : ''}` : ''}`;
-    } catch (error) { roleBox.innerHTML = `<p class="error">${esc(errorMessage(error))}</p>`; }
+  let workload = null;
+  const roleBox = $('#roleBox', modal), lockBox = $('#lockBox', modal), boardBox = $('#boardBox', modal);
+  // Vai BTGĐ lệch bộ phận Ban Tổng Giám đốc: cảnh báo, phải xác nhận mới lưu (server kiểm lại).
+  function showBoardBox() {
+    const warning = boardMismatch(form.elements.role.value, form.elements.departmentId.value || null);
+    const unchanged = user && form.elements.role.value === (user.role === 'deputy' ? 'manager' : user.role) && String(form.elements.departmentId.value || '') === String(user.departmentId ?? '');
+    if (!warning || unchanged) { boardBox.className = 'hidden'; boardBox.innerHTML = ''; return; }
+    boardBox.className = 'admin-box warn';
+    boardBox.innerHTML = `<b>${esc(warning)}.</b> <span class="muted sm">Vai Ban Tổng Giám đốc nên trùng đúng thành viên bộ phận Ban Tổng Giám đốc.</span>
+      <label class="check"><input type="checkbox" name="confirmBoardDept" data-testid="user-confirm-board"> Tôi đã kiểm tra, vẫn lưu</label>`;
   }
-  // Khoá tài khoản (nghỉ việc): hiện số đếm khối lượng đang có + tuỳ chọn trả việc về lãnh đạo phòng.
+  // Đổi vai: quyền đổi theo vai mới (không còn "áp hồ sơ quyền").
+  function showRoleBox() {
+    const role = form.elements.role.value, old = user.role === 'deputy' ? 'manager' : user.role;
+    if (role === old) { roleBox.classList.add('hidden'); roleBox.innerHTML = ''; return; }
+    roleBox.className = 'admin-box';
+    roleBox.innerHTML = `<h4>Đổi vai: ${esc(ROLE_LABEL[old] || old)} → ${esc(ROLE_LABEL[role])}</h4>
+      <p class="muted sm">Quyền của tài khoản đổi ngay theo vai mới.${role === 'director' ? ' Ban Tổng Giám đốc sẽ được thông báo; đặt phạm vi phụ trách ở nút "Quyền & phụ trách".' : ''}${old === 'director' ? ' Phạm vi phụ trách (toàn công ty, bộ phận) của tài khoản sẽ được bỏ.' : ''}</p>`;
+  }
+  // Khoá tài khoản (nghỉ việc): hiện số đếm khối lượng đang có + tuỳ chọn trả việc về lãnh đạo bộ phận.
   async function showLockBox() {
     if (!user) return;
     const active = form.elements.isActive.checked, locking = user.isActive && !active, lockedAlready = !user.isActive && !active;
@@ -161,11 +145,13 @@ function userForm(root, user = null) {
       if (lockedAlready && !hasWork(workload)) { lockBox.className = 'hidden'; return; }
       lockBox.innerHTML = `<h4>${locking ? 'Khoá tài khoản (nghỉ việc)' : 'Tài khoản đã khoá nhưng còn việc'}</h4>
         <p class="muted sm">Chỉ hiện số đếm, không hiện nội dung công việc.</p>${countsBox(workload)}
-        ${hasWork(workload) ? `<label class="check"><input type="checkbox" name="handover" ${locking ? 'checked' : ''} data-testid="user-handover"> Trả việc về lãnh đạo phòng để phân công lại</label>
-        <p class="muted xs">Gỡ người này khỏi các việc đang mở (chủ trì, phối hợp). Việc chỉ người này chủ trì: việc giao về phòng trở lại "Chờ phòng tiếp nhận" và lãnh đạo phòng chủ trì được báo; việc khác báo người giao / trưởng dự án. Thu hồi uỷ quyền; bỏ vai trò Phó TGĐ phụ trách và báo Giám đốc.</p>` : '<p class="muted sm">Không có việc đang mở cần bàn giao.</p>'}
-        ${workload.approvalsPending ? '<p class="muted xs">Yêu cầu duyệt đang chờ: cấp Trưởng phòng / Ban Tổng Giám đốc tự chuyển cho người còn lại; cấp "Người đứng tên dự án" hoặc "Người được chỉ định" cần đổi người duyệt trong cài đặt dự án.</p>' : ''}`;
+        ${hasWork(workload) ? `<label class="check"><input type="checkbox" name="handover" ${locking ? 'checked' : ''} data-testid="user-handover"> Trả việc về lãnh đạo bộ phận để phân công lại</label>
+        <p class="muted xs">Gỡ người này khỏi các việc đang mở (chủ trì, phối hợp). Việc chỉ người này chủ trì: việc giao về bộ phận trở lại "Chờ bộ phận tiếp nhận" và lãnh đạo bộ phận chủ trì được báo; việc khác báo người giao / người đứng tên dự án. Thu hồi uỷ quyền; bỏ phạm vi phụ trách bộ phận và báo Ban Tổng Giám đốc.</p>` : '<p class="muted sm">Không có việc đang mở cần bàn giao.</p>'}
+        ${workload.approvalsPending ? '<p class="muted xs">Yêu cầu duyệt đang chờ: cấp Lãnh đạo bộ phận / BTGĐ phụ trách tự chuyển cho người còn lại; cấp "Người đứng tên dự án" hoặc "Người được chỉ định" cần đổi người duyệt trong cài đặt dự án.</p>' : ''}`;
     } catch (error) { lockBox.innerHTML = `<p class="error">${esc(errorMessage(error))}</p>`; }
   }
+  form.elements.role.addEventListener('change', showBoardBox);
+  form.elements.departmentId.addEventListener('change', showBoardBox);
   if (user) {
     form.elements.role.addEventListener('change', showRoleBox);
     form.elements.isActive.addEventListener('change', showLockBox);
@@ -176,65 +162,50 @@ function userForm(root, user = null) {
     e.preventDefault();
     const f = formData(e.target);
     const body = { username: f.username, fullName: f.fullName, displayTitle: f.displayTitle, email: f.email, role: f.role, departmentId: f.departmentId ? Number(f.departmentId) : null };
+    if (e.target.confirmBoardDept?.checked) body.confirmBoardDept = true;
     if (user) {
       body.isActive = !!e.target.isActive.checked;
-      if (f.role !== user.role && canPermWrite && f.applyProfile === '1') body.applyRoleProfile = true;
       if (e.target.handover?.checked && !body.isActive) body.handover = true;
     } else if (f.password) body.password = f.password;
     try {
       const saved = await api(user ? `/api/admin/users/${user.id}` : '/api/admin/users', { method: user ? 'PUT' : 'POST', body });
       const notes = [];
-      if (saved.profileApplied) notes.push('đã áp quyền mặc định của vai trò mới');
+      if (saved.profileApplied) notes.push('quyền đã đổi theo vai mới');
       if (saved.handover) notes.push(`bàn giao: gỡ khỏi ${saved.handover.leadRemoved + saved.handover.supportRemoved} việc, ${saved.handover.reassignNotices} việc chờ phân công lại`);
       closeModal(); toast('Đã lưu tài khoản' + (notes.length ? ' — ' + notes.join('; ') : ''), 'ok'); await loadBasics(); renderUsers(root);
-    } catch (error) { $('#userError', modal).textContent = errorMessage(error); }
+    } catch (error) {
+      if (error.code === 'BOARD_DEPT_MISMATCH') showBoardBox();
+      $('#userError', modal).textContent = errorMessage(error);
+    }
   };
 }
 
-async function permissionEditor(root, userId, users = []) {
-  const [{ user, grants }, cat] = await Promise.all([api(`/api/admin/users/${userId}/permissions`), getCatalog()]);
-  rememberOrder(cat);
-  const current = new Map(grants.map(g => [slot(g), g.scope]));
+// Quyền của vai (CHỈ XEM) + phạm vi phụ trách (chỉ tài khoản vai Ban Tổng Giám đốc).
+async function roleViewer(root, user) {
+  const [{ grants }, cat] = await Promise.all([api(`/api/admin/users/${user.id}/permissions`), getCatalog()]);
+  const current = new Map(grants.map(g => [g.permissionKey + '|' + g.action, g.scope]));
   const canWrite = can('admin.permissions', 'operate');
-  const profile = cat.roleProfiles[user.role] || [];
-  const mismatch = diffGrants(grants, profile);
-  const modal = openModal(`<h2>Phân quyền: ${esc(user.fullName)} (${esc(user.username)})</h2>
-    <p class="muted sm">Phạm vi <b>Bộ phận</b> = chỉ dữ liệu của bộ phận tài khoản; <b>Toàn tổ chức</b> = mọi bộ phận. Vai: <b>${esc(ROLE_LABEL[user.role] || user.role)}</b>.</p>
-    <div class="admin-box${mismatch.length ? ' warn' : ''}" id="permState" data-testid="perm-state">${mismatch.length
-      ? `<span>Quyền hiện tại khác quyền mặc định của nhóm ${esc(ROLE_LABEL[user.role] || user.role)} (${diffSummary(mismatch)}).</span>`
-      : `<span class="muted">Quyền hiện tại trùng quyền mặc định của nhóm ${esc(ROLE_LABEL[user.role] || user.role)}.</span>`}
-      ${canWrite && mismatch.length ? `<button type="button" class="btn btn-ghost btn-sm" data-restore data-testid="perm-restore">${ICON.undo}Khôi phục quyền theo vai trò</button>` : ''}</div>
-    ${user.role !== 'admin' ? `<label class="admin-box check" data-testid="perm-board-all-box"><input type="checkbox" id="permBoardAll" data-testid="perm-board-all"${user.boardAll ? ' checked' : ''}${canWrite ? '' : ' disabled'}>
-      <span><b>BTGĐ phụ trách toàn công ty</b> — là Ban Tổng Giám đốc của <b>mọi việc</b> ở mọi bộ phận: sửa kế hoạch, người giao, duyệt gia hạn. Chọn riêng từng người
-      (không theo phòng, không theo vai). Phó TGĐ phụ trách bộ phận không cần chọn ở đây — đã là BTGĐ phụ trách của việc bộ phận mình phụ trách (Bộ phận → Phó TGĐ phụ trách).</span></label>` : ''}
-    <div class="admin-scroll"><table class="table perm-grid"><thead><tr><th>Nhóm</th><th>Quyền</th><th>Xem</th><th>Thao tác</th></tr></thead><tbody>
+  const board = user.role === 'director';
+  const supervised = new Set(user.supervisedDepartmentIds || []);
+  const depts = store.departments.filter(d => d.isActive || supervised.has(d.id));
+  const modal = openModal(`<h2>${board ? 'Quyền & phụ trách' : 'Quyền'}: ${esc(user.fullName)} (${esc(user.username)})</h2>
+    <p class="muted sm" data-testid="perm-state">Vai: <b>${esc(ROLE_LABEL[user.role] || user.role)}</b>. Quyền đi theo vai — muốn đổi quyền thì đổi vai, hoặc giao kiêm nhiệm / vai trên dự án. Không chỉnh quyền từng người.</p>
+    ${board ? `<div class="admin-box" data-testid="perm-board-all-box"><h4>Phạm vi phụ trách</h4>
+      <p class="muted xs">BTGĐ phụ trách của một việc: sửa kế hoạch, người giao, duyệt gia hạn, duyệt việc mốc / đường găng. Mọi thành viên Ban Tổng Giám đốc đều xem toàn công ty.</p>
+      <label class="check"><input type="checkbox" id="scopeAll" data-testid="perm-board-all"${user.boardAll ? ' checked' : ''}${canWrite ? '' : ' disabled'}> <b>Toàn công ty</b> — BTGĐ phụ trách của mọi việc ở mọi bộ phận</label>
+      <div class="muted sm">Phó Tổng Giám đốc phụ trách các bộ phận:</div>
+      <div class="scope-depts">${depts.map(d => `<label class="check"><input type="checkbox" data-scope-dept="${d.id}" data-testid="scope-dept-${esc(d.code)}"${supervised.has(d.id) ? ' checked' : ''}${canWrite ? '' : ' disabled'}> ${esc(d.name)}${d.supervisor && d.supervisor.id !== user.id ? ` <span class="muted xs">(đang: ${esc(d.supervisor.fullName)})</span>` : ''}</label>`).join('')}</div></div>` : ''}
+    <div class="admin-scroll"><table class="table perm-grid" data-testid="role-grid"><thead><tr><th>Mảng</th><th>Quyền</th><th>Xem</th><th>Thao tác</th></tr></thead><tbody>
     ${cat.permissions.map(p => `<tr data-row="${p.key}"><td class="muted sm">${esc(p.group)}</td><td><b>${esc(p.label)}</b><div class="muted xs">${esc(p.description)}</div></td>
-      ${['VIEW', 'OPERATE'].map(action => p.actions.includes(action) ? `<td><select data-key="${p.key}" data-action="${action}" ${canWrite ? '' : 'disabled'} data-testid="grant-${p.key}-${action}" aria-label="${esc(p.label)} — ${ACTION_TEXT[action]}"><option value="">—</option>${p.scopes.map(s => `<option value="${s}"${current.get(p.key + '|' + action) === s ? ' selected' : ''}>${SCOPE_TEXT[s]}</option>`).join('')}</select></td>` : '<td></td>').join('')}</tr>`).join('')}
-    </tbody></table></div><p class="muted sm" id="permNote" aria-live="polite"></p><p class="error" id="permError"></p>
-    <div class="modal-actions"><button class="btn btn-ghost" data-close>Đóng</button>${canWrite ? '<button class="btn btn-primary" data-save data-testid="perm-save">Lưu phân quyền</button>' : ''}</div>`, { wide: true });
-  const selects = () => $$('select[data-key]', modal);
-  const picked = () => selects().filter(s => s.value).map(s => ({ permissionKey: s.dataset.key, action: s.dataset.action, scope: s.value }));
-  // Đánh dấu các ô đã đổi so với quyền đang lưu.
-  const mark = () => {
-    for (const s of selects()) s.closest('td').classList.toggle('perm-changed', (current.get(s.dataset.key + '|' + s.dataset.action) || '') !== s.value);
-    const rows = diffGrants(grants, picked());
-    $('#permNote', modal).textContent = rows.length ? `Chưa lưu: ${diffSummary(rows)} quyền so với hiện tại.` : '';
-  };
-  modal.addEventListener('change', e => { if (e.target.matches('select[data-key]')) mark(); });
+      ${['VIEW', 'OPERATE'].map(action => p.actions.includes(action) ? `<td class="sm" data-testid="grant-${p.key}-${action}">${current.get(p.key + '|' + action) ? SCOPE_TEXT[current.get(p.key + '|' + action)] : (action === 'VIEW' && current.get(p.key + '|OPERATE') ? SCOPE_TEXT[current.get(p.key + '|OPERATE')] : '<span class="muted">—</span>')}</td>` : '<td></td>').join('')}</tr>`).join('')}
+    </tbody></table></div><p class="error" id="permError"></p>
+    <div class="modal-actions"><button class="btn btn-ghost" data-close>Đóng</button>${board && canWrite ? '<button class="btn btn-primary" data-save data-testid="perm-save">Lưu phạm vi phụ trách</button>' : ''}</div>`, { wide: true });
   modal.querySelector('[data-close]').onclick = () => closeModal();
-  modal.querySelector('[data-restore]')?.addEventListener('click', () => {
-    const want = new Map(profile.map(g => [slot(g), g.scope]));
-    for (const s of selects()) s.value = want.get(s.dataset.key + '|' + s.dataset.action) || '';
-    mark();
-    $('#permNote', modal).textContent = `Đã điền quyền mặc định của nhóm ${ROLE_LABEL[user.role] || user.role} (${diffSummary(mismatch)}) — kiểm tra rồi bấm "Lưu phân quyền".`;
-  });
   modal.querySelector('[data-save]')?.addEventListener('click', async () => {
+    const departmentIds = $$('[data-scope-dept]', modal).filter(x => x.checked).map(x => Number(x.dataset.scopeDept));
     try {
-      await api(`/api/admin/users/${userId}/permissions`, { method: 'PUT', body: { grants: picked() } });
-      const board = $('#permBoardAll', modal);
-      if (board && board.checked !== !!user.boardAll) await api(`/api/admin/users/${userId}/board`, { method: 'PUT', body: { boardAll: board.checked } });
-      closeModal(); toast('Đã lưu phân quyền', 'ok');
-      if (users.some(u => u.id === userId)) renderUsers(root);
+      await api(`/api/admin/users/${user.id}/scope`, { method: 'PUT', body: { all: $('#scopeAll', modal).checked, departmentIds } });
+      closeModal(); toast('Đã lưu phạm vi phụ trách', 'ok'); await loadBasics(); renderUsers(root);
     } catch (error) { $('#permError', modal).textContent = errorMessage(error); }
   });
 }
@@ -271,13 +242,12 @@ async function renderDepartments(root) {
 }
 function deptForm(root, dept = null) {
   const blocked = dept ? subtreeOf(dept.id) : new Set();
-  const directors = store.users.filter(u => u.role === 'director');
-  const lockedSup = dept?.supervisorId && !directors.some(u => u.id === dept.supervisorId) ? (dept.supervisor || { id: dept.supervisorId, fullName: '#' + dept.supervisorId }) : null;
+  const sup = dept?.supervisorId ? (dept.supervisor || store.users.find(u => u.id === dept.supervisorId) || { fullName: '#' + dept.supervisorId }) : null;
   const modal = openModal(`<h2>${dept ? 'Sửa bộ phận' : 'Thêm bộ phận'}</h2><form>
     <div class="grid2"><label class="field">Mã<input name="code" required maxlength="30" value="${esc(dept?.code || '')}" data-testid="dept-code"></label>
     <label class="field">Tên<input name="name" required maxlength="200" value="${esc(dept?.name || '')}" data-testid="dept-name"></label></div>
     <label class="field">Trực thuộc${dept && blocked.size > 1 ? ' <span class="muted xs">(không chọn được các phòng đang trực thuộc phòng này)</span>' : ''}<select name="parentId" data-testid="dept-parent"><option value="">— Không —</option>${store.departments.filter(d => !blocked.has(d.id)).map(d => `<option value="${d.id}"${dept?.parentId === d.id ? ' selected' : ''}>${esc(d.name)}${d.isActive ? '' : ' (đã khoá)'}</option>`).join('')}</select></label>
-    <label class="field">Phó TGĐ phụ trách <span class="muted xs">(nhận phiếu trình của phòng ở cấp Ban Tổng Giám đốc)</span><select name="supervisorId" data-testid="dept-supervisor"><option value="">— Không —</option>${lockedSup ? `<option value="${lockedSup.id}" selected>${esc(lockedSup.fullName)} (đã khoá — hãy chọn Phó TGĐ khác)</option>` : ''}${directors.map(u => `<option value="${u.id}"${dept?.supervisorId === u.id ? ' selected' : ''}>${esc(u.fullName)}${u.displayTitle ? ' — ' + esc(u.displayTitle) : ''}</option>`).join('')}</select></label>
+    <p class="muted sm" data-testid="dept-supervisor">Phó Tổng Giám đốc phụ trách: <b>${sup ? esc(sup.fullName) : '—'}</b> <span class="muted xs">(chọn ở tài khoản Ban Tổng Giám đốc → "Quyền &amp; phụ trách")</span></p>
     ${dept ? `<label class="check"><input type="checkbox" name="isActive" ${dept.isActive ? 'checked' : ''} data-testid="dept-active"> Đang hoạt động</label><div id="deptLockBox" class="hidden"></div>` : ''}
     <p class="error" id="deptError"></p>
     <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Huỷ</button><button class="btn btn-primary" data-testid="dept-save">Lưu</button></div></form>`);
@@ -294,7 +264,7 @@ function deptForm(root, dept = null) {
   });
   form.onsubmit = async e => {
     e.preventDefault();
-    const f = formData(e.target), body = { code: f.code, name: f.name, parentId: f.parentId ? Number(f.parentId) : null, supervisorId: f.supervisorId ? Number(f.supervisorId) : null };
+    const f = formData(e.target), body = { code: f.code, name: f.name, parentId: f.parentId ? Number(f.parentId) : null };
     if (dept) body.isActive = !!e.target.isActive.checked;
     if (needConfirm() && !e.target.confirmLock?.checked) { $('#deptError', modal).textContent = `Phòng còn ${dept.activeUsers} tài khoản đang hoạt động — đánh dấu "Tôi đã hiểu, vẫn khoá phòng" để tiếp tục.`; return; }
     try { await api(dept ? `/api/departments/${dept.id}` : '/api/departments', { method: dept ? 'PUT' : 'POST', body }); closeModal(); toast('Đã lưu bộ phận', 'ok'); renderDepartments(root); }
