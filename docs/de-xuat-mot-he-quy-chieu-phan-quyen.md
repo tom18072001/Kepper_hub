@@ -323,7 +323,7 @@ Chỉ làm sau khi chủ dự án duyệt và PR #40 merge (#39 đã merge). Là
 | `user#2` (bộ phận BTGD) | `director`, Ban GĐ toàn quyền, không phụ trách bộ phận nào | BTGĐ, phụ trách **Toàn công ty**. **Không đổi quyền** |
 | `user#3` (bộ phận BTGD) | `director`, PGĐ phụ trách 4 bộ phận | BTGĐ, phụ trách **4 bộ phận đó**. **Không đổi quyền** |
 | `user#4` (bộ phận BTGD) | `director`, Ban GĐ toàn quyền + PGĐ phụ trách 4 bộ phận | BTGĐ, phụ trách **Toàn công ty** (4 bộ phận vẫn hiện trên cây tổ chức). **Không đổi quyền** |
-| **`user#6`** (Phòng Tổng hợp, PMO) | vai `director`, nhưng bộ quyền đã thu hẹp về mức nhân viên | **Q1 (khuyến nghị): Nhân viên + kiêm nhiệm PMO.** Quyền theo bộ quyền **giữ nguyên** (vốn đã là mức nhân viên). Chỉ **mất** những gì đang lọt qua chuỗi vai (mục 4, điểm 1): văn thư mọi mức mật, tài liệu dự án mọi dự án / NAS, chức năng Ban GĐ ở MTL và báo cáo tuần, vai O trên mọi việc. **Giữ / có**: bản tổng hợp giao ban đầy đủ (qua PMO), Chủ dự án ở dự án mình được giao, người giao của các việc đã giao. **Phải** tham gia lập báo cáo tuần của Phòng Tổng hợp |
+| **`user#6`** (Phòng Tổng hợp, PMO) | vai `director`, nhưng bộ quyền đã thu hẹp về mức nhân viên | **Q1 (đã chọn 24/11): Nhân viên + kiêm nhiệm PMO.** Quyền theo bộ quyền **giữ nguyên** (vốn đã là mức nhân viên). **Mất** những gì đang lọt qua chuỗi vai (mục 4, điểm 1): văn thư mọi mức mật, tài liệu dự án mọi dự án / NAS, chức năng Ban GĐ ở MTL và báo cáo tuần, vai O trên mọi việc; và **quyền tạo dự án MTL mới** (chỉ BTGĐ tạo — BTGĐ đưa PMO vào làm Chủ dự án để điều phối). **Giữ / có**: bản tổng hợp giao ban đầy đủ (qua PMO); **quyền Thư ký giao ban** vì thuộc bộ phận thư ký (Phòng Tổng hợp, Q5 — trước đây không có vì mang vai Ban giám đốc: Ban GĐ không kiêm thư ký); Chủ dự án ở dự án mình được giao; người giao của các việc đã giao. **Phải** tham gia lập báo cáo tuần của Phòng Tổng hợp |
 | 3 tài khoản `manager` | Trưởng phòng | Lãnh đạo bộ phận. **Không đổi quyền** |
 | 5 tài khoản `member` | Nhân viên | **Không đổi** |
 | `user#1` (quản trị gốc) và 1 tài khoản `admin` | bộ quyền của `user#1` thiếu `admin.*`, nhưng cờ quản trị gốc đã đủ | **Không đổi** |
@@ -339,7 +339,7 @@ Theo từng câu hỏi:
 | Người xem chỉ xem | **0** (0 thành viên vai Người xem) |
 | Q6 — đổi chữ | không đổi quyền |
 
-Không ai **được thêm** quyền nghiệp vụ.
+Được thêm: chỉ `user#6` nhận quyền **Thư ký giao ban** (do thuộc bộ phận thư ký theo Q5, đúng thiết kế). Ngoài ra không ai được thêm quyền nghiệp vụ.
 
 ---
 
@@ -391,7 +391,7 @@ SELECT role, COUNT(*) FROM "ProjectMember" GROUP BY 1;
 | PRE (phòng ngừa) | Đóng lỗ "vai và bộ quyền lệch nhau" (mục 4, điểm 1). Tài khoản PMO thôi xem văn bản Hạn chế / Bảo mật cao và tài liệu mọi dự án: **tối thiểu hoá dữ liệu** (Nghị định 13/2023, Luật BVDLCN). Chặn trước rủi ro lộ hồ sơ nhân sự khi bật HRM |
 | DET (phát hiện) | Đổi vai, phạm vi phụ trách, kiêm nhiệm đều ghi nhật ký và báo BTGĐ. Thêm cảnh báo vai BTGĐ lệch bộ phận BTGD. Giữ nhật ký ≥ 12 tháng |
 | PRI (riêng tư) | Không thêm tập dữ liệu, không đổi nhãn. KPI cá nhân vẫn chỉ BTGĐ |
-| RES (ứng phó) | Migration không xoá dữ liệu, có thể quay lại bản cũ. Việc tài khoản PMO đã xem được văn bản mật trước đây là **quyền cấp sai, không phải sự cố rò rỉ ra ngoài**. Nên rà nhật ký truy cập văn thư / tài liệu dự án của tài khoản này để xác nhận |
+| RES (ứng phó) | Migration không xoá dữ liệu. Quay lại bản cũ được **với điều kiện** bảng quyền lưu riêng (`UserPermission`) khớp vai: bản này tự ghi lại bộ quyền theo vai khi tạo tài khoản và khi đổi vai; trước khi quay lại chạy `node scripts/sync-role-grants.js` (xem trước bằng `--dry-run`). Việc tài khoản PMO đã xem được văn bản mật trước đây là **quyền cấp sai, không phải sự cố rò rỉ ra ngoài**. Nên rà nhật ký truy cập văn thư / tài liệu dự án của tài khoản này để xác nhận |
 
 Ở giai đoạn 2, cập nhật mục "Quy định phân quyền" trong `docs/data-protection-assessment.md` theo bảng 5.4. Không có chuyển dữ liệu xuyên biên giới mới.
 
@@ -408,11 +408,12 @@ SELECT role, COUNT(*) FROM "ProjectMember" GROUP BY 1;
 | Gộp vai, cấp duyệt (Q3, Q4) | migration `20261125090000_mot_truc_vai`: `deputy` → `manager`; cấp duyệt `SUPERVISOR` → `DIRECTOR` ("BTGĐ phụ trách" = phụ trách Toàn công ty + Phó TGĐ phụ trách bộ phận chủ trì; chưa ai → mọi BTGĐ) |
 | Người xem chỉ xem | `services/access.js`: thành viên `VIEWER` không sửa, không quản lý |
 | KPI | `lib/policy.js kpi.person`: chỉ BTGĐ + chính mình |
+| Vòng nghiệm thu 1 (25/11) | báo BTGĐ **mọi** lần đổi vai, chuyển người vào / ra bộ phận BTGĐ, xác nhận lệch (`roleNotices`, có test); quan hệ dự án **chỉ cộng quyền** (BTGĐ là Người xem vẫn giữ quyền); chỉ BTGĐ tạo dự án MTL; migration `RAISE EXCEPTION` khi còn tài khoản vai Ban TGĐ có bộ quyền cũ thu hẹp; ghi `UserPermission` theo vai + `scripts/sync-role-grants.js`; quét mã theo cú pháp cho server, scripts, web; Quản trị: cột Kiêm nhiệm, hộp "Quyền" là bảng 5.4 bằng lời; phạm vi phụ trách không nhận bộ phận đã khoá; đổi mã bộ phận thành / khỏi BTGD báo BTGĐ; một định nghĩa người duyệt cấp bộ phận (`isDeptApprover`); mã `BGD` chỉ nhận khi `SEED_DEMO=true` |
 | Chỗ so chuỗi vai | đã chuyển sang hàm vai: approval, task-access, access, approvals, items, projects, workitems, mtl-guard, project-docs, documents, hrm, vanthu, crm, profile, work, ops, admin, kpi, mtl, register, sprint, dispatch |
 | Thuật ngữ | Ban Tổng Giám đốc / Phó TGĐ phụ trách / Bộ phận / Vai / Người đứng tên dự án / Lãnh đạo bộ phận chủ trì trên giao diện, thông báo, lỗi, tài liệu hướng dẫn |
 | Kiêm nhiệm | trang Thông tin cá nhân hiện "Kiêm nhiệm" của chính mình |
 | Test | `lib/role-matrix.test.js` (mỗi vai × chức năng theo bảng 5.4 + quét mã cấm so chuỗi vai / lọc theo bảng quyền từng người); `e2e/tests/17-ma-tran-vai.spec.js` (HTTP mỗi vai × endpoint quan trọng) |
 
-**Chờ PR #40 merge rồi làm nốt** (cùng tệp với #40): `services/weekly-data.js` (`rolesOf` → hàm vai), `routes/reports.js` (xuất MTL), `services/alerts.js` (người nhận Ban TGĐ đang lọc theo bảng quyền), nhãn "Chờ BGĐ cho ý kiến" (`services/stage.js` ↔ `dashboard.test.js`), chữ trong `views/weekly.js`, `docs/data-protection-assessment.md`. Test quét mã đang để ba tệp đầu trong danh sách chờ.
+**Chờ PR #40 merge rồi làm NGAY** (cùng tệp với #40): `services/weekly-data.js` (`rolesOf` → hàm vai), `routes/reports.js` (xuất MTL), `services/alerts.js` (người nhận cảnh báo găng / mốc cấp Ban TGĐ đang lọc theo bảng quyền lưu riêng — bản này đã ghi lại bảng đó khi tạo tài khoản / đổi vai và trong seed nên cảnh báo vẫn tới đúng người; vẫn phải chuyển sang `BOARD_WHERE`), nhãn "Chờ BGĐ cho ý kiến" (`services/stage.js` ↔ `dashboard.test.js`), chữ trong `views/weekly.js`, `docs/data-protection-assessment.md`. Test quét mã để các tệp này trong danh sách chờ `PENDING_PR40` (gồm `web/js/views/weekly.js`) và tự FAIL khi một tệp đã hết vi phạm. `app/mcp/server.js` (chữ "Ban GĐ" trong mô tả công cụ báo cáo tuần) sửa cùng đợt.
 
-**Thứ tự triển khai (bắt buộc)**: trên bản đang chạy, **trước khi** deploy PR này, quản trị đổi vai tài khoản PMO (`user#6`) trên giao diện Quản trị (có nhật ký, báo BTGĐ) sang vai **Nhân viên** (chủ dự án chọn 25/11/2026), và BTGĐ thêm tài khoản này vào danh sách PMO ở Thiết lập giao ban. Nếu deploy trước khi đổi vai, tài khoản này sẽ có quyền toàn công ty theo vai `director` (xem test "vai quyết định" trong `role-matrix.test.js`).
+**Thứ tự triển khai (bắt buộc)**: trên bản đang chạy, **trước khi** deploy PR này, quản trị đổi vai tài khoản PMO (`user#6`) trên giao diện Quản trị (có nhật ký, báo BTGĐ) sang vai **Nhân viên** (chủ dự án chọn 24/11/2026), và BTGĐ thêm tài khoản này vào danh sách PMO ở Thiết lập giao ban. Nếu quên bước đổi vai, migration dừng với thông báo lỗi (chốt an toàn) — không deploy được bản này cho tới khi đổi vai.

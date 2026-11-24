@@ -62,7 +62,7 @@ export async function renderProfile(root, setCrumbs) {
         ${org.peers.length ? `<details class="org-peers"><summary class="muted sm">Cùng cấp trong bộ phận</summary><div class="org-people">${org.peers.map(chip).join('')}</div></details>` : ''}</li>
       ${org.below.map(l => `<li class="org-level org-below"><div class="org-label">${esc(l.label)} <span class="muted xs">${l.people.length} người</span></div><div class="org-people">${l.people.map(chip).join('')}</div></li>`).join('')}
     </ol>
-    ${!org.above.length && !org.below.length ? '<p class="muted sm">Chưa có sơ đồ cấp trên, cấp dưới. Nhờ quản trị gán bộ phận, vai trò và Phó GĐ phụ trách.</p>' : ''}
+    ${!org.above.length && !org.below.length ? '<p class="muted sm">Chưa có sơ đồ cấp trên, cấp dưới. Nhờ quản trị gán bộ phận, vai và Phó Tổng Giám đốc phụ trách.</p>' : ''}
   </section>`;
 
   root.innerHTML = `<div class="page-head"><h1>Thông tin cá nhân</h1></div>

@@ -216,7 +216,7 @@ Gõ cho Claude:
 
 > **Tôi là ai trong Kepler Hub? Tôi được làm gì qua Claude?**
 
-Claude gọi `kepper_whoami` và trả lời: họ tên, tài khoản, bộ phận, vai trò giao ban, hạn nộp báo cáo tuần. Kiểm tra đúng tài khoản của bạn trước khi nhờ Claude làm gì khác.
+Claude gọi `kepper_whoami` và trả lời: họ tên, tài khoản, bộ phận, vai, kiêm nhiệm giao ban (thư ký, PMO), hạn nộp báo cáo tuần. Kiểm tra đúng tài khoản của bạn trước khi nhờ Claude làm gì khác.
 
 Tên hoặc bộ phận không đúng của bạn: dừng lại, vào **Kết nối Claude → Máy đã kết nối** thu hồi kết nối đó, rồi kết nối lại bằng tài khoản của chính bạn.
 

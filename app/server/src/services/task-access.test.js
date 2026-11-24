@@ -39,7 +39,7 @@ test('vai trên một việc: A, B (TGĐ + Phó TGĐ phụ trách), L, S, D, O, 
   assert.deepEqual(capsOf(U.lead, item(), { staffLeaderIds: [4, 9] }).roles, ['L']);
 });
 
-test('vai director KHÔNG tự động là Ban Tổng Giám đốc: PMO xem toàn bộ, không sửa kế hoạch việc người khác giao', () => {
+test('thành viên Ban Tổng Giám đốc chưa có phạm vi phụ trách: xem toàn bộ, không sửa kế hoạch việc người khác giao', () => {
   const c = capsOf(U.pmo);
   assert.equal(c.view, 'FULL');
   for (const k of ['plan', 'assign', 'assigner', 'delete', 'recur', 'progress', 'children', 'docsGive', 'docsBack', 'rebaseline', 'decideExtension']) assert.equal(c[k], false, k);
