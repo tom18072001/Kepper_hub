@@ -29,7 +29,9 @@ const DATASETS = {
   'hrm.leave': { label: 'Bảo mật', pii: 'cơ bản (có thể nhạy cảm nếu ghi bệnh)', note: 'Đơn nghỉ phép; lý do ≤ 200 ký tự, không ghi chi tiết bệnh' },
   'hrm.attendance': { label: 'Bảo mật', pii: 'cơ bản (thời gian, IP)', note: 'Giờ vào / ra, đi muộn / về sớm, giải trình' },
   // ---- Văn thư (QyĐ-GA-01) — quyền theo mức bảo mật của từng văn bản: services/vanthu.js canView ----
-  'vanthu.doc': { label: 'Theo mức ghi trên văn bản (Công khai / Nội bộ / Hạn chế / Bảo mật cao)', pii: 'có thể (nơi gửi, người ký, nội dung trích yếu)', note: 'Sổ văn bản đến / đi / nội bộ: số, trích yếu, người xử lý, hạn, trạng thái — không lưu tệp văn bản' },
+  // Sổ đến / đi: theo mức bảo mật. Sổ nội bộ (quy chế, quy định): theo CẤP XEM theo vai (Mọi người / Lãnh đạo / Ban TGĐ), dự thảo chỉ
+  // người soạn, Người phê duyệt, Văn thư — docs/de-xuat-quy-che-phe-duyet.md.
+  'vanthu.doc': { label: 'Sổ đến / đi: theo mức ghi trên văn bản (Công khai / Nội bộ / Hạn chế / Bảo mật cao); sổ nội bộ: theo cấp xem (Mọi người / Lãnh đạo / Ban TGĐ)', pii: 'có thể (nơi gửi, người ký, nội dung trích yếu)', note: 'Sổ văn bản đến / đi / nội bộ: số, trích yếu, người xử lý, hạn, trạng thái, người phê duyệt; tệp lưu trên NAS / kho tệp, mã băm SHA-256 lúc phê duyệt ghi nhật ký' },
   'hrm.config': { label: 'Nội bộ', pii: 'không', note: 'Giờ làm, ngày làm, ngày lễ, mạng văn phòng, người phụ trách nhân sự' },
 };
 const ACTIONS = ['view', 'edit', 'export', 'ai', 'external'];
