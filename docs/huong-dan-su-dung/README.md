@@ -5,7 +5,7 @@ Hai bộ tài liệu, chia theo người đọc:
 | Tài liệu | Gửi cho | Nội dung |
 |---|---|---|
 | [Hướng dẫn cho nhân viên](nhan-vien.md) | Mọi nhân viên | Đăng nhập, chứng chỉ, kết nối Claude desktop, cài skill; làm việc dự án ở vai người chủ trì / phối hợp; Cập nhật nhanh; báo cáo tuần; văn bản giao xử lý; chấm công, xin nghỉ; đối tác; nhắc việc; lỗi thường gặp |
-| [Hướng dẫn cho lãnh đạo](lanh-dao.md) | Ban Giám đốc, lãnh đạo bộ phận, PMO, thư ký giao ban | Vai và quyền; theo dõi tiến độ, KPI; giao việc; duyệt và chấm mức; duyệt gia hạn, kiến nghị; báo cáo tuần bộ phận; giao ban, Action Log, chấm điểm; vào sổ văn thư; duyệt đơn nghỉ, bảng công |
+| [Hướng dẫn cho lãnh đạo](lanh-dao.md) | Ban Tổng Giám đốc, lãnh đạo bộ phận, PMO, thư ký giao ban | Vai và quyền; theo dõi tiến độ, KPI; giao việc; duyệt và chấm mức; duyệt gia hạn, kiến nghị; báo cáo tuần bộ phận; giao ban, Action Log, chấm điểm; vào sổ văn thư; duyệt đơn nghỉ, bảng công |
 
 Không gửi tài liệu lãnh đạo cho toàn bộ nhân viên.
 

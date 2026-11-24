@@ -92,7 +92,7 @@ Cơ quan ngoài (UBND TP, Sở…, Cục…, VP ĐKĐĐ, ĐVTV) được lưu �
 ### Bỏ khỏi WorkHub (nghiệp vụ riêng NQ57)
 - Sổ giao việc Trung tâm và Kế hoạch năm (Word).
 - Giao về phòng / tiếp nhận / uỷ quyền.
-- Kiến nghị, BGĐ cho ý kiến, phiếu trình.
+- Kiến nghị, BTGĐ cho ý kiến, phiếu trình.
 - Lịch công tác.
 - Tổng hợp giao việc.
 - Gửi yêu cầu.
@@ -138,13 +138,13 @@ Phản hồi của chủ dự án (23/10/2026): "rườm rà và nhiều thao t�
 |---|---|
 | Điều hướng | Trang chủ `#/tuan`. Menu chính còn 3 mục: **Báo cáo tuần · Tiến độ dự án · Cập nhật nhanh**; các trang khác (Việc của tôi, Chờ duyệt, Số liệu, Thùng rác, Danh mục) gom vào "Công cụ khác" (thu gọn, có số việc chờ duyệt). Tông navy / vàng đồng của mẫu áp cho cả ứng dụng |
 | Báo cáo tuần | Một cột 920 px như mẫu; `GET /api/weekly/report` trả bản đã lưu + bản điền sẵn (`services/weekly.js#buildPrefill`): MTL của bộ phận (mức chi tiết nhất, không đếm cha – con hai lần), kế hoạch tuần trước, Action Log giao ban đã phát hành. Tự lưu nháp `PUT`; nộp `POST /api/weekly/submit` — làm sạch, kiểm tra theo Điều 4 (trả danh sách lỗi), ghi ngược % vào MTL (`services/mtl-progress.js`, dùng chung với báo cáo tiến độ), lưu bản nộp; giờ nộp lần đầu không đổi khi gửi lại |
-| Báo muộn / vắng | `WeeklyNotice`: lý do chọn danh sách + ghi chú ≤ 200 ký tự; muộn: giờ nộp dự kiến; vắng: bắt buộc người dự thay. Báo thư ký / Ban GĐ / PMO. Tự xoá sau 12 tháng |
+| Báo muộn / vắng | `WeeklyNotice`: lý do chọn danh sách + ghi chú ≤ 200 ký tự; muộn: giờ nộp dự kiến; vắng: bắt buộc người dự thay. Báo thư ký / Ban TGĐ / PMO. Tự xoá sau 12 tháng |
 | Tổng hợp | `GET /api/weekly/summary` (TGĐ, thư ký, PMO, trưởng / phó bộ phận): tình trạng nộp (Điều 6), vắng (Điều 7), rà Action Log tuần trước, yêu cầu hỗ trợ theo nơi nhận, chi tiết, văn bản sao chép (`summaryText`: nhãn BẢO MẬT, không họ tên) |
 | Giao ban | `WeeklyMeeting` mỗi tuần: hạn nộp / ngày họp khi nghỉ lễ, điểm danh, báo cáo không đạt, kết luận TGĐ (Chấp thuận / Giao bộ phận phối hợp / Phương án khác), Action Log; phát hành một lần → thông báo |
 | Chấm điểm | `GET /api/weekly/compliance?month=` theo Phụ lục 1: nộp muộn có báo 5, không báo 15, không nộp 25, không đạt 5, đi muộn 5, vắng không báo 25, vắng có báo + người dự thay 0; tính từ "tuần bắt đầu chấm điểm" |
 | Thiết lập | `AppSetting weekly.config`: bộ phận phải nộp theo thứ tự trình bày, tuần bắt đầu chấm điểm, (tuỳ chọn) mức trừ. Chưa thiết lập → bộ phận chủ trì hạng mục MTL |
 | Lịch | 15:00 thứ Năm: nhắc từng người cập nhật % (GĐ2a); 15:00 ngày hạn nộp: nhắc bộ phận chưa nộp; 07:35 ngày giao ban: tóm tắt tổng hợp; 02:35: xoá thông báo muộn / vắng quá 12 tháng |
-| Quyền | Vai trò **suy ra tự động** từ tài khoản (không chọn vai trò trên màn hình), cưỡng chế bằng `lib/policy.js`:<br>• **Ban GĐ** = tài khoản vai trò giám đốc: không lập báo cáo, xem mọi bộ phận, kết luận, duyệt và khoá bảng điểm, chọn bộ phận thư ký và PMO.<br>• **Thư ký** = thành viên bộ phận do Ban GĐ chọn: nhập thay (giờ nhận email), ghi điểm danh / Action Log, lập và trình bảng điểm, mở lại báo cáo sau giờ họp.<br>• **PMO** = người Ban GĐ chỉ định: xem chi tiết mọi bộ phận.<br>• **Trưởng / phó bộ phận** (có quyền xem tổng hợp của bộ phận): bản tóm tắt + chi tiết bộ phận mình.<br>• **Nhân viên**: lập / nộp báo cáo bộ phận mình.<br>• Admin IT không xem. |
+| Quyền | Vai trò **suy ra tự động** từ tài khoản (không chọn vai trò trên màn hình), cưỡng chế bằng `lib/policy.js`:<br>• **Ban TGĐ** = tài khoản vai trò giám đốc: không lập báo cáo, xem mọi bộ phận, kết luận, duyệt và khoá bảng điểm, chọn bộ phận thư ký và PMO.<br>• **Thư ký** = thành viên bộ phận do Ban TGĐ chọn: nhập thay (giờ nhận email), ghi điểm danh / Action Log, lập và trình bảng điểm, mở lại báo cáo sau giờ họp.<br>• **PMO** = người Ban TGĐ chỉ định: xem chi tiết mọi bộ phận.<br>• **Trưởng / phó bộ phận** (có quyền xem tổng hợp của bộ phận): bản tóm tắt + chi tiết bộ phận mình.<br>• **Nhân viên**: lập / nộp báo cáo bộ phận mình.<br>• Admin IT không xem. |
 
 Cài đặt trên máy chạy:
 1. Tạo đúng 5 bộ phận theo quy chế (tên thật chỉ nhập trên máy chạy), gán trưởng bộ phận.
@@ -162,7 +162,7 @@ Ba rà soát độc lập (nghiệp vụ theo quy chế, bảo mật / phân quy
 |---|---|
 | Quy định phân quyền | `lib/policy.js` — ma trận vai trò × tập dữ liệu × hành động (xem / sửa / xuất / AI / gửi ra ngoài); `policy.test.js` kiểm từng ô |
 | Một nguồn % | Việc cha theo việc con; nhập tay vào việc cha bị từ chối. Báo cáo tuần chỉ ghi % khi MTL chưa đổi từ lúc điền sẵn; nhập thay không ghi % |
-| Quyền sửa MTL | Theo `services/task-access.js` (20/11/2026): `%`: người chủ trì. Tên, găng, mốc, hạn, kế hoạch gốc: người giao + Ban Giám đốc của việc (Ban Giám đốc toàn quyền do quản trị đánh dấu; PGĐ phụ trách — việc bộ phận mình). Tạo bước tổng, nhập MTL: người quản lý dự án; nhập lại chỉ thêm bước mới. Thẻ sprint ẩn nút cập nhật khi không có quyền |
+| Quyền sửa MTL | Theo `services/task-access.js` (20/11/2026): `%`: người chủ trì. Tên, găng, mốc, hạn, kế hoạch gốc: người giao + BTGĐ phụ trách của việc (BTGĐ phụ trách toàn công ty do quản trị đánh dấu; Phó TGĐ phụ trách — việc bộ phận mình). Tạo bước tổng, nhập MTL: người quản lý dự án; nhập lại chỉ thêm bước mới. Thẻ sprint ẩn nút cập nhật khi không có quyền |
 | Báo cáo tuần | Hạng mục bắt buộc (MTL, Action Log, việc chưa xong tuần trước) không bỏ được; tình trạng dòng liên kết do máy chủ tính, chỉ được nâng lên "Vướng"; bắt buộc người phụ trách, "cần trước ngày" khi đề nghị hỗ trợ, sản phẩm đầu ra Phần III. Hai người sửa cùng nháp → báo xung đột. Khoá nộp lại sau giờ họp |
 | Bằng chứng | Mỗi lần nộp một phiên bản bất biến kèm SHA-256 (`WeeklyReportVersion`); `AuditLog` chỉ ghi thêm (trigger CSDL) |
 | Giao ban | Tuần nghỉ; danh sách bộ phận phải nộp chụp theo tuần; phát hành chỉ khi mọi yêu cầu hỗ trợ đã có kết luận; Action Log bắt buộc người phụ trách, rà mọi việc mở 12 tuần |
@@ -170,7 +170,7 @@ Ba rà soát độc lập (nghiệp vụ theo quy chế, bảo mật / phân quy
 | Lịch chạy | `services/jobs.js`: mỗi job một lần / ngày, **chạy bù** khi máy bật lại trong khung giờ còn ý nghĩa; lỗi một job không làm dừng máy chủ (sổ `AppSetting jobs.lastRun`) |
 | Vận hành | Sao lưu kiểm lỗi từng bước, chỉ dọn bản cũ khi bản mới đạt (`LAST_OK`); xoay vòng log Docker; image gắn phiên bản; CI (unit, migration, `npm audit`, e2e) |
 
-Chờ chủ dự án quyết: giới hạn đăng nhập sai / mật khẩu tạm hoặc SSO Microsoft 365; phạm vi mặc định của MTL; máy chủ luôn bật + TLS; báo Ban GĐ khi admin IT cấp quyền nghiệp vụ.
+Chờ chủ dự án quyết: giới hạn đăng nhập sai / mật khẩu tạm hoặc SSO Microsoft 365; phạm vi mặc định của MTL; máy chủ luôn bật + TLS; báo Ban TGĐ khi admin IT cấp quyền nghiệp vụ.
 
 ## GĐ3 — AI native: Claude dùng đúng quyền người dùng (nhánh `kepper/gd3-ai-native`)
 
@@ -200,7 +200,7 @@ Chủ dự án (24/10/2026): mở playground riêng xây thêm CRM (đối tác,
 |---|---|
 | Tách biệt | Module tuỳ chọn `MODULES=crm,hrm`, mặc định tắt (bản 4100 không đổi). Bản thử `deploy/playground.ps1`: thư mục, Docker project, image (`kepper-app:play`), CSDL, cổng 4200 riêng; dữ liệu GIẢ |
 | CRM | `CrmPartner` (một bộ phận phụ trách + người phụ trách), `CrmContact`, `CrmInteraction` (nhật ký không sửa; việc theo dõi có hạn + người theo dõi → nhắc 08:10), `CrmEngagement` (hợp đồng / gói thầu / MOU / hồ sơ cấp phép, gắn dự án) |
-| HRM | `HrProfile` (CCCD mã hoá), `HrContract` (lương mã hoá), `HrLeave` (tính ngày làm việc, phép năm BLLĐ Đ113–114, chặn trùng, lãnh đạo duyệt), `HrAttendance` (chấm vào / ra giờ máy chủ, giải trình → duyệt, nhập CSV máy chấm công), thiết lập (giờ làm, ngày làm, ngày lễ, mạng văn phòng, người phụ trách nhân sự do Ban GĐ chỉ định) |
+| HRM | `HrProfile` (CCCD mã hoá), `HrContract` (lương mã hoá), `HrLeave` (tính ngày làm việc, phép năm BLLĐ Đ113–114, chặn trùng, lãnh đạo duyệt), `HrAttendance` (chấm vào / ra giờ máy chủ, giải trình → duyệt, nhập CSV máy chấm công), thiết lập (giờ làm, ngày làm, ngày lễ, mạng văn phòng, người phụ trách nhân sự do Ban TGĐ chỉ định) |
 | Quyền | `lib/policy.js` thêm `crm.*`, `hrm.*`; test ma trận `policy-playground.test.js`; IT không có quyền nào |
 | Claude | 10 công cụ MCP mới (0.4.0): đối tác, chi tiết, việc theo dõi, ghi nhật ký, xong việc theo dõi; hồ sơ + phép của tôi, đơn nghỉ, tạo đơn nghỉ của mình, bảng công, tổng hợp công. Không chấm công / duyệt / sửa hồ sơ qua Claude; CCCD 4 số cuối; không lương; nghỉ ốm của người khác gộp |
 | Kiểm thử | unit (ma trận, ngày nghỉ, phép năm, đi muộn, CIDR, bảng công, mã hoá), e2e `08-playground-crm-hrm`, tích hợp MCP |

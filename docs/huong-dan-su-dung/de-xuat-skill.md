@@ -6,7 +6,7 @@ Rà bản skill `kepler-hub` đang chờ duyệt, đối chiếu với `app/mcp/
 
 | # | Mức | Vấn đề | Đề xuất |
 |---|---|---|---|
-| 1 | **Cao** | Skill ghi "gửi duyệt" thuộc nhóm *không có qua Claude*. Thực tế với việc trong dự án MTL, `kepper_update_progress` đặt `progress = 100` thì Hub **tự chuyển sang "Chờ duyệt"** (`routes/items.js:380-388`) — tức là gửi duyệt. | Thêm quy tắc: "100% trên việc MTL = gửi duyệt. Trước khi đặt 100%, nói rõ cho người dùng *việc sẽ chuyển sang Chờ duyệt, người giao / Ban Giám đốc sẽ nhận phiếu* và chờ họ đồng ý. Người dùng chỉ muốn ghi gần xong thì đặt 90–99%." |
+| 1 | **Cao** | Skill ghi "gửi duyệt" thuộc nhóm *không có qua Claude*. Thực tế với việc trong dự án MTL, `kepper_update_progress` đặt `progress = 100` thì Hub **tự chuyển sang "Chờ duyệt"** (`routes/items.js:380-388`) — tức là gửi duyệt. | Thêm quy tắc: "100% trên việc MTL = gửi duyệt. Trước khi đặt 100%, nói rõ cho người dùng *việc sẽ chuyển sang Chờ duyệt, người giao / Ban Tổng Giám đốc sẽ nhận phiếu* và chờ họ đồng ý. Người dùng chỉ muốn ghi gần xong thì đặt 90–99%." |
 | 2 | **Cao** | Bản chạy thật đang `MODULES=vanthu`: **Nhân sự và Đối tác tắt**. Gọi `kepper_hr_*`, `kepper_crm_*` sẽ lỗi 404 "Không tìm thấy API". Quy trình "Hôm nay tôi có gì?" lại gọi `kepper_hr_leaves scope=approve`. | Thêm: "Tool HR / CRM báo *Không tìm thấy API* = phân hệ chưa bật trên Kepler Hub. Nói một câu cho người dùng, không thử lại, bỏ phần đó khỏi tổng hợp." |
 | 3 | Trung bình | Mục Kết nối: "Không thấy tool `kepper_*` → liên hệ IT để cài". Người dùng tự cài được. | Đổi thành: "Vào Kepler Hub → tên tài khoản → **Kết nối Claude** → tải `kepper-claude.mcpb`, kéo vào Claude desktop → Install, để trống ô Token." |
 | 4 | Trung bình | Lỗi "Chưa xác thực" có hai nguồn: kết nối nhanh hết hạn (tự mở lại trang Cho phép) và **token tạo tay** (ô Token đã điền) — trường hợp sau không tự mở trang Cho phép. | Thêm: "Nếu đã dán token tay: tạo token mới ở trang Kết nối Claude, dán lại vào cấu hình tiện ích; hoặc xoá ô Token để dùng kết nối nhanh." |
@@ -22,8 +22,8 @@ Rà bản skill `kepler-hub` đang chờ duyệt, đối chiếu với `app/mcp/
 
 | # | Đề xuất | Lý do |
 |---|---|---|
-| B1 | `kepper_whoami` trả thêm `boardAll` (Ban Giám đốc toàn quyền), danh sách bộ phận PGĐ phụ trách và `modules` đang bật | Claude biết người dùng có quyền Ban Giám đốc của việc nào, và biết HR / CRM có bật không mà không phải thử lỗi |
-| B2 | Thêm tool `kepper_request_extension` (đề nghị gia hạn — server đã cho phép) | Người chủ trì xin gia hạn qua Claude; quyết định vẫn là Ban Giám đốc trên giao diện |
+| B1 | `kepper_whoami` trả thêm `boardAll` (BTGĐ phụ trách toàn công ty), danh sách bộ phận Phó TGĐ phụ trách và `modules` đang bật | Claude biết người dùng có quyền BTGĐ phụ trách của việc nào, và biết HR / CRM có bật không mà không phải thử lỗi |
+| B2 | Thêm tool `kepper_request_extension` (đề nghị gia hạn — server đã cho phép) | Người chủ trì xin gia hạn qua Claude; quyết định vẫn là Ban Tổng Giám đốc trên giao diện |
 | B3 | Thêm tool `kepper_progress_report` (POST `/api/items/:id/progress-reports`, server đã cho phép) | Gửi báo cáo tiến độ có khó khăn / kiến nghị, đúng luồng kiến nghị của lãnh đạo |
 | B4 | Cân nhắc chặn `progress = 100` qua token, hoặc trả về rõ "đã gửi duyệt" trong kết quả `kepper_update_progress` | Hiện tool trả lại tóm tắt việc, Claude phải tự nhận ra trạng thái đã thành "Chờ duyệt" |
 | B5 | Tool chỉ đọc cho Văn thư (`kepper_vanthu_mine`: văn bản giao tôi xử lý, hạn) | Câu hỏi hay gặp của nhân viên; dữ liệu theo đúng quyền sổ văn thư |

@@ -1,6 +1,6 @@
 # Hướng dẫn sử dụng Kepler Hub — dành cho lãnh đạo
 
-> Dành cho **Ban Giám đốc**, **lãnh đạo bộ phận**, **PMO / chủ dự án** và **thư ký giao ban**.
+> Dành cho **Ban Tổng Giám đốc**, **lãnh đạo bộ phận**, **PMO / chủ dự án** và **thư ký giao ban**.
 > Tài liệu này **không gửi cho toàn bộ nhân viên**: có các tính năng chỉ lãnh đạo thấy (duyệt, chấm mức, tổng hợp giao ban, chấm điểm, bảng công, KPI theo người).
 >
 > Phần dùng chung (đăng nhập, cài chứng chỉ, kết nối Claude, cài skill, Cập nhật nhanh, chấm công, xin nghỉ của chính mình) xem [Hướng dẫn cho nhân viên](nhan-vien.md), mục 2–3.
@@ -26,22 +26,28 @@
 
 ## 1. Ai làm gì trên Kepler Hub
 
-Kepler Hub áp **quyền tối thiểu theo vai**: trên mỗi việc, mỗi người chỉ làm phần thuộc vai của mình.
+Kepler Hub chỉ có **một trục vai** để trả lời "người này là ai trong công ty". Mỗi tài khoản có đúng một vai; quyền đi theo vai (quản trị không chỉnh quyền từng người).
 
 | Vai | Ai | Làm được |
 |---|---|---|
-| **Ban Giám đốc toàn quyền** | Người được quản trị đánh dấu riêng trong Quản trị → Tài khoản → Phân quyền (không theo phòng) | Là Ban Giám đốc của **mọi việc**: sửa kế hoạch, đổi người giao, duyệt gia hạn, duyệt + chấm mức việc mốc / đường găng |
-| **PGĐ phụ trách bộ phận** | Khai ở Phòng ban → PGĐ phụ trách | Như trên, nhưng chỉ với việc do các bộ phận mình phụ trách chủ trì |
-| **Người giao** | Người tạo / giao việc | Sửa kế hoạch việc mình giao (tên, mô tả, hạn, người chủ trì / phối hợp…), **duyệt và chấm mức** việc thường, trả lại, tạm dừng, huỷ, mở lại |
-| **Lãnh đạo bộ phận** | Trưởng / phó bộ phận | Xem toàn bộ việc của bộ phận, bình luận; nộp báo cáo tuần của bộ phận; duyệt đơn nghỉ, giải trình chấm công; xem bảng công bộ phận; duyệt việc nhân viên tự giao cho mình |
-| **PMO / chủ dự án** | Trưởng dự án, PMO | Xem toàn bộ dự án, nhập MTL, chạy cảnh báo; **không** sửa kế hoạch việc người khác giao |
-| **Thư ký giao ban** | Bộ phận thư ký do Ban Giám đốc chọn | Tổng hợp, điểm danh, soạn Action Log, nhập báo cáo thay bộ phận gửi email |
+| **Ban Tổng Giám đốc (BTGĐ)** | Tổng Giám đốc, các Phó Tổng Giám đốc (thành viên bộ phận Ban Tổng Giám đốc) | Xem toàn công ty, KPI & phân tích, tài liệu mọi dự án; kết luận giao ban, chọn thư ký / PMO / người phụ trách nhân sự / văn thư. Trong **phạm vi phụ trách** của mình: sửa kế hoạch, đổi người giao, duyệt gia hạn, duyệt + chấm mức việc mốc / đường găng |
+| **Lãnh đạo bộ phận** | Trưởng / phó bộ phận ("Trưởng phòng", "Phó trưởng ban"… chỉ là chức danh) | Xem toàn bộ việc của bộ phận, bình luận, chọn người cho việc giao về bộ phận; nộp báo cáo tuần; duyệt đơn nghỉ, giải trình chấm công; duyệt việc nhân viên tự giao cho mình |
+| **Nhân viên** | Mọi người còn lại | Làm việc mình chủ trì / phối hợp, báo cáo tiến độ, lập báo cáo tuần của bộ phận |
+| **Quản trị hệ thống** | IT | Tài khoản, bộ phận, nhãn, nhật ký. **Không** xem nội dung nghiệp vụ |
+
+**Phạm vi phụ trách** của một thành viên BTGĐ (quản trị đặt ở Quản trị → Tài khoản → "Quyền & phụ trách"):
+- **Toàn công ty**: là BTGĐ phụ trách của mọi việc;
+- **các bộ phận được chọn** (Phó Tổng Giám đốc phụ trách): chỉ với việc do các bộ phận đó chủ trì.
+
+Ngoài vai, mỗi người còn có:
+- **Quan hệ với từng việc / dự án** (không phải vai): **Người giao** sửa kế hoạch việc mình giao, duyệt và chấm mức việc thường; **Người chủ trì**, **Người phối hợp** làm phần việc của mình; dự án có **Chủ dự án**, **Thành viên**, **Người xem** (chỉ xem) và một **Người đứng tên dự án**.
+- **Kiêm nhiệm** do Ban Tổng Giám đốc giao: **Thư ký giao ban** (theo bộ phận), **PMO**, **Phụ trách nhân sự**, **Văn thư**, **Pháp chế**. Kiêm nhiệm hiện ở trang Thông tin cá nhân.
 
 Lưu ý:
 
-- Vai hệ thống "Giám đốc" **không tự** là Ban Giám đốc của việc. Phải được đánh dấu "Ban Giám đốc toàn quyền" hoặc là PGĐ phụ trách.
-- Người chủ trì không tự duyệt việc của mình. Ban Giám đốc là người chủ trì việc mốc / găng thì Ban Giám đốc **khác** duyệt.
-- Việc nhân viên tự giao cho mình: lãnh đạo bộ phận duyệt (không có → trưởng dự án → PGĐ phụ trách → Ban Giám đốc).
+- Người chủ trì không tự duyệt việc của mình. BTGĐ là người chủ trì việc mốc / găng thì BTGĐ **khác** duyệt.
+- Việc nhân viên tự giao cho mình: lãnh đạo bộ phận duyệt (không có → người đứng tên dự án → Phó TGĐ phụ trách → Ban Tổng Giám đốc).
+- Vai Ban Tổng Giám đốc phải trùng thành viên bộ phận Ban Tổng Giám đốc; lệch thì màn Quản trị cảnh báo.
 
 **Quy chế quản lý dự án (RACI) sắp ban hành.** Khi có, bảng vai này và skill `kepler-hub` sẽ cập nhật theo quy chế.
 
@@ -57,7 +63,7 @@ Menu **Dự án → Tiến độ dự án**: mỗi dự án một thẻ — thá
 
 ### 2.2 Tổng quan một dự án
 
-Mở dự án → tab **Tổng quan dự án**: ô số liệu bấm được, **đường cong S** kế hoạch / thực tế, theo giai đoạn, theo bộ phận, KPI theo người (chỉ Ban Giám đốc, lãnh đạo bộ phận — bộ phận mình — và PMO xem; mỗi lần xem có ghi nhật ký), mốc chính, cảnh báo gần đây.
+Mở dự án → tab **Tổng quan dự án**: ô số liệu bấm được, **đường cong S** kế hoạch / thực tế, theo giai đoạn, theo bộ phận, KPI theo người (chỉ Ban Tổng Giám đốc, lãnh đạo bộ phận — bộ phận mình — và PMO xem; mỗi lần xem có ghi nhật ký), mốc chính, cảnh báo gần đây.
 
 ![Tổng quan dự án](anh/20-ld-tong-quan-du-an.png)
 
@@ -87,11 +93,11 @@ Cảnh báo tiến độ chạy **07:30 hằng ngày**: việc **đường găng
 
 2. Nhập **Tiêu đề**, **Giai đoạn**, **Chủ trì** (1 người), **Phối hợp**, **Hạn**, **Ưu tiên**. Mục "Thêm thông tin" có trạng thái, mô tả, ngày bắt đầu, nguồn giao việc, nhãn. Bấm **Tạo việc**.
    - Trong dự án **MTL**: kế hoạch MTL do người quản lý dự án lập. Lãnh đạo bộ phận thêm việc con trong hạng mục bộ phận mình chủ trì, nên **bắt buộc chọn Việc cha**.
-   - **Đường găng** / **Mốc**: người giao hoặc Ban Giám đốc đánh dấu trong chi tiết việc. Việc găng / mốc do Ban Giám đốc của việc duyệt hoàn thành.
+   - **Đường găng** / **Mốc**: người giao hoặc Ban Tổng Giám đốc đánh dấu trong chi tiết việc. Việc găng / mốc do BTGĐ phụ trách của việc duyệt hoàn thành.
 
 ![Tạo việc](anh/20-ld-giao-viec.png)
 
-3. Bạn thành **người giao**: người chủ trì báo tiến độ, gửi duyệt cho bạn. Kế hoạch (tên, mô tả, hạn, người chủ trì…) chỉ bạn và Ban Giám đốc của việc sửa.
+3. Bạn thành **người giao**: người chủ trì báo tiến độ, gửi duyệt cho bạn. Kế hoạch (tên, mô tả, hạn, người chủ trì…) chỉ bạn và BTGĐ phụ trách của việc sửa.
 
 **Kế hoạch gốc** là căn cứ tính chậm / trễ và KPI, chỉ đổi qua **Điều chỉnh kế hoạch gốc** (người quản lý dự án, bắt buộc lý do, có nhật ký). MTL nhập từ Excel: menu **Khác → Nhập MTL từ Excel** (PMO, lãnh đạo bộ phận nhập MTL bộ phận mình).
 
@@ -115,7 +121,7 @@ Menu **Công việc → Chờ tôi duyệt**. Các tab: **Phiếu trình** (vi�
 
 ![Duyệt và chấm mức](anh/04-duyet-cham-muc.png)
 
-- Việc **mốc / đường găng**: phiếu tới **Ban Giám đốc của việc**, không tới người giao.
+- Việc **mốc / đường găng**: phiếu tới **BTGĐ phụ trách của việc**, không tới người giao.
 - Việc cha chỉ gửi duyệt được khi mọi việc nhánh đã được duyệt. Con mở lại thì việc cha tự về "Đang thực hiện".
 - KPI đúng hạn tính theo **ngày gửi duyệt**, không theo ngày bạn duyệt.
 - Đánh giá = mức chấm + nhận xét lúc duyệt, chỉ đọc sau đó.
@@ -126,9 +132,9 @@ Menu **Công việc → Chờ tôi duyệt**. Các tab: **Phiếu trình** (vi�
 
 ## 5. Gia hạn và kiến nghị
 
-### 5.1 Duyệt gia hạn (Ban Giám đốc của việc)
+### 5.1 Duyệt gia hạn (BTGĐ phụ trách của việc)
 
-Người chủ trì xin gia hạn → **Ban Giám đốc của việc** quyết định (người giao, lãnh đạo bộ phận chỉ theo dõi).
+Người chủ trì xin gia hạn → **BTGĐ phụ trách của việc** quyết định (người giao, lãnh đạo bộ phận chỉ theo dõi).
 
 1. **Chờ tôi duyệt → Đề nghị gia hạn**.
 2. Xem hạn cũ, hạn đề nghị, lý do → **Duyệt** (1) hoặc **Không duyệt**.
@@ -151,7 +157,7 @@ Lãnh đạo bộ phận chịu trách nhiệm báo cáo tuần của bộ phậ
    - Phần I: hạng mục MTL của bộ phận đến hạn / quá hạn / xong trong tuần, kế hoạch tuần trước, việc TGĐ giao trong Action Log;
    - Phần II: việc chạy nhiều tuần, việc chưa xong tuần trước;
    - Phần III: hạng mục bắt đầu tuần tới.
-2. Dòng **Chậm / Vướng / Quá hạn**: bắt buộc nguyên nhân, giải pháp, đề nghị hỗ trợ (Ban Giám đốc, bộ phận nào, hoặc "Tự xử lý") (1). Máy chủ kiểm, thiếu thì không cho gửi.
+2. Dòng **Chậm / Vướng / Quá hạn**: bắt buộc nguyên nhân, giải pháp, đề nghị hỗ trợ (Ban Tổng Giám đốc, bộ phận nào, hoặc "Tự xử lý") (1). Máy chủ kiểm, thiếu thì không cho gửi.
 3. Bấm **Gửi báo cáo** (2). % ghi luôn vào MTL. Sửa sau thì **Gửi lại**, giờ nộp vẫn tính lần đầu.
 
 ![Báo cáo tuần](anh/06-bao-cao-tuan.png)
@@ -204,15 +210,15 @@ Yêu cầu hỗ trợ gom theo nơi nhận; TGĐ ghi **Kết luận** cho từng
 
 ![Chấm điểm](anh/20-ld-cham-diem.png)
 
-Thiết lập bộ phận phải nộp, thứ tự, hạn nộp, ngày họp khi nghỉ lễ: Ban Giám đốc / thư ký ở **Thiết lập** của trang Báo cáo tuần.
+Thiết lập bộ phận phải nộp, thứ tự, hạn nộp, ngày họp khi nghỉ lễ: Ban Tổng Giám đốc / thư ký ở **Thiết lập** của trang Báo cáo tuần.
 
-**Bằng Claude (chỉ khi tài khoản có quyền xem tổng hợp):** "Tóm tắt tổng hợp giao ban tuần này theo bộ phận: hoàn thành, trễ, vướng mắc cần Ban Giám đốc quyết." Claude chỉ dùng **bản tổng hợp tóm tắt**; điểm danh, kết luận, phát hành, chấm điểm làm trên giao diện.
+**Bằng Claude (chỉ khi tài khoản có quyền xem tổng hợp):** "Tóm tắt tổng hợp giao ban tuần này theo bộ phận: hoàn thành, trễ, vướng mắc cần Ban Tổng Giám đốc quyết." Claude chỉ dùng **bản tổng hợp tóm tắt**; điểm danh, kết luận, phát hành, chấm điểm làm trên giao diện.
 
 ---
 
 ## 8. Văn thư
 
-**Vào sổ** (cấp số) do **văn thư** (người Ban Giám đốc chỉ định), **Ban Giám đốc**, hoặc **lãnh đạo bộ phận** (riêng dãy D7 — văn bản nội bộ của bộ phận mình).
+**Vào sổ** (cấp số) do **văn thư** (người Ban Tổng Giám đốc chỉ định), **Ban Tổng Giám đốc**, hoặc **lãnh đạo bộ phận** (riêng dãy D7 — văn bản nội bộ của bộ phận mình).
 
 1. **Nghiệp vụ → Văn thư** → chọn sổ: **Văn bản đến / Văn bản đi / Nội bộ**. Bấm **Vào sổ** (1).
 
@@ -228,8 +234,8 @@ Thiết lập bộ phận phải nộp, thứ tự, hạn nộp, ngày họp khi
 
 ![Văn bản nội bộ](anh/07-van-thu-noi-bo.png)
 
-- Mức **Hạn chế / Bảo mật cao**: chỉ người trong danh sách được xem; danh sách văn bản Bảo mật cao do TGĐ / Chủ tịch duyệt, Ban Giám đốc nhập.
-- **Thiết lập** (Ban Giám đốc): pháp nhân, văn thư, người nhận chuyển Pháp chế.
+- Mức **Hạn chế / Bảo mật cao**: chỉ người trong danh sách được xem; danh sách văn bản Bảo mật cao do TGĐ / Chủ tịch duyệt, Ban Tổng Giám đốc nhập.
+- **Thiết lập** (Ban Tổng Giám đốc): pháp nhân, văn thư, người nhận chuyển Pháp chế.
 
 Claude **không** vào sổ, không tải tệp. Skill `kepler-luu-tai-lieu` chỉ chỗ lưu và cách đặt tên.
 
@@ -237,11 +243,11 @@ Claude **không** vào sổ, không tải tệp. Skill `kepler-luu-tai-lieu` ch�
 
 ## 9. Nhân sự
 
-> Phân hệ Nhân sự đang **tắt** trên bản chạy thật cho tới khi Ban Giám đốc quyết định bật.
+> Phân hệ Nhân sự đang **tắt** trên bản chạy thật cho tới khi Ban Tổng Giám đốc quyết định bật.
 
 ### 9.1 Duyệt đơn nghỉ và giải trình
 
-**Chờ tôi duyệt → Đơn nghỉ & giải trình** (hoặc Nhân sự → Chờ duyệt). Đơn nhân viên → lãnh đạo bộ phận duyệt; đơn của lãnh đạo bộ phận → Ban Giám đốc duyệt.
+**Chờ tôi duyệt → Đơn nghỉ & giải trình** (hoặc Nhân sự → Chờ duyệt). Đơn nhân viên → lãnh đạo bộ phận duyệt; đơn của lãnh đạo bộ phận → Ban Tổng Giám đốc duyệt.
 
 Mỗi đơn hiện số phép còn và **cảnh báo việc đến hạn trong thời gian nghỉ** (cần người làm thay / lùi hạn). Bấm **Duyệt** (1) hoặc **Từ chối**.
 
@@ -263,10 +269,10 @@ Mỗi đơn hiện số phép còn và **cảnh báo việc đến hạn trong t
 
 ## 10. Đối tác (CRM)
 
-- Lãnh đạo bộ phận xem đối tác, người liên hệ, nhật ký, hợp đồng của **bộ phận mình phụ trách**; Ban Giám đốc xem tất cả.
+- Lãnh đạo bộ phận xem đối tác, người liên hệ, nhật ký, hợp đồng của **bộ phận mình phụ trách**; Ban Tổng Giám đốc xem tất cả.
 - Việc cần theo dõi nhắc lúc 08:10.
 
-**Bằng Claude:** "Việc cần theo dõi với đối tác của bộ phận tôi, việc nào quá hạn?" (Claude gọi phạm vi bộ phận; Ban Giám đốc: tất cả).
+**Bằng Claude:** "Việc cần theo dõi với đối tác của bộ phận tôi, việc nào quá hạn?" (Claude gọi phạm vi bộ phận; Ban Tổng Giám đốc: tất cả).
 
 ---
 
@@ -292,10 +298,10 @@ Tài khoản **quản trị hệ thống (IT)** không dùng được Claude v�
 
 | Câu hỏi | Trả lời |
 |---|---|
-| Tôi là Giám đốc mà không sửa được hạn việc? | Vai hệ thống không đủ. Cần được đánh dấu **Ban Giám đốc toàn quyền** (quản trị làm) hoặc là PGĐ phụ trách bộ phận chủ trì việc. Hoặc bạn phải là người giao |
-| PMO sao không sửa được kế hoạch việc? | Đúng thiết kế: PMO xem toàn bộ, kế hoạch do người giao và Ban Giám đốc sửa |
+| Tôi thuộc Ban Tổng Giám đốc mà không sửa được hạn việc? | Việc đó nằm ngoài **phạm vi phụ trách** của bạn (không phụ trách Toàn công ty, không phụ trách bộ phận chủ trì việc), và bạn không phải người giao. Nhờ quản trị đặt phạm vi phụ trách |
+| PMO sao không sửa được kế hoạch việc? | Đúng thiết kế: PMO là kiêm nhiệm (xem bản tổng hợp giao ban đầy đủ, quản lý dự án mình làm chủ). Kế hoạch do người giao và BTGĐ phụ trách sửa |
 | Nút "Phát hành kết luận + Action Log" bị khoá | Chưa tới giờ giao ban. Action Log vẫn soạn và lưu trước được |
 | Việc cha không gửi duyệt được | Còn việc nhánh chưa được duyệt hoàn thành |
-| Phiếu duyệt việc mốc không tới người giao | Đúng: việc mốc / đường găng do Ban Giám đốc của việc duyệt |
+| Phiếu duyệt việc mốc không tới người giao | Đúng: việc mốc / đường găng do BTGĐ phụ trách của việc duyệt |
 | Nhờ Claude đặt 100% có phải là duyệt không? | Không. 100% trên việc MTL = **gửi duyệt** (sang Chờ duyệt). Duyệt vẫn là người duyệt bấm trên giao diện |
 | Claude báo "Không đủ quyền" / `NOT_VIA_AI` | Xem bảng lỗi trong [hướng dẫn nhân viên, mục 12](nhan-vien.md#12-hỏi-đáp-và-lỗi-thường-gặp) |
