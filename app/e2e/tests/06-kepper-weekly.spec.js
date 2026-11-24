@@ -407,7 +407,7 @@ test('21. Mục S10 — việc Giám đốc giao trưởng phòng qua sổ, nhâ
   nvForm.risks.push({ key: 'gia', itemId: item.id, task: 'Giả mạo (giả)', status: 'Vướng', cause: 'Nhân viên ghi đè (giả)', solution: 'x', helpFrom: 'BGD', helpWhat: 'Xin hỗ trợ (giả)', helpBy: vnDate(5), ownerIds: [me.id], due: vnDate(5) });
   nvForm.plans.push({ key: 'giap', itemId: item.id, task: 'Giả mạo IV (giả)', basis: 'KH tháng', ownerIds: [me.id], due: vnDate(6), output: 'x' });
   const fakeRes = await post(nv, '/api/weekly/submit', { week: ctx.week, data: nvForm });
-  expect(fakeRes.ignored).toBe(2); expect(fakeRes.warning).toContain('không có quyền sửa'); // báo lại, không im lặng
+  expect(fakeRes.ignored).toBe(2); expect(fakeRes.warning).toContain('không có quyền thêm / sửa / bỏ'); // báo lại, không im lặng
   await stable('nhân viên gửi dòng của việc không xem được');
   const afterFake = await json(gd, `/api/weekly/summary?week=${ctx.week}`);
   const fakeRow = rowsOf(afterFake.rows.find(r => r.id === kt).report).find(r => r.itemId === item.id);
