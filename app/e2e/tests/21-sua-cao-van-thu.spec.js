@@ -232,6 +232,7 @@ test('L8a. Hủy số với lý do trống: hộp giữ mở, dòng đỏ "Nhậ
   const dir = pages.giamdoc;
   const a = await register({ title: 'văn bản đến hủy số' });
   await go(dir, `#/vanthu/${a.id}`);
+  await expect(dir.locator('#view h1')).toContainText(a.number); // trang trước (L7) cũng có nút Hủy số: chờ đúng văn bản
   await dir.getByTestId('vt-cancel').click();
   await emptyReasonRefused(dir, 'Lý do hủy (bắt buộc)', 'Hủy số');
   expect((await doc(dir, a.id)).cancelled, 'ô trống: chưa hủy').toBeNull();
@@ -249,6 +250,7 @@ test('L8b. Huỷ dự thảo / Trả lại với lý do trống: hộp giữ m�
   // Huỷ dự thảo (người soạn).
   const b = await draftKD('dự thảo sẽ huỷ', { pdf: false });
   await go(lead, `#/vanthu/${b.id}`);
+  await expect(lead.locator('#view')).toContainText(b.title); // chờ đúng dự thảo hiện ra rồi mới bấm
   await lead.getByTestId('vt-cancel').click();
   await emptyReasonRefused(lead, 'Lý do huỷ (bắt buộc)', 'Huỷ dự thảo');
   expect((await doc(lead, b.id)).cancelled).toBeNull();
@@ -259,6 +261,7 @@ test('L8b. Huỷ dự thảo / Trả lại với lý do trống: hộp giữ m�
   // Trả lại (Người phê duyệt).
   const c = await draftKD('dự thảo sẽ trả lại');
   await go(dir, `#/vanthu/${c.id}`);
+  await expect(dir.locator('#view')).toContainText(c.title);
   await dir.getByTestId('vt-return').click();
   await emptyReasonRefused(dir, 'Lý do trả lại (bắt buộc)', 'Trả lại');
   expect((await doc(dir, c.id)).status.code, 'ô trống: dự thảo vẫn chờ').toBe('DRAFT');
@@ -291,6 +294,8 @@ test('L9a. Văn bản đến / đi: mọi nút bước hỏi lại, nêu tên b�
   // Văn bản đến: đủ 5 nút bước, nút nào cũng hỏi; Huỷ cả 5 → vẫn "Đã tiếp nhận", lịch sử không có đổi trạng thái.
   const den = await register({ title: 'văn bản đến bấm bước' });
   await go(dir, `#/vanthu/${den.id}`);
+  // Chờ đúng văn bản này hiện ra: trang trước còn hiện tới khi trang mới vẽ xong (có thể cũng có nút bước cùng tên) — bấm sớm là bấm nhầm trang cũ.
+  await expect(dir.locator('#view h1')).toContainText(den.number);
   const STEPS = [['SUBMITTED', 'Đã trình', 'Đã trình'], ['ASSIGNED', 'Đã giao', 'Đã giao xử lý'], ['PROCESSING', 'Bắt đầu xử lý', 'Đang xử lý'], ['DONE', 'Báo xong', 'Đã hoàn thành'], ['FILED', 'Lập hồ sơ', 'Đã lập hồ sơ']];
   await expect(dir.locator('[data-to]')).toHaveCount(STEPS.length);
   for (const [to, step, status] of STEPS) await askThenCancel(dir, to, step, status, den.number);
@@ -319,6 +324,7 @@ test('L9a. Văn bản đến / đi: mọi nút bước hỏi lại, nêu tên b�
   // Văn bản đi: 3 nút bước đều hỏi; Huỷ → vẫn "Đã cấp số".
   const di = await register({ series: 'D9', title: 'công văn đi bấm bước' });
   await go(dir, `#/vanthu/${di.id}`);
+  await expect(dir.locator('#view h1')).toContainText(di.number);
   for (const [to, step] of [['SENT', 'Đã gửi'], ['CONFIRMED', 'Bên nhận đã xác nhận'], ['REPLIED', 'Đã có phản hồi']]) await askThenCancel(dir, to, step, step, di.number);
   expect((await doc(dir, di.id)).status.code).toBe('NUMBERED');
   await dir.getByTestId('vt-to-SENT').click();
@@ -339,6 +345,7 @@ test('L9b. Quy chế: "Có hiệu lực" / "Hết hiệu lực" hỏi lại; "H�
   const ap = await mk('hướng dẫn chờ hiệu lực', { effectiveDate: later });
   expect(ap.status.code).toBe('APPROVED');
   await go(dir, `#/vanthu/${ap.id}`);
+  await expect(dir.locator('#view h1')).toContainText(ap.number);
   await askThenCancel(dir, 'EFFECTIVE', 'Có hiệu lực', 'Hiệu lực', ap.number);
   await askThenCancel(dir, 'EXPIRED', 'Hết hiệu lực', 'Hết hiệu lực / thay thế', ap.number);
   await expect(dir.getByTestId('vt-status')).toHaveText('Đã phê duyệt');
@@ -346,6 +353,7 @@ test('L9b. Quy chế: "Có hiệu lực" / "Hết hiệu lực" hỏi lại; "H�
   const q = await mk('hướng dẫn sẽ hết hiệu lực');
   expect(q.status.code).toBe('EFFECTIVE');
   await go(dir, `#/vanthu/${q.id}`);
+  await expect(dir.locator('#view h1')).toContainText(q.number);
   await dir.getByTestId('vt-to-EXPIRED').click();
   await expect(modal(dir).locator('p').first()).toHaveText(`Hết hiệu lực: chuyển ${q.number} sang "Hết hiệu lực / thay thế"? Không quay lại được bước trước. Muốn áp dụng lại phải tạo dự thảo thay thế và phê duyệt lại.`);
   await dir.getByTestId('confirm-cancel').click();
