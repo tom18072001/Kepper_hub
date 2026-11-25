@@ -169,6 +169,26 @@ test('Phó TGĐ phụ trách bộ phận chủ trì đã khoá, có người ph�
   } finally { t.close(); }
 });
 
+test('Phó TGĐ phụ trách bộ phận chủ trì tự chủ trì việc và đề nghị gia hạn: người phụ trách Toàn công ty nhận và quyết; người gửi không tự duyệt', async () => {
+  const users = USERS.map(u => (u.id === 1 ? { ...u, boardAll: true } : u));
+  // Bộ phận 80: Phó TGĐ phụ trách là người 4 — chính người 4 chủ trì việc và gửi đề nghị.
+  const t = await scenario({ users, items: [item(100, { leadDepartmentId: 80, assignees: [{ userId: 4 }] })] });
+  try {
+    const sent = await t.call(4, 'POST', '/api/items/100/extensions', REQUEST);
+    assert.equal(sent.status, 201, JSON.stringify(sent.body));
+    // Không báo lại chính Phó TGĐ (người gửi); người quyết còn lại là người phụ trách Toàn công ty → được báo, kèm người giao.
+    assert.deepEqual(recipients(t.state), [1, 30]);
+    assert.deepEqual(await queueOf(t, 1), { rows: [['DA-100', true]], badge: 1 });
+    assert.deepEqual(await queueOf(t, 4), { rows: [], badge: 0 });
+    const self = await t.call(4, 'POST', `/api/extensions/${sent.body.id}/decide`, { decision: 'APPROVE' });
+    assert.equal(self.status, 403);
+    assert.equal(self.body.code, 'SELF_APPROVAL');
+    assert.equal((await t.call(5, 'POST', `/api/extensions/${sent.body.id}/decide`, { decision: 'APPROVE' })).status, 403); // BTGĐ không phụ trách
+    assert.equal((await t.call(1, 'POST', `/api/extensions/${sent.body.id}/decide`, { decision: 'APPROVE' })).status, 200);
+    assert.equal(t.state.extensions[0].status, 'APPROVED');
+  } finally { t.close(); }
+});
+
 test('việc nhánh không ghi bộ phận chủ trì: Phó TGĐ phụ trách bộ phận của việc cha nhận, thấy ở hàng chờ và quyết', async () => {
   const t = await scenario({ items: [item(100, { leadDepartmentId: 80 }), item(101, { leadDepartmentId: null, parentId: 100 })] });
   try {
