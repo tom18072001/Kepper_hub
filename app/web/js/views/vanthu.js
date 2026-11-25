@@ -354,6 +354,25 @@ async function openNoiboEdit(d, m, done) {
   };
 }
 
+// Người phê duyệt (sửa C1 / T14): máy chủ tính MỘT tập "hiệu lực" (m.config.approvers — cùng hàm với quyền phê duyệt). Màn này hiện ai đang
+// thực sự duyệt và vì sao; người đã lưu nhưng không còn hợp lệ (đã khoá / đổi vai) hiện gạch tên kèm lý do, có ô "giữ" đang tick: Lưu mà không
+// đụng tới thì danh sách đã lưu giữ nguyên (không âm thầm xoá ai), bỏ tick thì xoá. Không tự tính lại ở trình duyệt khi đổi ô chọn.
+function approverBox(m) {
+  const { approvers: a, approverProblems: why, boardUsers } = m.config;
+  const valid = new Set(a.stored.filter(x => !x.problems.length).map(x => x.id));
+  const stale = a.stored.filter(x => x.problems.length);
+  const names = list => list.map(u => esc(u.fullName)).join(', ');
+  const empty = a.stored.length ? 'danh sách không còn ai hợp lệ' : 'danh sách trống';
+  const reason = { LIST: 'theo danh sách đã lưu', BOARD_ALL: `theo "Toàn công ty" vì ${empty}`, BOARD: `mọi thành viên Ban TGĐ, vì ${empty} và không ai phụ trách "Toàn công ty"` }[a.source];
+  return `<div class="field span2" data-testid="vt-c-approver-box"><label for="vtApprovers">Người phê duyệt tài liệu nội bộ <span class="muted xs">(chỉ vai Ban TGĐ; để trống hoặc không còn ai hợp lệ = thành viên Ban TGĐ phụ trách "Toàn công ty"; không ai phụ trách "Toàn công ty" = mọi thành viên Ban TGĐ)</span></label>
+      <select id="vtApprovers" name="approverUserIds" multiple size="4" data-testid="vt-c-approvers">${boardUsers.map(u => `<option value="${u.id}"${valid.has(u.id) ? ' selected' : ''}>${esc(u.fullName)}${u.boardAll ? ' · Toàn công ty' : ''}</option>`).join('')}</select>
+      ${stale.length ? `<div data-testid="vt-c-stale"><p class="muted xs">Đã lưu nhưng không còn hợp lệ — hệ thống không tính những người này:</p>
+        ${stale.map(x => `<label class="check"><input type="checkbox" name="keepApprover" value="${x.id}" checked data-testid="vt-c-keep-${x.id}"><span><s>${esc(x.fullName || `Tài khoản #${x.id}`)}</s> (${esc(x.problems.map(p => why[p] || p).join(', '))}) — giữ tên trong danh sách</span></label>`).join('')}
+        <p class="muted xs">Giữ: người đó tự được phê duyệt lại khi tài khoản mở khoá / có lại vai Ban Tổng Giám đốc. Bỏ tick rồi Lưu: xoá khỏi danh sách.</p></div>` : ''}
+      ${a.source === 'NONE' ? '<p class="returned-banner" role="alert" data-testid="vt-c-no-approver"><b>Hiện không có Người phê duyệt hợp lệ — dự thảo sẽ không ai duyệt.</b></p>'
+        : `<p class="sm" data-testid="vt-c-effective">Đang áp dụng: <b>${names(a.effective)}</b> — ${reason}.</p>`}</div>`;
+}
+
 async function renderSettings(root, setCrumbs, m) {
   setCrumbs('<a href="#/vanthu">Văn thư</a> / Thiết lập');
   if (!m.me.director) { root.innerHTML = '<div class="empty">Chỉ Ban Tổng Giám đốc thiết lập văn thư.</div>'; return; }
@@ -364,8 +383,7 @@ async function renderSettings(root, setCrumbs, m) {
         <textarea name="entities" rows="3" data-testid="vt-c-entities">${esc(m.entities.map(e => `${e.code} · ${e.name}`).join('\n'))}</textarea></label>
       <label class="field">Văn thư<br>${people(m.config.clerkUserIds, 'clerkUserIds')}</label>
       <label class="field">Pháp chế<br>${people(m.config.legalUserIds, 'legalUserIds')}</label>
-      <label class="field span2">Người phê duyệt tài liệu nội bộ <span class="muted xs">(chỉ vai Ban TGĐ; để trống = thành viên Ban TGĐ phụ trách "Toàn công ty")</span><br>
-        <select name="approverUserIds" multiple size="4" data-testid="vt-c-approvers">${m.config.boardUsers.map(u => `<option value="${u.id}"${m.config.approverUserIds.includes(u.id) ? ' selected' : ''}>${esc(u.fullName)}${u.boardAll ? ' · Toàn công ty' : ''}</option>`).join('')}</select></label>
+      ${approverBox(m)}
       <p class="error span2" id="vcErr"></p>
       <div class="modal-actions span2"><button class="btn btn-primary" data-testid="vt-c-save">Lưu</button></div></form>`;
   root.querySelector('#vtCfg').onsubmit = async e => {
@@ -373,7 +391,9 @@ async function renderSettings(root, setCrumbs, m) {
     const f = e.target;
     const entities = f.entities.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [code, ...rest] = l.split(/\s*[·\-–|:]\s*/); return { code: (code || '').toUpperCase(), name: rest.join(' - ') }; });
     const sel = n => [...f[n].selectedOptions].map(o => Number(o.value));
-    try { await api('/api/vanthu/config', { method: 'PUT', body: { entities, clerkUserIds: sel('clerkUserIds'), legalUserIds: sel('legalUserIds'), approverUserIds: sel('approverUserIds') } }); await getMeta(true); toast('Đã lưu thiết lập', 'ok'); location.hash = '#/vanthu'; }
+    // Người phê duyệt = người chọn trong ô + người không còn hợp lệ mà Ban TGĐ vẫn để tick "giữ".
+    const kept = [...f.querySelectorAll('input[name="keepApprover"]:checked')].map(i => Number(i.value));
+    try { await api('/api/vanthu/config', { method: 'PUT', body: { entities, clerkUserIds: sel('clerkUserIds'), legalUserIds: sel('legalUserIds'), approverUserIds: [...sel('approverUserIds'), ...kept] } }); await getMeta(true); toast('Đã lưu thiết lập', 'ok'); location.hash = '#/vanthu'; }
     catch (error) { root.querySelector('#vcErr').textContent = errorMessage(error); }
   };
 }

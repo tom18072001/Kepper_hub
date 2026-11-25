@@ -1,6 +1,7 @@
 // Văn thư — quy tắc của "Quy định văn thư, lưu trữ" (QyĐ-GA-01): dãy số, số và ký hiệu, hạn xử lý theo độ khẩn, quyền xem.
-// Thuần (không đụng CSDL) trừ vanthuConfig — để kiểm thử từng quy tắc (vanthu.test.js).
+// Thuần (không đụng CSDL) trừ vanthuConfig và approversOf — để kiểm thử từng quy tắc (vanthu.test.js, quy-che-phe-duyet.test.js).
 const WK = require('./weekly');
+const { isBoard, BOARD_WHERE } = require('../lib/permissions');
 
 const CONFIG_KEY = 'vanthu.config';
 const BOOKS = { DEN: 'Văn bản đến', DI: 'Văn bản đi', NOIBO: 'Văn bản nội bộ' };
@@ -120,7 +121,7 @@ function canViewNoibo(doc, s) {
 const aiHidden = (doc, s) => !!s.ai && (doc.book === 'NOIBO' ? (doc.viewLevel === 'BOARD' || (isDraft(doc) && doc.createdById !== s.userId)) : doc.security === 'BAO_MAT_CAO');
 // Sửa / gửi lại / huỷ dự thảo, tải / gỡ tệp của dự thảo: người soạn; Văn thư (trong cấp xem). Không qua Claude (trừ tạo dự thảo).
 const canEditDraft = (doc, s) => !s.it && !s.ai && !doc.cancelledAt && isDraft(doc) && (doc.createdById === s.userId || (!!s.clerk && levelOk(doc.viewLevel, s)));
-// Phê duyệt / trả lại: chỉ Người phê duyệt (danh sách trong Thiết lập văn thư, chỉ vai Ban TGĐ), trên giao diện, dự thảo đang chờ.
+// Phê duyệt / trả lại: chỉ Người phê duyệt HIỆU LỰC (s.approver — effectiveApprovers), trên giao diện, dự thảo đang chờ.
 // Trả về null nếu được; ngược lại [mã HTTP, thông báo, mã lỗi].
 function approveCheck(doc, s, files = []) {
   if (s.ai) return [403, 'Phê duyệt làm trên giao diện Kepler Hub, không qua Claude', 'NOT_VIA_AI'];
@@ -135,8 +136,39 @@ const returnCheck = (doc, s) => {
   const e = approveCheck(doc, s, [{ mimeType: 'application/pdf' }]);
   return e && e[2] === 'PDF_REQUIRED' ? null : e;
 };
-// Người phê duyệt: tài khoản vai Ban TGĐ có trong danh sách; danh sách trống → Ban TGĐ phụ trách "Toàn công ty".
-const isApprover = (user, cfg, board) => !!board && (cfg.approverUserIds.length ? cfg.approverUserIds.includes(user.id) : !!user.boardAll);
+// ---- Người phê duyệt HIỆU LỰC — MỘT nơi tính, dùng ở mọi chỗ: quyền Phê duyệt / Trả lại và xem dự thảo (routes subject().approver),
+// người nhận "Tài liệu chờ phê duyệt" (tạo dự thảo, gửi lại, đổi Thiết lập), màn Thiết lập (ai đang thực sự duyệt và vì sao). Chuỗi dự phòng:
+//   LIST      người trong danh sách đã lưu (Thiết lập văn thư) còn hoạt động VÀ còn vai Ban TGĐ;
+//   BOARD_ALL không còn ai hợp lệ (danh sách trống, hoặc chỉ còn người đã khoá / đổi vai) → thành viên Ban TGĐ phụ trách "Toàn công ty" đang hoạt động;
+//   BOARD     vẫn không có ai → mọi thành viên Ban TGĐ đang hoạt động;
+//   NONE      không có thành viên Ban TGĐ nào đang hoạt động: dự thảo không ai duyệt (màn Thiết lập báo đỏ).
+// Quản trị hệ thống không bao giờ vào tập (isBoard loại tài khoản IT, kể cả khi mã của họ nằm trong danh sách). Người không còn hợp lệ VẪN nằm
+// trong danh sách đã lưu (stored, kèm lý do) cho tới khi Ban TGĐ bỏ tick "giữ" ở Thiết lập — không âm thầm xoá; mở khoá / có lại vai là duyệt lại.
+// users: các tài khoản có trong danh sách đã lưu (mọi trạng thái) + các thành viên Ban TGĐ đang hoạt động — approversOf nạp đúng tập này.
+const APPROVER_PROBLEMS = { INACTIVE: 'đã khoá', NOT_BOARD: 'không còn vai Ban Tổng Giám đốc', MISSING: 'không còn tài khoản' };
+const activeBoard = u => !!u && u.isActive === true && isBoard(u);
+function effectiveApprovers(cfg, users) {
+  const byId = new Map(users.map(u => [u.id, u]));
+  const stored = cfg.approverUserIds.map(id => {
+    const u = byId.get(id);
+    const problems = !u ? ['MISSING'] : [...(u.isActive === true ? [] : ['INACTIVE']), ...(isBoard(u) ? [] : ['NOT_BOARD'])];
+    return { id, fullName: u?.fullName ?? null, problems };
+  });
+  const board = users.filter(activeBoard);
+  const listed = stored.filter(x => !x.problems.length).map(x => x.id);
+  const all = board.filter(u => u.boardAll).map(u => u.id);
+  const [source, ids] = listed.length ? ['LIST', listed] : all.length ? ['BOARD_ALL', all] : board.length ? ['BOARD', board.map(u => u.id)] : ['NONE', []];
+  return { source, ids, stored, board: board.map(u => ({ id: u.id, fullName: u.fullName, boardAll: !!u.boardAll })) };
+}
+// Nạp một lần đủ tài khoản cho effectiveApprovers: người trong danh sách đã lưu (mọi trạng thái — để biết ai đã khoá / đổi vai) + mọi thành viên
+// Ban TGĐ đang hoạt động (dự phòng "Toàn công ty" / mọi thành viên).
+async function approversOf(prisma, cfg) {
+  const users = await prisma.user.findMany({ where: { OR: [{ id: { in: cfg.approverUserIds } }, { isActive: true, ...BOARD_WHERE }] },
+    select: { id: true, fullName: true, role: true, isRootAdmin: true, isActive: true, boardAll: true }, orderBy: { fullName: 'asc' } });
+  return effectiveApprovers(cfg, users);
+}
+// Tài khoản có phải Người phê duyệt hiệu lực không (eff = effectiveApprovers / approversOf của cùng thiết lập).
+const isApprover = (user, eff) => isBoard(user) && eff.ids.includes(user.id);
 // Phê duyệt xong: chưa tới ngày hiệu lực → Đã phê duyệt; ngày hiệu lực trống / hôm nay / trong quá khứ → Hiệu lực ngay.
 const statusOnApprove = (effectiveDate, today) => (effectiveDate && effectiveDate > today ? 'APPROVED' : 'EFFECTIVE');
 // Sau khi phê duyệt chỉ Văn thư / Ban TGĐ đánh dấu Hiệu lực / Hết hiệu lực (đổi trạng thái tay); dự thảo không đổi trạng thái theo đường này.
@@ -149,4 +181,5 @@ const legacySecurity = (status, viewLevel) => (DRAFT_STATES.has(status) || (view
 
 module.exports = { CONFIG_KEY, BOOKS, SERIES, SECURITY, URGENCY, DUE_WORKDAYS, STATUS, FIRST, CLOSED, DOC_TYPES, vanthuConfig, numberOf, seriesKey,
   addWorkdays, dueFor, canView, canRegister, canStatus, isOverdue, LINKABLE_SECURITY, canLink, issuerOf,
-  VIEW_LEVELS, LEVEL_RANK, NOIBO_TYPES, isDraft, levelOk, levelsFor, canViewNoibo, aiHidden, canEditDraft, approveCheck, returnCheck, isApprover, statusOnApprove, NOIBO_MANUAL, legacySecurity };
+  VIEW_LEVELS, LEVEL_RANK, NOIBO_TYPES, isDraft, levelOk, levelsFor, canViewNoibo, aiHidden, canEditDraft, approveCheck, returnCheck,
+  APPROVER_PROBLEMS, effectiveApprovers, approversOf, isApprover, statusOnApprove, NOIBO_MANUAL, legacySecurity };

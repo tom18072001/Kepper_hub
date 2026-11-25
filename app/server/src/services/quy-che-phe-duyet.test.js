@@ -5,23 +5,23 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const V = require('./vanthu');
-const { roleRank, isBoard } = require('../lib/permissions');
+const { roleRank, isBoard, BOARD_WHERE } = require('../lib/permissions');
 
 const cfgList = ids => ({ approverUserIds: ids, clerkUserIds: [], legalUserIds: [], entities: [] });
-// Chủ thể như routes/vanthu.js subject(): rank từ roleRank, approver từ isApprover.
-function subj(user, { clerk = false, ai = false, cfg = cfgList([]) } = {}) {
+// Chủ thể như routes/vanthu.js subject(): rank từ roleRank, approver = Người phê duyệt HIỆU LỰC (V.effectiveApprovers trên danh bạ tài khoản).
+function subj(user, { clerk = false, ai = false, cfg = cfgList([]), users = Object.values(U) } = {}) {
   const it = user.role === 'admin' || !!user.isRootAdmin;
-  return { userId: user.id, departmentId: user.departmentId ?? null, it, director: isBoard(user), clerk: !it && clerk, ai, rank: roleRank(user), approver: !it && V.isApprover(user, cfg, isBoard(user)) };
+  return { userId: user.id, departmentId: user.departmentId ?? null, it, director: isBoard(user), clerk: !it && clerk, ai, rank: roleRank(user), approver: !it && V.isApprover(user, V.effectiveApprovers(cfg, users)) };
 }
 const U = {
-  board: { id: 1, role: 'director', departmentId: 1, boardAll: true },        // TGĐ — Người phê duyệt (mặc định: BTGĐ "Toàn công ty")
-  board2: { id: 2, role: 'director', departmentId: 1, boardAll: false },      // thành viên BTGĐ khác, không phải Người phê duyệt
-  leader: { id: 3, role: 'manager', departmentId: 5 },
-  member: { id: 4, role: 'member', departmentId: 5 },
-  it: { id: 5, role: 'admin', departmentId: null },
-  root: { id: 6, role: 'member', isRootAdmin: true },
-  author: { id: 7, role: 'member', departmentId: 6 },                          // người soạn vai Nhân viên
-  clerkMember: { id: 8, role: 'member', departmentId: 9 },                     // Văn thư vai Nhân viên
+  board: { id: 1, role: 'director', departmentId: 1, boardAll: true, isActive: true },        // TGĐ — Người phê duyệt (mặc định: BTGĐ "Toàn công ty")
+  board2: { id: 2, role: 'director', departmentId: 1, boardAll: false, isActive: true },      // thành viên BTGĐ khác, không phải Người phê duyệt
+  leader: { id: 3, role: 'manager', departmentId: 5, isActive: true },
+  member: { id: 4, role: 'member', departmentId: 5, isActive: true },
+  it: { id: 5, role: 'admin', departmentId: null, isActive: true },
+  root: { id: 6, role: 'member', isRootAdmin: true, isActive: true },
+  author: { id: 7, role: 'member', departmentId: 6, isActive: true },                          // người soạn vai Nhân viên
+  clerkMember: { id: 8, role: 'member', departmentId: 9, isActive: true },                     // Văn thư vai Nhân viên
 };
 const doc = (viewLevel, status = 'EFFECTIVE', extra = {}) => ({ book: 'NOIBO', viewLevel, status, createdById: U.author.id, number: V.isDraft({ status }) ? null : '001/2026/QC-TGĐ', ...extra });
 
@@ -78,14 +78,103 @@ test('dự thảo (Chưa phê duyệt / Đã trả lại): chỉ người soạn
   assert.ok(!V.canView(doc('BOARD', 'DRAFT'), subj(U.board, { cfg })));
 });
 
-test('Người phê duyệt: chỉ vai Ban TGĐ; danh sách trống → BTGĐ phụ trách "Toàn công ty"', () => {
-  assert.ok(V.isApprover(U.board, cfgList([]), isBoard(U.board)));
-  assert.ok(!V.isApprover(U.board2, cfgList([]), isBoard(U.board2)));
-  assert.ok(V.isApprover(U.board2, cfgList([2]), isBoard(U.board2)));
-  assert.ok(!V.isApprover(U.board, cfgList([2]), isBoard(U.board)));
-  // Có tên trong danh sách nhưng không phải vai BTGĐ (vd. đổi vai sau khi chọn) → không phê duyệt.
-  assert.ok(!V.isApprover(U.leader, cfgList([3]), isBoard(U.leader)));
-  assert.ok(!V.isApprover({ ...U.board, role: 'admin' }, cfgList([1]), isBoard({ ...U.board, role: 'admin' })));
+// ---- Người phê duyệt HIỆU LỰC (sửa C1 / T14): một hàm tính, chuỗi dự phòng danh sách hợp lệ → "Toàn công ty" → mọi thành viên Ban TGĐ. ----
+const eff = (ids, users) => V.effectiveApprovers(cfgList(ids), users);
+const P = {
+  tgd: { id: 1, fullName: 'TGĐ (giả)', role: 'director', isActive: true, boardAll: true },
+  ptgd: { id: 2, fullName: 'Phó TGĐ (giả)', role: 'director', isActive: true, boardAll: false },
+  ptgd2: { id: 3, fullName: 'Phó TGĐ hai (giả)', role: 'director', isActive: true, boardAll: false },
+  locked: { id: 4, fullName: 'Phó TGĐ đã nghỉ (giả)', role: 'director', isActive: false, boardAll: false },
+  lockedAll: { id: 5, fullName: 'TGĐ cũ đã nghỉ (giả)', role: 'director', isActive: false, boardAll: true },
+  demoted: { id: 6, fullName: 'Nay là Lãnh đạo bộ phận (giả)', role: 'manager', departmentId: 7, isActive: true, boardAll: true },
+  it: { id: 7, fullName: 'IT (giả)', role: 'admin', isActive: true, boardAll: true },
+  root: { id: 8, fullName: 'Quản trị gốc (giả)', role: 'director', isRootAdmin: true, isActive: true, boardAll: true },
+};
+const ALL_P = Object.values(P);
+
+test('Người phê duyệt hiệu lực: danh sách còn người hợp lệ → chỉ những người đó (bỏ người đã khoá / đổi vai), theo thứ tự đã lưu', () => {
+  const e = eff([3, 4, 2], ALL_P);
+  assert.equal(e.source, 'LIST');
+  assert.deepEqual(e.ids, [3, 2]);
+  assert.deepEqual(e.stored, [
+    { id: 3, fullName: 'Phó TGĐ hai (giả)', problems: [] },
+    { id: 4, fullName: 'Phó TGĐ đã nghỉ (giả)', problems: ['INACTIVE'] },
+    { id: 2, fullName: 'Phó TGĐ (giả)', problems: [] },
+  ]);
+  assert.ok(!e.ids.includes(1), 'BTGĐ "Toàn công ty" ngoài danh sách không duyệt khi danh sách còn người hợp lệ');
+});
+
+test('Người phê duyệt hiệu lực: danh sách chỉ còn người đã khoá → thành viên Ban TGĐ phụ trách "Toàn công ty" đang hoạt động (không kẹt)', () => {
+  const e = eff([4, 5], ALL_P);
+  assert.equal(e.source, 'BOARD_ALL');
+  assert.deepEqual(e.ids, [1], 'người "Toàn công ty" đã khoá (id 5) không được tính; IT / quản trị gốc có boardAll cũng không');
+  assert.deepEqual(e.stored.map(x => [x.id, x.problems]), [[4, ['INACTIVE']], [5, ['INACTIVE']]]);
+});
+
+test('Người phê duyệt hiệu lực: danh sách chỉ còn người đổi vai (khỏi Ban TGĐ, sang Quản trị hệ thống) → "Toàn công ty"', () => {
+  const e = eff([6, 7, 8], ALL_P);
+  assert.equal(e.source, 'BOARD_ALL');
+  assert.deepEqual(e.ids, [1]);
+  assert.deepEqual(e.stored.map(x => [x.id, x.problems]), [[6, ['NOT_BOARD']], [7, ['NOT_BOARD']], [8, ['NOT_BOARD']]]);
+  // Vừa khoá vừa đổi vai: ghi đủ hai lý do; mã không còn tài khoản: MISSING.
+  const both = eff([9, 99], [...ALL_P, { id: 9, fullName: 'X (giả)', role: 'member', isActive: false }]);
+  assert.deepEqual(both.stored.map(x => [x.id, x.fullName, x.problems]), [[9, 'X (giả)', ['INACTIVE', 'NOT_BOARD']], [99, null, ['MISSING']]]);
+  assert.equal(both.source, 'BOARD_ALL');
+});
+
+test('Người phê duyệt hiệu lực: danh sách trống → "Toàn công ty"; không ai "Toàn công ty" → mọi thành viên Ban TGĐ đang hoạt động; không có ai → NONE', () => {
+  assert.deepEqual([eff([], ALL_P).source, eff([], ALL_P).ids], ['BOARD_ALL', [1]]);
+  const noAll = ALL_P.filter(u => u.id !== 1);
+  assert.deepEqual([eff([], noAll).source, eff([], noAll).ids], ['BOARD', [2, 3]], 'chỉ BTGĐ đang hoạt động; không người khoá, đổi vai, IT');
+  assert.deepEqual([eff([4], noAll).source, eff([4], noAll).ids], ['BOARD', [2, 3]], 'danh sách chỉ còn người khoá + không ai "Toàn công ty"');
+  const noBoard = [P.locked, P.lockedAll, P.demoted, P.it, P.root];
+  const none = eff([4, 6], noBoard);
+  assert.deepEqual([none.source, none.ids, none.board], ['NONE', [], []]);
+  assert.deepEqual(eff([], []).ids, []);
+});
+
+test('Người phê duyệt hiệu lực: Quản trị hệ thống không bao giờ vào tập (kể cả có tên trong danh sách, có "Toàn công ty", vai director gắn quản trị gốc)', () => {
+  for (const ids of [[], [7], [8], [7, 8], [4, 7]]) for (const users of [ALL_P, ALL_P.filter(u => u.id !== 1)]) {
+    const e = eff(ids, users);
+    assert.ok(!e.ids.includes(7) && !e.ids.includes(8), `${ids} → ${e.ids}`);
+    assert.ok(!e.board.some(u => u.id === 7 || u.id === 8));
+    assert.ok(!V.isApprover(P.it, e) && !V.isApprover(P.root, e));
+  }
+});
+
+test('isApprover dùng tập hiệu lực: chỉ vai Ban TGĐ có mặt trong tập', () => {
+  const e = eff([4], ALL_P); // kẹt cũ: danh sách chỉ có người đã khoá
+  assert.ok(V.isApprover(P.tgd, e), 'BTGĐ "Toàn công ty" duyệt thay khi danh sách không còn ai hợp lệ');
+  assert.ok(!V.isApprover(P.ptgd, e) && !V.isApprover(P.locked, e));
+  assert.ok(!V.isApprover({ ...P.tgd, role: 'manager' }, e), 'mã có trong tập nhưng tài khoản (lúc hỏi) không còn vai Ban TGĐ');
+  const l = eff([2], ALL_P);
+  assert.ok(V.isApprover(P.ptgd, l) && !V.isApprover(P.tgd, l));
+});
+
+test('quyền phê duyệt / xem dự thảo đi theo tập hiệu lực: danh sách chỉ còn người đã khoá thì BTGĐ "Toàn công ty" duyệt được, người đã khoá thì không', () => {
+  const users = [...Object.values(U), { id: 40, role: 'director', isActive: false, boardAll: false }, { id: 41, role: 'manager', departmentId: 5, isActive: true }];
+  const pdf = [{ mimeType: 'application/pdf' }];
+  for (const stuck of [[40], [41], [40, 41]]) {
+    const cfg = cfgList(stuck);
+    assert.equal(V.approveCheck(doc('ALL', 'DRAFT'), subj(U.board, { cfg, users }), pdf), null, `danh sách ${stuck}: TGĐ "Toàn công ty" duyệt`);
+    assert.equal(V.returnCheck(doc('ALL', 'DRAFT'), subj(U.board, { cfg, users })), null);
+    assert.ok(V.canView(doc('BOARD', 'DRAFT'), subj(U.board, { cfg, users })), 'Người phê duyệt hiệu lực xem dự thảo');
+    assert.equal(V.approveCheck(doc('ALL', 'DRAFT'), subj(U.board2, { cfg, users }), pdf)[0], 403);
+  }
+  // Có người hợp lệ trong danh sách: chỉ họ.
+  const cfg = cfgList([40, 2]);
+  assert.equal(V.approveCheck(doc('ALL', 'DRAFT'), subj(U.board2, { cfg, users }), pdf), null);
+  assert.equal(V.approveCheck(doc('ALL', 'DRAFT'), subj(U.board, { cfg, users }), pdf)[0], 403);
+  assert.ok(!V.canView(doc('BOARD', 'DRAFT'), subj(U.board, { cfg, users })));
+});
+
+test('approversOf: MỘT truy vấn nạp người trong danh sách (mọi trạng thái) + thành viên Ban TGĐ đang hoạt động, rồi tính bằng effectiveApprovers', async () => {
+  let args;
+  const prisma = { user: { findMany: async a => { args = a; return [P.locked, P.tgd]; } } };
+  const e = await V.approversOf(prisma, cfgList([4]));
+  assert.deepEqual(args.where, { OR: [{ id: { in: [4] } }, { isActive: true, ...BOARD_WHERE }] });
+  for (const k of ['id', 'fullName', 'role', 'isRootAdmin', 'isActive', 'boardAll']) assert.equal(args.select[k], true, k);
+  assert.deepEqual([e.source, e.ids], ['BOARD_ALL', [1]]);
 });
 
 test('Claude (token): không đọc cấp Ban TGĐ, không đọc dự thảo của người khác; dự thảo của chính mình thì đọc', () => {
