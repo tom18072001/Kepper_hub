@@ -241,11 +241,11 @@ Yêu cầu hỗ trợ gom theo nơi nhận. Với từng yêu cầu, Ban Tổng 
 
 ![Báo muộn / vắng](anh/20-ld-bao-muon-vang.png)
 
-- **Chấm điểm** (chỉ Ban Tổng Giám đốc và thư ký thấy tab này): điểm tuân thủ tháng theo Phụ lục 1 (100 điểm, trừ theo mức có sẵn). Tháng chưa khép thì chưa lập được ("Tháng chưa khép — lập, trình và duyệt từ đầu tháng sau (sau buổi giao ban cuối tháng)."). Từ đầu tháng sau, thư ký bấm **Trình TGĐ** → thành viên Ban Tổng Giám đốc bấm **Duyệt và khoá**. Trình xong Kepler Hub không báo ai: Ban Tổng Giám đốc tự mở tab **Chấm điểm**. ⚠️ **Duyệt và khoá** không hỏi lại và không mở khoá được.
+- **Chấm điểm** (chỉ Ban Tổng Giám đốc và thư ký thấy tab này): điểm tuân thủ tháng theo Phụ lục 1 (100 điểm, trừ theo mức có sẵn). Tháng chưa khép thì chưa lập được ("Tháng chưa khép — lập, trình và duyệt từ đầu tháng sau (sau buổi giao ban cuối tháng)."). Từ đầu tháng sau, thư ký bấm **Trình TGĐ** (thành viên Ban Tổng Giám đốc nhận thông báo "Bảng điểm tuân thủ giao ban tháng … chờ duyệt") → thành viên Ban Tổng Giám đốc bấm **Duyệt và khoá**, đồng ý ở hộp hỏi lại; thư ký và lãnh đạo các bộ phận được chấm nhận thông báo đã duyệt. Đã khoá mà cần sửa: Ban Tổng Giám đốc bấm **Mở khoá**, ghi lý do (bắt buộc) — bảng về bản nháp, thư ký được báo để kiểm tra và trình lại.
 
 ![Chấm điểm](anh/20-ld-cham-diem.png)
 
-Thiết lập giao ban: tab **Tổng hợp** → cuối trang, khối **Thiết lập** (Ban Tổng Giám đốc và thư ký): bộ phận phải nộp và thứ tự trình bày, tuần bắt đầu chấm điểm, và cho **tuần đang chọn** ở ô "Tuần báo cáo (thứ Sáu)" đầu trang: tuần nghỉ, hạn nộp, ngày giao ban. Ô **Bộ phận thư ký giao ban** và **PMO** chỉ Ban Tổng Giám đốc sửa; sau hạn nộp của một tuần, chỉ Ban Tổng Giám đốc đổi lịch tuần đó. Ngày lễ khai ở Nhân sự không tự dời hạn nộp; đổi lịch cũng không tự báo các bộ phận. Từng ô: [Hướng dẫn thiết lập, mục 5.1](thiet-lap.md#51-khối-thiết-lập-ở-cuối-tab-tổng-hợp).
+Thiết lập giao ban: tab **Tổng hợp** → cuối trang, khối **Thiết lập** (Ban Tổng Giám đốc và thư ký): bộ phận phải nộp và thứ tự trình bày, tuần bắt đầu chấm điểm, và cho **tuần đang chọn** ở ô "Tuần báo cáo (thứ Sáu)" đầu trang: tuần nghỉ, hạn nộp, ngày giao ban. Ô **Bộ phận thư ký giao ban** và **PMO** chỉ Ban Tổng Giám đốc sửa; sau hạn nộp của một tuần, chỉ Ban Tổng Giám đốc đổi lịch tuần đó. Nhãn ba ô lịch ghi ngày của tuần đang chọn (vd. "Hạn nộp tuần 23/11 – 27/11/2026 …"). Ngày lễ khai ở Nhân sự không tự dời hạn nộp. Đổi lịch tuần thì Kepler Hub tự báo lãnh đạo các bộ phận phải nộp và người lập báo cáo; Ban Tổng Giám đốc đổi lịch của tuần đã qua hạn nộp thì Kepler Hub hỏi lại trước khi lưu (làm đổi điểm tuân thủ). Từng ô: [Hướng dẫn thiết lập, mục 5.1](thiet-lap.md#51-khối-thiết-lập-ở-cuối-tab-tổng-hợp).
 
 **Bằng Claude (chỉ khi tài khoản có quyền xem tổng hợp):** "Tóm tắt tổng hợp giao ban tuần này theo bộ phận: hoàn thành, trễ, vướng mắc cần Ban Tổng Giám đốc quyết." Claude chỉ dùng **bản tổng hợp tóm tắt**; điểm danh, kết luận, phát hành, chấm điểm làm trên giao diện.
 
@@ -389,6 +389,6 @@ Kết nối Claude, quản lý máy đã kết nối, thông tin cá nhân, đ�
 | Không đổi được **Mức duyệt** của một việc | Chỉ BTGĐ phụ trách của việc hoặc người quản lý dự án đổi được |
 | Gia hạn đã duyệt mà hạng mục MTL vẫn báo trễ | Gia hạn chỉ đổi Hạn; chậm / trễ, KPI tính theo kế hoạch gốc. Muốn đổi: người giao hoặc BTGĐ phụ trách bấm **Điều chỉnh kế hoạch gốc…** |
 | **Phát hành kết luận + Action Log** báo còn yêu cầu hỗ trợ chưa kết luận | Chọn **Kết luận của TGĐ** cho từng yêu cầu rồi phát hành |
-| Bảng điểm tuân thủ đã **Duyệt và khoá** nhưng sai | Không mở khoá được trên giao diện |
+| Bảng điểm tuân thủ đã **Duyệt và khoá** nhưng sai | Ban Tổng Giám đốc bấm **Mở khoá** ở tab **Chấm điểm**, ghi lý do; thư ký trình lại, Ban Tổng Giám đốc duyệt lại |
 | Đi vắng, muốn uỷ quyền duyệt cho người khác | Giao diện chưa có chức năng uỷ quyền |
 | Một người nghỉ việc, việc của họ xử lý thế nào | Khi khoá tài khoản, quản trị tích "Trả việc về lãnh đạo bộ phận để phân công lại": lãnh đạo bộ phận chủ trì hoặc người giao nhận thông báo "Cần phân công lại … (cán bộ nghỉ việc)". Quản trị bỏ ô đó thì người nghỉ vẫn đứng tên các việc đang mở |

@@ -199,11 +199,12 @@ Mỗi dòng là một thao tác thiết lập, kèm chỗ làm và người làm
 | Chọn bộ phận thư ký giao ban | Cùng khối → **Bộ phận thư ký giao ban (Tổng hợp & Nhân sự)** → **Lưu thiết lập** | Ban Tổng Giám đốc |
 | Chọn PMO | Cùng khối → **PMO (xem đầy đủ, không sửa — Ban TGĐ chỉ định)** → **Lưu thiết lập** | Ban Tổng Giám đốc |
 | Đặt tuần bắt đầu chấm điểm tuân thủ | Cùng khối → **Tuần bắt đầu chấm điểm tuân thủ** (một ngày thứ Sáu) → **Lưu thiết lập** | Ban Tổng Giám đốc, thư ký |
-| Dời hạn nộp một tuần (nghỉ lễ thứ Sáu) | Chọn tuần ở **Tuần báo cáo (thứ Sáu)** → **Thiết lập** → **Hạn nộp tuần này…** → **Lưu thiết lập** | Ban Tổng Giám đốc, thư ký (sau 17:30 ngày hạn: chỉ Ban Tổng Giám đốc) |
-| Dời ngày giao ban (nghỉ lễ thứ Hai) | Chọn tuần → **Thiết lập** → **Ngày giao ban…** → **Lưu thiết lập** | Như trên |
-| Đánh dấu tuần nghỉ Tết, lễ | Chọn tuần → **Thiết lập** → **Tuần này nghỉ (Tết, lễ)…** → **Lưu thiết lập** | Như trên |
+| Dời hạn nộp một tuần (nghỉ lễ thứ Sáu) | Chọn tuần ở **Tuần báo cáo (thứ Sáu)** → **Thiết lập** → **Hạn nộp tuần {tuần}…** → **Lưu thiết lập** (Kepler Hub tự báo các bộ phận) | Ban Tổng Giám đốc, thư ký (sau 17:30 ngày hạn: chỉ Ban Tổng Giám đốc) |
+| Dời ngày giao ban (nghỉ lễ thứ Hai) | Chọn tuần → **Thiết lập** → **Ngày giao ban của tuần {tuần}…** → **Lưu thiết lập** | Như trên |
+| Đánh dấu tuần nghỉ Tết, lễ | Chọn tuần → **Thiết lập** → **Tuần {tuần} nghỉ (Tết, lễ)…** → **Lưu thiết lập** | Như trên |
 | Trình bảng điểm tuân thủ tháng | **Báo cáo tuần** → tab **Chấm điểm** → **Trình TGĐ** | Thư ký giao ban |
-| Duyệt và khoá bảng điểm tuân thủ | **Báo cáo tuần** → tab **Chấm điểm** → **Duyệt và khoá** | Ban Tổng Giám đốc |
+| Duyệt và khoá bảng điểm tuân thủ | **Báo cáo tuần** → tab **Chấm điểm** → **Duyệt và khoá** → đồng ý ở hộp hỏi lại | Ban Tổng Giám đốc |
+| Mở khoá bảng điểm đã duyệt (để sửa) | **Báo cáo tuần** → tab **Chấm điểm** → **Mở khoá** → ghi lý do | Ban Tổng Giám đốc |
 | Đổi mức trừ điểm, giờ nhắc, giờ họp | Không có màn (cố định trong phần mềm) | — |
 | Bật / tắt phân hệ Nhân sự, Đối tác, Văn thư | Cấu hình máy chạy (khoá `MODULES`), khởi động lại | IT |
 | Đặt giờ vào, giờ ra, nghỉ trưa, phút cho phép đi muộn | **Nghiệp vụ** → **Nhân sự** → tab **Thiết lập** → **Lưu thiết lập** | Ban Tổng Giám đốc, Phụ trách nhân sự |
@@ -3323,18 +3324,18 @@ Báo cáo tuần có **một** chỗ thiết lập duy nhất: khối **Thiết 
 | Loại | Gồm các ô | Áp cho | Ai sửa |
 |---|---|---|---|
 | Thiết lập chung | **Bộ phận phải nộp — theo thứ tự trình bày tại giao ban**, **Bộ phận thư ký giao ban (Tổng hợp & Nhân sự)**, **PMO (xem đầy đủ, không sửa — Ban TGĐ chỉ định)**, **Tuần bắt đầu chấm điểm tuân thủ** | Mọi tuần, từ lúc lưu | Ban Tổng Giám đốc, thư ký (riêng hai ô thư ký và PMO: chỉ Ban Tổng Giám đốc) |
-| Lịch của một tuần | **Tuần này nghỉ (Tết, lễ) — không giao ban, không chấm điểm**, **Hạn nộp tuần này (nghỉ lễ thứ Sáu → ngày làm việc liền trước)**, **Ngày giao ban (nghỉ lễ thứ Hai → ngày làm việc kế tiếp)** | **Chỉ tuần đang chọn** ở ô **Tuần báo cáo (thứ Sáu)** đầu trang | Ban Tổng Giám đốc, thư ký; sau hạn nộp của tuần đó: chỉ Ban Tổng Giám đốc |
+| Lịch của một tuần (khung **Lịch tuần {tuần}**) | **Tuần {tuần} nghỉ (Tết, lễ) — không giao ban, không chấm điểm**, **Hạn nộp tuần {tuần} (nghỉ lễ thứ Sáu → ngày làm việc liền trước)**, **Ngày giao ban của tuần {tuần} (nghỉ lễ thứ Hai → ngày làm việc kế tiếp)**. {tuần} là tuần đang chọn, ghi "thứ Hai – thứ Sáu", vd. "23/11 – 27/11/2026" | **Chỉ tuần đang chọn** ở ô **Tuần báo cáo (thứ Sáu)** đầu trang | Ban Tổng Giám đốc, thư ký; sau hạn nộp của tuần đó: chỉ Ban Tổng Giám đốc |
 
 Những thứ **không có ô** để sửa: các mốc giờ trong tuần (mục 5.2) và mức trừ điểm tuân thủ (mục 5.4). Ngày lễ khai ở Nhân sự **không** dời hạn báo cáo tuần (mục 5.3).
 
 ### 5.1 Khối "Thiết lập" ở cuối tab Tổng hợp
 
-**Mở ở đâu:** Menu trái **Giao ban** → **Báo cáo tuần** → tab **Tổng hợp** (trang `#/tuan/tong-hop`) → cuộn xuống cuối trang → bấm dòng **Thiết lập** (bên cạnh có chữ nhỏ "bộ phận phải nộp, thứ tự trình bày, tuần bắt đầu chấm điểm, hạn nộp khi nghỉ lễ") để mở khối. Khối đóng sẵn mỗi lần vào trang. Ban Tổng Giám đốc và thư ký mở trang Báo cáo tuần là vào thẳng tab Tổng hợp. Mở nhanh: `Ctrl K` → gõ "bao cao tuan".
+**Mở ở đâu:** Menu trái **Giao ban** → **Báo cáo tuần** → tab **Tổng hợp** (trang `#/tuan/tong-hop`) → cuộn xuống cuối trang → bấm dòng **Thiết lập** (bên cạnh có chữ nhỏ "bộ phận phải nộp, thứ tự trình bày, tuần bắt đầu chấm điểm; lịch tuần {tuần}: tuần nghỉ, hạn nộp, ngày giao ban") để mở khối. Khối đóng sẵn mỗi lần vào trang. Ban Tổng Giám đốc và thư ký mở trang Báo cáo tuần là vào thẳng tab Tổng hợp. Mở nhanh: `Ctrl K` → gõ "bao cao tuan".
 
 ![Khối Thiết lập của báo cáo tuần](anh/30-bao-cao-tuan-thiet-lap.png)
 
 **Ai thấy, ai sửa:**
-- **Ban Tổng Giám đốc**: thấy khối, sửa mọi ô, đổi lịch của tuần kể cả sau hạn nộp.
+- **Ban Tổng Giám đốc**: thấy khối, sửa mọi ô, đổi lịch của tuần kể cả sau hạn nộp (khi đó Kepler Hub hỏi lại trước khi lưu).
 - **Thư ký giao ban** (mọi người đang hoạt động thuộc bộ phận thư ký, trừ người có vai Ban Tổng Giám đốc): thấy khối, sửa mọi ô trừ hai ô **Bộ phận thư ký giao ban** và **PMO** (hai ô này hiện dạng chữ). Sau 17:30 ngày hạn nộp của một tuần, thư ký không đổi được lịch tuần đó nữa.
 - **PMO**, **Lãnh đạo bộ phận**, **Nhân viên**: không thấy khối, kể cả người thấy tab Tổng hợp. Đừng tìm.
 - **Quản trị hệ thống**: không vào được trang Báo cáo tuần, báo "Tài khoản quản trị hệ thống không xem nội dung nghiệp vụ".
@@ -3360,34 +3361,32 @@ C. Đặt tuần bắt đầu chấm điểm (khi bắt đầu dùng chính th�
 
 D. Dời hạn nộp hoặc ngày giao ban vì nghỉ lễ (làm trước, tối đa một tuần trước tuần đó)
 1. Ở ô **Tuần báo cáo (thứ Sáu)** đầu trang, chọn đúng tuần có ngày nghỉ (thường là dòng có chữ "· tuần sau" hoặc "· tuần này").
-2. Mở khối **Thiết lập**, điền **Hạn nộp tuần này…** và / hoặc **Ngày giao ban…**.
-3. Bấm **Lưu thiết lập**. Đang xem tuần khác tuần này thì chip đầu trang ghi ngày giao ban ("Giao ban {thứ} {dd/mm}"); tới khi tuần đó thành tuần này, chip ghi hạn mới ("Hạn nộp 17:30 {thứ} {dd/mm}").
-4. Tự báo các bộ phận (email, nhóm chat): Kepler Hub **không** gửi thông báo nào.
+2. Mở khối **Thiết lập**. Khung **Lịch tuần {tuần}** ghi đúng tuần vừa chọn (vd. "Lịch tuần 28/12 – 01/01/2027"): xem lại cho chắc rồi điền **Hạn nộp tuần {tuần}…** và / hoặc **Ngày giao ban của tuần {tuần}…**.
+3. Bấm **Lưu thiết lập**. Kepler Hub tự báo lãnh đạo các bộ phận phải nộp và người lập báo cáo (mục 5.5, "Ai nhận thông báo gì"); trang ghi "Đã lưu thiết lập — đã báo lịch mới tới {n} người". Đang xem tuần khác tuần này thì chip đầu trang ghi ngày giao ban ("Giao ban {thứ} {dd/mm}"); tới khi tuần đó thành tuần này, chip ghi hạn mới ("Hạn nộp 17:30 {thứ} {dd/mm}").
+4. Quy chế vẫn yêu cầu báo trước ít nhất 02 ngày làm việc (Điều 3): đổi lịch sớm, thông báo đi ngay lúc lưu.
 
 E. Đánh dấu tuần nghỉ (Tết)
 1. Chọn đúng tuần ở ô **Tuần báo cáo (thứ Sáu)**.
-2. Đánh dấu **Tuần này nghỉ (Tết, lễ) — không giao ban, không chấm điểm** → **Lưu thiết lập**.
+2. Đánh dấu **Tuần {tuần} nghỉ (Tết, lễ) — không giao ban, không chấm điểm** (kiểm tra ngày trên nhãn) → **Lưu thiết lập**. Các bộ phận phải nộp nhận thông báo "Tuần {tuần} nghỉ giao ban".
 
 **Từng ô**
 
 | Ô (nguyên văn) | Nghĩa là gì | Điền / chọn thế nào (mặc định) | Đổi thì hệ thống làm gì khác |
 |---|---|---|---|
-| **Tuần báo cáo (thứ Sáu)** (đầu trang, ngoài khối) | Tuần đang xem trên cả trang | Có 10 tuần: tuần này đứng đầu, tiếp theo 8 tuần đã qua (gần nhất trước), tuần sau ở cuối. Mỗi dòng ghi "thứ Hai – thứ Sáu", vd. "23/11 – 27/11/2026 · tuần này", "30/11 – 04/12/2026 · tuần sau". Mặc định: tuần này. Từ thứ Bảy, "tuần này" vẫn là tuần vừa kết thúc; sang thứ Hai mới chuyển sang tuần mới | Đổi tuần thì mọi tab đổi theo tuần đó, **và ba ô lịch trong khối Thiết lập áp cho tuần đó**. Chỉ chọn được tối đa tuần sau, nên lịch nghỉ lễ chỉ đặt trước được một tuần |
+| **Tuần báo cáo (thứ Sáu)** (đầu trang, ngoài khối) | Tuần đang xem trên cả trang | Có 10 tuần: tuần này đứng đầu, tiếp theo 8 tuần đã qua (gần nhất trước), tuần sau ở cuối. Mỗi dòng ghi "thứ Hai – thứ Sáu", vd. "23/11 – 27/11/2026 · tuần này", "30/11 – 04/12/2026 · tuần sau". Mặc định: tuần này. Từ thứ Bảy, "tuần này" vẫn là tuần vừa kết thúc; sang thứ Hai mới chuyển sang tuần mới | Đổi tuần thì mọi tab đổi theo tuần đó, **và ba ô lịch trong khối Thiết lập áp cho tuần đó**: nhãn ba ô và khung **Lịch tuần {tuần}** đổi theo, ghi ngày của tuần đó. Chỉ chọn được tối đa tuần sau, nên lịch nghỉ lễ chỉ đặt trước được một tuần |
 | **Bộ phận phải nộp — theo thứ tự trình bày tại giao ban** (mỗi dòng: ô đánh dấu, tên bộ phận, nút **↑**, **↓**) | Bộ phận phải nộp báo cáo tuần và thứ tự trình bày tại giao ban | Đánh dấu bộ phận phải nộp, xếp bằng ↑ ↓. Các bộ phận đã đánh dấu đứng đầu theo thứ tự đã lưu, các bộ phận khác xếp theo tên ở dưới. Chỉ liệt kê bộ phận đang hoạt động. Mặc định (chưa lưu lần nào): **tự động** = các bộ phận đang chủ trì hạng mục của dự án MTL đang chạy, trừ bộ phận có thành viên vai Ban Tổng Giám đốc. Bỏ dấu hết rồi lưu = quay về tự động | Bộ phận được đánh dấu: nhận nhắc 15:00 ngày hạn nộp khi chưa nộp; được đếm trong số "{đã nộp}/{tổng} bộ phận đã nộp"; hiện đúng thứ tự trong bảng tình trạng nộp, phần **Chi tiết từng bộ phận** và bản sao chép; bị chấm điểm tuân thủ. Bộ phận không đánh dấu vẫn lập và nộp được (đã nộp thì hiện ở cuối bảng) nhưng không bị nhắc, không bị chấm điểm. Ví dụ: bỏ dấu "Phòng Kế toán" rồi lưu → 15:00 ngày hạn nộp tới, lãnh đạo Phòng Kế toán không nhận nhắc; tuần đó Phòng Kế toán không nộp cũng không bị trừ 25 điểm. Danh sách của mỗi tuần được **chụp lại** lúc 15:00 ngày hạn nộp (chậm nhất là lần đầu có người mở bản tổng hợp sau 17:30): đổi về sau chỉ ảnh hưởng tuần hiện tại (khi chưa phát hành kết luận) và các tuần sau, điểm các tuần đã qua giữ nguyên |
 | **Bộ phận thư ký giao ban (Tổng hợp & Nhân sự)** | Bộ phận mà mọi thành viên là **Thư ký giao ban** | Ban Tổng Giám đốc: ô chọn "— Chưa chọn —" và các bộ phận đang hoạt động. Người khác thấy tên bộ phận, hoặc "— Ban TGĐ chưa chọn —". Mặc định: chưa chọn | Mọi tài khoản đang hoạt động thuộc bộ phận này, **trừ người có vai Ban Tổng Giám đốc**, thành thư ký ngay: thấy khối Thiết lập và tab **Chấm điểm**; nhập thay báo cáo bộ phận khác; báo muộn / vắng thay bộ phận khác và ghi giờ nhận tin; điểm danh, đánh dấu **Không đạt**, soạn Action Log, phát hành; gửi lại báo cáo sau giờ giao ban; trình bảng điểm; nhận thông báo báo muộn / vắng; cột "Kiêm nhiệm" hiện "Thư ký giao ban". Ví dụ: chọn "Phòng Tổng hợp" → nhân viên mới chuyển vào Phòng Tổng hợp cũng thành thư ký; người chuyển đi mất quyền ngay. Để "— Chưa chọn —": không ai là thư ký, chỉ Ban Tổng Giám đốc điều hành giao ban, và **không ai trình được bảng điểm** nên bảng điểm tháng không duyệt được. Lỗi: "Bộ phận thư ký không hợp lệ"; người không phải Ban Tổng Giám đốc gửi thay đổi: "Chỉ Ban Tổng Giám đốc chọn bộ phận thư ký và PMO" |
 | **PMO (xem đầy đủ, không sửa — Ban TGĐ chỉ định)** | Danh sách người kiêm **PMO** trong giao ban | Ban Tổng Giám đốc: ô chọn nhiều, giữ `Ctrl` để chọn thêm; liệt kê mọi tài khoản đang hoạt động trừ Quản trị hệ thống. Người khác thấy danh sách tên, hoặc "—". Mặc định: **không ai** | Người được chọn (không phải vai Ban Tổng Giám đốc) xem bản tổng hợp đầy đủ, **Chi tiết từng bộ phận**, các bản đã nộp, danh sách báo muộn / vắng của mọi bộ phận (không thấy ghi chú lý do), nút **Sao chép bản đầy đủ**; không sửa gì; nhận tóm tắt 07:35 và thông báo phát hành kết luận; cột "Kiêm nhiệm" hiện "PMO". Bỏ một người khỏi danh sách → mất các quyền xem trên ngay. Chưa chọn ai = không ai là PMO. Chọn người có vai Ban Tổng Giám đốc thì không đổi gì (họ đã xem đầy đủ) nhưng cột "Kiêm nhiệm" vẫn ghi "PMO". Lỗi: "Danh sách PMO có tài khoản không hợp lệ" (tài khoản đã khoá hoặc Quản trị hệ thống) |
-| **Tuần này nghỉ (Tết, lễ) — không giao ban, không chấm điểm** | Đánh dấu tuần đang chọn là tuần nghỉ | Ô đánh dấu, mặc định bỏ trống | Tuần đang chọn: không nhắc 15:00, không gửi tóm tắt 07:35; bấm **Gửi báo cáo** bị báo "Tuần nghỉ — không giao ban, không cần nộp"; bảng tình trạng nộp ghi "Tuần nghỉ — không giao ban"; tuần không bị chấm điểm. Bỏ dấu và lưu → tuần trở lại bình thường. ⚠️ Đánh dấu một tuần **đã qua** là tuần nghỉ thì mọi vi phạm của tuần đó biến khỏi bảng điểm tháng (nếu bảng điểm tháng đó chưa **Duyệt và khoá**) |
+| **Tuần {tuần} nghỉ (Tết, lễ) — không giao ban, không chấm điểm** | Đánh dấu tuần đang chọn ({tuần}) là tuần nghỉ | Ô đánh dấu, mặc định bỏ trống | Tuần đang chọn: không nhắc 15:00, không gửi tóm tắt 07:35; bấm **Gửi báo cáo** bị báo "Tuần nghỉ — không giao ban, không cần nộp"; bảng tình trạng nộp ghi "Tuần nghỉ — không giao ban"; tuần không bị chấm điểm. Lưu xong, các bộ phận phải nộp nhận thông báo "Tuần {tuần} nghỉ giao ban". Bỏ dấu và lưu → tuần trở lại bình thường, các bộ phận nhận lại lịch ("Lịch giao ban tuần {tuần}: …", nội dung "Tuần này không còn là tuần nghỉ — nộp báo cáo tuần như thường lệ."). ⚠️ Đánh dấu một tuần **đã qua hạn nộp** là tuần nghỉ thì mọi vi phạm của tuần đó biến khỏi bảng điểm tháng (nếu bảng điểm tháng đó chưa **Duyệt và khoá**): Kepler Hub hỏi lại trước khi lưu (nút **Lưu thiết lập**) |
 | **Tuần bắt đầu chấm điểm tuân thủ** | Thứ Sáu đầu tiên được tính điểm | Ô ngày; phải chọn một ngày thứ Sáu. Mặc định: trống = tính mọi thứ Sáu của tháng | Bảng điểm tháng chỉ tính các tuần từ ngày này. Tab **Chấm điểm** ghi " · bắt đầu chấm từ {dd/mm/yyyy}", hoặc khi trống " · chưa đặt tuần bắt đầu chấm điểm (Tổng hợp → Thiết lập): đang tính cả các tuần trước khi dùng chính thức". Ví dụ: đặt 04/12/2026 → tháng 12/2026 chỉ tính 04/12, 11/12, 18/12, 25/12; tháng 11/2026 không còn tuần nào được tính, mọi bộ phận giữ 100 điểm. Lỗi: "Tuần bắt đầu chấm điểm phải là một ngày thứ Sáu" (báo ngay, chưa lưu gì) |
-| **Hạn nộp tuần này (nghỉ lễ thứ Sáu → ngày làm việc liền trước)** | Ngày hạn nộp báo cáo của **tuần đang chọn** | Ô ngày; chỉ nhận một ngày từ thứ Hai đến thứ Sáu của tuần đó. Mặc định: trống = thứ Sáu | Mọi mốc dời theo ngày mới: nhắc 15:00 ngày đó, hạn 17:30 ngày đó, nộp muộn tới 12:00 hôm sau, báo muộn phải gửi trước 17:30 ngày đó mới tính "có thông báo trước", báo vắng có người dự thay phải gửi trước 17:30 ngày đó. Khi tuần đó là tuần này, chip đầu trang ghi "Hạn nộp 17:30 {thứ} {dd/mm}". Ví dụ: thứ Sáu 01/01/2027 nghỉ Tết Dương lịch, đặt 31/12/2026 → nhắc 15:00 thứ Năm 31/12, hạn 17:30 thứ Năm 31/12, nộp muộn tới 12:00 thứ Sáu 01/01. Lỗi: "Hạn nộp phải là một ngày từ thứ Hai đến thứ Sáu của tuần báo cáo"; sau hạn nộp mà không phải Ban Tổng Giám đốc: "Đã qua hạn nộp — chỉ Ban TGĐ đổi lịch của tuần này" |
-| **Ngày giao ban (nghỉ lễ thứ Hai → ngày làm việc kế tiếp)** | Ngày họp giao ban xét **tuần đang chọn** | Ô ngày; phải sau thứ Sáu của tuần đó và không quá 10 ngày sau thứ Sáu đó. Mặc định: trống = thứ Hai kế tiếp | Mọi mốc của buổi họp dời theo: tóm tắt gửi 07:35 ngày đó; báo vắng vì "Việc đột xuất" hạn 08:00 ngày đó; họp 08:30 ngày đó; điểm danh và nút **Phát hành kết luận + Action Log** chỉ mở từ 08:30 ngày đó; báo cáo đã nộp bị khoá từ 08:30 ngày đó (trừ thư ký). Ví dụ: nếu thứ Hai 03/05/2027 là ngày nghỉ bù, đặt thứ Ba 04/05/2027 → sáng thứ Hai không có tóm tắt, không mở điểm danh; tất cả dời sang thứ Ba. Lỗi: "Ngày giao ban phải sau thứ Sáu của tuần báo cáo" (cũng báo câu này khi chọn quá 10 ngày); sau hạn nộp mà không phải Ban Tổng Giám đốc: "Đã qua hạn nộp — chỉ Ban TGĐ đổi lịch của tuần này" |
+| **Hạn nộp tuần {tuần} (nghỉ lễ thứ Sáu → ngày làm việc liền trước)** | Ngày hạn nộp báo cáo của **tuần đang chọn** | Ô ngày; chỉ nhận một ngày từ thứ Hai đến thứ Sáu của tuần đó. Mặc định: trống = thứ Sáu | Mọi mốc dời theo ngày mới: nhắc 15:00 ngày đó, hạn 17:30 ngày đó, nộp muộn tới 12:00 hôm sau, báo muộn phải gửi trước 17:30 ngày đó mới tính "có thông báo trước", báo vắng có người dự thay phải gửi trước 17:30 ngày đó. Khi tuần đó là tuần này, chip đầu trang ghi "Hạn nộp 17:30 {thứ} {dd/mm}". Lưu xong, lãnh đạo các bộ phận phải nộp và người lập báo cáo nhận thông báo "Lịch giao ban tuần {tuần}: hạn nộp 17:30 {thứ} {dd/mm}, giao ban 08:30 {thứ} {dd/mm}" (nội dung ghi lịch cũ). Ví dụ: thứ Sáu 01/01/2027 nghỉ Tết Dương lịch, đặt 31/12/2026 → nhắc 15:00 thứ Năm 31/12, hạn 17:30 thứ Năm 31/12, nộp muộn tới 12:00 thứ Sáu 01/01; các bộ phận nhận "Lịch giao ban tuần 28/12 – 01/01/2027: hạn nộp 17:30 T5 31/12, giao ban 08:30 T2 04/01". Lỗi: "Hạn nộp phải là một ngày từ thứ Hai đến thứ Sáu của tuần báo cáo"; sau hạn nộp mà không phải Ban Tổng Giám đốc: "Đã qua hạn nộp — chỉ Ban TGĐ đổi lịch của tuần này" |
+| **Ngày giao ban của tuần {tuần} (nghỉ lễ thứ Hai → ngày làm việc kế tiếp)** | Ngày họp giao ban xét **tuần đang chọn** | Ô ngày; phải sau thứ Sáu của tuần đó và không quá 10 ngày sau thứ Sáu đó. Mặc định: trống = thứ Hai kế tiếp | Mọi mốc của buổi họp dời theo: tóm tắt gửi 07:35 ngày đó; báo vắng vì "Việc đột xuất" hạn 08:00 ngày đó; họp 08:30 ngày đó; điểm danh và nút **Phát hành kết luận + Action Log** chỉ mở từ 08:30 ngày đó; báo cáo đã nộp bị khoá từ 08:30 ngày đó (trừ thư ký). Lưu xong, các bộ phận nhận thông báo lịch mới như ô hạn nộp. Ví dụ: nếu thứ Hai 03/05/2027 là ngày nghỉ bù, đặt thứ Ba 04/05/2027 → sáng thứ Hai không có tóm tắt, không mở điểm danh; tất cả dời sang thứ Ba. Lỗi: "Ngày giao ban phải sau thứ Sáu của tuần báo cáo" (cũng báo câu này khi chọn quá 10 ngày); sau hạn nộp mà không phải Ban Tổng Giám đốc: "Đã qua hạn nộp — chỉ Ban TGĐ đổi lịch của tuần này" |
 | Mức trừ điểm tuân thủ (**không có ô**) | Số điểm trừ cho từng loại vi phạm | Cố định (bảng ở mục 5.4) | Không sửa được trên giao diện. **Lưu thiết lập** giữ nguyên mức đang dùng |
 | Các mốc giờ trong tuần (**không có ô**) | 15:00, 17:30, 12:00, 07:35, 08:00, 08:30, 14:00 | Cố định (mục 5.2) | Chỉ dời theo ngày, không đổi được giờ |
 
-> ⚠️ **Chữ trên màn hình ghi** "Tuần này nghỉ…" và "Hạn nộp tuần này…" **nhưng thực tế** ba ô lịch áp cho tuần đang chọn ở ô **Tuần báo cáo (thứ Sáu)** đầu trang, không nhất thiết là tuần này. Ví dụ: đang xem tuần trước, đánh dấu "Tuần này nghỉ" rồi lưu → tuần trước bị đánh dấu nghỉ, tuần này vẫn giao ban bình thường.
+Ghi chú cạnh nút **Lưu thiết lập** (nguyên văn): "Đổi lịch tuần (tuần nghỉ, hạn nộp, ngày giao ban): Kepler Hub tự báo lãnh đạo các bộ phận phải nộp và người lập báo cáo; tuần đã họp xong thì không báo. Quy chế (Điều 3): báo trước ít nhất 02 ngày làm việc — đổi lịch sớm." Người nhận cụ thể: mục 5.5, "Ai nhận thông báo gì".
 
 > ⚠️ **Chữ trên màn hình ghi** "Chọn đúng 5 bộ phận theo quy chế rồi bấm Lưu." **nhưng thực tế** máy không kiểm số lượng: chọn 3 hay 8 bộ phận đều lưu được.
-
-> ⚠️ **Chữ trên màn hình ghi** "Thay đổi hạn nộp / ngày giao ban: thông báo các bộ phận trước ít nhất 02 ngày làm việc (Điều 3)." **nhưng thực tế** đổi lịch không gửi thông báo nào. Người đổi lịch phải tự báo các bộ phận.
 
 > ⚠️ **Chữ trên màn hình ghi** "(Tổng hợp & Nhân sự)" ở ô bộ phận thư ký **nhưng thực tế** đó chỉ là gợi ý theo quy chế; chọn bộ phận nào cũng được.
 
@@ -3397,7 +3396,7 @@ E. Đánh dấu tuần nghỉ (Tết)
 |---|---|---|---|
 | Dòng **Thiết lập** | Mở / đóng khối | Không | — |
 | **↑**, **↓** | Đẩy bộ phận lên / xuống một bậc. Chỉ đổi trên màn hình, chưa lưu | Không | Có: bấm ngược lại, hoặc tải lại trang để bỏ |
-| **Lưu thiết lập** | Lưu **hai lượt** (xem ngay dưới). Xong: "Đã lưu thiết lập", trang vẽ lại | **Không** | Có: sửa rồi lưu lại. Riêng danh sách đã chụp của các tuần đã qua không đổi; sau hạn nộp chỉ Ban Tổng Giám đốc đổi lịch |
+| **Lưu thiết lập** | Lưu **hai lượt** (xem ngay dưới). Xong: "Đã lưu thiết lập" (lịch tuần đổi thật và đã báo các bộ phận: "Đã lưu thiết lập — đã báo lịch mới tới {n} người"), trang vẽ lại | Chỉ khi Ban Tổng Giám đốc đổi lịch của tuần **đã qua hạn nộp**: "Tuần {tuần} đã qua hạn nộp (17:30 {thứ} {dd/mm}). Đổi lịch tuần đã qua hạn nộp sẽ đổi điểm tuân thủ tháng {mm/yyyy}: nộp đúng hạn / muộn, vắng của tuần này được tính lại theo lịch mới (bảng điểm tháng đã duyệt và khoá thì giữ nguyên). Vẫn lưu?" — **Vẫn lưu** hoặc **Huỷ**; Huỷ thì không lưu gì, kể cả thiết lập chung. Không đổi ô lịch nào thì không hỏi | Có: sửa rồi lưu lại. Riêng danh sách đã chụp của các tuần đã qua không đổi; sau hạn nộp chỉ Ban Tổng Giám đốc đổi lịch; thông báo đã gửi thì không thu hồi được |
 
 **"Lưu thiết lập" lưu làm hai lượt.** Lượt 1 lưu thiết lập chung (bộ phận phải nộp, tuần bắt đầu chấm điểm; Ban Tổng Giám đốc thêm bộ phận thư ký và PMO). Lượt 2 lưu lịch của tuần đang chọn (tuần nghỉ, hạn nộp, ngày giao ban). Lượt 1 lỗi thì lượt 2 không chạy. Lượt 1 xong mà lượt 2 lỗi thì **phần thiết lập chung đã lưu**, lịch chưa lưu; trang hiện thông báo lỗi đỏ nhưng không tự vẽ lại. Ví dụ: 18:00 thứ Sáu, thư ký sắp lại thứ tự bộ phận và lỡ sửa luôn ô hạn nộp của tuần này → lượt 1 lưu thứ tự mới; lượt 2 báo "Đã qua hạn nộp — chỉ Ban TGĐ đổi lịch của tuần này". Tải lại trang (F5) để thấy cái gì đã lưu.
 
@@ -3408,14 +3407,15 @@ E. Đánh dấu tuần nghỉ (Tết)
 - Thành viên Ban Tổng Giám đốc thuộc bộ phận thư ký **không** thành thư ký (Ban Tổng Giám đốc không tự trình rồi tự duyệt bảng điểm, không nhập thay).
 - Đổi danh sách bộ phận vào sáng thứ Hai giao ban không làm đổi danh sách của tuần đang họp: lúc đó "tuần này" đã sang tuần mới, tuần đang họp đã chụp danh sách từ chiều thứ Sáu.
 - Sau 17:30 ngày hạn nộp, thư ký vẫn lưu được thiết lập chung, chỉ không đổi được ba ô lịch của tuần đó. Không sửa ba ô lịch thì không bị báo lỗi.
-- Ban Tổng Giám đốc đổi được lịch của cả tuần đã qua. Đánh dấu tuần đã qua là tuần nghỉ, hoặc đổi hạn nộp của nó, làm thay đổi điểm tuân thủ tháng đó nếu bảng điểm chưa **Duyệt và khoá**.
+- Ban Tổng Giám đốc đổi được lịch của cả tuần đã qua. Đánh dấu tuần đã qua là tuần nghỉ, hoặc đổi hạn nộp của nó, làm thay đổi điểm tuân thủ tháng đó nếu bảng điểm chưa **Duyệt và khoá**; vì vậy Kepler Hub hỏi lại trước khi lưu. Bảng đã khoá muốn tính lại: **Mở khoá** (mục 5.4).
+- Đổi lịch của tuần đã họp xong (đã qua 08:30 ngày giao ban, cả theo lịch cũ lẫn lịch mới): không gửi thông báo. Lưu lại lịch y nguyên, hoặc điền hạn nộp đúng bằng thứ Sáu: không gửi.
 
 **Claude:** Không sửa được thiết lập, không đổi lịch tuần. Công cụ **Tôi là ai trong Kepler Hub** cho biết bạn là Ban Tổng Giám đốc, thư ký, PMO, lãnh đạo hay người phải nộp, và hạn nộp tuần này. Claude đọc được báo cáo tuần, bản tổng hợp giao ban (lãnh đạo bộ phận chỉ bản tóm tắt) và lưu **nháp** báo cáo tuần; mọi thứ trong khối Thiết lập làm trên giao diện.
 
 ### 5.2 Các mốc giờ của một tuần giao ban (cố định, không có ô sửa)
 
 **Mở ở đâu:** Không có màn hình. Các mốc hiện qua chip đầu trang Báo cáo tuần và các thông báo.
-**Ai thấy, ai sửa:** Mọi người thấy hệ quả; không ai sửa được giờ. Chỉ **ngày** dời được, bằng hai ô **Hạn nộp tuần này…** và **Ngày giao ban…** (mục 5.1).
+**Ai thấy, ai sửa:** Mọi người thấy hệ quả; không ai sửa được giờ. Chỉ **ngày** dời được, bằng hai ô **Hạn nộp tuần {tuần}…** và **Ngày giao ban của tuần {tuần}…** (mục 5.1).
 **Dùng để làm gì:** Biết chính xác lúc nào hệ thống nhắc, khoá, tính muộn, để dời ngày cho đúng khi nghỉ lễ.
 
 | Mốc | Giờ | Tính theo ngày | Chuyện gì xảy ra |
@@ -3445,9 +3445,9 @@ Ví dụ trọn một tuần bình thường: thứ Sáu 27/11/2026 nhắc 15:00
 
 **Các bước thường làm**
 1. Đầu năm, đánh dấu sẵn trên lịch giấy các tuần có ngày nghỉ rơi vào ngày hạn nộp (thường thứ Sáu) hoặc ngày giao ban (thường thứ Hai).
-2. Ô **Tuần báo cáo (thứ Sáu)** chỉ cho chọn tới **tuần sau**. Vì vậy, trong tuần liền trước tuần có ngày nghỉ, chọn dòng "· tuần sau" rồi đặt lịch. Ví dụ: Tết Dương lịch rơi vào thứ Sáu 01/01/2027. Từ thứ Hai 21/12/2026, chọn "28/12 – 01/01/2027 · tuần sau", điền **Hạn nộp tuần này…** = 31/12/2026, bấm **Lưu thiết lập**, rồi tự báo các bộ phận, trước ít nhất 02 ngày làm việc theo quy chế.
-3. Cả hạn nộp và ngày giao ban cùng vướng: điền cả hai ô trong một lần. Ví dụ: nếu thứ Sáu 30/04/2027 và thứ Hai 03/05/2027 (nghỉ bù) đều nghỉ → chọn tuần "26/04 – 30/04/2027", **Hạn nộp tuần này…** = 29/04/2027, **Ngày giao ban…** = 04/05/2027.
-4. Nghỉ cả tuần (Tết Nguyên đán): đánh dấu **Tuần này nghỉ (Tết, lễ) — không giao ban, không chấm điểm** cho đúng tuần đó.
+2. Ô **Tuần báo cáo (thứ Sáu)** chỉ cho chọn tới **tuần sau**. Vì vậy, trong tuần liền trước tuần có ngày nghỉ, chọn dòng "· tuần sau" rồi đặt lịch. Ví dụ: Tết Dương lịch rơi vào thứ Sáu 01/01/2027. Từ thứ Hai 21/12/2026, chọn "28/12 – 01/01/2027 · tuần sau", điền **Hạn nộp tuần 28/12 – 01/01/2027…** = 31/12/2026, bấm **Lưu thiết lập**. Kepler Hub báo ngay các bộ phận: "Lịch giao ban tuần 28/12 – 01/01/2027: hạn nộp 17:30 T5 31/12, giao ban 08:30 T2 04/01". Quy chế yêu cầu báo trước ít nhất 02 ngày làm việc: đặt lịch sớm.
+3. Cả hạn nộp và ngày giao ban cùng vướng: điền cả hai ô trong một lần. Ví dụ: nếu thứ Sáu 30/04/2027 và thứ Hai 03/05/2027 (nghỉ bù) đều nghỉ → chọn tuần "26/04 – 30/04/2027", **Hạn nộp tuần 26/04 – 30/04/2027…** = 29/04/2027, **Ngày giao ban của tuần 26/04 – 30/04/2027…** = 04/05/2027. Các bộ phận nhận một thông báo: "Lịch giao ban tuần 26/04 – 30/04/2027: hạn nộp 17:30 T5 29/04, giao ban 08:30 T3 04/05".
+4. Nghỉ cả tuần (Tết Nguyên đán): đánh dấu **Tuần {tuần} nghỉ (Tết, lễ) — không giao ban, không chấm điểm** cho đúng tuần đó (nhãn ghi ngày của tuần đang chọn).
 
 **Từng ô:** như ba ô lịch ở mục 5.1.
 
@@ -3461,8 +3461,8 @@ Ví dụ trọn một tuần bình thường: thứ Sáu 27/11/2026 nhắc 15:00
 ### 5.4 Chấm điểm tuân thủ: tab Chấm điểm và những gì thiết lập ảnh hưởng
 
 **Mở ở đâu:** Menu **Giao ban** → **Báo cáo tuần** → tab **Chấm điểm** (trang `#/tuan/diem`; chọn tháng thì địa chỉ thêm `?m=` và tháng, vd. `#/tuan/diem?m=2026-11`).
-**Ai thấy, ai sửa:** Xem: Ban Tổng Giám đốc và thư ký. Trình: thư ký. Duyệt và khoá: Ban Tổng Giám đốc (chữ "TGĐ" trên nút và thông báo ứng với mọi thành viên vai Ban Tổng Giám đốc). PMO, Lãnh đạo bộ phận, Nhân viên không có tab này; gõ thẳng địa chỉ `#/tuan/diem` thì trang tự chuyển về tab khác.
-**Dùng để làm gì:** Tính điểm tuân thủ giao ban hằng tháng của từng bộ phận (100 điểm trừ dần theo vi phạm), để thư ký trình và Ban Tổng Giám đốc duyệt, khoá. Điểm phụ thuộc trực tiếp vào thiết lập ở mục 5.1: danh sách bộ phận phải nộp, tuần bắt đầu chấm điểm, tuần nghỉ, hạn nộp, ngày giao ban.
+**Ai thấy, ai sửa:** Xem: Ban Tổng Giám đốc và thư ký. Trình: thư ký. Duyệt và khoá, Mở khoá: Ban Tổng Giám đốc (chữ "TGĐ" trên nút và thông báo ứng với mọi thành viên vai Ban Tổng Giám đốc). PMO, Lãnh đạo bộ phận, Nhân viên không có tab này; gõ thẳng địa chỉ `#/tuan/diem` thì trang tự chuyển về tab khác.
+**Dùng để làm gì:** Tính điểm tuân thủ giao ban hằng tháng của từng bộ phận (100 điểm trừ dần theo vi phạm), để thư ký trình và Ban Tổng Giám đốc duyệt, khoá; mở khoá khi cần tính lại. Điểm phụ thuộc trực tiếp vào thiết lập ở mục 5.1: danh sách bộ phận phải nộp, tuần bắt đầu chấm điểm, tuần nghỉ, hạn nộp, ngày giao ban.
 
 Câu đầu trang (nguyên văn): "Mỗi trưởng ban có 100 điểm đầu tháng, trừ theo Phụ lục 1 (TGĐ chốt mức trừ). Điểm cuối tháng × trọng số (đề xuất 5%) tính vào KPI. Lập vào ngày làm việc thứ 3 tháng sau, trình TGĐ duyệt." Chữ "trưởng ban" ở đây ứng với **Lãnh đạo bộ phận**.
 
@@ -3486,7 +3486,8 @@ Câu đầu trang (nguyên văn): "Mỗi trưởng ban có 100 điểm đầu th
 |---|---|---|---|
 | **Tháng** | Tháng chấm | 6 tháng gần nhất. Mặc định: tháng của tuần đang chọn ở đầu trang | Bảng tính lại cho tháng chọn |
 | Dòng ghi chú tuần | "Tính {n} tuần: {dd/mm}, …" hoặc "Chưa có tuần nào trong tháng được tính"; tiếp theo " · bắt đầu chấm từ {dd/mm/yyyy}" hoặc " · chưa đặt tuần bắt đầu chấm điểm (Tổng hợp → Thiết lập): đang tính cả các tuần trước khi dùng chính thức" | Chỉ đọc | Tính các thứ Sáu của tháng tới tuần hiện tại, từ **Tuần bắt đầu chấm điểm tuân thủ**, bỏ tuần nghỉ |
-| Chip trạng thái | "Bản nháp (tính theo số liệu hiện tại)", "Đã trình TGĐ — {người} {giờ}", "Đã duyệt — {người} {giờ} · đã khoá" | Chỉ đọc | Đã trình: hiện đúng bảng đã trình. Đã duyệt: hiện bảng đã khoá, không tính lại nữa |
+| Chip trạng thái | "Bản nháp (tính theo số liệu hiện tại)", "Đã trình TGĐ — {người} {giờ}", "Đã duyệt — {người} {giờ} · đã khoá" | Chỉ đọc | Đã trình: hiện đúng bảng đã trình. Đã duyệt: hiện bảng đã khoá, không tính lại nữa (tới khi Ban Tổng Giám đốc **Mở khoá**) |
+| Băng đã mở khoá | "Đã mở khoá {giờ} — {người}. Lý do: {lý do}. Bảng tính lại theo số liệu hiện tại; thư ký kiểm tra rồi trình lại, Ban Tổng Giám đốc duyệt lại." | Chỉ đọc | Hiện sau khi bảng được mở khoá, tới khi bảng được duyệt lại |
 | Ghi chú tháng chưa khép | "Tháng chưa khép — lập, trình và duyệt từ đầu tháng sau (sau buổi giao ban cuối tháng)." | Chỉ đọc | Tháng khép khi đã qua 08:30 buổi giao ban của thứ Sáu cuối tháng. Chưa khép thì không có nút trình, duyệt |
 | Băng cảnh báo thiếu lãnh đạo | "{n} bộ phận chưa có trưởng bộ phận: {tên}. Điểm vẫn tính cho bộ phận nhưng chưa gắn được người chịu trách nhiệm — nhờ quản trị hệ thống cấp quyền “Duyệt công việc” cho trưởng bộ phận." | Chỉ đọc | Hiện khi bộ phận không có tài khoản vai Lãnh đạo bộ phận (hoặc Ban Tổng Giám đốc) thuộc bộ phận đó |
 | Bảng: **Bộ phận**, **Trưởng bộ phận**, **Điểm**, **Vi phạm**, **Chi tiết** | Bảng điểm. Cột "Trưởng bộ phận" = các **Lãnh đạo bộ phận** của bộ phận đó, hoặc nhãn "Chưa có trưởng bộ phận". Điểm xanh từ 95, cam từ 80, đỏ dưới 80. Chi tiết mỗi dòng "{dd/mm}: {vi phạm} −{điểm}" hoặc "(không trừ)"; không có thì "Không vi phạm". Bảng trống: "Chưa thiết lập bộ phận phải nộp" | Chỉ đọc | Bộ phận được chấm = bộ phận có trong danh sách phải nộp (đã chụp) ở ít nhất một tuần của tháng |
@@ -3504,18 +3505,20 @@ Câu đầu trang (nguyên văn): "Mỗi trưởng ban có 100 điểm đầu th
 
 | Nút | Làm gì | Có hỏi lại không | Quay lại được không |
 |---|---|---|---|
-| **Trình TGĐ** | Chụp bảng điểm hiện tại, chuyển sang "Đã trình TGĐ". Báo "Đã trình TGĐ bảng điểm". Chỉ thư ký thấy, chỉ khi tháng đã khép và chưa duyệt | Không | Có: trình lại (bảng mới thay bảng cũ) cho tới khi Ban Tổng Giám đốc duyệt |
-| **Duyệt và khoá** | Duyệt đúng bảng đã trình và khoá. Báo "Đã duyệt và khoá bảng điểm". Chỉ Ban Tổng Giám đốc thấy, chỉ khi tháng đã khép và đã trình | ⚠️ **Không hỏi lại** | ⚠️ **Không**: không có nút mở khoá; lần sau hệ thống báo "Bảng điểm tháng này đã được duyệt và khoá" |
+| **Trình TGĐ** | Chụp bảng điểm hiện tại, chuyển sang "Đã trình TGĐ". Báo "Đã trình TGĐ bảng điểm". Mọi thành viên Ban Tổng Giám đốc đang hoạt động nhận thông báo "Bảng điểm tuân thủ giao ban tháng {mm/yyyy} chờ duyệt". Chỉ thư ký thấy, chỉ khi tháng đã khép và chưa duyệt | Không | Có: trình lại (bảng mới thay bảng cũ) cho tới khi Ban Tổng Giám đốc duyệt |
+| **Duyệt và khoá** | Duyệt đúng bảng đã trình và khoá. Báo "Đã duyệt và khoá bảng điểm". Thư ký và lãnh đạo các bộ phận được chấm nhận thông báo "Bảng điểm tuân thủ giao ban tháng {mm/yyyy} đã duyệt và khoá" (lãnh đạo bộ phận chỉ được báo là đã chốt, không kèm điểm). Chỉ Ban Tổng Giám đốc thấy, chỉ khi tháng đã khép và đã trình | Có: "Duyệt và khoá bảng điểm tháng {mm/yyyy}? Sau khi khoá không sửa được; chỉ Ban Tổng Giám đốc mở khoá (ghi lý do)." — **Duyệt và khoá** hoặc **Huỷ** (Huỷ: bảng vẫn "Đã trình TGĐ") | Có, bằng **Mở khoá** (dòng dưới) |
+| **Mở khoá** | Hiện cho Ban Tổng Giám đốc khi bảng đã duyệt. Đưa bảng về **Bản nháp** (tính lại theo số liệu hiện tại, không giữ bảng đã duyệt), báo "Đã mở khoá bảng điểm". Thư ký nhận thông báo "Bảng điểm tuân thủ giao ban tháng {mm/yyyy} đã mở khoá", nội dung có lý do. Lý do ghi vào **Nhật ký hệ thống** (hành động `WEEKLY_COMPLIANCE_UNLOCK`); Quản trị hệ thống chỉ thấy ai mở, lúc nào, không đọc được lý do | Có: "Mở khoá bảng điểm tháng {mm/yyyy}? Bảng về bản nháp, tính lại theo số liệu hiện tại; thư ký giao ban được báo để kiểm tra và trình lại. Lý do được ghi vào nhật ký.", kèm ô **Lý do mở khoá (bắt buộc)**. Bỏ trống lý do mà bấm **Mở khoá**: báo "Ghi lý do mở khoá bảng điểm", không mở | Có: thư ký **Trình TGĐ** lại, Ban Tổng Giám đốc **Duyệt và khoá** lại |
 
-Lỗi có thể gặp: "Thư ký giao ban lập và trình bảng điểm", "TGĐ duyệt bảng điểm tuân thủ", "Tháng chưa khép (còn buổi giao ban trong tháng) — lập và duyệt bảng điểm từ đầu tháng sau", "Thư ký chưa trình bảng điểm tháng này", "Bảng điểm vừa được trình lại — tải lại trước khi duyệt".
+Lỗi có thể gặp: "Thư ký giao ban lập và trình bảng điểm", "TGĐ duyệt bảng điểm tuân thủ", "Tháng chưa khép (còn buổi giao ban trong tháng) — lập và duyệt bảng điểm từ đầu tháng sau", "Thư ký chưa trình bảng điểm tháng này", "Bảng điểm vừa được trình lại — tải lại trước khi duyệt", "Bảng điểm tháng này đã được duyệt và khoá" (trình / duyệt bảng đã khoá), "Chỉ Ban Tổng Giám đốc mở khoá bảng điểm tuân thủ đã duyệt", "Ghi lý do mở khoá bảng điểm", "Lý do mở khoá tối đa 500 ký tự", "Bảng điểm tháng này chưa duyệt và khoá — không có gì để mở khoá".
 
 **⚠️ Dễ nhầm**
-- Trình hay duyệt đều **không gửi thông báo**. Thư ký trình xong phải tự báo Ban Tổng Giám đốc vào tab Chấm điểm.
+- Lãnh đạo bộ phận nhận thông báo bảng điểm đã duyệt nhưng **không** có tab Chấm điểm: muốn biết điểm của bộ phận, hỏi thư ký giao ban.
+- **Mở khoá** đưa bảng về **Bản nháp**, không về "Đã trình TGĐ": Ban Tổng Giám đốc không duyệt lại ngay được bảng cũ; thư ký kiểm tra số liệu, sửa chỗ sai (điểm danh, "Không đạt", lịch tuần…) rồi trình lại.
 - Chưa chọn bộ phận thư ký (mục 5.1) thì không ai trình được, nên không duyệt được.
-- Bảng điểm đã duyệt không đổi nữa, kể cả khi sau đó Ban Tổng Giám đốc đánh dấu một tuần của tháng đó là tuần nghỉ.
+- Bảng điểm đã duyệt không đổi nữa, kể cả khi sau đó Ban Tổng Giám đốc đánh dấu một tuần của tháng đó là tuần nghỉ. Muốn tính lại: **Mở khoá** (ghi lý do) → thư ký **Trình TGĐ** → **Duyệt và khoá**.
 - Bộ phận không có lãnh đạo vẫn bị tính điểm; chỉ thiếu tên người chịu trách nhiệm.
 
-**Claude:** Không xem được bảng điểm tuân thủ, không trình, không duyệt.
+**Claude:** Không xem được bảng điểm tuân thủ, không trình, không duyệt, không mở khoá.
 
 ### 5.5 Các vai trong tuần: ai làm được gì
 
@@ -3553,7 +3556,7 @@ Một người có nhiều vai trò thì cộng quyền. Ví dụ: Lãnh đạo 
 | Thấy và sửa khối **Thiết lập** | Có | Có, trừ hai ô thư ký / PMO | Không | Không | Không |
 | Chọn bộ phận thư ký, danh sách PMO | Có | Không | Không | Không | Không |
 | Đổi lịch tuần sau 17:30 ngày hạn nộp | Có | Không | Không | Không | Không |
-| Tab **Chấm điểm** | Xem, **Duyệt và khoá** | Xem, **Trình TGĐ** | Không | Không | Không |
+| Tab **Chấm điểm** | Xem, **Duyệt và khoá**, **Mở khoá** | Xem, **Trình TGĐ** | Không | Không | Không |
 
 > ⚠️ **Chữ trên màn hình ghi** "Kết luận của TGĐ" **nhưng thực tế** thư ký cũng chọn và lưu được kết luận này, giống Ban Tổng Giám đốc.
 
@@ -3565,8 +3568,12 @@ Một người có nhiều vai trò thì cộng quyền. Ví dụ: Lãnh đạo 
 | "Tổng hợp giao ban {dd/mm}: {đã nộp}/{tổng} bộ phận đã nộp" | 07:35 ngày giao ban; tuần nghỉ không gửi | Ban Tổng Giám đốc, thư ký, PMO, Lãnh đạo bộ phận |
 | "{bộ phận} báo nộp báo cáo tuần muộn" / "{bộ phận} báo vắng giao ban {dd/mm}" | Ngay khi có người báo | Ban Tổng Giám đốc và thư ký, trừ người vừa báo |
 | "Kết luận giao ban {dd/mm} và Action Log đã phát hành" | Khi bấm phát hành | Lãnh đạo mọi bộ phận đang hoạt động, người phụ trách từng việc trong Action Log, Ban Tổng Giám đốc, thư ký, PMO, trừ người vừa phát hành |
+| "Lịch giao ban tuần {tuần}: hạn nộp 17:30 {thứ} {dd/mm}, giao ban 08:30 {thứ} {dd/mm}" (nội dung: lịch cũ, hoặc "Tuần này không còn là tuần nghỉ — nộp báo cáo tuần như thường lệ.") / "Tuần {tuần} nghỉ giao ban" | Khi **Lưu thiết lập** làm lịch của tuần thực sự đổi (hạn nộp, ngày giao ban, tuần nghỉ). Không gửi khi lưu lại y nguyên, khi đổi hạn của tuần vẫn là tuần nghỉ, khi tuần đã họp xong (đã qua 08:30 ngày giao ban, cả lịch cũ lẫn lịch mới). Bấm vào mở trang Báo cáo tuần đúng tuần đó | Lãnh đạo các bộ phận phải nộp tuần đó (danh sách đã chụp của tuần, chưa chụp thì theo thiết lập; kể cả người đang được uỷ quyền), người lập báo cáo tuần trước và người đang lập báo cáo tuần đó của các bộ phận ấy; trừ người vừa đổi, tài khoản đã khoá, Quản trị hệ thống |
+| "Bảng điểm tuân thủ giao ban tháng {mm/yyyy} chờ duyệt" | Thư ký bấm **Trình TGĐ** | Mọi thành viên Ban Tổng Giám đốc đang hoạt động |
+| "Bảng điểm tuân thủ giao ban tháng {mm/yyyy} đã duyệt và khoá" | Ban Tổng Giám đốc đồng ý **Duyệt và khoá** | Thư ký (mở tab Chấm điểm); lãnh đạo các bộ phận được chấm, kể cả người đang được uỷ quyền (chỉ báo đã chốt, không kèm điểm); trừ người vừa duyệt |
+| "Bảng điểm tuân thủ giao ban tháng {mm/yyyy} đã mở khoá" (nội dung có lý do) | Ban Tổng Giám đốc bấm **Mở khoá** | Thư ký |
 
-Không có thông báo khi: đổi thiết lập, đổi lịch tuần, trình hoặc duyệt bảng điểm.
+Không có thông báo khi: đổi thiết lập chung (bộ phận phải nộp, thứ tự, tuần bắt đầu chấm điểm, thư ký, PMO); đổi lịch của tuần đã họp xong.
 
 **⚠️ Dễ nhầm**
 - Lãnh đạo bộ phận mặc định chỉ thấy bản tóm tắt. Muốn xem chi tiết mọi bộ phận: Ban Tổng Giám đốc chọn người đó vào PMO.
@@ -5093,12 +5100,12 @@ Dữ liệu trình duyệt **không tách theo người** (máy dùng chung thì
 | Câu hỏi | Trả lời |
 |---|---|
 | Tôi là thư ký giao ban mà không đổi được hạn nộp, báo "Đã qua hạn nộp — chỉ Ban TGĐ đổi lịch của tuần này"? | Sau 17:30 ngày hạn nộp của một tuần, chỉ Ban Tổng Giám đốc đổi được lịch tuần đó. Đổi lịch trước hạn, hoặc nhờ Ban Tổng Giám đốc (mục 5.1) |
-| Đánh dấu "Tuần này nghỉ" rồi mà tuần này vẫn bị nhắc nộp báo cáo? | Ba ô lịch áp cho tuần đang chọn ở ô **Tuần báo cáo (thứ Sáu)** đầu trang. Bạn đã đánh dấu nhầm tuần khác. Chọn đúng tuần, đánh dấu lại, lưu (mục 5.1) |
-| Đã dời hạn nộp mà các bộ phận không ai biết? | Kepler Hub không gửi thông báo khi đổi lịch, dù ghi chú nhắc "thông báo các bộ phận trước ít nhất 02 ngày làm việc". Người đổi lịch tự báo (mục 5.1) |
+| Đánh dấu tuần nghỉ rồi mà tuần này vẫn bị nhắc nộp báo cáo? | Ba ô lịch áp cho tuần đang chọn ở ô **Tuần báo cáo (thứ Sáu)** đầu trang; nhãn ghi ngày của tuần đó (vd. "Tuần 23/11 – 27/11/2026 nghỉ…"). Bạn đã đánh dấu tuần khác. Chọn đúng tuần, đánh dấu lại, lưu (mục 5.1) |
+| Đã dời hạn nộp, ai được báo? Sao có bộ phận không nhận? | Kepler Hub tự báo lãnh đạo các bộ phận phải nộp tuần đó và người lập báo cáo (tuần trước, tuần đó) ngay khi lưu. Không báo: bộ phận không phải nộp, tài khoản đã khoá, tuần đã họp xong, lưu lại lịch không đổi (mục 5.5). Bộ phận chưa có lãnh đạo, chưa ai lập báo cáo thì không có ai để báo: báo thêm ngoài hệ thống |
 | Bấm "Lưu thiết lập" báo lỗi, nhưng danh sách bộ phận vẫn đổi? | Nút này lưu hai lượt: thiết lập chung trước, lịch tuần sau. Lượt hai lỗi thì lượt một đã lưu. Tải lại trang để xem (mục 5.1) |
 | Khai ngày lễ ở Nhân sự rồi mà hạn báo cáo tuần không dời? | Hai chỗ độc lập. Ngày lễ ở Nhân sự chỉ dùng cho chấm công, nghỉ phép, hạn văn bản đến. Dời hạn báo cáo tuần ở Báo cáo tuần → Thiết lập (mục 5.3) |
 | Chưa chọn PMO thì ai là PMO? Lãnh đạo bộ phận sao chỉ thấy bản tóm tắt? | Chưa chọn = không ai là PMO. Lãnh đạo bộ phận mặc định chỉ xem bản tóm tắt; muốn xem chi tiết mọi bộ phận, Ban Tổng Giám đốc chọn người đó vào PMO (mục 5.1, 5.5) |
-| Lỡ bấm "Duyệt và khoá" bảng điểm tuân thủ? Muốn đổi mức trừ điểm? | Bảng đã duyệt không mở khoá được trên giao diện. Mức trừ điểm cố định trong phần mềm, không có ô sửa (mục 5.4) |
+| Lỡ bấm "Duyệt và khoá" bảng điểm tuân thủ? Muốn đổi mức trừ điểm? | Nút hỏi lại trước khi khoá. Đã khoá mà cần sửa: Ban Tổng Giám đốc bấm **Mở khoá**, ghi lý do → bảng về bản nháp, thư ký trình lại, Ban Tổng Giám đốc duyệt lại. Mức trừ điểm cố định trong phần mềm, không có ô sửa (mục 5.4) |
 | Menu không có Nhân sự / Đối tác? | Trên bản chạy thật hai phân hệ đã bật (25/11/2026): bấm F5 tải lại trang. Ở bản cài khác: phân hệ chưa bật; chỉ IT bật được, theo quyết định của Ban Tổng Giám đốc (mục 6.1) |
 | Bật "Chỉ cho chấm công trong mạng văn phòng" xong không ai chấm công được? | Kepler Hub đang thấy IP của máy trung gian (vd. Docker Desktop 172.x / 192.168.65.x), không thấy IP người dùng. Xoá trống ô, lưu, nhờ IT sửa cấu hình rồi mới bật lại (mục 6.2) |
 | Đối tác bị gán nhầm bộ phận phụ trách, đổi ở đâu? | Giao diện không có chỗ đổi bộ phận phụ trách sau khi tạo. Nhờ IT. Lần sau Ban Tổng Giám đốc kiểm kỹ ô **Bộ phận phụ trách** trước khi lưu (mục 6.3) |

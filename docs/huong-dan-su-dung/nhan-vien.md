@@ -509,7 +509,7 @@ Kepler Hub tự nhắc qua chuông. Không có chỗ đổi giờ hay tắt nh�
 | 15:00 thứ Năm hằng tuần | "Cập nhật tiến độ tuần này: {n} việc trong kỳ này chưa cập nhật" — **một** thông báo gom mọi việc | Bạn chủ trì việc dự án MTL trong kỳ cập nhật tháng này, đã tới ngày bắt đầu và **5 ngày trở lên** chưa báo tiến độ (mục 5). Việc chưa giao ai: lãnh đạo bộ phận chủ trì nhận |
 | 15:00 ngày hạn nộp báo cáo tuần | "Báo cáo tuần {bộ phận}: hạn nộp 17:30 hôm nay" | Bộ phận bạn chưa nộp, và bạn là lãnh đạo bộ phận, người lập báo cáo tuần trước hoặc người đang có bản nháp tuần này |
 
-Ngoài ra còn các thông báo khi có việc xảy ra: được giao việc, có phiếu cần bạn duyệt, việc được duyệt hoặc bị trả lại, đề nghị gia hạn được đồng ý hoặc không, kiến nghị có ý kiến, đơn nghỉ được duyệt, văn bản giao bạn xử lý.
+Ngoài ra còn các thông báo khi có việc xảy ra: được giao việc, có phiếu cần bạn duyệt, việc được duyệt hoặc bị trả lại, đề nghị gia hạn được đồng ý hoặc không, kiến nghị có ý kiến, đơn nghỉ được duyệt, văn bản giao bạn xử lý, lịch giao ban tuần đổi (hạn nộp, ngày giao ban, tuần nghỉ — khi bạn lập báo cáo tuần cho bộ phận).
 
 ### 10.6 Ghi chú của tôi
 
