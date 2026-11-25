@@ -456,6 +456,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     const result = await prisma.$transaction(async tx => {
       await D.meetingLock(tx, week);
       const existing = await tx.weeklyMeeting.findUnique({ where: { week } });
+      const before = WK.scheduleOf(week, existing); // lịch hiệu lực TRƯỚC khi lưu — so với sau khi lưu để báo các bộ phận
       // Action Log do người khác vừa sửa (so phiên bản lúc tải) → không ghi đè cả danh sách.
       if (b.actions !== undefined && b.baseActions !== sha256(existing?.data?.actions || []))
         fail(409, 'Action Log vừa được người khác cập nhật — tải lại trước khi lưu', 'MEETING_CONFLICT');
@@ -507,10 +508,13 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
         if (missing.length) fail(422, `Còn ${missing.length} yêu cầu hỗ trợ chưa có kết luận của TGĐ`, 'CONCLUSION_MISSING');
       }
       const saved = await tx.weeklyMeeting.upsert({ where: { week }, create: { week, data, updatedById: req.user.id, publishedAt: publish ? now : null }, update: { data, updatedById: req.user.id, ...(publish ? { publishedAt: now } : {}) } });
-      return { saved, data, publish };
+      return { saved, data, publish, before };
     }, { timeout: 15_000, maxWait: 10_000 });
-    const { saved, data, publish } = result;
+    const { saved, data, publish, before } = result;
     await audit(req, publish ? 'WEEKLY_MEETING_PUBLISH' : 'WEEKLY_MEETING', 'WeeklyMeeting', week, null, { week, keys: Object.keys(b).filter(k => k !== 'week'), actions: (data.actions || []).length, skip: !!data.skip });
+    // Lịch tuần đổi thật (tuần nghỉ, hạn nộp, ngày giao ban): báo lãnh đạo các bộ phận phải nộp và người lập báo cáo (Điều 3) —
+    // không chờ người đổi tự báo. Không đổi gì / tuần đã họp: không gửi (services/weekly.js scheduleChange).
+    const notified = await D.notifyScheduleChange(prisma, { week, before, after: WK.scheduleOf(week, saved), meeting: saved, now, actorId: req.user.id });
     if (publish) {
       const leaders = new Set(), owners = new Set();
       for (const d of depts) for (const id of await approval.deptLeaderIds(prisma, d)) leaders.add(id);
@@ -518,7 +522,7 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
       const S = WK.scheduleOf(week, saved);
       await notify(prisma, [...new Set([...leaders, ...owners, ...(await D.summaryViewerIds(prisma))])], { type: 'WEEKLY_ACTION_LOG', title: `Kết luận giao ban ${WK.fmtD(S.meetingDay)} và Action Log đã phát hành`, body: `${(data.actions || []).length} việc — tự vào Phần I báo cáo tuần sau`, link: '#/tuan/tong-hop' }, req.user.id);
     }
-    res.json({ ok: true, publishedAt: saved.publishedAt, updatedAt: saved.updatedAt, actionsVersion: sha256(saved.data?.actions || []), data: saved.data, schedule: WK.scheduleOf(week, saved) });
+    res.json({ ok: true, publishedAt: saved.publishedAt, updatedAt: saved.updatedAt, actionsVersion: sha256(saved.data?.actions || []), data: saved.data, schedule: WK.scheduleOf(week, saved), notified });
   });
 
   // ---------- Thiết lập: bộ phận phải nộp (thứ tự trình bày), tuần bắt đầu chấm điểm; vai trò giao ban (chỉ Ban TGĐ) ----------
@@ -588,40 +592,77 @@ module.exports = function mountWeekly(app, { prisma, auth, audit }) {
     const now = new Date(), month = monthParam(req.query.month, now);
     const st = (await prisma.appSetting.findUnique({ where: { key: COMPLIANCE_KEY(month) } }))?.value || null;
     const live = await complianceRows(month, now);
-    const names = st ? await userNames(prisma, [st.submittedById, st.approvedById]) : {};
+    const unlock = st?.unlocks?.at(-1) || null; // lần mở khoá gần nhất (ai, lúc nào, lý do)
+    const names = st ? await userNames(prisma, [st.submittedById, st.approvedById, unlock?.byId]) : {};
     res.setHeader('Cache-Control', 'private, no-store');
-    // Đã duyệt: trả bảng đã khoá (không tính lại); chưa: tính theo số liệu hiện có.
+    // Đã duyệt: trả bảng đã khoá (không tính lại); chưa (kể cả bản nháp sau khi mở khoá): tính theo số liệu hiện có.
     const closed = await monthClosed(month, now);
     res.json({ month, closed, ...(st?.status === 'APPROVED' ? { ...live, rows: st.rows } : live),
-      state: st ? { status: st.status, submittedAt: st.submittedAt, submittedBy: names[st.submittedById] || '', approvedAt: st.approvedAt || null, approvedBy: names[st.approvedById] || '', sha256: st.rows ? sha256(st.rows) : null } : { status: 'DRAFT' },
+      state: st ? { status: st.status, submittedAt: st.submittedAt || null, submittedBy: names[st.submittedById] || '', approvedAt: st.approvedAt || null, approvedBy: names[st.approvedById] || '', sha256: st.rows ? sha256(st.rows) : null,
+        ...(unlock ? { unlock: { at: unlock.at, by: names[unlock.byId] || '', reason: unlock.reason } } : {}) } : { status: 'DRAFT' },
       // Duyệt đúng bảng đã trình: TGĐ duyệt bảng mình đang xem (st.rows), không tính lại.
       ...(st?.status === 'SUBMITTED' ? { rows: st.rows } : {}),
-      canSubmit: s.secretary && closed && st?.status !== 'APPROVED', canApprove: s.director && closed && st?.status === 'SUBMITTED' });
+      canSubmit: s.secretary && closed && st?.status !== 'APPROVED', canApprove: s.director && closed && st?.status === 'SUBMITTED',
+      canUnlock: s.director && st?.status === 'APPROVED' });
   });
+  // submit: thư ký trình (báo Ban TGĐ) · approve: Ban TGĐ duyệt và khoá (báo thư ký, lãnh đạo các bộ phận được chấm) ·
+  // unlock: Ban TGĐ mở khoá bảng đã duyệt, bắt buộc lý do (ghi nhật ký, báo thư ký) — bảng về bản nháp để thư ký trình lại.
+  const COMPLIANCE_ACTIONS = ['submit', 'approve', 'unlock'];
   app.post('/api/weekly/compliance/:action', auth, async (req, res) => {
     const s = await subjectOf(req);
+    const action = req.params.action;
+    // Mở khoá: chỉ Ban TGĐ — thư ký, PMO, lãnh đạo bộ phận… nhận cùng một câu từ chối (Quản trị hệ thống đã bị chặn ở subjectOf).
+    if (action === 'unlock' && !s.director) fail(403, 'Chỉ Ban Tổng Giám đốc mở khoá bảng điểm tuân thủ đã duyệt', 'FORBIDDEN');
     P.assertCan(s, 'view', 'weekly.compliance');
     const now = new Date(), month = monthParam(req.body?.month, now), key = COMPLIANCE_KEY(month);
-    if (!['submit', 'approve'].includes(req.params.action)) fail(404, 'Không tìm thấy thao tác', 'NOT_FOUND');
-    if (req.params.action === 'submit' && !s.secretary) fail(403, 'Thư ký giao ban lập và trình bảng điểm', 'FORBIDDEN');
-    if (req.params.action === 'approve' && !s.director) fail(403, 'TGĐ duyệt bảng điểm tuân thủ', 'FORBIDDEN');
-    if (!(await monthClosed(month, now))) fail(409, 'Tháng chưa khép (còn buổi giao ban trong tháng) — lập và duyệt bảng điểm từ đầu tháng sau', 'MONTH_OPEN');
-    const rows = req.params.action === 'submit' ? (await complianceRows(month, now)).rows : null; // tính trước khoá (chậm)
-    const value = await prisma.$transaction(async tx => {
+    if (!COMPLIANCE_ACTIONS.includes(action)) fail(404, 'Không tìm thấy thao tác', 'NOT_FOUND');
+    if (action === 'submit' && !s.secretary) fail(403, 'Thư ký giao ban lập và trình bảng điểm', 'FORBIDDEN');
+    if (action === 'approve' && !s.director) fail(403, 'TGĐ duyệt bảng điểm tuân thủ', 'FORBIDDEN');
+    const reason = action === 'unlock' ? String(req.body?.reason ?? '').trim() : '';
+    if (action === 'unlock' && !reason) fail(422, 'Ghi lý do mở khoá bảng điểm', 'REQUIRED');
+    if (reason.length > 500) fail(422, 'Lý do mở khoá tối đa 500 ký tự', 'TOO_LONG');
+    if (action !== 'unlock' && !(await monthClosed(month, now))) fail(409, 'Tháng chưa khép (còn buổi giao ban trong tháng) — lập và duyệt bảng điểm từ đầu tháng sau', 'MONTH_OPEN');
+    const rows = action === 'submit' ? (await complianceRows(month, now)).rows : null; // tính trước khoá (chậm)
+    const { value, prev } = await prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
       const cur = (await tx.appSetting.findUnique({ where: { key } }))?.value || null;
-      if (cur?.status === 'APPROVED') fail(409, 'Bảng điểm tháng này đã được duyệt và khoá', 'LOCKED');
       let v;
-      if (req.params.action === 'submit') v = { status: 'SUBMITTED', rows, submittedById: req.user.id, submittedAt: now.toISOString() };
-      else {
-        if (cur?.status !== 'SUBMITTED') fail(409, 'Thư ký chưa trình bảng điểm tháng này', 'NOT_SUBMITTED');
-        if (req.body?.sha256 !== sha256(cur.rows)) fail(409, 'Bảng điểm vừa được trình lại — tải lại trước khi duyệt', 'STALE');
-        v = { ...cur, status: 'APPROVED', approvedById: req.user.id, approvedAt: now.toISOString() };
+      if (action === 'unlock') {
+        if (cur?.status !== 'APPROVED') fail(409, 'Bảng điểm tháng này chưa duyệt và khoá — không có gì để mở khoá', 'NOT_LOCKED');
+        // Về BẢN NHÁP, không về "Đã trình": bảng tính lại theo số liệu hiện tại, thư ký kiểm tra rồi trình lại, Ban TGĐ duyệt lại —
+        // không duyệt lại được nguyên bảng cũ khi chưa sửa gì. Lịch sử mở khoá (ai, lúc nào, lý do, bảng đã duyệt) giữ trong bản ghi.
+        v = { status: 'DRAFT', unlocks: [...(cur.unlocks || []), { at: now.toISOString(), byId: req.user.id, reason, approvedAt: cur.approvedAt || null, approvedById: cur.approvedById || null, sha256: sha256(cur.rows) }].slice(-20) };
+      } else {
+        if (cur?.status === 'APPROVED') fail(409, 'Bảng điểm tháng này đã được duyệt và khoá', 'LOCKED');
+        if (action === 'submit') v = { status: 'SUBMITTED', rows, submittedById: req.user.id, submittedAt: now.toISOString(), ...(cur?.unlocks ? { unlocks: cur.unlocks } : {}) };
+        else {
+          if (cur?.status !== 'SUBMITTED') fail(409, 'Thư ký chưa trình bảng điểm tháng này', 'NOT_SUBMITTED');
+          if (req.body?.sha256 !== sha256(cur.rows)) fail(409, 'Bảng điểm vừa được trình lại — tải lại trước khi duyệt', 'STALE');
+          v = { ...cur, status: 'APPROVED', approvedById: req.user.id, approvedAt: now.toISOString() };
+        }
       }
       await tx.appSetting.upsert({ where: { key }, create: { key, value: v, updatedById: req.user.id }, update: { value: v, updatedById: req.user.id } });
-      return v;
+      return { value: v, prev: cur };
     });
-    await audit(req, req.params.action === 'approve' ? 'WEEKLY_COMPLIANCE_APPROVE' : 'WEEKLY_COMPLIANCE_SUBMIT', 'AppSetting', key, null, { month, sha256: sha256(value.rows) });
+    // Lý do mở khoá là nội dung nghiệp vụ: ghi dưới đối tượng nghiệp vụ "WeeklyCompliance" — màn Nhật ký ẩn trước – sau với Quản trị
+    // hệ thống (routes/admin.js presentAudit), khác "AppSetting" (đối tượng kỹ thuật, IT xem được trước – sau).
+    if (action === 'unlock') await audit(req, 'WEEKLY_COMPLIANCE_UNLOCK', 'WeeklyCompliance', key, { month, status: 'APPROVED', approvedAt: prev.approvedAt || null, approvedById: prev.approvedById || null, sha256: sha256(prev.rows) }, { month, status: 'DRAFT', reason });
+    else await audit(req, action === 'approve' ? 'WEEKLY_COMPLIANCE_APPROVE' : 'WEEKLY_COMPLIANCE_SUBMIT', 'AppSetting', key, null, { month, sha256: sha256(value.rows) });
+    // Thông báo (thư ký trình xong Ban TGĐ biết để duyệt; duyệt / mở khoá xong thư ký biết) — trừ chính người vừa bấm.
+    const M = `${month.slice(5)}/${month.slice(0, 4)}`, link = `#/tuan/diem?m=${month}`, type = 'WEEKLY_COMPLIANCE', who = req.user.fullName;
+    if (action === 'submit') {
+      await notify(prisma, await D.boardIds(prisma), { type, title: `Bảng điểm tuân thủ giao ban tháng ${M} chờ duyệt`,
+        body: `${who} đã ${prev?.status === 'SUBMITTED' ? 'trình lại' : 'trình'} — mở tab Chấm điểm, kiểm tra rồi bấm "Duyệt và khoá".`, link }, req.user.id);
+    } else if (action === 'approve') {
+      // Lãnh đạo bộ phận không xem được bảng điểm (lib/policy.js weekly.compliance): thông báo chỉ báo đã chốt, không kèm điểm.
+      const sec = await D.secretaryIds(prisma), title = `Bảng điểm tuân thủ giao ban tháng ${M} đã duyệt và khoá`;
+      const leaders = (await D.leaderIdsOf(prisma, (value.rows || []).map(r => r.id))).filter(id => !sec.includes(id));
+      await notify(prisma, sec, { type, title, body: `${who} đã duyệt. Cần sửa: Ban Tổng Giám đốc mở khoá (ghi lý do), thư ký trình lại.`, link }, req.user.id);
+      await notify(prisma, leaders, { type, title, body: 'Điểm tuân thủ giao ban tháng này của bộ phận đã chốt (Phụ lục 1). Thắc mắc về điểm: liên hệ thư ký giao ban.', link: '#/tuan' }, req.user.id);
+    } else {
+      await notify(prisma, await D.secretaryIds(prisma), { type, title: `Bảng điểm tuân thủ giao ban tháng ${M} đã mở khoá`,
+        body: `${who} mở khoá. Lý do: ${reason}. Bảng về bản nháp, tính lại theo số liệu hiện tại — kiểm tra rồi bấm "Trình TGĐ" lại.`, link }, req.user.id);
+    }
     res.json({ ok: true, status: value.status });
   });
 };

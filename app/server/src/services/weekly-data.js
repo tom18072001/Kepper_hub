@@ -72,6 +72,39 @@ async function usersWhere(prisma, test) {
 const managerIds = prisma => usersWhere(prisma, r => r.manage);
 // Người nhận bản tổng hợp: TGĐ, thư ký, PMO và trưởng / phó các bộ phận (Điều 5).
 const summaryViewerIds = prisma => usersWhere(prisma, r => r.summary);
+// Thư ký giao ban: thành viên đang hoạt động của bộ phận thư ký, trừ vai Ban TGĐ, Quản trị hệ thống (rolesOf).
+const secretaryIds = prisma => usersWhere(prisma, r => r.secretary);
+// Thành viên Ban Tổng Giám đốc đang hoạt động (lib/permissions.js BOARD_WHERE).
+const boardIds = async prisma => (await prisma.user.findMany({ where: { ...BOARD_WHERE, isActive: true }, select: { id: true } })).map(u => u.id);
+// Chỉ giữ tài khoản đang hoạt động, không phải Quản trị hệ thống; bỏ trùng. Người được uỷ quyền, người lập báo cáo tuần trước
+// có thể đã nghỉ việc / đổi sang vai quản trị — không gửi thông báo nghiệp vụ cho họ.
+async function activeIds(prisma, ids) {
+  const list = [...new Set((ids || []).filter(Boolean))];
+  if (!list.length) return [];
+  return (await prisma.user.findMany({ where: { id: { in: list }, ...ACTIVE_USER }, select: { id: true } })).map(u => u.id);
+}
+// Lãnh đạo (kể cả người đang được uỷ quyền) của các bộ phận; leaderIdsOf: chỉ tài khoản đang hoạt động.
+const leadersOf = async (prisma, deptIds) => (await Promise.all(deptIds.map(id => approval.deptLeaderIds(prisma, id)))).flat();
+const leaderIdsOf = async (prisma, deptIds) => activeIds(prisma, await leadersOf(prisma, deptIds));
+
+// ---------- Đổi lịch một tuần: báo các bộ phận (QC-TH-01 Điều 3) ----------
+// Người nhận: lãnh đạo các bộ phận phải nộp tuần đó (danh sách đã chụp của tuần; chưa chụp thì theo thiết lập), người lập báo cáo
+// tuần trước và người đang lập báo cáo tuần đó của các bộ phận ấy (như nhắc 15:00). Chỉ tài khoản đang hoạt động, không Quản trị hệ thống.
+async function scheduleRecipients(prisma, week, meeting = null) {
+  const rd = await requiredDepartments(prisma, await weeklyConfig(prisma));
+  const snap = Array.isArray(meeting?.data?.required) ? meeting.data.required : null;
+  const ids = (snap ? rd.all.filter(d => snap.includes(d.id)) : rd.list).map(d => d.id);
+  if (!ids.length) return [];
+  const reps = await prisma.weeklyReport.findMany({ where: { departmentId: { in: ids }, week: { in: [WK.addDays(week, -7), week] } }, select: { preparerId: true } });
+  return activeIds(prisma, [...await leadersOf(prisma, ids), ...reps.map(r => r.preparerId)]);
+}
+// Lịch hiệu lực của tuần đổi thật (WK.scheduleChange) → một thông báo cho mỗi người nhận, trừ người vừa đổi. Trả số người được báo
+// (0: không đổi gì, tuần đã họp, hoặc không có ai để báo). Liên kết mở thẳng tab Nộp báo cáo của đúng tuần đó.
+async function notifyScheduleChange(prisma, { week, before, after, meeting = null, now = new Date(), actorId = null }) {
+  const msg = WK.scheduleChange(before, after, now);
+  if (!msg) return 0;
+  return notify(prisma, await scheduleRecipients(prisma, week, meeting), { type: 'WEEKLY_SCHEDULE', ...msg, link: `#/tuan?w=${week}` }, actorId);
+}
 
 // Action Log còn theo dõi tới tuần báo cáo f: việc của các buổi giao ban đã phát hành trong 12 tuần trước,
 // trạng thái = dòng mới nhất (bản đã nộp) có actionRef đó; việc đã "Hoàn thành" ở tuần trước thì đóng (trừ việc của buổi liền trước).
@@ -157,4 +190,5 @@ async function runSummaryNotice(prisma, now = new Date()) {
   return { skipped: true, sent: 0 };
 }
 
-module.exports = { meetingLock, CONFIG_KEY, ACTIVE_USER, weeklyConfig, rolesOf, requiredDepartments, userNames, rowOwnerIds, meetingOf, managerIds, summaryViewerIds, summaryOf, openActions, snapshotRequired, runReportReminder, runSummaryNotice };
+module.exports = { meetingLock, CONFIG_KEY, ACTIVE_USER, weeklyConfig, rolesOf, requiredDepartments, userNames, rowOwnerIds, meetingOf, managerIds, summaryViewerIds, summaryOf, openActions, snapshotRequired, runReportReminder, runSummaryNotice,
+  secretaryIds, boardIds, activeIds, leaderIdsOf, scheduleRecipients, notifyScheduleChange };
