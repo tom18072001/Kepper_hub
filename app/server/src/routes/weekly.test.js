@@ -11,7 +11,7 @@ const express = require('express');
 const WK = require('../services/weekly');
 const D = require('../services/weekly-data');
 const mountWeekly = require('./weekly');
-const { presentAudit } = require('./admin');
+const { presentAudit, AUDIT_ACTIONS, AUDIT_ENTITIES } = require('./admin');
 
 // ---------- Hàm thuần: lịch hiệu lực trước / sau → nội dung thông báo ----------
 test('Lỗi 11 — scheduleChange: chỉ báo khi lịch HIỆU LỰC đổi và buổi giao ban chưa diễn ra; nội dung ghi đúng tuần, hạn nộp, giờ họp', () => {
@@ -280,6 +280,9 @@ test('Lỗi 12 — "Mở khoá": chỉ Ban TGĐ, bắt buộc lý do, về bản
     const row = { id: 1, userId: 2, action: a.action, entity: a.entity, entityId: a.entityId, oldValue: JSON.stringify(a.oldValue), newValue: JSON.stringify(a.newValue) };
     const forIt = presentAudit(row, { itAdmin: true });
     assert.equal(forIt.newValue, null); assert.equal(forIt.oldValue, null); assert.equal(forIt.redacted, true);
+    // Màn Nhật ký có nhãn cho hành động và đối tượng mới (ô lọc liệt kê được, không hiện mã thô).
+    assert.equal(AUDIT_ACTIONS.WEEKLY_COMPLIANCE_UNLOCK, 'Mở khoá bảng điểm tuân thủ giao ban');
+    assert.equal(AUDIT_ENTITIES.WeeklyCompliance, 'Bảng điểm tuân thủ giao ban');
 
     const sent = db.T.notification.slice(mark);
     assert.deepEqual(ids(sent.map(x => x.userId)), [21], 'báo thư ký giao ban');
