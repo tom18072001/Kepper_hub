@@ -39,10 +39,10 @@ async function supervisorOf(client, deptId) {
   if (deptId == null) return null;
   return (await client.department.findUnique({ where: { id: deptId }, select: { supervisorId: true } }))?.supervisorId ?? null;
 }
-// Ban Tổng Giám đốc nhận đề nghị gia hạn: Phó TGĐ phụ trách bộ phận chủ trì; phòng chưa có Phó TGĐ phụ trách thì TGĐ.
-async function boardOf(client, item, org) {
-  const sup = await supervisorOf(client, item.leadDepartmentId);
-  return sup ? [sup] : org.topIds;
+// Người nhận đề nghị gia hạn: người quyết định — BTGĐ phụ trách của việc; việc chưa có ai phụ trách thì mọi thành viên Ban Tổng Giám đốc
+// (TA.extensionDeciderIds, CÙNG ngữ cảnh ctx đã tính quyền decideExtension) — và người giao để theo dõi. Không báo chính người gửi.
+function extensionRecipients(ctx, item, requesterId) {
+  return [...new Set([...TA.extensionDeciderIds(ctx), item.assignedById].filter(u => u != null && Number(u) !== Number(requesterId)))];
 }
 
 module.exports = function mountDispatch(app, { prisma, auth, audit }) {
@@ -214,7 +214,7 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
   // ---------- Đề nghị gia hạn ----------
   app.post('/api/items/:id/extensions', auth, async (req, res) => {
     const id = intParam(req.params.id);
-    const { project, caps, org } = await TA.loadTask(prisma, req.user, id);
+    const { project, caps, ctx } = await TA.loadTask(prisma, req.user, id);
     const row = await prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'item:' + id}))`;
       const item = await itemWithProject(tx, id);
@@ -228,8 +228,7 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
       const x = await tx.dueExtension.create({ data: { workItemId: id, requestedById: req.user.id, oldDue: item.dueDate, newDue, reason } });
       await activity(tx, id, req.user.id, 'EXTENSION_REQUESTED', { extensionId: x.id, newDue });
       // Ban Tổng Giám đốc duyệt mọi đề nghị gia hạn; người giao được báo để theo dõi.
-      const deciders = [...new Set([...(await boardOf(tx, item, org)), item.assignedById].filter(u => u && u !== req.user.id))];
-      await notify(tx, deciders, { type: 'EXTENSION_REQUESTED', title: `Đề nghị gia hạn ${label(project, item)}`, body: reason.slice(0, 200), link: W.link(project, item) }, req.user.id);
+      await notify(tx, extensionRecipients(ctx, item, req.user.id), { type: 'EXTENSION_REQUESTED', title: `Đề nghị gia hạn ${label(project, item)}`, body: reason.slice(0, 200), link: W.link(project, item) }, req.user.id);
       return x;
     });
     bus.item(project.id, id, req.user.id);
@@ -248,7 +247,8 @@ module.exports = function mountDispatch(app, { prisma, auth, audit }) {
       const current = await tx.dueExtension.findUnique({ where: { id: ext.id } });
       if (current.status !== 'PENDING') fail(409, 'Đề nghị đã được xử lý', 'CLOSED');
       if (current.requestedById === req.user.id) fail(403, 'Không tự duyệt đề nghị gia hạn của chính mình', 'SELF_APPROVAL');
-      // BTGĐ phụ trách của việc (TGĐ, Phó TGĐ phụ trách bộ phận chủ trì) duyệt mọi đề nghị gia hạn.
+      // BTGĐ phụ trách của việc (phụ trách Toàn công ty, Phó TGĐ phụ trách bộ phận chủ trì) duyệt mọi đề nghị gia hạn;
+      // việc chưa có BTGĐ phụ trách nào → mọi thành viên Ban Tổng Giám đốc (TA.extensionDeciderIds).
       TA.assertCap(caps, 'decideExtension');
       const x = await tx.dueExtension.update({ where: { id: ext.id }, data: { status: decision === 'APPROVE' ? 'APPROVED' : 'REJECTED', decidedById: req.user.id, decidedAt: new Date(), decisionNote: note || null } });
       if (decision === 'APPROVE') await tx.workItem.update({ where: { id: item.id }, data: { dueDate: current.newDue, originalDueDate: item.originalDueDate ?? current.oldDue } });

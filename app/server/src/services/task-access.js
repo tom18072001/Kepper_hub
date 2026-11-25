@@ -6,6 +6,7 @@
 //   B  BTGĐ phụ trách của việc: thành viên Ban Tổng Giám đốc (vai) có phạm vi phụ trách "Toàn công ty" (User.boardAll) — mọi việc;
 //      hoặc phụ trách bộ phận chủ trì của việc (Department.supervisorId) — chỉ việc do bộ phận đó chủ trì
 //      (lib/permissions.js; hệ quy chiếu một trục vai, chủ dự án duyệt 24/11/2026).
+//      Riêng duyệt gia hạn: việc chưa có B nào → mọi thành viên Ban Tổng Giám đốc (extensionDeciderIds).
 //   L  người chủ trì · S  người phối hợp
 //   D  lãnh đạo bộ phận chủ trì (Dl) hoặc lãnh đạo phòng của người chủ trì — xem toàn bộ, không sửa kế hoạch
 //   O  chủ dự án (người quản lý dự án, thành viên vai OWNER, người đứng tên dự án) và thành viên BTGĐ — xem đầy đủ, bình luận
@@ -47,7 +48,7 @@ const MESSAGES = {
   progress: 'Tiến độ, khó khăn, kiến nghị, dự báo hoàn thành do người chủ trì cập nhật',
   submit: 'Chỉ người chủ trì gửi duyệt / nộp sản phẩm',
   extension: 'Chỉ người chủ trì đề nghị gia hạn',
-  decideExtension: 'Chỉ BTGĐ phụ trách của việc (BTGĐ phụ trách toàn công ty, Phó TGĐ phụ trách bộ phận chủ trì) duyệt đề nghị gia hạn',
+  decideExtension: 'Chỉ BTGĐ phụ trách của việc (phụ trách Toàn công ty, Phó TGĐ phụ trách bộ phận chủ trì) duyệt đề nghị gia hạn; việc chưa có BTGĐ phụ trách thì thành viên Ban Tổng Giám đốc nào cũng duyệt được',
   children: 'Chỉ người chủ trì, người giao hoặc Ban Tổng Giám đốc tạo việc nhánh',
   comment: 'Chỉ người liên quan đến việc (người giao, Ban Tổng Giám đốc, chủ trì, phối hợp, lãnh đạo bộ phận, chủ dự án / PMO) bình luận',
   docsGive: 'Văn bản "Căn cứ giao việc" và tài liệu bên giao do người giao hoặc Ban Tổng Giám đốc gửi',
@@ -65,11 +66,25 @@ const MESSAGES = {
 const has = (list, id) => id != null && (list || []).some(x => Number(x) === Number(id));
 const uniq = list => [...new Set(list.filter(x => x != null).map(Number))];
 
+// ---------- Người quyết định đề nghị gia hạn ----------
+// BTGĐ phụ trách của việc (vai B): phụ trách Toàn công ty + Phó TGĐ phụ trách bộ phận chủ trì. orgContext chỉ giữ người đang hoạt động
+// còn vai BTGĐ: Phó TGĐ đã khoá / đổi vai không được tính, Quản trị hệ thống không bao giờ có.
+function boardInChargeIds(ctx = {}) { return uniq([...(ctx.topIds || []), ctx.supervisorId]); }
+// Người quyết định đề nghị gia hạn = BTGĐ phụ trách của việc. Việc chưa có BTGĐ phụ trách nào (chưa ai phụ trách Toàn công ty, bộ phận chủ trì
+// chưa có Phó TGĐ phụ trách) → mọi thành viên Ban Tổng Giám đốc đang hoạt động (ctx.boardIds), dự phòng như cấp duyệt "BTGĐ phụ trách"
+// (services/approval.js) để đề nghị không treo. MỘT danh sách cho quyền decideExtension, người nhận thông báo (routes/dispatch.js) và nút
+// ở hàng chờ (routes/approvals.js). Dự phòng chỉ áp cho gia hạn: kế hoạch, giao người, xoá… vẫn theo vai B.
+function extensionDeciderIds(ctx = {}) {
+  const inCharge = boardInChargeIds(ctx);
+  return inCharge.length ? inCharge : uniq(ctx.boardIds || []);
+}
+
 // ---------- Hàm quyền thuần ----------
 // user: { id, role, isRootAdmin }
 // item: { id, assignedById, reporterId, assigneeIds[], supporterIds[], category, archivedAt, dispatchStatus, parentId }
 // ctx:  { project: { kind, visibility, leadId }, rights: { canView, canEdit, canManage, delegated }, memberRole,
-//         topIds[], supervisorId, leadDeptId (phòng chủ trì của cây việc, null = không giao cho bộ phận), leadLeaderIds[],
+//         topIds[], supervisorId, boardIds[] (mọi thành viên BTGĐ đang hoạt động — dự phòng duyệt gia hạn),
+//         leadDeptId (phòng chủ trì của cây việc, null = không giao cho bộ phận), leadLeaderIds[],
 //         staffLeaderIds[] (lãnh đạo phòng của người chủ trì), supportLeaderIds[] (lãnh đạo phòng phối hợp), approver }
 function rolesOf(user, item, ctx = {}) {
   const uid = user?.id;
@@ -127,7 +142,7 @@ function taskCapabilities(user, item, ctx = {}) {
     progress: open && L,
     submit: open && L, // gửi duyệt là bước của người chủ trì (người giao / BTGĐ duyệt, tạm dừng, huỷ, mở lại)
     extension: open && L,
-    decideExtension: write && B,
+    decideExtension: write && has(extensionDeciderIds(ctx), user.id), // B; việc chưa có BTGĐ phụ trách → mọi thành viên BTGĐ
     children: (live && boss) || (open && L),
     comment: write && (related || SL),
     docsGive: live && boss,
@@ -208,8 +223,8 @@ async function orgContext(db, now = new Date()) {
     }
     return leaderCache.get(deptId);
   };
-  // BTGĐ phụ trách Toàn công ty: chỉ tài khoản vai BTGĐ đang hoạt động.
-  return { topIds: active.filter(u => u.boardAll && boardIds.has(u.id)).map(u => u.id), supervisor, leaders, deptOf };
+  // BTGĐ phụ trách Toàn công ty: chỉ tài khoản vai BTGĐ đang hoạt động. boardIds: mọi thành viên BTGĐ đang hoạt động (dự phòng duyệt gia hạn).
+  return { topIds: active.filter(u => u.boardAll && boardIds.has(u.id)).map(u => u.id), boardIds: [...boardIds], supervisor, leaders, deptOf };
 }
 
 // Ngữ cảnh của MỘT việc (đồng bộ, dùng lại orgContext). chain = tổ tiên [cha, ông, …] (để lấy phòng chủ trì kế thừa).
@@ -218,7 +233,7 @@ function itemContext(org, { project, rights, member, item, chain = [], approver 
   const dept = leadDeptId ?? project.departmentId ?? null; // dự án thường: phòng của dự án là phòng chủ trì
   return {
     project: { kind: project.kind, visibility: project.visibility, leadId: project.leadId ?? null }, rights: rights || {}, memberRole: member?.role ?? null,
-    topIds: org.topIds, supervisorId: dept != null ? org.supervisor.get(dept) ?? null : null,
+    topIds: org.topIds, supervisorId: dept != null ? org.supervisor.get(dept) ?? null : null, boardIds: org.boardIds || [],
     leadDeptId, leadLeaderIds: org.leaders(dept),
     staffLeaderIds: uniq((item.assigneeIds || []).flatMap(id => org.leaders(org.deptOf.get(id)))),
     supportLeaderIds: uniq((item.supportDepartmentIds || []).flatMap(d => org.leaders(d))),
@@ -246,19 +261,25 @@ async function isApprover(db, user, project, itemId) {
   return require('./approval').canAct(db, user, project, pending, pending.workItem);
 }
 
-// Nạp việc + quyền: loadItem (quyền xem theo dự án / sổ) rồi tính capabilities. Trả { project, member, rights, task, caps, org }.
+// Tổ tiên [cha, ông, …] để lấy bộ phận chủ trì kế thừa — chỉ đọc khi việc không ghi bộ phận chủ trì.
+async function leadChain(db, task) {
+  return task.leadDepartmentId == null && task.parentId ? require('./tree').ancestors(db, task.parentId, { leadDepartmentId: true }) : [];
+}
+
+// Nạp việc + quyền: loadItem (quyền xem theo dự án / sổ) rồi tính capabilities. Trả { project, member, rights, task, caps, org, ctx }
+// (ctx = ngữ cảnh của việc đã dùng để tính quyền — route dùng lại, vd. người nhận đề nghị gia hạn).
 async function loadTask(db, user, itemId, { need = 'view', org = null } = {}) {
   const { loadItem } = require('./access');
-  const tree = require('./tree');
   const base = await loadItem(db, user, itemId, 'view');
   const row = await db.workItem.findUnique({ where: { id: itemId }, select: TASK_SELECT });
   const task = taskOf(row);
-  const chain = task.leadDepartmentId == null && task.parentId ? await tree.ancestors(db, task.parentId, { leadDepartmentId: true }) : [];
+  const chain = await leadChain(db, task);
   const o = org || await orgContext(db);
   const approver = !base.rights.delegated && await isApprover(db, user, base.project, itemId);
-  const caps = taskCapabilities(user, task, itemContext(o, { project: base.project, rights: base.rights, member: base.member, item: task, chain, approver }));
+  const ctx = itemContext(o, { project: base.project, rights: base.rights, member: base.member, item: task, chain, approver });
+  const caps = taskCapabilities(user, task, ctx);
   if (need !== 'view') assertCap(caps, need);
-  return { ...base, task, caps, org: o };
+  return { ...base, task, caps, org: o, ctx };
 }
 
 // Quyền nhẹ cho từng thẻ trong danh sách (không xét người duyệt): { view, state }.
@@ -270,6 +291,6 @@ function listCaps(user, org, { project, rights, member }, row) {
 
 module.exports = {
   PLAN_FIELDS, PROGRESS_FIELDS, BACK_FIELDS, ASSIGN_FIELDS, REMOVED_FIELDS, WORK_FROM, WORK_TO, MESSAGES, TASK_SELECT,
-  rolesOf, taskCapabilities, canMove, capForField, assertCap, assertMove,
-  orgContext, itemContext, taskOf, isApprover, loadTask, listCaps,
+  rolesOf, taskCapabilities, canMove, capForField, assertCap, assertMove, extensionDeciderIds,
+  orgContext, itemContext, taskOf, isApprover, leadChain, loadTask, listCaps,
 };
