@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { store, reloadProjects, labelsFor } from '../store.js';
 import { $, $$, esc, VISIBILITY, APPROVER, CATEGORY, PRIORITY, toast, openModal, closeModal, formData, errorMessage, fmtDateTime, labelChip, multiSelect, readMulti, bindMulti, isItUser, isLeadershipUser, isBoardUser } from '../util.js';
 import { scheduleFields, bindSchedule, readSchedule, openRepeatDialog } from './recurring-form.js';
+import { levelLabel } from './project.js';
 import { renderProjectNav } from '../main.js';
 
 export function openCreateProject(onCreated) {
@@ -21,8 +22,8 @@ export function openCreateProject(onCreated) {
       <option value="WEEK">Lịch tuần — cột Thứ 2 … Cuối tuần, không duyệt (vd. ai ở / không ở văn phòng)</option></select></label>
     <label class="field mtl-t0">Tháng T0 (bắt đầu Master Timeline)<input type="month" name="t0" data-testid="project-t0"></label>
     <fieldset class="approval-setup"><legend>Quy trình duyệt</legend>
-      <label class="field">Số cấp duyệt<select name="tpl" data-testid="project-approval-template">
-        <option value="1" selected>1 cấp — Lãnh đạo bộ phận duyệt</option><option value="2">2 cấp — Lãnh đạo bộ phận → BTGĐ phụ trách</option><option value="0">Không cần duyệt</option></select></label>
+      <label class="field">Cấp duyệt thêm sau người giao<select name="tpl" data-testid="project-approval-template">
+        <option value="1" selected>Người giao → Lãnh đạo bộ phận</option><option value="2">Người giao → Lãnh đạo bộ phận → BTGĐ phụ trách</option><option value="0">Chỉ người giao duyệt</option></select></label>
       <div class="grid2">
         <label class="field" data-lvl="1">Người duyệt cấp 1<select name="ap1" data-testid="project-approver-1"><option value="DEPARTMENT_MANAGER">Lãnh đạo bộ phận chủ trì (tự động)</option><option value="PROJECT_LEAD">Người đứng tên dự án</option>${approverUserOptions()}</select></label>
         <label class="field" data-lvl="2">Người duyệt cấp 2<select name="ap2" data-testid="project-approver-2"><option value="DIRECTOR">BTGĐ phụ trách (toàn công ty / Phó TGĐ phụ trách bộ phận chủ trì)</option>${approverUserOptions()}</select></label>
@@ -72,16 +73,21 @@ function approverUserOptions(selected) {
 }
 
 export async function renderProjectSettings(root, id, setCrumbs) {
-  const p = await api(`/api/projects/${id}`);
+  const p = await api(`/api/projects/${id}?usage=1`); // usage: số việc từng cột — khoá ô nhóm của cột còn việc
   setCrumbs(`<span class="muted">${esc(p.name)} /</span> Cài đặt`);
   if (!p.rights.canManage) { root.innerHTML = '<div class="card empty">Bạn không có quyền quản lý dự án này.</div>'; return; }
   const users = store.users;
+  // Người đứng tên, thành viên, người nhận việc lặp lại: chỉ tài khoản nghiệp vụ — Quản trị hệ thống không xem nội dung nghiệp vụ
+  // (máy chủ cũng từ chối). Danh bạ chỉ có tài khoản đang hoạt động.
+  const people = users.filter(u => !isItUser(u));
+  const leadNote = p.leadId != null && !people.some(u => u.id === p.leadId)
+    ? `<span class="field-error" style="display:block" data-testid="settings-lead-invalid">Người đứng tên hiện tại${users.some(u => u.id === p.leadId) ? ' là tài khoản Quản trị hệ thống' : ' đã khoá tài khoản'} — chọn người khác rồi bấm Lưu (để "—" thì cấp duyệt "Người đứng tên dự án" do Chủ dự án duyệt thay).</span>` : '';
   root.innerHTML = `<div class="page-head"><h1>Cài đặt dự án ${esc(p.key)}</h1><a class="btn btn-ghost" href="#/projects/${id}"><svg class="i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Về bảng công việc</a></div>
   <div class="dash-grid" style="grid-template-columns:1fr">
     <form class="card" id="generalForm"><h3 style="margin-bottom:10px">Thông tin chung</h3>
       <div class="grid2"><label class="field">Tên<input name="name" required value="${esc(p.name)}"></label>
       <label class="field">Ai được xem<select name="visibility">${Object.entries(VISIBILITY).map(([k, v]) => `<option value="${k}"${p.visibility === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
-      <label class="field">Người đứng tên dự án<select name="leadId" data-testid="settings-lead"><option value="">—</option>${users.map(u => `<option value="${u.id}"${p.leadId === u.id ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select></label>
+      <label class="field">Người đứng tên dự án<select name="leadId" data-testid="settings-lead"><option value="">—</option>${people.map(u => `<option value="${u.id}"${p.leadId === u.id ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select>${leadNote}</label>
       <label class="field">Mô tả<input name="description" value="${esc(p.description || '')}"></label></div>
       <div class="row"><button class="btn btn-primary" data-testid="settings-save">Lưu</button><label class="check"><input type="checkbox" name="archived" ${p.archivedAt ? 'checked' : ''}> Lưu trữ dự án (chỉ đọc)</label></div></form>
 
@@ -93,9 +99,9 @@ export async function renderProjectSettings(root, id, setCrumbs) {
       <div id="statesEditor" data-testid="states-editor">${p.states.map(stateRow).join('')}</div>
       <div class="row"><button class="btn btn-ghost btn-sm" id="addState"><svg class="i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Thêm cột</button><button class="btn btn-primary" id="saveStates" data-testid="save-states">Lưu cột</button></div></div>
 
-    <div class="card"><h3>Quy trình duyệt nhiều cấp</h3><p class="muted sm">Khi việc được chuyển vào cột nhóm <b>Chờ duyệt</b>, hệ thống gửi lần lượt qua các cấp dưới đây. Duyệt hết các cấp → việc tự chuyển sang Hoàn thành; trả lại ở bất kỳ cấp nào → việc quay về cột trước đó. Để trống = không cần duyệt.</p>
+    <div class="card"><h3>Quy trình duyệt nhiều cấp</h3><p class="muted sm" data-testid="steps-help">Khi việc được chuyển vào cột nhóm <b>Chờ duyệt</b>, hệ thống gửi lần lượt qua các cấp dưới đây. Duyệt hết các cấp → việc tự chuyển sang Hoàn thành; trả lại ở bất kỳ cấp nào → việc quay về cột trước đó. Để trống = chỉ người giao duyệt (việc mốc / đường găng: BTGĐ phụ trách).</p>
       <div id="stepsEditor" data-testid="steps-editor">${p.approvalSteps.map(s => stepRow(s, users)).join('')}</div>
-      ${p.approvalSteps.length ? `<label class="field" style="max-width:460px;margin-top:10px">Việc mới mặc định cần<select id="defaultLevels" data-testid="default-levels"><option value="">Đủ ${p.approvalSteps.length} cấp</option>${Array.from({ length: p.approvalSteps.length }, (_, n) => `<option value="${n}"${p.defaultApprovalLevels === n ? ' selected' : ''}>${n === 0 ? 'Không cần duyệt' : `${n} cấp đầu (${p.approvalSteps.slice(0, n).map(x => esc(x.name)).join(' → ')})`}</option>`).join('')}</select></label>` : ''}
+      ${p.approvalSteps.length ? `<label class="field" style="max-width:460px;margin-top:10px">Việc mới mặc định cần<select id="defaultLevels" data-testid="default-levels"><option value="">${esc(levelLabel(p.approvalSteps.length, p.approvalSteps))}</option>${Array.from({ length: p.approvalSteps.length }, (_, n) => `<option value="${n}"${p.defaultApprovalLevels === n ? ' selected' : ''}>${esc(levelLabel(n, p.approvalSteps))}</option>`).join('')}</select></label>` : ''}
       <div class="row"><button class="btn btn-ghost btn-sm" id="addStep" data-testid="add-step"><svg class="i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Thêm cấp duyệt</button><button class="btn btn-primary" id="saveSteps" data-testid="save-steps">Lưu quy trình duyệt</button></div>
       ${p.approvalSteps.length ? `<h4 style="margin:22px 0 6px">Quy tắc tự động</h4>
       <p class="muted sm">Việc khớp quy tắc sẽ tự lấy số cấp duyệt tương ứng (nhiều quy tắc khớp → lấy số cấp cao nhất). Lãnh đạo bộ phận vẫn chọn tay được cho từng việc; chọn tay luôn được ưu tiên.</p>
@@ -112,14 +118,14 @@ export async function renderProjectSettings(root, id, setCrumbs) {
       <div id="recurringList" data-testid="recurring-list"><div class="muted sm">Đang tải…</div></div>
       <form id="recurringForm" class="grid2" style="margin-top:10px">
         <label class="field">Tiêu đề việc<input name="title" required maxlength="300" data-testid="rec-title"></label>
-        <div class="field">Người nhận${multiSelect('recAssignees', users.map(u => ({ id: u.id, label: u.fullName })), [], 'Chưa giao')}</div>
+        <div class="field">Người nhận${multiSelect('recAssignees', people.map(u => ({ id: u.id, label: u.fullName })), [], 'Chưa giao')}</div>
         <div style="grid-column:1/-1">${scheduleFields({}, { prefix: 'rec' })}</div>
         <div><button class="btn btn-primary" data-testid="rec-save">Thêm việc lặp lại</button></div>
       </form></div>
 
     <div class="card"><h3>Thành viên</h3><p class="muted sm">Chủ dự án quản lý cài đặt; Thành viên tạo và cập nhật việc; Người xem chỉ đọc. Với phạm vi "Cả bộ phận", nhân viên trong bộ phận cũng làm việc được mà không cần thêm.</p>
       <div id="membersEditor" data-testid="members-editor">${p.members.map(m => memberRow(m.userId, m.role, users)).join('')}</div>
-      <div class="row"><select id="newMember" style="width:auto" data-testid="new-member">${users.filter(u => !p.members.some(m => m.userId === u.id)).map(u => `<option value="${u.id}">${esc(u.fullName)} (${esc(u.username)})</option>`).join('')}</select>
+      <div class="row"><select id="newMember" style="width:auto" data-testid="new-member">${people.filter(u => !p.members.some(m => m.userId === u.id)).map(u => `<option value="${u.id}">${esc(u.fullName)} (${esc(u.username)})</option>`).join('')}</select>
         <button class="btn btn-ghost btn-sm" id="addMember" data-testid="add-member"><svg class="i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Thêm</button><button class="btn btn-primary" id="saveMembers" data-testid="save-members">Lưu thành viên</button></div></div>
   </div>`;
 
@@ -141,8 +147,11 @@ export async function renderProjectSettings(root, id, setCrumbs) {
     if (preset) {
       const editor = $('#statesEditor', root);
       const rows = () => $$('[data-row]', editor);
-      const set = (r, s) => { r.querySelector('[name=name]').value = s.name; r.querySelector('[name=category]').value = s.category; r.querySelector('[name=color]').value = s.color; r.querySelector('[name=wip]').value = s.wipLimit ?? ''; };
-      if (preset.dataset.preset === 'free') { for (const r of rows()) { r.querySelector('[name=category]').value = 'OTHER'; r.querySelector('[name=wip]').value = ''; } }
+      // Cột còn việc (ô nhóm khoá) mà mẫu muốn đổi nhóm: giữ nguyên cả dòng, báo lại tên cột.
+      const kept = [];
+      const keep = (r, category) => { const c = r.querySelector('[name=category]'); if (!c.disabled || c.value === category) return false; kept.push(r.querySelector('[name=name]').value); return true; };
+      const set = (r, s) => { if (keep(r, s.category)) return; r.querySelector('[name=name]').value = s.name; r.querySelector('[name=category]').value = s.category; r.querySelector('[name=color]').value = s.color; r.querySelector('[name=wip]').value = s.wipLimit ?? ''; };
+      if (preset.dataset.preset === 'free') { for (const r of rows()) { if (keep(r, 'OTHER')) continue; r.querySelector('[name=category]').value = 'OTHER'; r.querySelector('[name=wip]').value = ''; } }
       else {
         const list = preset.dataset.preset === 'week'
           ? ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Cuối tuần'].map((name, i) => ({ name, category: 'OTHER', color: ['#2563eb', '#0891b2', '#16a34a', '#d97706', '#9333ea', '#64748b'][i], wipLimit: null }))
@@ -150,7 +159,7 @@ export async function renderProjectSettings(root, id, setCrumbs) {
         list.forEach((s, i) => { const r = rows()[i]; if (r) set(r, s); else editor.insertAdjacentHTML('beforeend', stateRow(s)); });
         if (rows().length > list.length) toast(`Còn ${rows().length - list.length} cột thừa ở cuối — bấm "Xoá" nếu không dùng (cột còn việc thì chuyển việc trước)`, 'ok');
       }
-      toast('Đã điền mẫu — bấm "Lưu cột" để áp dụng', 'ok');
+      toast(kept.length ? `Đã điền mẫu, trừ cột còn việc (giữ nguyên nhóm): ${kept.join(', ')} — bấm "Lưu cột" để áp dụng` : 'Đã điền mẫu — bấm "Lưu cột" để áp dụng', 'ok');
     }
     if (e.target.closest('#addStep')) $('#stepsEditor', root).insertAdjacentHTML('beforeend', stepRow({ approverType: 'DEPARTMENT_MANAGER', name: '' }, users));
     if (e.target.closest('#addMember')) { const sel = $('#newMember', root); if (sel.value) { $('#membersEditor', root).insertAdjacentHTML('beforeend', memberRow(Number(sel.value), 'MEMBER', users)); sel.selectedOptions[0].remove(); } }
@@ -196,7 +205,8 @@ export async function renderProjectSettings(root, id, setCrumbs) {
       catch (error) { toast(errorMessage(error), 'err'); }
     }
     if (e.target.closest('#saveMembers')) {
-      const members = $$('#membersEditor [data-row]', root).map(r => ({ userId: Number(r.dataset.user), role: r.querySelector('select').value }));
+      // Tài khoản Quản trị hệ thống lỡ có tên từ trước (dòng ghi chú "sẽ bị bỏ"): không gửi lên — máy chủ không nhận Quản trị làm thành viên.
+      const members = $$('#membersEditor [data-row]:not([data-it])', root).map(r => ({ userId: Number(r.dataset.user), role: r.querySelector('select').value }));
       if (await save(`/api/projects/${id}/members`, { members }, 'Đã lưu thành viên')) renderProjectSettings(root, id, setCrumbs);
     }
   };
@@ -234,19 +244,23 @@ export async function renderProjectSettings(root, id, setCrumbs) {
 async function save(path, body, ok) {
   try { await api(path, { method: 'PUT', body }); toast(ok, 'ok'); return true; } catch (error) { toast(errorMessage(error), 'err'); return false; }
 }
+// Cột còn việc (s.itemCount, kể cả việc trong Thùng rác): khoá ô nhóm — đổi nhóm là đổi nghĩa mọi việc trong cột (máy chủ cũng chặn);
+// đổi tên, màu, WIP, thứ tự vẫn được.
 function stateRow(s) {
+  const lock = s.id && s.itemCount > 0;
+  const why = lock ? `Cột còn ${s.itemCount} việc${s.trashCount ? ` (${s.trashCount} việc đang ở Thùng rác)` : ''} — chuyển việc sang cột khác rồi mới đổi nhóm` : '';
   return `<div class="state-edit" data-row ${s.id ? `data-id="${s.id}"` : ''}><button type="button" class="icon-btn" data-up title="Lên trên" aria-label="Lên trên"><svg class="i" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m18 15-6-6-6 6"/></svg></button>
     <input name="name" value="${esc(s.name)}" placeholder="Tên cột" maxlength="40" aria-label="Tên cột">
-    <select name="category" aria-label="Nhóm trạng thái">${Object.entries(CATEGORY).map(([k, v]) => `<option value="${k}"${s.category === k ? ' selected' : ''}>${v}</option>`).join('')}</select>
+    <select name="category" aria-label="Nhóm trạng thái"${lock ? ` disabled title="${esc(why)}" aria-describedby="stateLock${s.id}" data-testid="state-category-locked"` : ''}>${Object.entries(CATEGORY).map(([k, v]) => `<option value="${k}"${s.category === k ? ' selected' : ''}>${v}</option>`).join('')}</select>
     <input type="color" name="color" value="${esc(s.color)}" aria-label="Màu"><input name="wip" type="number" min="1" placeholder="WIP" value="${s.wipLimit ?? ''}" aria-label="Giới hạn WIP" data-testid="wip-${esc(s.name)}">
-    <button type="button" class="btn btn-ghost btn-sm" data-remove>Xoá</button></div>`;
+    <button type="button" class="btn btn-ghost btn-sm" data-remove>Xoá</button>${lock ? `<span class="muted xs" id="stateLock${s.id}" style="grid-column:2/-1;margin-top:-4px">Nhóm đã khoá: ${esc(why)}.</span>` : ''}</div>`;
 }
 function ruleRow(r, p) {
   const n = p.approvalSteps.length;
   return `<div class="row rule-row" data-row style="margin-bottom:6px"><span class="muted sm">Nếu nhãn</span>
     <select name="label" style="width:auto" aria-label="Nhãn"><option value="">— bất kỳ —</option>${labelsFor(p.id).map(l => `<option value="${l.id}"${r.labelId === l.id ? ' selected' : ''}>${esc(l.name)}</option>`).join('')}</select>
     <span class="muted sm">và ưu tiên</span><select name="priority" style="width:auto" aria-label="Ưu tiên"><option value="">— bất kỳ —</option>${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}"${r.priority === k ? ' selected' : ''}>${v.label}</option>`).join('')}</select>
-    <span class="muted sm">→ cần</span><select name="levels" style="width:auto" aria-label="Số cấp duyệt" data-testid="rule-levels">${Array.from({ length: n + 1 }, (_, k) => `<option value="${k}"${r.levels === k ? ' selected' : ''}>${k === 0 ? 'không cần duyệt' : k === n ? `đủ ${n} cấp` : `${k} cấp`}</option>`).join('')}</select>
+    <span class="muted sm">→ cần</span><select name="levels" style="width:auto" aria-label="Cấp duyệt thêm sau người giao" data-testid="rule-levels">${Array.from({ length: n + 1 }, (_, k) => `<option value="${k}"${r.levels === k ? ' selected' : ''}>${k === 0 ? 'chỉ người giao duyệt' : k === n ? `người giao + đủ ${n} cấp` : `người giao + ${k} cấp`}</option>`).join('')}</select>
     <button type="button" class="btn btn-ghost btn-sm" data-remove>Xoá</button></div>`;
 }
 function stepRow(s, users) {
@@ -257,9 +271,11 @@ function stepRow(s, users) {
     ${s.approvers ? `<span class="muted xs" title="Người sẽ duyệt ở cấp này">${s.approvers.length ? 'Người duyệt: ' + esc(s.approvers.map(a => a.fullName).join(', ')) : '<span class="due overdue">Chưa có người duyệt</span>'}</span>` : ''}
     <button type="button" class="btn btn-ghost btn-sm" data-remove>Xoá</button></div>`;
 }
+// Tài khoản Quản trị hệ thống có tên từ trước (dữ liệu cũ): hiện kèm ghi chú, không gửi lên khi Lưu thành viên (máy chủ từ chối).
 function memberRow(userId, role, users) {
   const u = users.find(x => x.id === userId);
-  return `<div class="row" data-row data-user="${userId}" style="margin-bottom:6px"><span class="grow">${esc(u?.fullName || '#' + userId)} <span class="muted xs">${esc(u?.username || '')}</span></span>
+  const it = isItUser(u);
+  return `<div class="row" data-row data-user="${userId}"${it ? ' data-it="1"' : ''} style="margin-bottom:6px"><span class="grow">${esc(u?.fullName || '#' + userId)} <span class="muted xs">${esc(u?.username || '')}</span>${it ? ' <span class="field-error" data-testid="member-it-note">Tài khoản Quản trị hệ thống — không làm thành viên dự án được, sẽ bị bỏ khi Lưu thành viên</span>' : ''}</span>
     <select style="width:auto" aria-label="Vai trò">${[['OWNER', 'Chủ dự án'], ['MEMBER', 'Thành viên'], ['VIEWER', 'Người xem']].map(([k, v]) => `<option value="${k}"${role === k ? ' selected' : ''}>${v}</option>`).join('')}</select>
     <button type="button" class="btn btn-ghost btn-sm" data-remove>Bỏ</button></div>`;
 }

@@ -165,8 +165,9 @@ function ratingResult() {
 function approvalSection(open) {
   const latest = data.approvals[0];
   const pendingNow = latest?.status === 'PENDING' ? latest : null;
-  if (!data.approvalSteps.length) return sec('approval', { title: 'Duyệt', summary: 'không cần duyệt', open, testid: 'approval-section', id: 'approval-section', body: `${levelControl(pendingNow)}
-    <p class="muted sm" data-testid="no-approval-needed">Việc này không cần duyệt — chuyển thẳng sang Hoàn thành khi xong.</p>` });
+  // Bảng không có duyệt (không có cột Chờ duyệt / Hoàn thành, vd. Lịch tuần): máy chủ trả chuỗi rỗng — trang dự án cũng không hiện nhãn "Duyệt N cấp".
+  if (!data.approvalSteps.length) return sec('approval', { title: 'Duyệt', summary: 'bảng không có duyệt', open, testid: 'approval-section', id: 'approval-section', body: `${levelControl(pendingNow)}
+    <p class="muted sm" data-testid="no-approval-needed">Bảng của dự án không có cột Chờ duyệt / Hoàn thành nên việc không qua duyệt.</p>` });
   const pending = latest?.status === 'PENDING' ? latest : null;
   const stepClass = s => {
     if (!latest || latest.status === 'CANCELLED' || latest.status === 'REOPENED') return '';
@@ -208,6 +209,7 @@ const ACT_TEXT = {
   EXTENSION_REQUESTED: () => 'đề nghị gia hạn', EXTENSION_APPROVED: () => 'đồng ý gia hạn', EXTENSION_REJECTED: () => 'không đồng ý gia hạn',
   CHILDREN_BULK: d => `chia ${d.count} việc nhánh`, SUPPORT_STAFF: () => 'cử cán bộ phối hợp', HANDOVER: d => 'bàn giao: cán bộ nghỉ việc được gỡ khỏi việc' + (d?.reset ? ', trả về phòng để phân công lại' : ''),
   DOCUMENT_ADDED: d => 'thêm văn bản ' + esc(d.number || ''), DOCUMENT_REMOVED: d => 'gỡ văn bản ' + esc(d.number || ''), APPROVAL_REJECTED: d => 'trả lại: ' + esc(d.comment || ''), APPROVAL_CANCELLED: () => 'huỷ yêu cầu duyệt', ARCHIVED: () => 'đã xoá việc (vào thùng rác)', RESTORED: () => 'đã khôi phục việc từ thùng rác',
+  APPROVAL_REOPENED: d => `mở lại yêu cầu duyệt khi khôi phục ${d?.reason === 'PROJECT_RESTORED' ? 'dự án' : 'việc'} từ thùng rác`,
 };
 
 // Khối "Giao việc" (tab Tổng quan) theo mẫu Sổ theo dõi, kiểm soát giao việc: kế hoạch, sản phẩm đầu ra yêu cầu, ghi chú.

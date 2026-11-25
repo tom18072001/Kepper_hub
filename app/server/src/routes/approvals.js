@@ -160,9 +160,10 @@ module.exports = function mountApprovals(app, { prisma, auth, audit, config = {}
   // tiến độ về mức cũ nếu gửi kèm (progress), thông báo "Cần duyệt" người duyệt chưa đọc của phiếu này được gỡ.
   app.post('/api/approvals/:id/withdraw', auth, async (req, res) => {
     const id = intParam(req.params.id);
-    const head = await prisma.approvalRequest.findUnique({ where: { id }, select: { workItemId: true, requestedById: true } });
+    const head = await prisma.approvalRequest.findUnique({ where: { id }, select: { workItemId: true, requestedById: true, workItem: { select: { archivedAt: true, project: { select: { deletedAt: true } } } } } });
     if (!head) fail(404, 'Không tìm thấy yêu cầu duyệt', 'NOT_FOUND');
     if (head.requestedById !== req.user.id) fail(403, 'Chỉ người gửi duyệt được rút lại yêu cầu này', 'FORBIDDEN');
+    approval.assertNotInTrash(head.workItem); // dự án / việc ở Thùng rác: 409, khôi phục trước
     const { project, rights, caps } = await TA.loadTask(prisma, req.user, head.workItemId);
     TA.assertCap(caps, 'submit');
     const want = req.body?.progress;

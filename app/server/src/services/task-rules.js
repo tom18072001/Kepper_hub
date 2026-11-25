@@ -25,6 +25,18 @@ function chainOf(projectSteps, withAssigner = true, { board = false } = {}) {
   return [board ? BOARD_STEP : ASSIGNER_STEP, ...steps.map((s, i) => ({ ...s, level: i + 2 }))];
 }
 const stepAt = (chain, level) => chain.find(s => s.level === level) || null;
+// Bảng có duyệt không — MỘT định nghĩa cho nhãn "Duyệt N cấp" ở trang dự án và mục "Quy trình duyệt" của panel việc: có cấp duyệt của
+// dự án, hoặc có cột nhóm Chờ duyệt / Hoàn thành. Bảng không có các cột đó (vd. Lịch tuần, toàn Cột tự do) thì không bao giờ có duyệt.
+const hasApprovalFlow = (states = [], stepsCount = 0) => stepsCount > 0 || states.some(s => s.category === 'REVIEW' || s.category === 'COMPLETED');
+// Số cấp của dự án áp cho việc không chọn tay, không khớp quy tắc: mức mặc định của dự án; để trống = đủ các cấp.
+const defaultLevels = (project, total) => Math.max(0, Math.min(total, Number(project?.defaultApprovalLevels ?? total)));
+// Quy trình duyệt mặc định của một việc mới trong dự án: CÙNG chainOf với panel việc — bước người giao (luôn có) + các cấp dự án theo
+// mức mặc định. Đếm số cấp = độ dài chuỗi (trang dự án "Duyệt N cấp" và panel việc "Quy trình duyệt N cấp" không lệch nhau).
+function defaultFlow(project, projectSteps = [], states = []) {
+  if (!hasApprovalFlow(states, projectSteps.length)) return [];
+  const steps = [...projectSteps].sort((a, b) => a.level - b.level);
+  return chainOf(steps.slice(0, defaultLevels(project, steps.length)), true);
+}
 
 // Tiến độ việc con trực tiếp: x/y không tính việc con đã huỷ. children: [{ state: { category } } | { category }].
 function childProgress(children = []) {
@@ -95,4 +107,4 @@ function checkDecision({ step, decision, rating, comment, userId, assigneeIds = 
   } else if (rating && !RATINGS[rating]) fail(422, 'Mức hoàn thành không hợp lệ', 'INVALID_RATING');
 }
 
-module.exports = { RATINGS, ASSIGNER_STEP, BOARD_STEP, isGradeStep, isBoardItem, chainOf, stepAt, childProgress, assertChildrenDone, completionTarget, assignerApprovers, boardApprovers, checkDecision };
+module.exports = { RATINGS, ASSIGNER_STEP, BOARD_STEP, isGradeStep, isBoardItem, chainOf, stepAt, hasApprovalFlow, defaultLevels, defaultFlow, childProgress, assertChildrenDone, completionTarget, assignerApprovers, boardApprovers, checkDecision };

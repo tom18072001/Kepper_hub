@@ -2,7 +2,8 @@
 const { fail, intParam, optionalInt, optionalDate, text, oneOf } = require('../lib/http');
 const { loadProject, projectRights, visibleProjectsWhere, canCreateProjectIn } = require('../services/access');
 const { APPROVER_TYPES, approverIds } = require('../services/approval');
-const { permissionScope, isBoard } = require('../lib/permissions');
+const rules = require('../services/task-rules');
+const { permissionScope, isBoard, isItAdmin } = require('../lib/permissions');
 
 const CATEGORIES = ['BACKLOG', 'UNSTARTED', 'STARTED', 'REVIEW', 'COMPLETED', 'CANCELLED', 'OTHER'];
 // OTHER = cột tự do (lịch tuần, danh sách theo chủ đề…): chỉ là nhãn cột, không tính tiến độ, không kích hoạt duyệt.
@@ -62,7 +63,23 @@ async function checkApprovers(client, steps) {
   const ids = steps.filter(s => s.approverUserId).map(s => s.approverUserId);
   if (ids.length && (await client.user.count({ where: { id: { in: ids }, isActive: true } })) !== new Set(ids).size) fail(422, 'Người duyệt không tồn tại hoặc đã khoá', 'INVALID_APPROVER');
 }
-async function projectDetail(prisma, id, user) {
+// Người đứng tên dự án: tài khoản nghiệp vụ đang hoạt động. Tài khoản Quản trị hệ thống không xem nội dung nghiệp vụ (đứng tên thì lại nhận
+// "Cần duyệt …" của cấp "Người đứng tên dự án" và cảnh báo MTL phần "PMO"); tài khoản đã khoá / không tồn tại thì không ai đứng tên thật.
+// Để trống vẫn được (cấp "Người đứng tên dự án" khi đó do Chủ dự án duyệt thay — services/approval.js).
+async function checkLead(client, leadId) {
+  if (leadId == null) return;
+  const u = await client.user.findUnique({ where: { id: leadId }, select: { id: true, isActive: true, role: true, isRootAdmin: true } });
+  if (!u || !u.isActive || isItAdmin(u)) fail(422, 'Người đứng tên dự án phải là tài khoản nghiệp vụ đang hoạt động', 'INVALID_LEAD');
+}
+// Cột có sẵn ĐỔI nhóm khi còn việc (đếm như khi xoá cột, kể cả việc trong Thùng rác): đổi nhóm là đổi nghĩa mọi việc trong cột — vd. "Đang làm"
+// → Hoàn thành thì việc thành xong mà không qua người giao duyệt; → Cột tự do thì việc rời khỏi tiến độ. Đổi tên, màu, WIP, thứ tự vẫn được.
+// existing: [{ id, name, category, _count: { items } }]; states: danh sách gửi lên [{ id?, category }]. Trả các cột bị khoá.
+function categoryLocks(existing, states) {
+  return states.filter(s => s.id).map(s => [s, existing.find(e => e.id === s.id)])
+    .filter(([s, e]) => e && e.category !== s.category && e._count.items > 0).map(([, e]) => e);
+}
+// usage: kèm số việc của từng cột (kể cả việc trong Thùng rác) — màn Cài đặt khoá ô nhóm của cột còn việc.
+async function projectDetail(prisma, id, user, { usage = false } = {}) {
   const project = await prisma.project.findUnique({ where: { id }, include: {
     department: { select: { id: true, name: true } },
     states: { orderBy: { position: 'asc' } },
@@ -76,7 +93,15 @@ async function projectDetail(prisma, id, user) {
   for (const step of project.approvalSteps) ids.set(step.id, await approverIds(prisma, project, step));
   const names = Object.fromEntries((await prisma.user.findMany({ where: { id: { in: [...new Set([...ids.values()].flat())] } }, select: { id: true, fullName: true } })).map(u => [u.id, u.fullName]));
   const approvalSteps = project.approvalSteps.map(s => ({ ...s, approvers: ids.get(s.id).map(uid => ({ id: uid, fullName: names[uid] })) }));
-  return { ...project, approvalSteps, rights: projectRights(user, project, member) };
+  // Quy trình duyệt mặc định của việc mới (nhãn "Duyệt N cấp" ở trang dự án): cùng hàm dựng chuỗi với panel việc — đếm cả bước người giao.
+  const approvalFlow = rules.defaultFlow(project, project.approvalSteps, project.states).map(s => ({ level: s.level, name: s.name, approverType: s.approverType }));
+  let states = project.states;
+  if (usage) {
+    const count = async where => new Map((await prisma.workItem.groupBy({ by: ['stateId'], where: { projectId: id, ...where }, _count: { _all: true } })).map(r => [r.stateId, r._count._all]));
+    const [all, trashed] = await Promise.all([count({}), count({ archivedAt: { not: null } })]);
+    states = states.map(s => ({ ...s, itemCount: all.get(s.id) || 0, trashCount: trashed.get(s.id) || 0 }));
+  }
+  return { ...project, states, approvalSteps, approvalFlow, rights: projectRights(user, project, member) };
 }
 
 module.exports = function mountProjects(app, { prisma, auth, audit }) {
@@ -97,6 +122,7 @@ module.exports = function mountProjects(app, { prisma, auth, audit }) {
     const dept = await prisma.department.findFirst({ where: { id: departmentId, isActive: true } });
     if (!dept) fail(422, 'Bộ phận không hợp lệ', 'INVALID_DEPARTMENT');
     const leadId = optionalInt(req.body.leadId, 'Người đứng tên dự án') ?? req.user.id;
+    await checkLead(prisma, leadId);
     const steps = req.body.approvalSteps === undefined ? [] : parseSteps(req.body.approvalSteps);
     await checkApprovers(prisma, steps);
     const defaultApprovalLevels = defaultLevelsInput(req.body.defaultApprovalLevels) ?? null;
@@ -126,7 +152,7 @@ module.exports = function mountProjects(app, { prisma, auth, audit }) {
 
   app.get('/api/projects/:id', auth, async (req, res) => {
     const { project } = await loadProject(prisma, req.user, intParam(req.params.id));
-    res.json(await projectDetail(prisma, project.id, req.user));
+    res.json(await projectDetail(prisma, project.id, req.user, { usage: req.query.usage === '1' }));
   });
 
   app.put('/api/projects/:id', auth, async (req, res) => {
@@ -137,7 +163,10 @@ module.exports = function mountProjects(app, { prisma, auth, audit }) {
     if (req.body.visibility !== undefined) data.visibility = oneOf(req.body.visibility, VISIBILITY, 'Phạm vi');
     // MTL không dùng phạm vi "sổ giao việc" (luồng giao về phòng / tiếp nhận cũ không đi qua quy định MTL).
     if (project.kind === 'MTL' && data.visibility === 'ASSIGNED') fail(422, 'Dự án MTL không dùng phạm vi sổ giao việc', 'INVALID_VALUE');
-    if (req.body.leadId !== undefined) data.leadId = optionalInt(req.body.leadId, 'Người đứng tên dự án');
+    if (req.body.leadId !== undefined) {
+      data.leadId = optionalInt(req.body.leadId, 'Người đứng tên dự án');
+      await checkLead(prisma, data.leadId);
+    }
     if (req.body.archived !== undefined) data.archivedAt = req.body.archived ? new Date() : null;
     if (req.body.intakeEnabled !== undefined) data.intakeEnabled = !!req.body.intakeEnabled;
     if (req.body.defaultApprovalLevels !== undefined) data.defaultApprovalLevels = defaultLevelsInput(req.body.defaultApprovalLevels);
@@ -164,6 +193,12 @@ module.exports = function mountProjects(app, { prisma, auth, audit }) {
       const keep = new Set(states.filter(s => s.id).map(s => s.id));
       for (const s of states) if (s.id && !existing.some(e => e.id === s.id)) fail(422, 'Cột không thuộc dự án');
       for (const e of existing) if (!keep.has(e.id) && e._count.items) fail(409, `Cột "${e.name}" còn ${e._count.items} việc, hãy chuyển việc trước khi xoá`, 'STATE_NOT_EMPTY');
+      const [locked] = categoryLocks(existing, states);
+      if (locked) {
+        const trashed = await tx.workItem.count({ where: { stateId: locked.id, archivedAt: { not: null } } });
+        fail(409, `Cột "${locked.name}" còn ${locked._count.items} việc — chuyển việc sang cột khác rồi mới đổi nhóm`
+          + (trashed ? `. Trong đó ${trashed} việc đang ở Thùng rác nên Bảng không hiện: khôi phục rồi chuyển đi, hoặc chờ hệ thống xoá hẳn sau 7 ngày` : ''), 'STATE_CATEGORY_LOCKED');
+      }
       await tx.workflowState.deleteMany({ where: { projectId: project.id, id: { notIn: [...keep] } } });
       for (const s of states) {
         const { id, ...data } = s;
@@ -179,8 +214,10 @@ module.exports = function mountProjects(app, { prisma, auth, audit }) {
     const list = Array.isArray(req.body.members) ? req.body.members : fail(422, 'Danh sách thành viên không hợp lệ');
     const members = [...new Map(list.map(m => [intParam(m.userId, 'Thành viên'), oneOf(m.role || 'MEMBER', MEMBER_ROLES, 'Vai trò')])).entries()];
     if (!members.some(([, role]) => role === 'OWNER')) fail(422, 'Dự án cần ít nhất một chủ dự án (OWNER)', 'NO_OWNER');
-    const valid = await prisma.user.count({ where: { id: { in: members.map(([id]) => id) }, isActive: true } });
-    if (valid !== members.length) fail(422, 'Có thành viên không tồn tại hoặc đã khoá');
+    const accounts = await prisma.user.findMany({ where: { id: { in: members.map(([id]) => id) } }, select: { id: true, isActive: true, role: true, isRootAdmin: true } });
+    // Quản trị hệ thống không xem nội dung nghiệp vụ: không làm thành viên (Chủ dự án ở dự án MTL thì lại nhận cảnh báo tiến độ phần "PMO").
+    if (accounts.some(isItAdmin)) fail(422, 'Tài khoản Quản trị hệ thống không làm thành viên dự án được', 'IT_MEMBER');
+    if (accounts.filter(u => u.isActive).length !== members.length) fail(422, 'Có thành viên không tồn tại hoặc đã khoá');
     await prisma.$transaction(async tx => {
       const old = await tx.projectMember.findMany({ where: { projectId: project.id } });
       await tx.projectMember.deleteMany({ where: { projectId: project.id } });
@@ -204,8 +241,11 @@ module.exports = function mountProjects(app, { prisma, auth, audit }) {
       const sig = list => JSON.stringify(list.map(s => [s.level, s.name, s.approverType, s.approverUserId ?? null]));
       const stepsChanged = sig(old) !== sig(steps);
       // Chỉ chặn khi thực sự đổi các bước (người duyệt / số cấp) mà còn yêu cầu đang chờ; đổi mức mặc định thì luôn được.
-      const pending = stepsChanged ? await tx.approvalRequest.count({ where: { status: 'PENDING', workItem: { projectId: project.id } } }) : 0;
-      if (pending) fail(409, `Còn ${pending} yêu cầu đang chờ duyệt, hãy xử lý xong trước khi đổi các bước duyệt`, 'APPROVALS_PENDING');
+      // Phiếu của việc đang ở Thùng rác vẫn PENDING (xoá không huỷ phiếu) nên vẫn chặn — nói rõ để người dùng biết vì sao.
+      const pending = stepsChanged ? await tx.approvalRequest.findMany({ where: { status: 'PENDING', workItem: { projectId: project.id } }, select: { workItem: { select: { archivedAt: true } } } }) : [];
+      const trashed = pending.filter(r => r.workItem.archivedAt).length;
+      if (pending.length) fail(409, `Còn ${pending.length} yêu cầu đang chờ duyệt, hãy xử lý xong trước khi đổi các bước duyệt`
+        + (trashed ? `. Trong đó ${trashed} yêu cầu của việc đang ở Thùng rác: khôi phục việc để xử lý, hoặc chờ hệ thống xoá hẳn sau 7 ngày` : ''), 'APPROVALS_PENDING');
       if (stepsChanged) {
         await tx.approvalStep.deleteMany({ where: { projectId: project.id } });
         if (steps.length) await tx.approvalStep.createMany({ data: steps.map(s => ({ ...s, projectId: project.id })) });
@@ -242,3 +282,4 @@ module.exports = function mountProjects(app, { prisma, auth, audit }) {
 };
 module.exports.DEFAULT_STATES = DEFAULT_STATES;
 module.exports.MTL_STATES = MTL_STATES;
+module.exports.categoryLocks = categoryLocks;
