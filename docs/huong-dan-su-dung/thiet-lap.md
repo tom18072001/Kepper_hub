@@ -356,7 +356,7 @@ Các kiêm nhiệm **PMO**, **Thư ký giao ban**, **Phụ trách nhân sự**, 
 
 ![Tạo dự án MTL: chọn kiểu Theo Master Timeline và tháng T0](anh/30-du-an-tao.png)
 
-![Tạo dự án thường: kiểu Quy trình công việc và số cấp duyệt](anh/30-du-an-tao-quy-trinh.png)
+![Tạo dự án thường: kiểu Quy trình công việc và cấp duyệt thêm sau người giao](anh/30-du-an-tao-quy-trinh.png)
 
 **Ai thấy, ai sửa:**
 - **Ban Tổng Giám đốc**: thấy nút **+**; ô **Bộ phận** có mọi bộ phận đang hoạt động; thấy kiểu **Theo Master Timeline** và đây là lựa chọn mặc định.
