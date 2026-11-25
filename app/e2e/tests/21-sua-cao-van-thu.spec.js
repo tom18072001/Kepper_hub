@@ -27,8 +27,15 @@ async function as(browser, username) {
 async function json(r, status) { const t = await r.text(); expect(r.status(), t).toBe(status); return t ? JSON.parse(t) : null; }
 const setApprovers = ids => apiAs(pages.giamdoc, '/api/vanthu/config', { method: 'PUT', data: { approverUserIds: ids } }).then(r => json(r, 200));
 const lockX = locked => apiAs(pages.admin, `/api/admin/users/${X.id}`, { method: 'PUT', data: { isActive: !locked } }).then(r => json(r, 200));
-// Khoá tài khoản làm phiên cũ hết hạn: mở khoá rồi đăng nhập lại khi cần dùng X.
-async function activeX() { await lockX(false); await login(pages[X_USER.username], X_USER.username); return pages[X_USER.username]; }
+// Khoá tài khoản làm phiên cũ hết hạn: mở khoá rồi đăng nhập lại khi cần dùng X. Bỏ phiên đang lưu trước: trang của X có thể còn
+// đăng nhập (X chưa bị khoá lần nào) — khi đó trang mở thẳng ứng dụng, không có ô đăng nhập để login() điền.
+async function activeX() {
+  await lockX(false);
+  const page = pages[X_USER.username];
+  await page.evaluate(() => localStorage.removeItem('workhub_token'));
+  await login(page, X_USER.username);
+  return page;
+}
 // Danh sách Người phê duyệt "kẹt" kiểu cũ: chỉ có X, rồi Quản trị khoá X.
 async function stuckOnLockedX() { await lockX(false); await setApprovers([X.id]); await lockX(true); }
 const doc = (page, id) => apiAs(page, `/api/vanthu/docs/${id}`).then(r => json(r, 200));
