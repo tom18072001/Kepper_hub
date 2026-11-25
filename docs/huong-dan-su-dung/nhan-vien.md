@@ -562,7 +562,7 @@ Menu **Công việc → Thùng rác** (hoặc `G` rồi `R`).
 - Mỗi dòng: **Mã**, **Công việc** (việc con ghi "(việc con)"), **Dự án**, **Xoá bởi**, **Xoá lúc**, **Thời hạn** ("còn … ngày", "còn dưới 1 ngày", "sắp xoá hẳn").
 - **Khôi phục**: việc trở lại cùng các việc con bị xoá cùng lúc. Việc con không khôi phục được khi việc cha còn trong thùng rác ("Hãy khôi phục việc cha trước").
 - ⚠️ Quá **7 ngày** kể từ lúc xoá, hệ thống xoá hẳn, kể cả tệp đính kèm. Không có nút "Xoá hẳn", và sau 7 ngày không lấy lại được.
-- ⚠️ Lúc xoá, phiếu duyệt đang chờ của việc bị huỷ; khôi phục **không** mở lại phiếu đó.
+- Lúc xoá, phiếu duyệt đang chờ của việc **không** bị huỷ: phiếu tạm ẩn khỏi **Chờ tôi duyệt** của người duyệt; khôi phục là phiếu hiện lại, duyệt tiếp như trước.
 
 ### 10.10 Giao diện nhớ theo trình duyệt
 
