@@ -4,7 +4,7 @@
 // Báo cáo tự điền sẵn từ MTL + kế hoạch tuần trước + Action Log giao ban; tự lưu nháp; gửi một lần — % ghi ngược vào MTL.
 import { api } from '../api.js';
 import { store } from '../store.js';
-import { $, $$, esc, toast, errorMessage, debounce, isItUser } from '../util.js';
+import { $, $$, esc, toast, errorMessage, debounce, isItUser, confirmDialog } from '../util.js';
 import { rerender } from '../main.js';
 
 const DAY = 86_400_000, H7 = 7 * 3_600_000;
@@ -13,6 +13,10 @@ const WD = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const addDays = (s, n) => new Date(Date.parse(s + 'T00:00:00Z') + n * DAY).toISOString().slice(0, 10);
 const fmtD = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}` : '');
 const fmtDY = s => (s ? `${fmtD(s)}/${s.slice(0, 4)}` : '');
+// "23/11 – 27/11/2026": tuần báo cáo theo lịch S (cùng cách ghi với ô "Tuần báo cáo (thứ Sáu)").
+const weekText = S => `${fmtD(S.from)} – ${fmtDY(S.to)}`;
+// Tháng chấm điểm tuân thủ của một tuần = tháng của thứ Sáu (máy chủ: services/weekly.js fridaysOf) — "11/2026".
+const monthText = ym => `${ym.slice(5, 7)}/${ym.slice(0, 4)}`;
 const wday = s => WD[new Date(Date.parse(s + 'T00:00:00Z')).getUTCDay()];
 const fmtTime = t => { if (!t) return ''; const x = new Date(new Date(t).getTime() + H7); return `${String(x.getUTCHours()).padStart(2, '0')}:${String(x.getUTCMinutes()).padStart(2, '0')} ${WD[x.getUTCDay()]} ${String(x.getUTCDate()).padStart(2, '0')}/${String(x.getUTCMonth() + 1).padStart(2, '0')}`; };
 const localInput = t => { if (!t) return ''; const x = new Date(new Date(t).getTime() + H7); return x.toISOString().slice(0, 16); };
@@ -559,20 +563,34 @@ function deptDetail(r, f, names) {
 function setupHtml(s) {
   const md = s.meeting || {}, S = s.schedule;
   const order = [...ctx.required.map(id => ({ id, on: true })), ...ctx.departments.filter(d => !ctx.required.includes(d.id)).map(d => ({ id: d.id, on: false }))];
-  return `<details class="wk-card" id="wkSetup" data-testid="wk-setup"><summary><b>Thiết lập</b> <span class="wk-note">bộ phận phải nộp, thứ tự trình bày, tuần bắt đầu chấm điểm, hạn nộp khi nghỉ lễ</span></summary>
+  // Ba ô lịch áp cho TUẦN ĐANG CHỌN ở ô "Tuần báo cáo (thứ Sáu)" (không phải luôn là tuần này): nhãn và tiêu đề khối ghi đúng
+  // tuần đó; đổi tuần ở đầu trang thì trang vẽ lại, nhãn đổi theo.
+  const W = weekText(S), past = Date.now() > Date.parse(S.deadline);
+  return `<details class="wk-card" id="wkSetup" data-testid="wk-setup"><summary><b>Thiết lập</b> <span class="wk-note">bộ phận phải nộp, thứ tự trình bày, tuần bắt đầu chấm điểm; lịch tuần ${W}: tuần nghỉ, hạn nộp, ngày giao ban</span></summary>
     <div style="display:grid;gap:14px;margin-top:12px">
       <div class="wk-order"><b style="font-size:.9rem">Bộ phận phải nộp — theo thứ tự trình bày tại giao ban</b>${ctx.configured ? '' : '<span class="wk-note">Chưa thiết lập: đang lấy tự động các bộ phận chủ trì hạng mục MTL. Chọn đúng 5 bộ phận theo quy chế rồi bấm Lưu.</span>'}
         <ol id="setOrder">${order.map(o => `<li data-id="${o.id}"><label><input type="checkbox" ${o.on ? 'checked' : ''} data-testid="wk-set-dept-${o.id}"> ${esc(deptName(o.id))}</label><button class="btn x" type="button" data-up>↑</button><button class="btn x" type="button" data-down>↓</button></li>`).join('')}</ol></div>
       <div class="wk-grid">
         <label class="wk-f">Bộ phận thư ký giao ban (Tổng hợp & Nhân sự)${ctx.me.canRoles ? `<select id="setSecretary" data-testid="wk-set-secretary">${opts([['', '— Chưa chọn —'], ...ctx.departments.map(d => [d.id, d.name])], ctx.secretaryDepartmentId || '')}</select>` : `<span class="wk-ro">${esc(deptName(ctx.secretaryDepartmentId) || '— Ban TGĐ chưa chọn —')}</span>`}</label>
         <label class="wk-f">PMO (xem đầy đủ, không sửa — Ban TGĐ chỉ định)${ctx.me.canRoles ? `<select id="setPmo" multiple size="4" data-testid="wk-set-pmo">${store.users.filter(u => !isItUser(u)).map(u => `<option value="${u.id}"${ctx.pmoUserIds.includes(u.id) ? ' selected' : ''}>${esc(u.fullName)}</option>`).join('')}</select>` : `<span class="wk-ro">${esc(ctx.pmoUserIds.map(id => store.users.find(u => u.id === id)?.fullName).filter(Boolean).join(', ') || '—')}</span>`}</label>
-        <label class="wk-f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="setSkip" ${md.skip ? 'checked' : ''} data-testid="wk-set-skip"> Tuần này nghỉ (Tết, lễ) — không giao ban, không chấm điểm</label>
         <label class="wk-f">Tuần bắt đầu chấm điểm tuân thủ<input type="date" id="setStart" value="${esc(ctx.startWeek || '')}" step="7"></label>
-        <label class="wk-f">Hạn nộp tuần này (nghỉ lễ thứ Sáu → ngày làm việc liền trước)<input type="date" id="setDeadline" value="${esc(md.deadlineDay || '')}" placeholder="${S.to}"></label>
-        <label class="wk-f">Ngày giao ban (nghỉ lễ thứ Hai → ngày làm việc kế tiếp)<input type="date" id="setMeeting" value="${esc(md.meetingDay || '')}"></label>
       </div>
-      <div class="wk-actions"><button class="btn btn-primary" type="button" id="setSave" data-testid="wk-set-save">Lưu thiết lập</button><span class="wk-note">Thay đổi hạn nộp / ngày giao ban: thông báo các bộ phận trước ít nhất 02 ngày làm việc (Điều 3).</span></div>
+      <div role="group" aria-labelledby="setSchedHead" data-testid="wk-set-sched" style="display:grid;gap:10px;border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div><b id="setSchedHead" style="font-size:.9rem" data-testid="wk-set-sched-head">Lịch tuần ${W}</b> <span class="wk-note">tuần đang chọn ở ô “Tuần báo cáo (thứ Sáu)” đầu trang${past ? ` · đã qua hạn nộp (${fmtTime(S.deadline)})` : ''}</span></div>
+        <div class="wk-grid">
+          <label class="wk-f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="setSkip" ${md.skip ? 'checked' : ''} data-testid="wk-set-skip"> Tuần ${W} nghỉ (Tết, lễ) — không giao ban, không chấm điểm</label>
+          <label class="wk-f">Hạn nộp tuần ${W} (nghỉ lễ thứ Sáu → ngày làm việc liền trước)<input type="date" id="setDeadline" value="${esc(md.deadlineDay || '')}" placeholder="${S.to}" data-testid="wk-set-deadline"></label>
+          <label class="wk-f">Ngày giao ban của tuần ${W} (nghỉ lễ thứ Hai → ngày làm việc kế tiếp)<input type="date" id="setMeeting" value="${esc(md.meetingDay || '')}" data-testid="wk-set-meeting"></label>
+        </div>
+      </div>
+      <div class="wk-actions"><button class="btn btn-primary" type="button" id="setSave" data-testid="wk-set-save">Lưu thiết lập</button><span class="wk-note" data-testid="wk-set-note">Đổi lịch tuần (tuần nghỉ, hạn nộp, ngày giao ban): Kepler Hub tự báo lãnh đạo các bộ phận phải nộp, người lập báo cáo, Ban Tổng Giám đốc và thư ký giao ban; tuần đã họp xong thì không báo. Quy chế (Điều 3): báo trước ít nhất 02 ngày làm việc — đổi lịch sớm.</span></div>
     </div></details>`;
+}
+// Lịch HIỆU LỰC của tuần có đổi không (ô trống = mặc định: hạn nộp thứ Sáu, giao ban thứ Hai kế tiếp; đổi hạn của tuần vẫn nghỉ
+// không tính) — cùng quy tắc máy chủ dùng để báo các bộ phận (services/weekly.js scheduleChange).
+function scheduleMoved(S, x) {
+  const skip = !!x.skip, deadlineDay = x.deadlineDay || S.week, meetingDay = x.meetingDay || addDays(S.week, 3);
+  return skip !== !!S.skip || (!skip && (deadlineDay !== S.deadlineDay || meetingDay !== S.meetingDay));
 }
 function bindSummary(body, s) {
   const M = s.canManage;
@@ -694,15 +712,23 @@ function bindSummary(body, s) {
     const up = e.target.closest('[data-up],[data-down]');
     if (up) { const li = up.closest('li'); if (up.dataset.up !== undefined && li.previousElementSibling) li.parentNode.insertBefore(li, li.previousElementSibling); else if (up.dataset.down !== undefined && li.nextElementSibling) li.parentNode.insertBefore(li.nextElementSibling, li); return; }
     if (e.target.closest('#setSave')) {
+      // Chốt tuần (tuần của bản đang vẽ — đúng tuần ghi trên nhãn ba ô lịch) và dữ liệu form TRƯỚC mọi await: đổi tuần ở đầu trang
+      // trong lúc hỏi lại / đang lưu không làm lịch áp sang tuần khác.
+      const S = s.schedule, week = S.week;
       const departments = $$('#setOrder li', body).filter(li => $('input', li).checked).map(li => Number(li.dataset.id));
       const startWeek = $('#setStart', body).value;
+      const sched = { deadlineDay: $('#setDeadline', body).value || null, meetingDay: $('#setMeeting', body).value || null, skip: $('#setSkip', body).checked };
+      const cfgBody = { departments, startWeek: startWeek || null };
+      if (ctx.me.canRoles) { cfgBody.secretaryDepartmentId = Number($('#setSecretary', body).value) || null; cfgBody.pmoUserIds = [...$('#setPmo', body).selectedOptions].map(o => Number(o.value)); }
       try {
         if (startWeek && new Date(startWeek + 'T00:00:00Z').getUTCDay() !== 5) throw new Error('Tuần bắt đầu chấm điểm phải là một ngày thứ Sáu');
-        const cfgBody = { departments, startWeek: startWeek || null };
-        if (ctx.me.canRoles) { cfgBody.secretaryDepartmentId = Number($('#setSecretary', body).value) || null; cfgBody.pmoUserIds = [...$('#setPmo', body).selectedOptions].map(o => Number(o.value)); }
+        // Tuần đã qua hạn nộp: đổi lịch làm đổi điểm tuân thủ đã phát sinh — Ban Tổng Giám đốc (chỉ vai này đổi được, máy chủ kiểm)
+        // xác nhận trước khi lưu bất cứ thứ gì; Huỷ thì không lưu.
+        if (ctx.me.director && Date.now() > Date.parse(S.deadline) && scheduleMoved(S, sched)
+          && !(await confirmDialog(`Tuần ${weekText(S)} đã qua hạn nộp (${fmtTime(S.deadline)}). Đổi lịch tuần đã qua hạn nộp sẽ đổi điểm tuân thủ tháng ${monthText(week)}: nộp đúng hạn / muộn, vắng của tuần này được tính lại theo lịch mới (bảng điểm tháng đã duyệt và khoá thì giữ nguyên). Vẫn lưu?`, { okText: 'Vẫn lưu' }))) return;
         await api('/api/weekly/config', { method: 'PUT', body: cfgBody });
-        await saveMeeting({ deadlineDay: $('#setDeadline', body).value || null, meetingDay: $('#setMeeting', body).value || null, skip: $('#setSkip', body).checked }, null);
-        ctx = null; toast('Đã lưu thiết lập', 'ok');
+        const r = await saveMeeting({ week, ...sched }, null);
+        ctx = null; toast(r.notified ? `Đã lưu thiết lập — đã báo lịch mới tới ${r.notified} người` : 'Đã lưu thiết lập', 'ok');
         await rerender();
       } catch (error) { toast(errorMessage(error), 'err'); }
     }
@@ -727,14 +753,34 @@ async function drawCompliance(body, params) {
       <span class="wk-note">${d.weeks.length ? `Tính ${d.weeks.length} tuần: ${d.weeks.map(fmtD).join(', ')}` : 'Chưa có tuần nào trong tháng được tính'}${d.startWeek ? ` · bắt đầu chấm từ ${fmtDY(d.startWeek)}` : ` · <b>chưa đặt tuần bắt đầu chấm điểm</b>${ctx.me.canManage ? ' (Tổng hợp → Thiết lập)' : ''}: đang tính cả các tuần trước khi dùng chính thức`}</span>
       <span class="wk-chip ${d.state.status === 'APPROVED' ? 'c-good' : d.state.status === 'SUBMITTED' ? 'c-warn' : 'c-idle'}" data-testid="wk-score-state">${d.state.status === 'APPROVED' ? `Đã duyệt — ${esc(d.state.approvedBy)} ${fmtTime(d.state.approvedAt)} · đã khoá` : d.state.status === 'SUBMITTED' ? `Đã trình TGĐ — ${esc(d.state.submittedBy)} ${fmtTime(d.state.submittedAt)}` : 'Bản nháp (tính theo số liệu hiện tại)'}</span>
       ${d.closed ? '' : '<span class="wk-note" data-testid="wk-score-open">Tháng chưa khép — lập, trình và duyệt từ đầu tháng sau (sau buổi giao ban cuối tháng).</span>'}
-      ${d.canSubmit ? '<button class="btn" type="button" id="cSubmit" data-testid="wk-score-submit">Trình TGĐ</button>' : ''}${d.canApprove ? '<button class="btn btn-primary" type="button" id="cApprove" data-testid="wk-score-approve">Duyệt và khoá</button>' : ''}</div>
+      ${d.canSubmit ? '<button class="btn" type="button" id="cSubmit" data-testid="wk-score-submit">Trình TGĐ</button>' : ''}${d.canApprove ? '<button class="btn btn-primary" type="button" id="cApprove" data-testid="wk-score-approve">Duyệt và khoá</button>' : ''}${d.canUnlock ? '<button class="btn" type="button" id="cUnlock" data-testid="wk-score-unlock">Mở khoá</button>' : ''}</div>
+      ${d.state.unlock && d.state.status !== 'APPROVED' ? `<div class="wk-banner c-warn" data-testid="wk-score-unlocked" style="margin-top:8px">Đã mở khoá ${fmtTime(d.state.unlock.at)} — ${esc(d.state.unlock.by)}. Lý do: ${esc(d.state.unlock.reason)}. Bảng tính lại theo số liệu hiện tại; thư ký kiểm tra rồi trình lại, Ban Tổng Giám đốc duyệt lại.</div>` : ''}
       <div class="wk-table"><table><thead><tr><th>Bộ phận</th><th>Trưởng bộ phận</th><th>Điểm</th><th>Vi phạm</th><th>Chi tiết</th></tr></thead><tbody data-testid="wk-score">
       ${d.rows.map(r => `<tr><td><b>${esc(r.name)}</b></td><td>${r.leaders?.length ? esc(r.leaders.join(', ')) : `<span class="wk-chip c-warn" data-testid="wk-no-leader-${r.id}">Chưa có trưởng bộ phận</span>`}</td><td><b style="font-size:1.1rem;color:${r.score >= 95 ? 'var(--good)' : r.score >= 80 ? 'var(--wk-warn)' : 'var(--bad)'}">${r.score}</b></td><td>${r.violations}</td>
         <td>${r.events.length ? r.events.map(e => `<div class="wk-note">${fmtD(e.week)}: ${esc(e.label)} ${e.points ? `<b>−${e.points}</b>` : '(không trừ)'}</div>`).join('') : '<span class="wk-note">Không vi phạm</span>'}</td></tr>`).join('') || '<tr><td colspan="5" class="wk-note">Chưa thiết lập bộ phận phải nộp</td></tr>'}
       </tbody></table></div>
       <p class="wk-note">Mức trừ: ${Object.entries(d.points).map(([k, v]) => `${esc(ctx.pointLabels[k])} ${v}`).join(' · ')}. Vi phạm do nhân viên được giao gửi báo cáo tính cho trưởng bộ phận. Từ 03 lần vi phạm trong một quý: nhắc nhở bằng văn bản.</p></section>`;
   $('#cMonth', body).onchange = e => { location.hash = `#/tuan/diem?m=${e.target.value}${st.week !== ctx.week ? `&w=${st.week}` : ''}`; };
-  for (const [id, action, msg] of [['#cSubmit', 'submit', 'Đã trình TGĐ bảng điểm'], ['#cApprove', 'approve', 'Đã duyệt và khoá bảng điểm']]) $(id, body)?.addEventListener('click', async () => {
-    try { await api(`/api/weekly/compliance/${action}`, { method: 'POST', body: { month, ...(action === 'approve' ? { sha256: d.state.sha256 } : {}) } }); toast(msg, 'ok'); await drawCompliance(freshBody(), params); } catch (error) { toast(errorMessage(error), 'err'); }
+  // Tháng (và bảng đã trình) chốt theo bản đang vẽ: hộp hỏi lại và lời gọi API dùng cùng một tháng.
+  const M = monthText(month);
+  const act = async (btn, action, extra, msg) => {
+    btn.disabled = true;
+    try { await api(`/api/weekly/compliance/${action}`, { method: 'POST', body: { month, ...extra } }); toast(msg, 'ok'); await drawCompliance(freshBody(), params); }
+    catch (error) { btn.disabled = false; toast(errorMessage(error), 'err'); }
+  };
+  $('#cSubmit', body)?.addEventListener('click', e => act(e.currentTarget, 'submit', {}, 'Đã trình TGĐ bảng điểm'));
+  // Duyệt và khoá: hỏi lại trước (khoá xong không sửa được; chỉ Ban Tổng Giám đốc mở khoá, có lý do).
+  $('#cApprove', body)?.addEventListener('click', async e => {
+    const btn = e.currentTarget;
+    if (!(await confirmDialog(`Duyệt và khoá bảng điểm tháng ${M}? Sau khi khoá không sửa được; chỉ Ban Tổng Giám đốc mở khoá (ghi lý do).`, { okText: 'Duyệt và khoá' }))) return;
+    act(btn, 'approve', { sha256: d.state.sha256 }, 'Đã duyệt và khoá bảng điểm');
+  });
+  // Mở khoá (Ban Tổng Giám đốc): bắt buộc lý do — bỏ trống thì báo lỗi, không gửi.
+  $('#cUnlock', body)?.addEventListener('click', async e => {
+    const btn = e.currentTarget;
+    const reason = await confirmDialog(`Mở khoá bảng điểm tháng ${M}? Bảng về bản nháp, tính lại theo số liệu hiện tại; thư ký giao ban được báo để kiểm tra và trình lại. Lý do được ghi vào nhật ký.`, { okText: 'Mở khoá', danger: true, input: 'Lý do mở khoá (bắt buộc)' });
+    if (reason === null) return;
+    if (!reason) { toast('Ghi lý do mở khoá bảng điểm', 'err'); return; }
+    act(btn, 'unlock', { reason }, 'Đã mở khoá bảng điểm');
   });
 }

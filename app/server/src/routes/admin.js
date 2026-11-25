@@ -69,7 +69,7 @@ const AUDIT_ACTIONS = {
   MTL_SPRINT_PLAN: 'Thiết lập sprint MTL', MTL_TEMPLATE_EXPORT: 'Tải mẫu MTL bộ phận',
   WEEKLY_REPORT_SUBMIT: 'Nộp báo cáo tuần', WEEKLY_NOTICE: 'Báo nộp muộn / vắng giao ban', WEEKLY_NOTICE_DELETE: 'Xoá thông báo muộn / vắng',
   WEEKLY_SUMMARY_COPY: 'Sao chép bản tổng hợp giao ban', WEEKLY_MEETING: 'Cập nhật giao ban (điểm danh, kết luận, Action Log)', WEEKLY_MEETING_PUBLISH: 'Phát hành kết luận giao ban',
-  WEEKLY_CONFIG: 'Thiết lập báo cáo tuần', WEEKLY_COMPLIANCE_SUBMIT: 'Trình bảng điểm tuân thủ giao ban', WEEKLY_COMPLIANCE_APPROVE: 'Duyệt bảng điểm tuân thủ giao ban', TOKEN_CREATE: 'Tạo token Claude', TOKEN_REVOKE: 'Thu hồi token Claude',
+  WEEKLY_CONFIG: 'Thiết lập báo cáo tuần', WEEKLY_COMPLIANCE_SUBMIT: 'Trình bảng điểm tuân thủ giao ban', WEEKLY_COMPLIANCE_APPROVE: 'Duyệt bảng điểm tuân thủ giao ban', WEEKLY_COMPLIANCE_UNLOCK: 'Mở khoá bảng điểm tuân thủ giao ban', TOKEN_CREATE: 'Tạo token Claude', TOKEN_REVOKE: 'Thu hồi token Claude',
   CRM_PARTNER_CREATE: 'Thêm đối tác', CRM_PARTNER_UPDATE: 'Sửa đối tác', CRM_CONTACT_CREATE: 'Thêm người liên hệ đối tác', CRM_CONTACT_UPDATE: 'Sửa người liên hệ đối tác', CRM_CONTACT_DELETE: 'Xoá người liên hệ đối tác',
   CRM_INTERACTION_CREATE: 'Ghi nhật ký làm việc với đối tác', CRM_FOLLOWUP_DONE: 'Xong việc theo dõi đối tác', CRM_ENGAGEMENT_CREATE: 'Thêm hợp đồng / gói thầu', CRM_ENGAGEMENT_UPDATE: 'Sửa hợp đồng / gói thầu',
   HRM_CONFIG: 'Thiết lập nhân sự', HR_PROFILE_UPDATE: 'Sửa hồ sơ nhân sự', HR_IDENTITY_VIEW: 'Xem số định danh', HR_IDENTITY_UPDATE: 'Sửa số định danh', HR_CONTRACT_CREATE: 'Thêm hợp đồng lao động', HR_CONTRACT_UPDATE: 'Sửa hợp đồng lao động',
@@ -82,7 +82,7 @@ const AUDIT_ENTITIES = {
   CrmPartner: 'Đối tác', CrmContact: 'Người liên hệ đối tác', CrmInteraction: 'Nhật ký đối tác', CrmEngagement: 'Hợp đồng / gói thầu', HrmConfig: 'Thiết lập nhân sự',
   HrProfile: 'Hồ sơ nhân sự', HrContract: 'Hợp đồng lao động', HrLeave: 'Đơn nghỉ', HrAttendance: 'Chấm công', WorkItem: 'Công việc', Project: 'Dự án / sổ', Attachment: 'Tệp đính kèm',
   ApprovalRequest: 'Yêu cầu duyệt', Cycle: 'Chu kỳ', RecurringRule: 'Việc lặp lại', IntakeRequest: 'Yêu cầu tiếp nhận', SavedView: 'Bộ lọc đã lưu',
-  Plan: 'Kế hoạch năm', Summary: 'Tổng hợp giao việc', Kpi: 'KPI', WeeklyReport: 'Báo cáo tuần', WeeklyNotice: 'Thông báo muộn / vắng', WeeklyMeeting: 'Giao ban tuần', Ops: 'Trang Điều hành',
+  Plan: 'Kế hoạch năm', Summary: 'Tổng hợp giao việc', Kpi: 'KPI', WeeklyReport: 'Báo cáo tuần', WeeklyNotice: 'Thông báo muộn / vắng', WeeklyMeeting: 'Giao ban tuần', WeeklyCompliance: 'Bảng điểm tuân thủ giao ban', Ops: 'Trang Điều hành',
 };
 // Đối tượng kỹ thuật: admin IT xem được giá trị trước–sau. Mọi đối tượng khác là nghiệp vụ → admin IT chỉ thấy ai/lúc nào/mã đối tượng.
 const NON_BUSINESS_ENTITIES = new Set(['User', 'Department', 'Label', 'UserPermission', 'Auth', 'AppSetting', 'TaskTemplate', 'Delegation', 'ApiToken']);

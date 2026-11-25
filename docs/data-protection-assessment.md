@@ -281,7 +281,7 @@ Vai trò giao ban **suy ra** từ vai trò và phòng ban đã gán cho tài kho
 | Thông báo muộn / vắng | — | xem mọi bộ phận | xem, nhập hộ (giờ nhận tin), xoá | xem | xem bộ phận mình, tạo | tạo, xoá của mình |
 | Ghi chú lý do vắng | — | xem | xem | — | — | chỉ người tạo |
 | Giao ban (điểm danh, kết luận, Action Log, tuần nghỉ) | — | sửa (TGĐ kết luận) | sửa | xem | xem | — |
-| Bảng điểm tuân thủ | — | xem, duyệt và khoá | xem, lập, trình | — | — | — |
+| Bảng điểm tuân thủ | — | xem, duyệt và khoá, mở khoá (bắt buộc lý do, ghi nhật ký) | xem, lập, trình | — | — | — |
 | Thiết lập giao ban | — | sửa | sửa | xem | xem | — |
 | Vai trò giao ban (bộ phận thư ký, PMO) | — | sửa | — | — | — | — |
 | % tiến độ / checklist hạng mục MTL | — | khi là người quản lý dự án | như nhân viên | khi là người quản lý dự án | lãnh đạo bộ phận chủ trì | người được giao |

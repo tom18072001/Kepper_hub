@@ -304,6 +304,7 @@ test('20. Báo cáo tuần: điền sẵn từ MTL, nộp, báo muộn / vắng,
   await toast(hc, 'Đã trình TGĐ bảng điểm');
   await gd.goto(`/#/tuan/diem?m=${prevMonth}`);
   await gd.getByTestId('wk-score-approve').click();
+  await gd.getByTestId('confirm-ok').click(); // hỏi lại trước khi khoá (Huỷ / Mở khoá: 22-sua-cao-giao-ban)
   await toast(gd, 'Đã duyệt và khoá bảng điểm');
   await expect(gd.getByTestId('wk-score-state')).toContainText('Đã duyệt');
   // 13) Thư ký = thành viên bộ phận thư ký (theo phòng ban, không cấp quyền riêng): mở thẳng Tổng hợp, có Chấm điểm.
