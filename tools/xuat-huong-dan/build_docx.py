@@ -28,6 +28,7 @@ OUT = HERE / "dist"
 BOOKS = [
     ("nhan-vien.md", "Kepler Hub - Huong dan su dung - Ban nhan vien", "Hướng dẫn sử dụng Kepler Hub — bản nhân viên"),
     ("lanh-dao.md", "Kepler Hub - Huong dan su dung - Ban lanh dao", "Hướng dẫn sử dụng Kepler Hub — bản lãnh đạo"),
+    ("thiet-lap.md", "Kepler Hub - Huong dan thiet lap va quan tri", "Hướng dẫn thiết lập và quản trị Kepler Hub"),
 ]
 NAMES = {src: label for src, _, label in BOOKS}
 
