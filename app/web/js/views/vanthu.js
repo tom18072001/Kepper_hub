@@ -254,11 +254,16 @@ async function renderDoc(root, id, setCrumbs, m) {
     </section>
     <section class="card pg-section"><h3 style="margin-top:0">Lịch sử</h3><ol class="vt-log">
       ${d.events.map(e => `<li><span class="muted xs">${fmtDateTime(e.createdAt)}</span> <b>${esc(e.user || '')}</b> · ${esc(ACT[e.action] || e.action)}${e.action === 'STATUS' ? `: ${esc(st[e.fromValue] || e.fromValue || '')} → ${esc(st[e.toValue] || e.toValue)}` : ''}${e.note ? ` — <span style="white-space:pre-line">${esc(e.note)}</span>` : ''}</li>`).join('')}</ol></section>`;
+  // Nút bước: trạng thái chỉ đi tiếp (máy chủ chặn quay lại, không có thao tác mở lại) → MỌI nút đều hỏi lại, cùng một cách viết:
+  // "<tên nút>: chuyển <số> sang "<trạng thái>"? Không quay lại được bước trước." kèm hệ quả riêng của bước nếu có. "Báo xong" thêm ô kết quả.
+  const STEP_MORE = { DONE: 'Văn bản được tính là đã xong, hết nhắc hạn.', FILED: 'Văn bản được tính là đã xong, hết nhắc hạn.',
+    EXPIRED: 'Muốn áp dụng lại phải tạo dự thảo thay thế và phê duyệt lại.' };
   root.querySelectorAll('[data-to]').forEach(b => b.onclick = async () => {
-    const to = b.dataset.to;
-    let note = null;
-    if (to === 'DONE') { note = await confirmDialog(`Báo đã xử lý xong ${d.number}?`, { okText: 'Báo xong', input: 'Kết quả xử lý (không bắt buộc)' }); if (note === null) return; }
-    try { await api(`/api/vanthu/docs/${d.id}/status`, { method: 'POST', body: { to, note: typeof note === 'string' ? note : null } }); toast('Đã cập nhật', 'ok'); renderDoc(root, id, setCrumbs, m); }
+    const to = b.dataset.to, step = STEP_LABEL[to] || st[to];
+    const ok = await confirmDialog(`${step}: chuyển ${d.number || 'văn bản'} sang "${st[to]}"? Không quay lại được bước trước.${STEP_MORE[to] ? ' ' + STEP_MORE[to] : ''}`,
+      { okText: step, ...(to === 'DONE' ? { input: 'Kết quả xử lý (không bắt buộc)' } : {}) });
+    if (ok === null) return;
+    try { await api(`/api/vanthu/docs/${d.id}/status`, { method: 'POST', body: { to, note: typeof ok === 'string' && ok ? ok : null } }); toast('Đã cập nhật', 'ok'); renderDoc(root, id, setCrumbs, m); }
     catch (error) { toast(errorMessage(error), 'error'); }
   });
   root.querySelector('#vtFiles')?.addEventListener('change', async e => {
