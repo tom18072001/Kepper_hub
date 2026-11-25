@@ -201,6 +201,35 @@ test('Lỗi 11 — tuần nghỉ / bỏ nghỉ có báo; danh sách đã chụp 
   } finally { await s.close(); }
 });
 
+// ---------- Lỗi 10: hộp hỏi lại "tuần đã qua hạn nộp" chỉ hiện cho Ban TGĐ — dựa vào luật có sẵn của máy chủ ----------
+// Sau hạn nộp của một tuần, chỉ Ban TGĐ đổi lịch tuần đó (tuần nghỉ, hạn nộp, ngày giao ban); thư ký, lãnh đạo bộ phận bị chặn.
+test('Lỗi 10 — tuần đã qua hạn nộp: thư ký, lãnh đạo bộ phận đổi lịch bị 403, lịch giữ nguyên, không báo; Ban TGĐ đổi được', async () => {
+  const db = fakeDb(seed());
+  const s = await server(db);
+  try {
+    const LAST = WK.addDays(CUR, -7); // hạn nộp 17:30 thứ Sáu tuần trước: luôn đã qua, vào mọi ngày chạy
+    assert.ok(Date.now() > new Date(WK.scheduleOf(LAST).deadline).getTime());
+    const lich = () => { const S = WK.scheduleOf(LAST, db.T.weeklyMeeting.find(m => m.week === LAST) || null); return [S.skip, S.deadlineDay, S.meetingDay]; };
+    const goc = lich(), mark = db.T.notification.length;
+    for (const [who, patch] of [[21, { deadlineDay: WK.addDays(LAST, -1) }], [21, { meetingDay: WK.addDays(LAST, 4) }], [21, { skip: true }],
+      [11, { skip: true }], [12, { deadlineDay: WK.addDays(LAST, -1) }], [24, { meetingDay: WK.addDays(LAST, 4) }]]) {
+      const r = await s.call('PUT', '/api/weekly/meeting', who, { week: LAST, ...patch });
+      assert.equal(r.status, 403, `người ${who} ${JSON.stringify(patch)}`);
+      if (who === 21) assert.equal(r.body.error, 'Đã qua hạn nộp — chỉ Ban TGĐ đổi lịch của tuần này');
+    }
+    assert.deepEqual(lich(), goc, 'lịch giữ nguyên');
+    assert.deepEqual(sentTo(db, 'WEEKLY_SCHEDULE', mark), [], 'không gửi thông báo đổi lịch');
+    // "Lưu thiết lập" luôn gửi đủ ba ô lịch: thư ký gửi lại đúng lịch đang có (không đổi gì) thì vẫn lưu được.
+    const same = await s.call('PUT', '/api/weekly/meeting', 21, { week: LAST, skip: false, deadlineDay: null, meetingDay: null });
+    assert.equal(same.status, 200, JSON.stringify(same.body));
+    // Ban TGĐ đổi được lịch của tuần đã qua hạn nộp.
+    const dl = WK.addDays(LAST, -1);
+    const ok = await s.call('PUT', '/api/weekly/meeting', 1, { week: LAST, deadlineDay: dl });
+    assert.equal(ok.status, 200, JSON.stringify(ok.body));
+    assert.deepEqual(lich(), [false, dl, goc[2]]);
+  } finally { await s.close(); }
+});
+
 // ---------- Lỗi 12: bảng điểm tuân thủ — trình / duyệt / mở khoá ----------
 // Tháng đã khép chắc chắn: 3 tháng trước tháng của tuần hiện tại (tháng liền trước có thể chưa khép vào sáng thứ Hai đầu tháng).
 const MONTH = (() => { const [y, m] = CUR.split('-').map(Number); return new Date(Date.UTC(y, m - 1 - 3, 1)).toISOString().slice(0, 7); })();
