@@ -54,6 +54,21 @@ function scheduleOf(f, meeting = null) {
 }
 // Điểm danh và phát hành kết luận + Action Log chỉ mở từ giờ giao ban: bấm nhầm từ thứ Năm, thứ Sáu không ghi được.
 const meetingStarted = (S, now = new Date()) => now.getTime() >= new Date(S.meetingAt).getTime();
+// Đổi lịch một tuần (Điều 3: báo các bộ phận). before / after: lịch HIỆU LỰC (scheduleOf) trước và sau khi lưu.
+// Trả { title, body } của thông báo, hoặc null khi không báo:
+//  - lịch không đổi thật: ô hạn nộp điền đúng thứ Sáu mặc định, đổi hạn / ngày họp của tuần vẫn là tuần nghỉ, lưu lại y nguyên;
+//  - buổi giao ban (cả lịch cũ lẫn lịch mới) đã bắt đầu: tuần đã họp, bộ phận không còn việc gì phải làm theo lịch đó. Đổi lịch
+//    tuần đã họp chỉ làm đổi điểm tuân thủ — lãnh đạo bộ phận được báo khi bảng điểm tháng được duyệt và khoá.
+function scheduleChange(before, after, now = new Date()) {
+  const skipChanged = !!before.skip !== !!after.skip;
+  const moved = before.deadlineDay !== after.deadlineDay || before.meetingDay !== after.meetingDay;
+  if (!skipChanged && (after.skip || !moved)) return null;
+  if (now.getTime() >= Math.max(new Date(before.meetingAt).getTime(), new Date(after.meetingAt).getTime())) return null;
+  const W = `${fmtD(after.from)} – ${fmtDY(after.to)}`;
+  if (after.skip) return { title: `Tuần ${W} nghỉ giao ban`, body: 'Không giao ban, không chấm điểm tuân thủ tuần này — không cần nộp báo cáo tuần.' };
+  const plan = S => `hạn nộp ${fmtTime(S.deadline)}, giao ban ${fmtTime(S.meetingAt)}`;
+  return { title: `Lịch giao ban tuần ${W}: ${plan(after)}`, body: before.skip ? 'Tuần này không còn là tuần nghỉ — nộp báo cáo tuần như thường lệ.' : `Lịch cũ: ${plan(before)}.` };
+}
 
 // ---------- Tình trạng hạng mục ----------
 // Quá hạn = đã QUA deadline mà chưa hoàn thành (QC-TH-01 Điều 4): hạn trước thứ Sáu của tuần báo cáo.
@@ -604,7 +619,7 @@ function fridaysOf(ym, now = new Date(), startWeek = null) {
 
 module.exports = {
   SOURCES, MTL_SOURCE, TASK_SOURCE, RISK_CODES, STATUSES, DONE, HELP_BGD, HELP_SELF, REASONS, NOTICE_TYPES, ATTENDANCE, DECISIONS, POINTS, POINT_LABEL,
-  isDay, addDays, dayOf, at, weekday, currentFriday, isFriday, fmtD, fmtDY, fmtTime, scheduleOf, meetingStarted,
+  isDay, addDays, dayOf, at, weekday, currentFriday, isFriday, fmtD, fmtDY, fmtTime, scheduleOf, meetingStarted, scheduleChange,
   doneSince, AUTO_LABEL, isAuto, addAutoRows, withoutAuto, markNoDelete, viewFor, briefFor, allRows, isOverdue, needsIssue, issueLabel, rowRisk, riskRows, rowStarted, partsOf, regroup, adoptMandatory, PLAN_NOT_STARTED, riskNoteOf, placeOf, statusFromMtl, taskStatus, deptCandidates, buildPrefill, sanitize, validate, finalize, writeBacks,
   submissionStatus, absenceNoticed, SUBMITTED, buildSummary, briefSummary, summaryText, emailText, summaryView, compliance, fridaysOf, stableStringify,
 };
