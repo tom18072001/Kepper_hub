@@ -6,6 +6,11 @@ test('21. Kết nối Claude: token cá nhân đúng quyền người dùng, tha
   const nv = await (await browser.newContext()).newPage();
   await login(nv, 'nv.phaply');
   await nv.goto('/#/claude');
+  // Tên tệp tiện ích người dùng thấy là "kepler-claude.mcpb" (góp ý người dùng: không còn chữ "kepper"), tải ở đường mới.
+  // Tải được ở cả đường mới lẫn đường cũ: unit test app/server/src/lib/tien-ich-claude.test.js (gói chỉ có trong bản Docker).
+  await expect(nv.getByTestId('claude-mcpb')).toHaveText('kepler-claude.mcpb');
+  await expect(nv.getByTestId('claude-mcpb')).toHaveAttribute('href', '/downloads/kepler-claude.mcpb');
+  await expect(nv.locator('#view')).not.toContainText(/kepper/i);
   await nv.getByTestId('claude-manual').locator('summary').click();
   await nv.getByTestId('claude-token-name').fill('Máy văn phòng (giả)');
   await nv.getByTestId('claude-token-create').click();

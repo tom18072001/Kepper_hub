@@ -238,7 +238,7 @@ Mỗi dòng là một thao tác thiết lập, kèm chỗ làm và người làm
 | Đổi mật khẩu của mình | Menu tài khoản → **Thông tin cá nhân** → **Đổi mật khẩu** | Mọi người, kể cả quản trị gốc |
 | Đổi / xoá ảnh đại diện | **Thông tin cá nhân** → **Đổi ảnh** / **Xoá ảnh** | Mọi người |
 | Sửa họ tên, chức danh, bộ phận, email của mình | Nhờ Quản trị hệ thống | Quản trị hệ thống |
-| Tải tiện ích Claude | Menu tài khoản → **Kết nối Claude** → **kepper-claude.mcpb** | Mọi người trừ Quản trị hệ thống |
+| Tải tiện ích Claude | Menu tài khoản → **Kết nối Claude** → **kepler-claude.mcpb** | Mọi người trừ Quản trị hệ thống |
 | Kết nối Claude, chọn **Chỉ xem** / **Xem và cập nhật** | Hỏi Claude → trang **Kết nối Claude** mở ra → chọn phạm vi → **Cho phép** | Mọi người trừ Quản trị hệ thống |
 | Thu hồi kết nối Claude của mình | **Kết nối Claude** → **Máy đã kết nối** → **Thu hồi** | Mọi người trừ Quản trị hệ thống |
 | Tạo token Claude thủ công | **Kết nối Claude** → **Tạo token thủ công…** → **Tạo token** → **Sao chép** | Mọi người trừ Quản trị hệ thống |
@@ -3789,7 +3789,7 @@ Quyền của một người = bốn lớp cộng lại:
 
 | Vai (nguyên văn ở ô **Vai**) | Dành cho | Quyền chung | Không có |
 |---|---|---|---|
-| **Ban Tổng Giám đốc** | Tổng Giám đốc, các Phó Tổng Giám đốc. Nên trùng đúng thành viên bộ phận Ban Tổng Giám đốc (bộ phận có mã `BTGD`) | Xem toàn công ty; tạo, quản lý dự án mọi bộ phận kể cả MTL; KPI & phân tích mọi người; bản tổng hợp giao ban đầy đủ, kết luận; chọn thư ký, PMO, người phụ trách nhân sự, văn thư, pháp chế; văn thư mọi mức mật; nhân sự, đối tác mọi bộ phận. Sửa kế hoạch việc, duyệt gia hạn, duyệt việc mốc / đường găng: chỉ trong **phạm vi phụ trách** và việc mình giao | Không lập báo cáo tuần. Không có quyền quản trị |
+| **Ban Tổng Giám đốc** | Tổng Giám đốc, các Phó Tổng Giám đốc. Nên trùng đúng thành viên bộ phận Ban Tổng Giám đốc (bộ phận có mã `BTGD`) | Xem toàn công ty; tạo, quản lý dự án mọi bộ phận kể cả MTL; KPI & phân tích mọi người; bản tổng hợp giao ban đầy đủ, kết luận; chọn thư ký, PMO, người phụ trách nhân sự, văn thư, pháp chế; văn thư mọi mức mật; nhân sự, đối tác mọi bộ phận. Sửa kế hoạch việc, duyệt việc mốc / đường găng: chỉ trong **phạm vi phụ trách** và việc mình giao. Duyệt gia hạn: việc trong **phạm vi phụ trách**; việc chưa có BTGĐ phụ trách nào thì mọi thành viên Ban Tổng Giám đốc | Không lập báo cáo tuần. Không có quyền quản trị |
 | **Lãnh đạo bộ phận** | Trưởng, phó bộ phận ("Trưởng phòng", "Phó trưởng ban" chỉ là chức danh) | Trong bộ phận mình: xem, sửa, xoá, duyệt việc; tạo, quản lý dự án thường; dashboard, xuất Excel; lập báo cáo tuần, xem bản tổng hợp tóm tắt; duyệt nghỉ phép, chấm công người trong bộ phận; đối tác của bộ phận gồm giá trị hợp đồng | Phải gán một bộ phận mới là lãnh đạo của bộ phận đó |
 | **Nhân viên** | Mọi người còn lại. **Vai mặc định khi tạo tài khoản** | Xem, sửa việc trong phạm vi bộ phận; dashboard bộ phận; lập báo cáo tuần; KPI của chính mình | Không tạo dự án (chỉ quản lý dự án mình là Chủ dự án) |
 | **Quản trị hệ thống** | IT | Tài khoản, bộ phận, nhãn chung, danh mục, nhật ký hệ thống, token Claude; đặt phạm vi phụ trách của Ban Tổng Giám đốc | **Không xem**: dự án, công việc, báo cáo, KPI, tài liệu, văn thư, nhân sự, đối tác. Không dùng Claude |
@@ -3815,7 +3815,7 @@ Quản trị hệ thống **không** gán kiêm nhiệm; chỉ nhìn thấy kế
 
 **⚠️ Dễ nhầm**
 - Hỏi "cho anh X quyền duyệt": không có ô quyền từng người. Đổi vai X thành **Lãnh đạo bộ phận** (nếu X là lãnh đạo thật), hoặc để người quản lý dự án đặt X làm người duyệt trong cài đặt dự án.
-- Gán vai Ban Tổng Giám đốc chưa đủ để người đó duyệt gia hạn việc nào; phải đặt phạm vi phụ trách (mục 7.6).
+- Gán vai Ban Tổng Giám đốc chưa đủ để người đó duyệt gia hạn việc đã có BTGĐ phụ trách; phải đặt phạm vi phụ trách (mục 7.6). Riêng việc chưa có BTGĐ phụ trách nào thì mọi thành viên Ban Tổng Giám đốc đều nhận đề nghị gia hạn và ai cũng duyệt được.
 
 **Claude:** Công cụ **Tôi là ai trong Kepler Hub** cho người dùng biết tài khoản, vai và vai trò giao ban của họ. Không công cụ nào đổi vai, kiêm nhiệm hay phạm vi phụ trách.
 
@@ -3977,7 +3977,7 @@ B. Sửa thông tin (họ tên, chức danh, email, tên đăng nhập)
 
 | Đổi sang | Ngay lập tức | Ví dụ |
 |---|---|---|
-| **Ban Tổng Giám đốc** | Xem toàn công ty; mất tab **Nộp báo cáo**; thôi là thư ký nếu đang thuộc bộ phận thư ký; chưa là BTGĐ phụ trách của việc nào cho tới khi đặt phạm vi; Ban Tổng Giám đốc nhận "… — xem toàn công ty theo vai Ban Tổng Giám đốc" | Phó Tổng Giám đốc mới nhận vai: xem được mọi dự án nhưng chưa duyệt gia hạn việc nào |
+| **Ban Tổng Giám đốc** | Xem toàn công ty; mất tab **Nộp báo cáo**; thôi là thư ký nếu đang thuộc bộ phận thư ký; chưa là BTGĐ phụ trách của việc nào cho tới khi đặt phạm vi; Ban Tổng Giám đốc nhận "… — xem toàn công ty theo vai Ban Tổng Giám đốc" | Phó Tổng Giám đốc mới nhận vai: xem được mọi dự án nhưng chỉ duyệt được gia hạn của việc chưa có BTGĐ phụ trách nào |
 | Rời **Ban Tổng Giám đốc** | Bỏ ngay phạm vi phụ trách (Toàn công ty và các bộ phận); Ban Tổng Giám đốc nhận "… — bỏ vai Ban Tổng Giám đốc và phạm vi phụ trách". Gán lại vai Ban Tổng Giám đốc thì phải đặt lại phạm vi | Lỡ tay đổi vai một Phó TGĐ rồi đổi lại: các bộ phận người đó phụ trách đã mất, phải tick lại |
 | **Lãnh đạo bộ phận** | Thành lãnh đạo của bộ phận đang gán: duyệt việc của bộ phận, nhận nhắc báo cáo tuần 15:00, xem tổng hợp tóm tắt, duyệt đơn nghỉ, tạo dự án thường của bộ phận | Gán vai cho trưởng phòng mới của Phòng Thiết kế → từ lần nhắc báo cáo tuần tới, người đó nhận nhắc |
 | **Nhân viên** | Mất các quyền lãnh đạo ở trên | Trưởng phòng cũ thôi chức: đổi về Nhân viên để không còn duyệt việc bộ phận |
@@ -4019,7 +4019,7 @@ Ví dụ: thư ký riêng của Tổng Giám đốc được đặt vào bộ ph
 | Ô (nguyên văn) | Nghĩa là gì | Điền / chọn thế nào (mặc định) | Đổi thì hệ thống làm gì khác |
 |---|---|---|---|
 | Khối "Phạm vi phụ trách" + câu "BTGĐ phụ trách của một việc: sửa kế hoạch, người giao, duyệt gia hạn, duyệt việc mốc / đường găng. Mọi thành viên Ban Tổng Giám đốc đều xem toàn công ty." | Chỉ hiện với tài khoản vai Ban Tổng Giám đốc | — | — |
-| **Toàn công ty** — BTGĐ phụ trách của mọi việc ở mọi bộ phận | Phạm vi Toàn công ty | Ô đánh dấu, mặc định bỏ trống | Người này là BTGĐ phụ trách của **mọi** việc: sửa kế hoạch (tên, hạn, người chủ trì…), đổi người giao, xoá, đặt lặp lại, duyệt gia hạn, duyệt và chấm mức việc mốc / đường găng; là người duyệt ở bước "BTGĐ phụ trách" của mọi quy trình duyệt; là Người phê duyệt tài liệu nội bộ khi Văn thư → Thiết lập để trống ô đó; nhận đề nghị gia hạn của việc thuộc bộ phận chưa có Phó TGĐ phụ trách. Lỗi: "Thiếu lựa chọn "Toàn công ty"" |
+| **Toàn công ty** — BTGĐ phụ trách của mọi việc ở mọi bộ phận | Phạm vi Toàn công ty | Ô đánh dấu, mặc định bỏ trống | Người này là BTGĐ phụ trách của **mọi** việc: sửa kế hoạch (tên, hạn, người chủ trì…), đổi người giao, xoá, đặt lặp lại, duyệt gia hạn, duyệt và chấm mức việc mốc / đường găng; là người duyệt ở bước "BTGĐ phụ trách" của mọi quy trình duyệt; là Người phê duyệt tài liệu nội bộ khi Văn thư → Thiết lập để trống ô đó; duyệt được đề nghị gia hạn của mọi việc; được báo đề nghị gia hạn khi bộ phận chủ trì chưa có Phó TGĐ phụ trách (có thì chỉ Phó TGĐ đó được báo). Lỗi: "Thiếu lựa chọn "Toàn công ty"" |
 | "Phó Tổng Giám đốc phụ trách các bộ phận:" + một ô đánh dấu mỗi bộ phận; bộ phận đang có Phó TGĐ khác ghi thêm "(đang: {họ tên})" | Các bộ phận người này phụ trách | Danh sách = bộ phận đang hoạt động + bộ phận người này đang phụ trách (kể cả đã khoá) | Người này là BTGĐ phụ trách các việc **do bộ phận đó chủ trì** (dự án thường không ghi bộ phận chủ trì thì tính bộ phận của dự án); nhận đề nghị gia hạn của các việc đó; hiện ở cột "Phó TGĐ phụ trách" (màn Bộ phận) và ở cây tổ chức. Mỗi bộ phận tối đa một Phó TGĐ phụ trách: tick bộ phận đang "(đang: X)" là lấy khỏi X, **không hỏi lại**. Lỗi: "Danh sách bộ phận không hợp lệ"; "Bộ phận không tồn tại"; "Bộ phận đã khoá, không nhận thêm vào phạm vi phụ trách: {tên}" |
 | Bảng "Chức năng" / "{vai} được làm" | Quyền của vai bằng lời | Chỉ xem | Bảng ngay dưới |
 | Câu cuối hộp: "Cộng thêm theo quan hệ với từng việc / dự án (người giao, người chủ trì, Chủ dự án…) và theo kiêm nhiệm (Thư ký giao ban, PMO, Phụ trách nhân sự, Văn thư, Pháp chế). Quan hệ chỉ cộng quyền, không bớt quyền của vai." | — | — | — |
@@ -4059,6 +4059,8 @@ Ví dụ: thư ký riêng của Tổng Giám đốc được đặt vào bộ ph
 
 > ⚠️ **Chữ trên màn hình ghi** quyền của Quản trị hệ thống là "Tài khoản, bộ phận, nhãn, nhật ký hệ thống; đặt phạm vi phụ trách của Ban Tổng Giám đốc" **nhưng thực tế** Quản trị hệ thống còn sửa được **Danh mục** (mục 7.12) và xem, thu hồi **Token Claude** của mọi người (mục 7.14).
 
+> ⚠️ **Chữ trên màn hình ghi** "duyệt gia hạn" của Ban Tổng Giám đốc áp cho "Việc trong phạm vi phụ trách … và việc mình giao" **nhưng thực tế** duyệt gia hạn không theo "việc mình giao": chỉ BTGĐ phụ trách của việc duyệt; việc chưa có BTGĐ phụ trách nào (chưa ai phụ trách Toàn công ty, bộ phận chủ trì chưa có Phó TGĐ phụ trách) thì mọi thành viên Ban Tổng Giám đốc duyệt.
+
 **Các nút**
 
 | Nút | Làm gì | Có hỏi lại không | Quay lại được không |
@@ -4072,8 +4074,8 @@ Lỗi khi lưu: "Chỉ tài khoản vai Ban Tổng Giám đốc có phạm vi ph
 
 **⚠️ Dễ nhầm**
 - Tick bộ phận đang ghi "(đang: X)" là lấy bộ phận khỏi X mà không hỏi. Ví dụ: tick "Phòng Thiết kế (đang: Phó TGĐ A)" cho Phó TGĐ B → Phó TGĐ A thôi phụ trách Phòng Thiết kế; từ đó đề nghị gia hạn việc của Phòng Thiết kế gửi Phó TGĐ B.
-- Bộ phận con **không** thừa hưởng Phó TGĐ phụ trách của bộ phận cha. Ví dụ: Phó TGĐ A phụ trách "Ban Kỹ thuật"; "Phòng Thiết kế" trực thuộc Ban Kỹ thuật mà chưa có Phó TGĐ riêng → cây tổ chức của nhân viên Phòng Thiết kế vẫn hiện Phó TGĐ A, nhưng Phó TGĐ A **không** duyệt được gia hạn việc do Phòng Thiết kế chủ trì. Muốn vậy phải tick thêm Phòng Thiết kế cho Phó TGĐ A.
-- Không ai có **Toàn công ty** và bộ phận chủ trì chưa có Phó TGĐ phụ trách → đề nghị gia hạn của việc bộ phận đó không có ai nhận, không ai duyệt được. Luôn để ít nhất một thành viên Ban Tổng Giám đốc có **Toàn công ty**.
+- Bộ phận con **không** thừa hưởng Phó TGĐ phụ trách của bộ phận cha. Ví dụ: Phó TGĐ A phụ trách "Ban Kỹ thuật"; "Phòng Thiết kế" trực thuộc Ban Kỹ thuật mà chưa có Phó TGĐ riêng → cây tổ chức của nhân viên Phòng Thiết kế vẫn hiện Phó TGĐ A, nhưng Phó TGĐ A **không** phải BTGĐ phụ trách việc do Phòng Thiết kế chủ trì: có người phụ trách **Toàn công ty** thì chỉ người đó nhận và duyệt gia hạn; không có thì mọi thành viên Ban Tổng Giám đốc (kể cả A) cùng nhận, ai cũng duyệt được. Muốn A phụ trách phải tick thêm Phòng Thiết kế cho Phó TGĐ A.
+- Không ai có **Toàn công ty** và bộ phận chủ trì chưa có Phó TGĐ phụ trách (hoặc Phó TGĐ đó đã bị khoá / đổi vai) → đề nghị gia hạn của việc bộ phận đó gửi tới **mọi** thành viên Ban Tổng Giám đốc đang hoạt động, ai cũng duyệt được (dự phòng để đề nghị không treo). Muốn đề nghị tới đúng người: đặt **Toàn công ty** cho Tổng Giám đốc và tick bộ phận cho Phó TGĐ phụ trách. Người phụ trách **Toàn công ty** duyệt được đề nghị gia hạn của **mọi** việc (thấy ở **Chờ tôi duyệt**), nhưng chỉ được báo khi bộ phận chủ trì chưa có Phó TGĐ phụ trách.
 - Để trống ô Người phê duyệt tài liệu nội bộ (Văn thư) mà bỏ **Toàn công ty** của mọi người → dự thảo quy chế không có ai phê duyệt.
 - Rời vai Ban Tổng Giám đốc (mục 7.5) là mất hết phạm vi; khoá tài khoản kèm bàn giao chỉ bỏ các bộ phận, không bỏ dấu Toàn công ty (mục 7.7).
 
@@ -4092,7 +4094,7 @@ Lỗi khi lưu: "Chỉ tài khoản vai Ban Tổng Giám đốc có phạm vi ph
 4. Có dòng "Yêu cầu duyệt đang chờ…": ghi lại để báo người quản lý dự án (bước 9).
 5. **Lưu** → "Đã lưu tài khoản — bàn giao: gỡ khỏi {n} việc, {m} việc chờ phân công lại".
 6. Người nghỉ từng là **Phó TGĐ phụ trách** bộ phận: Ban Tổng Giám đốc nhận "Cần chỉ định Phó Tổng Giám đốc phụ trách: {các bộ phận}". Khi Ban Tổng Giám đốc chọn người thay, mở **Quyền & phụ trách** của người thay và tick các bộ phận đó (mục 7.6).
-7. Người nghỉ có **Toàn công ty**: đặt **Toàn công ty** cho thành viên Ban Tổng Giám đốc khác. Hệ thống **không** tự báo việc này.
+7. Người nghỉ có **Toàn công ty**: đặt **Toàn công ty** cho thành viên Ban Tổng Giám đốc khác. Hệ thống **không** tự báo việc này. Chưa đặt thì đề nghị gia hạn của việc chưa có Phó TGĐ phụ trách gửi tới mọi thành viên Ban Tổng Giám đốc (mục 7.6).
 8. Người nghỉ có kiêm nhiệm (xem cột **Kiêm nhiệm** trước khi khoá) hoặc là Người phê duyệt tài liệu nội bộ: báo Ban Tổng Giám đốc chọn người thay ở đúng nơi (mục 7.1). Khoá tài khoản **không** tự gỡ kiêm nhiệm.
 9. Báo người quản lý các dự án liên quan: đổi người duyệt ở các bước "Người đứng tên dự án" / "Người được chỉ định" đang trỏ tới người nghỉ, đổi người đứng tên dự án / Chủ dự án nếu là người nghỉ.
 
@@ -4713,7 +4715,7 @@ Lỗi ảnh: "Chọn ảnh PNG, JPEG hoặc WebP", "Ảnh gốc quá lớn (tố
 **Các bước thường làm**
 
 A. Kết nối nhanh (cách chính)
-1. Bấm tải **kepper-claude.mcpb**, kéo thả vào cửa sổ Claude Desktop → **Install**. Ô **Địa chỉ Kepler Hub** đã điền sẵn; ô Token để trống.
+1. Bấm tải **kepler-claude.mcpb**, kéo thả vào cửa sổ Claude Desktop → **Install**. Ô **Địa chỉ Kepler Hub** đã điền sẵn; ô Token để trống.
 2. Hỏi Claude một câu về Kepler Hub. Trình duyệt tự mở trang Kết nối Claude với thẻ "Claude Desktop xin kết nối với tài khoản của bạn".
 3. Kiểm **mã** trên trang trùng mã Claude báo, **tên máy** đúng máy của bạn.
 4. Chọn **Xem và cập nhật (%, bình luận, nháp báo cáo)** hoặc **Chỉ xem** → **Cho phép**. Thấy "Đã kết nối — quay lại Claude Desktop và hỏi tiếp".
@@ -4732,7 +4734,7 @@ C. Token thủ công (chỉ khi máy không tự mở được trình duyệt)
 |---|---|---|---|
 | Thẻ yêu cầu kết nối: "Claude Desktop xin kết nối với tài khoản của bạn", dòng "Máy **{tên máy}** · mã **{XXXX-XXXX}** · lúc {thời gian}", câu "Claude sẽ xem được những gì bạn xem được; không nộp báo cáo, phê duyệt, xoá, xuất tệp. Kết nối có hiệu lực 30 ngày, thu hồi được bất cứ lúc nào ở danh sách bên dưới." | Yêu cầu từ tiện ích Claude | Chỉ hiện khi mở bằng mã còn hạn (10 phút) | Máy khác: cảnh báo "Yêu cầu này đến từ **máy khác** với máy bạn đang mở Kepler Hub — chỉ bấm "Cho phép" trên chính máy chạy Claude Desktop."; mã hết hạn: thẻ "Không tìm thấy yêu cầu kết nối." kèm "Yêu cầu kết nối không còn (quá 10 phút) — hỏi lại Claude để tạo yêu cầu mới"; đã xử lý: "Yêu cầu {mã} đã được xử lý. Quay lại Claude Desktop và hỏi tiếp." |
 | **Xem và cập nhật (%, bình luận, nháp báo cáo)** / **Chỉ xem** | Phạm vi của kết nối | Mặc định **Xem và cập nhật** | Bảng phạm vi dưới |
-| Thẻ hướng dẫn: "**Cài tiện ích:** tải kepper-claude.mcpb, kéo thả vào cửa sổ Claude Desktop → Install. Ô **Địa chỉ Kepler Hub** đã điền sẵn {địa chỉ}; ô Token để trống." và "**Hỏi Claude**, ví dụ: "Việc nào của tôi trễ hạn tuần này?". Lần đầu, Kepler Hub tự mở trên trình duyệt — bấm **Cho phép**. Xong." | Cách cài | Tệp tải về đã điền sẵn địa chỉ Kepler Hub và chứng chỉ HTTPS nội bộ (nếu có) | — |
+| Thẻ hướng dẫn: "**Cài tiện ích:** tải kepler-claude.mcpb, kéo thả vào cửa sổ Claude Desktop → Install. Ô **Địa chỉ Kepler Hub** đã điền sẵn {địa chỉ}; ô Token để trống." và "**Hỏi Claude**, ví dụ: "Việc nào của tôi trễ hạn tuần này?". Lần đầu, Kepler Hub tự mở trên trình duyệt — bấm **Cho phép**. Xong." | Cách cài | Tệp tải về đã điền sẵn địa chỉ Kepler Hub và chứng chỉ HTTPS nội bộ (nếu có) | — |
 | Bảng **Máy đã kết nối**: **Máy / tên** (kèm mã đầu), **Quyền** ("Xem và cập nhật" / "Chỉ xem"), **Hết hạn** (hoặc "Đã thu hồi"), **Dùng gần nhất**; trống: "Chưa có máy nào kết nối." | Các token của bạn | Token hết hạn / đã thu hồi hiện mờ | — |
 | Dòng "{n}/5 kết nối đang dùng. Mất máy hoặc nghi lộ thì thu hồi ngay. Đổi mật khẩu sẽ ngắt mọi kết nối." | — | Tối đa 5 kết nối còn hiệu lực | — |
 | Mục **Tạo token thủ công (chỉ khi máy không mở được trình duyệt)**: **Tên (máy / mục đích)** (chữ mờ "Laptop văn phòng"), **Quyền** ("Xem và cập nhật" / "Chỉ xem"), **Hiệu lực** ("30 ngày" / "60 ngày" / "90 ngày") | Token dán tay vào tiện ích | Tên bắt buộc, tối đa 60 ký tự; hiệu lực mặc định 30 ngày | Lỗi: "Thiếu Tên", "Tên vượt 60 ký tự"; "Mỗi người tối đa 5 token còn hiệu lực — thu hồi token cũ trước" |
@@ -4752,7 +4754,7 @@ Kết nối được phép không có nghĩa tiện ích Claude đã có công c
 
 | Nút | Làm gì | Có hỏi lại không | Quay lại được không |
 |---|---|---|---|
-| **kepper-claude.mcpb** (liên kết tải) | Tải tiện ích | — | — |
+| **kepler-claude.mcpb** (liên kết tải) | Tải tiện ích (đường `/downloads/kepler-claude.mcpb`) | — | — |
 | **Cho phép** | Tạo token 30 ngày cho máy đó và trao cho tiện ích; kết nối lại cùng máy thì thu hồi token cũ của máy đó. "Đã kết nối — quay lại Claude Desktop và hỏi tiếp" | — | Thu hồi ở bảng |
 | **Từ chối** | Từ chối yêu cầu. "Đã từ chối" | — | Hỏi lại Claude để có yêu cầu mới |
 | **Thu hồi** (dòng còn hiệu lực) | Thu hồi token. "Đã thu hồi" | "Thu hồi kết nối này? Claude trên máy đó sẽ không truy cập Kepler Hub được nữa (hỏi lại Claude để kết nối lại)." — **Thu hồi** (đỏ) / **Huỷ** | Không; kết nối lại sẽ tạo token mới |
@@ -4769,6 +4771,7 @@ Lỗi khi bấm **Cho phép**: "Chỉ bấm "Cho phép" trên chính máy đang 
 - Claude Desktop hỏi bạn trước mỗi lần dùng công cụ ghi, trừ khi bạn đã chọn luôn cho phép.
 - Màn Quản trị → Token Claude gọi cùng phạm vi là "Đọc và cập nhật" / "Chỉ đọc".
 - Hỏi Claude "Tôi là ai trong Kepler Hub?": câu trả lời hiện có tài khoản, vai, vai trò giao ban; dòng **bộ phận** hiện để trống dù bạn có bộ phận.
+- Tệp tiện ích nay tên `kepler-claude.mcpb`; tệp `kepper-claude.mcpb` tải từ trước là bản cũ. **Cho IT:** đường tải cũ `/downloads/kepper-claude.mcpb` vẫn chạy, ra cùng gói, tệp tải về cũng mang tên mới. Gói đưa lên thư mục tiện ích của tổ chức trên claude.ai thì tải ở đường mới `/downloads/kepler-claude.mcpb`. Đổi tên tệp không đổi mã tiện ích (`kepper-hub`, nằm trong gói): Claude Desktop và thư mục tổ chức vẫn coi là cùng tiện ích như trước khi đổi tên.
 
 **Claude:** Chính tiện ích Claude khởi động việc xin kết nối. Không công cụ nào tạo hay thu hồi token; tạo, thu hồi làm trên trang này.
 
@@ -5103,7 +5106,7 @@ Dữ liệu trình duyệt **không tách theo người** (máy dùng chung thì
 | Bật "Chỉ cho chấm công trong mạng văn phòng" xong không ai chấm công được? | Kepler Hub đang thấy IP của máy trung gian (vd. Docker Desktop 172.x / 192.168.65.x), không thấy IP người dùng. Xoá trống ô, lưu, nhờ IT sửa cấu hình rồi mới bật lại (mục 6.2) |
 | Đối tác bị gán nhầm bộ phận phụ trách, đổi ở đâu? | Giao diện không có chỗ đổi bộ phận phụ trách sau khi tạo. Nhờ IT. Lần sau Ban Tổng Giám đốc kiểm kỹ ô **Bộ phận phụ trách** trước khi lưu (mục 6.3) |
 | Người mới có chức danh "Trưởng phòng" mà không duyệt được việc của phòng? | Chức danh không cấp quyền. Quản trị hệ thống đổi **Vai** của người đó thành **Lãnh đạo bộ phận** và gán đúng **Bộ phận** (mục 7.1, 7.5) |
-| Phó Tổng Giám đốc mới đã có vai Ban Tổng Giám đốc mà không duyệt được gia hạn việc nào? | Vai chỉ cho xem toàn công ty. Quản trị hệ thống mở **Quyền & phụ trách**, tick các bộ phận người đó phụ trách (hoặc **Toàn công ty**), **Lưu phạm vi phụ trách** (mục 7.6) |
+| Phó Tổng Giám đốc mới đã có vai Ban Tổng Giám đốc mà không duyệt được gia hạn việc nào? | Vai chỉ cho xem toàn công ty (và duyệt gia hạn việc chưa có BTGĐ phụ trách nào). Quản trị hệ thống mở **Quyền & phụ trách**, tick các bộ phận người đó phụ trách (hoặc **Toàn công ty**), **Lưu phạm vi phụ trách** (mục 7.6) |
 | Kiêm nhiệm (thư ký, PMO, văn thư…) gán ở đâu? | Không phải ở Quản trị. Ban Tổng Giám đốc chọn ở ba nơi: Báo cáo tuần → Thiết lập (thư ký, PMO); Nhân sự → Thiết lập (phụ trách nhân sự); Tài liệu → Văn thư → Thiết lập (văn thư, pháp chế, người phê duyệt) (mục 7.1) |
 | Nhân viên nghỉ việc, khoá tài khoản thế nào để việc không bị bỏ rơi? | **Sửa** → bỏ **Đang hoạt động** → **giữ** dấu **Trả việc về lãnh đạo bộ phận để phân công lại** → **Lưu**. Khoá làm mất phiên đăng nhập và token Claude; ghi chú cá nhân bị xoá sau 30 ngày (mục 7.7) |
 | Quên mật khẩu thì làm sao? | Báo Quản trị hệ thống bấm **Reset MK**. Mật khẩu mặc định — IT báo riêng cho người dùng; đăng nhập xong phải đổi ngay (mục 7.8, 8.1) |

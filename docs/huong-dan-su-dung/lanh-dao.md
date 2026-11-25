@@ -30,7 +30,7 @@ Kepler Hub chỉ có **một trục vai** để trả lời "người này là a
 
 | Vai | Ai | Làm được |
 |---|---|---|
-| **Ban Tổng Giám đốc (BTGĐ)** | Tổng Giám đốc, các Phó Tổng Giám đốc (thành viên bộ phận Ban Tổng Giám đốc) | Xem toàn công ty (xem đầy đủ mọi việc, bình luận); tạo, quản lý mọi dự án, kể cả MTL; KPI & phân tích; tài liệu mọi dự án; văn thư mọi mức mật; kết luận giao ban; chọn bộ phận thư ký giao ban, PMO, người phụ trách nhân sự, Văn thư, Pháp chế, Người phê duyệt tài liệu nội bộ. Trong **phạm vi phụ trách** của mình: sửa kế hoạch, đổi người giao, xoá, đặt lặp lại việc, duyệt gia hạn, duyệt + chấm mức việc mốc / đường găng (sửa kế hoạch, xoá việc cũng làm được với việc mình giao) |
+| **Ban Tổng Giám đốc (BTGĐ)** | Tổng Giám đốc, các Phó Tổng Giám đốc (thành viên bộ phận Ban Tổng Giám đốc) | Xem toàn công ty (xem đầy đủ mọi việc, bình luận); tạo, quản lý mọi dự án, kể cả MTL; KPI & phân tích; tài liệu mọi dự án; văn thư mọi mức mật; kết luận giao ban; chọn bộ phận thư ký giao ban, PMO, người phụ trách nhân sự, Văn thư, Pháp chế, Người phê duyệt tài liệu nội bộ. Trong **phạm vi phụ trách** của mình: sửa kế hoạch, đổi người giao, xoá, đặt lặp lại việc, duyệt gia hạn, duyệt + chấm mức việc mốc / đường găng (sửa kế hoạch, xoá việc cũng làm được với việc mình giao). Việc chưa có BTGĐ phụ trách nào: thành viên BTGĐ nào cũng duyệt gia hạn được |
 | **Lãnh đạo bộ phận** | Trưởng / phó bộ phận ("Trưởng phòng", "Phó trưởng ban"… chỉ là chức danh) | Xem dự án của bộ phận, dự án dùng chung, dự án mình là thành viên; xem đầy đủ, bình luận việc do bộ phận mình hoặc người trong bộ phận mình chủ trì; chọn người cho việc giao về bộ phận; tạo, quản lý dự án thường của bộ phận; duyệt ở cấp "Lãnh đạo bộ phận chủ trì" của quy trình duyệt dự án và duyệt việc nhân viên tự giao cho mình; chịu trách nhiệm báo cáo tuần, xem bản tổng hợp giao ban mức tóm tắt; duyệt đơn nghỉ, giải trình chấm công của nhân viên bộ phận; tạo dự thảo văn bản nội bộ dãy D7 của bộ phận |
 | **Nhân viên** | Mọi người còn lại | Làm việc mình chủ trì / phối hợp, báo cáo tiến độ; giao việc trong dự án mình làm việc được (khi đó là người giao: sửa kế hoạch, duyệt, chấm mức); quản lý dự án mình là Chủ dự án; lập, gửi báo cáo tuần của bộ phận |
 | **Quản trị hệ thống** | IT | Tài khoản (gán vai, bộ phận, khoá, đặt lại mật khẩu), phạm vi phụ trách của BTGĐ, bộ phận, nhãn chung, danh mục, nhật ký hệ thống, thu hồi token Claude. **Không** xem nội dung nghiệp vụ, không dùng Claude với Kepler Hub |
@@ -167,7 +167,7 @@ Nhiều dự án thường có quy trình duyệt nhiều cấp (lựa chọn m�
 
 ### 5.1 Duyệt gia hạn (BTGĐ phụ trách của việc)
 
-Người chủ trì xin gia hạn → **BTGĐ phụ trách của việc** quyết định (người giao, lãnh đạo bộ phận chỉ theo dõi).
+Người chủ trì xin gia hạn → **BTGĐ phụ trách của việc** quyết định (người giao, lãnh đạo bộ phận chỉ theo dõi). Thông báo gửi Phó Tổng Giám đốc phụ trách bộ phận chủ trì; bộ phận chưa có Phó Tổng Giám đốc phụ trách thì gửi người phụ trách **Toàn công ty**. Người phụ trách **Toàn công ty** quyết được mọi đề nghị (thấy ở **Chờ tôi duyệt**) dù không được báo. Việc chưa có ai phụ trách (chưa ai phụ trách Toàn công ty, bộ phận chủ trì chưa có Phó Tổng Giám đốc phụ trách hoặc người đó đã nghỉ) thì **mọi thành viên BTGĐ** nhận và ai cũng quyết được, để đề nghị không bị treo.
 
 1. **Chờ tôi duyệt → Đề nghị gia hạn**.
 2. Xem hạn cũ, hạn đề nghị, lý do → **Duyệt** (1) hoặc **Không duyệt** (phải ghi ý kiến). Duyệt chỉ đổi **Hạn** của việc — hạng mục MTL vẫn tính chậm / trễ, KPI theo kế hoạch gốc.

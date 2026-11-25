@@ -23,18 +23,40 @@ async function decisionScope(prisma, user) {
   const supervised = (await prisma.department.findMany({ where: { supervisorId: { in: [user.id, ...fromIds] } }, select: { id: true } })).map(d => d.id);
   // BTGĐ phụ trách của việc (services/task-access.js): TGĐ — mọi việc; Phó TGĐ phụ trách — việc của phòng mình phụ trách.
   const org = await TA.orgContext(prisma, now);
-  const ownSupervised = (await prisma.department.findMany({ where: { supervisorId: user.id }, select: { id: true } })).map(d => d.id);
-  return { assigners: [user.id, ...fromIds], leaderDepts: [...leaderDepts], supervised, top: org.topIds.includes(user.id), ownSupervised };
+  // board: thành viên Ban Tổng Giám đốc đang hoạt động — có thể quyết gia hạn cả việc ngoài phạm vi trên (việc chưa có BTGĐ phụ trách;
+  // việc nhánh kế thừa bộ phận chủ trì mình phụ trách).
+  return { assigners: [user.id, ...fromIds], leaderDepts: [...leaderDepts], supervised, org, top: org.topIds.includes(user.id), board: org.boardIds.includes(user.id) };
 }
 // Kiến nghị "của tôi": người giao / Phó TGĐ phụ trách luôn thấy; lãnh đạo phòng chỉ thấy kiến nghị chưa trình lên BTGĐ.
 const proposalScope = s => ({ OR: [{ workItem: { assignedById: { in: s.assigners } } }, ...(s.supervised.length ? [{ workItem: { leadDepartmentId: { in: s.supervised } } }] : []),
   ...(s.leaderDepts.length ? [{ forwardedAt: null, workItem: { leadDepartmentId: { in: s.leaderDepts } } }] : [])] });
 const scopeWhere = s => (s.top ? {} : { OR: [{ assignedById: { in: s.assigners } }, ...(s.leaderDepts.length ? [{ leadDepartmentId: { in: s.leaderDepts } }] : []), ...(s.supervised.length ? [{ leadDepartmentId: { in: s.supervised } }] : [])] });
-// Giống điều kiện ở POST /api/extensions/:id/decide: BTGĐ phụ trách của việc (TGĐ; Phó TGĐ phụ trách bộ phận chủ trì) duyệt mọi đề nghị gia hạn.
-// Người giao, lãnh đạo bộ phận chủ trì vẫn thấy đề nghị để nắm (không có nút).
-const canDecideExt = (s, userId, ext, item) => s.top || s.ownSupervised.includes(item.leadDepartmentId ?? item.project?.departmentId);
-const ITEM_SELECT = { id: true, number: true, title: true, dueDate: true, priority: true, taskType: true, assignedById: true, leadDepartmentId: true, archivedAt: true,
+// CÙNG điều kiện với POST /api/extensions/:id/decide (quyền decideExtension, services/task-access.js extensionDeciderIds): BTGĐ phụ trách
+// của việc (Toàn công ty; Phó TGĐ phụ trách bộ phận chủ trì, kể cả bộ phận kế thừa từ việc cha); việc chưa có BTGĐ phụ trách nào → mọi
+// thành viên Ban Tổng Giám đốc. Người giao, lãnh đạo bộ phận chủ trì vẫn thấy đề nghị để nắm (không có nút).
+async function canDecideExt(prisma, s, userId, item) {
+  if (s.top) return true; // phụ trách Toàn công ty: BTGĐ phụ trách của mọi việc
+  const task = TA.taskOf(item);
+  const ctx = TA.itemContext(s.org, { project: item.project, item: task, chain: await TA.leadChain(prisma, task) });
+  return TA.extensionDeciderIds(ctx).includes(userId);
+}
+const ITEM_SELECT = { id: true, number: true, title: true, dueDate: true, priority: true, taskType: true, assignedById: true, leadDepartmentId: true, parentId: true, archivedAt: true,
   project: { select: { id: true, key: true, name: true, departmentId: true, deletedAt: true } }, assignees: { select: { user: { select: { id: true, fullName: true } } } } };
+// Đề nghị gia hạn đang chờ, kèm cờ canDecide: trong phạm vi của tôi (người giao, lãnh đạo bộ phận chủ trì, BTGĐ phụ trách) như trước;
+// thành viên BTGĐ (không phụ trách Toàn công ty) thấy thêm đề nghị ngoài phạm vi đó mà mình quyết được — việc chưa có BTGĐ phụ trách
+// (dự phòng), việc nhánh kế thừa bộ phận chủ trì mình phụ trách.
+async function pendingExtensions(prisma, user, s, take) {
+  const where = scope => ({ status: 'PENDING', requestedById: { not: user.id }, workItem: { archivedAt: null, project: { deletedAt: null }, ...scope } });
+  const args = { include: { workItem: { select: ITEM_SELECT } }, orderBy: { createdAt: 'asc' }, take };
+  const [mine, more] = await Promise.all([
+    prisma.dueExtension.findMany({ where: where(scopeWhere(s)), ...args }),
+    s.board && !s.top ? prisma.dueExtension.findMany({ where: where({}), ...args }) : [],
+  ]);
+  const out = new Map();
+  for (const r of mine) out.set(r.id, { ...r, canDecide: await canDecideExt(prisma, s, user.id, r.workItem) });
+  for (const r of more) if (!out.has(r.id) && await canDecideExt(prisma, s, user.id, r.workItem)) out.set(r.id, { ...r, canDecide: true });
+  return [...out.values()].sort((a, b) => a.createdAt - b.createdAt || a.id - b.id).slice(0, take);
+}
 
 // Đơn nghỉ + giải trình chấm công chờ tôi duyệt (khi bật phân hệ Nhân sự): cùng nguồn với Nhân sự → Chờ duyệt.
 async function hrPending(prisma, user) {
@@ -77,16 +99,12 @@ module.exports = function mountApprovals(app, { prisma, auth, audit, config = {}
   // Đề nghị gia hạn chờ tôi quyết định.
   app.get('/api/approvals/extensions', auth, async (req, res) => {
     const s = await decisionScope(prisma, req.user);
-    const rows = await prisma.dueExtension.findMany({
-      where: { status: 'PENDING', requestedById: { not: req.user.id }, workItem: { archivedAt: null, project: { deletedAt: null }, ...scopeWhere(s) } },
-      include: { workItem: { select: ITEM_SELECT } }, orderBy: { createdAt: 'asc' }, take: 200,
-    });
+    const rows = await pendingExtensions(prisma, req.user, s, 200);
     const n = await names(rows.flatMap(r => [r.requestedById, r.workItem.assignedById])); const d = await deptNames();
-    // Chỉ BTGĐ phụ trách của việc có nút quyết định; người giao / lãnh đạo bộ phận xem để nắm.
+    // Chỉ người quyết định (BTGĐ phụ trách của việc; chưa có ai thì mọi thành viên BTGĐ) có nút; người giao / lãnh đạo bộ phận xem để nắm.
     res.json(rows.map(r => {
       const it = r.workItem;
-      const canDecide = canDecideExt(s, req.user.id, r, it);
-      return { id: r.id, newDue: r.newDue, oldDue: r.oldDue, reason: r.reason, createdAt: r.createdAt, requestedByName: n[r.requestedById], canDecide,
+      return { id: r.id, newDue: r.newDue, oldDue: r.oldDue, reason: r.reason, createdAt: r.createdAt, requestedByName: n[r.requestedById], canDecide: r.canDecide,
         days: r.oldDue ? Math.round((r.newDue - r.oldDue) / DAY) : null,
         item: { id: it.id, code: `${it.project.key}-${it.number}`, title: it.title, dueDate: it.dueDate, taskType: it.taskType, departmentName: d[deptOf(it)] || null, assignedByName: n[it.assignedById] || null },
         project: { id: it.project.id, key: it.project.key, name: it.project.name } };
@@ -112,9 +130,8 @@ module.exports = function mountApprovals(app, { prisma, auth, audit, config = {}
     const s = await decisionScope(prisma, req.user);
     const [queue, extensions, proposals, hr] = await Promise.all([
       approval.queueFor(prisma, req.user).then(q => q.length),
-      // Chỉ đếm đề nghị mình được quyết định (khớp tab "Đề nghị gia hạn"): BTGĐ phụ trách của việc.
-      prisma.dueExtension.findMany({ where: { status: 'PENDING', requestedById: { not: req.user.id }, workItem: { archivedAt: null, project: { deletedAt: null }, ...scopeWhere(s) } },
-        select: { requestedById: true, workItem: { select: { assignedById: true, leadDepartmentId: true, project: { select: { departmentId: true } } } } }, take: 500 }).then(rows => rows.filter(r => canDecideExt(s, req.user.id, r, r.workItem)).length),
+      // Chỉ đếm đề nghị mình được quyết định (khớp tab "Đề nghị gia hạn"): BTGĐ phụ trách của việc; chưa có ai thì mọi thành viên BTGĐ.
+      pendingExtensions(prisma, req.user, s, 500).then(rows => rows.filter(r => r.canDecide).length),
       prisma.progressReport.count({ where: { proposals: { not: '' }, answer: null, authorId: { not: req.user.id }, workItem: { archivedAt: null, project: { deletedAt: null } }, AND: [proposalScope(s)] } }),
       hrmOn ? hrPending(prisma, req.user) : 0,
     ]);

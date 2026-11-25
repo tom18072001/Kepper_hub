@@ -9,7 +9,7 @@ RUN npm ci --omit=dev --no-audit --no-fund --fetch-retries=5
 # Liệt kê ĐỦ mọi tệp server.js nạp (import): thiếu một tệp là tiện ích chết ngay khi khởi động trên máy người dùng (0.6.0 thiếu
 # weekly-draft.cjs). CI giải nén gói trong image và khởi động thử (bước "Gói tiện ích Claude", app/mcp/test/pack-smoke.mjs).
 COPY app/mcp/server.js app/mcp/weekly-draft.cjs app/mcp/manifest.json app/mcp/.mcpbignore ./
-RUN mkdir -p /out && mcpb pack . /out/kepper-claude.mcpb
+RUN mkdir -p /out && mcpb pack . /out/kepler-claude.mcpb
 
 FROM node:22-bookworm-slim
 
@@ -24,7 +24,7 @@ RUN npm ci --no-audit --no-fund --fetch-retries=5 --fetch-retry-mintimeout=20000
 COPY app/server/ ./
 RUN npx prisma generate
 COPY app/web/ /app/web/
-COPY --from=mcpb /out/kepper-claude.mcpb /app/web/downloads/kepper-claude.mcpb
+COPY --from=mcpb /out/kepler-claude.mcpb /app/web/downloads/kepler-claude.mcpb
 
 # Chạy bằng tài khoản không phải root; thư mục tệp đính kèm là volume.
 RUN mkdir -p /data/uploads && chown -R node:node /data /app/server/node_modules/.prisma && chmod +x docker-entrypoint.sh

@@ -40,7 +40,7 @@ export async function renderClaude(root, setCrumbs, params = new URLSearchParams
       <p><b>Claude dùng đúng quyền của bạn</b>: bạn xem, sửa được gì thì Claude được đúng như vậy.
         Nộp báo cáo, duyệt, phát hành, xoá, xuất tệp vẫn do bạn tự bấm.</p>
       <ol class="cl-ol">
-        <li><b>Cài tiện ích:</b> tải <a href="/downloads/kepper-claude.mcpb" download data-testid="claude-mcpb">kepper-claude.mcpb</a>, kéo thả vào cửa sổ Claude Desktop → Install.
+        <li><b>Cài tiện ích:</b> tải <a href="/downloads/kepler-claude.mcpb" download data-testid="claude-mcpb">kepler-claude.mcpb</a>, kéo thả vào cửa sổ Claude Desktop → Install.
           Ô <b>Địa chỉ Kepler Hub</b> đã điền sẵn <code>${esc(origin)}</code>; ô Token để trống.</li>
         <li><b>Hỏi Claude</b>, ví dụ: "Việc nào của tôi trễ hạn tuần này?". Lần đầu, Kepler Hub tự mở trên trình duyệt — bấm <b>Cho phép</b>. Xong.</li>
       </ol>

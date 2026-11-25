@@ -7,7 +7,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "pack": "mcpb pack . ../web/downloads/kepper-claude.mcpb"
+    "pack": "mcpb pack . ../web/downloads/kepler-claude.mcpb"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
