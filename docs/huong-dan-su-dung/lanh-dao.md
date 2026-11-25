@@ -167,7 +167,7 @@ Nhiều dự án thường có quy trình duyệt nhiều cấp (lựa chọn m�
 
 ### 5.1 Duyệt gia hạn (BTGĐ phụ trách của việc)
 
-Người chủ trì xin gia hạn → **BTGĐ phụ trách của việc** quyết định (người giao, lãnh đạo bộ phận chỉ theo dõi). Người phụ trách **Toàn công ty** và Phó Tổng Giám đốc phụ trách bộ phận chủ trì cùng nhận thông báo, ai cũng quyết được. Việc chưa có ai phụ trách (chưa ai phụ trách Toàn công ty, bộ phận chủ trì chưa có Phó Tổng Giám đốc phụ trách hoặc người đó đã nghỉ) thì **mọi thành viên BTGĐ** nhận và ai cũng quyết được, để đề nghị không bị treo.
+Người chủ trì xin gia hạn → **BTGĐ phụ trách của việc** quyết định (người giao, lãnh đạo bộ phận chỉ theo dõi). Thông báo gửi Phó Tổng Giám đốc phụ trách bộ phận chủ trì; bộ phận chưa có Phó Tổng Giám đốc phụ trách thì gửi người phụ trách **Toàn công ty**. Người phụ trách **Toàn công ty** quyết được mọi đề nghị (thấy ở **Chờ tôi duyệt**) dù không được báo. Việc chưa có ai phụ trách (chưa ai phụ trách Toàn công ty, bộ phận chủ trì chưa có Phó Tổng Giám đốc phụ trách hoặc người đó đã nghỉ) thì **mọi thành viên BTGĐ** nhận và ai cũng quyết được, để đề nghị không bị treo.
 
 1. **Chờ tôi duyệt → Đề nghị gia hạn**.
 2. Xem hạn cũ, hạn đề nghị, lý do → **Duyệt** (1) hoặc **Không duyệt** (phải ghi ý kiến). Duyệt chỉ đổi **Hạn** của việc — hạng mục MTL vẫn tính chậm / trễ, KPI theo kế hoạch gốc.

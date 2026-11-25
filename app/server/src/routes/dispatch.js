@@ -39,10 +39,14 @@ async function supervisorOf(client, deptId) {
   if (deptId == null) return null;
   return (await client.department.findUnique({ where: { id: deptId }, select: { supervisorId: true } }))?.supervisorId ?? null;
 }
-// Người nhận đề nghị gia hạn: người quyết định — BTGĐ phụ trách của việc; việc chưa có ai phụ trách thì mọi thành viên Ban Tổng Giám đốc
-// (TA.extensionDeciderIds, CÙNG ngữ cảnh ctx đã tính quyền decideExtension) — và người giao để theo dõi. Không báo chính người gửi.
+// Người nhận đề nghị gia hạn: người quyết định cụ thể nhất — Phó TGĐ phụ trách bộ phận chủ trì (đang hoạt động, còn vai BTGĐ); bộ phận
+// chưa có thì người phụ trách Toàn công ty; chưa ai phụ trách thì mọi thành viên Ban Tổng Giám đốc (TA.extensionDeciderIds, CÙNG ngữ cảnh
+// ctx đã tính quyền decideExtension). Người phụ trách Toàn công ty vẫn quyết được mọi đề nghị (thấy ở Chờ tôi duyệt) nhưng chỉ được báo
+// khi bộ phận chủ trì chưa có Phó TGĐ phụ trách — như trước. Kèm người giao để theo dõi. Không báo chính người gửi.
 function extensionRecipients(ctx, item, requesterId) {
-  return [...new Set([...TA.extensionDeciderIds(ctx), item.assignedById].filter(u => u != null && Number(u) !== Number(requesterId)))];
+  const notMe = u => u != null && Number(u) !== Number(requesterId);
+  const deciders = notMe(ctx.supervisorId) ? [ctx.supervisorId] : TA.extensionDeciderIds(ctx).filter(notMe);
+  return [...new Set([...deciders, item.assignedById].filter(notMe).map(Number))];
 }
 
 module.exports = function mountDispatch(app, { prisma, auth, audit }) {

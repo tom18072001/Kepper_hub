@@ -136,20 +136,36 @@ test('chưa ai phụ trách Toàn công ty, Phó TGĐ phụ trách bộ phận c
   } finally { t.close(); }
 });
 
-test('có người phụ trách: người phụ trách Toàn công ty và Phó TGĐ phụ trách bộ phận chủ trì nhận; thành viên BTGĐ khác không nhận, không quyết', async () => {
+test('có người phụ trách: Phó TGĐ phụ trách bộ phận chủ trì nhận; người phụ trách Toàn công ty không bị báo nhưng thấy và quyết được; thành viên BTGĐ khác không nhận, không quyết', async () => {
   const users = USERS.map(u => (u.id === 1 ? { ...u, boardAll: true } : u));
   const t = await scenario({ users, items: [item(100, { leadDepartmentId: 80 })] });
   try {
     const sent = await t.call(40, 'POST', '/api/items/100/extensions', REQUEST);
     assert.equal(sent.status, 201, JSON.stringify(sent.body));
-    assert.deepEqual(recipients(t.state), [1, 4, 30]);
+    // Như trước: bộ phận có Phó TGĐ phụ trách thì chỉ Phó TGĐ đó (và người giao) được báo — không báo người Toàn công ty mọi đề nghị.
+    assert.deepEqual(recipients(t.state), [4, 30]);
     assert.deepEqual(await queueOf(t, 5), { rows: [], badge: 0 });
     assert.deepEqual(await queueOf(t, 4), { rows: [['DA-100', true]], badge: 1 });
+    assert.deepEqual(await queueOf(t, 1), { rows: [['DA-100', true]], badge: 1 });
     assert.equal((await t.call(5, 'POST', `/api/extensions/${sent.body.id}/decide`, { decision: 'APPROVE' })).status, 403);
     const no = await t.call(1, 'POST', `/api/extensions/${sent.body.id}/decide`, { decision: 'REJECT', note: 'Chưa đủ căn cứ (giả)' });
     assert.equal(no.status, 200, JSON.stringify(no.body));
     assert.equal(t.state.extensions[0].status, 'REJECTED');
     assert.equal(t.items.get(100).dueDate.toISOString(), '2026-12-01T00:00:00.000Z');
+  } finally { t.close(); }
+});
+
+test('Phó TGĐ phụ trách bộ phận chủ trì đã khoá, có người phụ trách Toàn công ty: người Toàn công ty nhận và quyết; người đã khoá không được báo', async () => {
+  const users = USERS.map(u => (u.id === 1 ? { ...u, boardAll: true } : u));
+  const t = await scenario({ users, items: [item(100)] }); // bộ phận 50: Phó TGĐ phụ trách là người 2, đã khoá
+  try {
+    const sent = await t.call(40, 'POST', '/api/items/100/extensions', REQUEST);
+    assert.equal(sent.status, 201, JSON.stringify(sent.body));
+    assert.deepEqual(recipients(t.state), [1, 30]); // mã cũ: [2, 30] — chỉ báo tài khoản đã khoá
+    for (const who of [4, 5]) assert.deepEqual(await queueOf(t, who), { rows: [], badge: 0 }, `người ${who}`);
+    assert.equal((await t.call(4, 'POST', `/api/extensions/${sent.body.id}/decide`, { decision: 'APPROVE' })).status, 403);
+    assert.deepEqual(await queueOf(t, 1), { rows: [['DA-100', true]], badge: 1 });
+    assert.equal((await t.call(1, 'POST', `/api/extensions/${sent.body.id}/decide`, { decision: 'APPROVE' })).status, 200);
   } finally { t.close(); }
 });
 
