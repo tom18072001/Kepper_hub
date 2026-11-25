@@ -269,8 +269,9 @@ async function renderDoc(root, id, setCrumbs, m) {
     catch (error) { toast(errorMessage(error), 'error'); e.target.value = ''; }
   });
   root.querySelectorAll('[data-dl]').forEach(b => b.onclick = () => download(`/api/vanthu/files/${b.dataset.dl}/download`).catch(err => toast(errorMessage(err), 'error')));
+  // Máy chủ (storage.remove): tệp trên NAS chuyển vào _LuuTru của thư mục sổ; tệp lưu trong Hub (không nhãn NAS) bị xoá thật — hộp hỏi nói rõ.
   root.querySelectorAll('[data-rm]').forEach(b => b.onclick = async () => {
-    const msg = b.dataset.nas ? 'Gỡ tệp khỏi văn bản? Bản trên NAS được chuyển vào thư mục _LuuTru của sổ, không xoá hẳn.' : 'Gỡ tệp khỏi văn bản?';
+    const msg = b.dataset.nas ? 'Gỡ tệp khỏi văn bản? Bản trên NAS được chuyển vào thư mục _LuuTru của sổ, không xoá hẳn.' : 'Gỡ tệp khỏi văn bản? Tệp lưu trong Hub sẽ bị xoá hẳn, không khôi phục được.';
     if (!(await confirmDialog(msg, { okText: 'Gỡ tệp', danger: true }))) return;
     try { await api(`/api/vanthu/files/${b.dataset.rm}`, { method: 'DELETE' }); toast('Đã gỡ tệp', 'ok'); renderDoc(root, id, setCrumbs, m); }
     catch (error) { toast(errorMessage(error), 'error'); }
