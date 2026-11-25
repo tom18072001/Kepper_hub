@@ -134,6 +134,8 @@ nên người ngoài vào được Hub mà không đi tới DC hay máy khác tr
   - Máy trong domain: trên DC chạy `certutil -dspublish -f <kepler-hub-ca.crt> RootCA` (Domain Admin), máy trạm nhận qua Group Policy (hoặc `gpupdate /force`).
   - Máy ngoài domain / điện thoại: mở `http://hub.keplerholdings.vn/cai-chung-chi` (trang hướng dẫn, tải `kepler-hub-ca.crt`).
 - Tên khác ngoài `hub.keplerholdings.vn` (không khuyến nghị): `HUB_HOST="hub.keplerholdings.vn, <tên-khác>"` và thêm cùng các tên vào `APP_ORIGIN` (`https://...`).
-- Tiện ích Claude (`/downloads/kepper-claude.mcpb`): máy chủ lấy chứng chỉ gốc từ Caddy (`http://caddy/kepler-hub-ca.crt`, biến `HUB_CA_URL`), đóng vào gói và đặt `NODE_EXTRA_CA_CERTS`
+- Tiện ích Claude (`/downloads/kepler-claude.mcpb`): máy chủ lấy chứng chỉ gốc từ Caddy (`http://caddy/kepler-hub-ca.crt`, biến `HUB_CA_URL`), đóng vào gói và đặt `NODE_EXTRA_CA_CERTS`
   (Node trong Claude Desktop không đọc kho chứng chỉ của Windows), điền sẵn đúng địa chỉ người dùng đang mở. Máy còn trỏ tên cũ `kepler-hub.kepler.com`:
   đổi ô "Địa chỉ Kepler Hub" thành `https://hub.keplerholdings.vn`.
+  Đường cũ `/downloads/kepper-claude.mcpb` vẫn chạy, ra cùng gói (tệp tải về cũng tên `kepler-claude.mcpb`). Gói đưa lên thư mục tiện ích
+  của tổ chức trên claude.ai thì tải ở đường mới; mã tiện ích `kepper-hub` (trong gói) không đổi nên vẫn là cùng một tiện ích.

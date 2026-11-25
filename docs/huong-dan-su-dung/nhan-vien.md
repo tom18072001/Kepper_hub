@@ -113,11 +113,11 @@ Bấm tên của bạn góc trên phải → **Kết nối Claude** (1).
 
 ### 3.2 Bước 1 (bắt buộc): cài tiện ích Kepler Hub cho Claude Desktop
 
-1. Trên trang **Kết nối Claude**, dòng **Cài tiện ích**: bấm vào chữ `kepper-claude.mcpb` (1) để tải tệp về thư mục Tải về (Downloads). Tên tệp đúng là "kepper", không phải "kepler".
+1. Trên trang **Kết nối Claude**, dòng **Cài tiện ích**: bấm vào chữ `kepler-claude.mcpb` (1) để tải tệp về thư mục Tải về (Downloads).
 
 ![Trang Kết nối Claude](anh/03-trang-ket-noi-claude.png)
 
-> ⚠️ Thư mục Tải về đã có tệp `kepper-claude.mcpb` cũ thì trình duyệt đặt tên tệp mới là `kepper-claude (1).mcpb`. Phải mở **tệp mới nhất**; mở tệp cũ là cài lại bản cũ. Nên xoá tệp cũ trước khi tải.
+> ⚠️ Thư mục Tải về đã có tệp `kepler-claude.mcpb` cũ thì trình duyệt đặt tên tệp mới là `kepler-claude (1).mcpb`. Phải mở **tệp mới nhất**; mở tệp cũ là cài lại bản cũ. Nên xoá tệp cũ trước khi tải. Tệp `kepper-claude.mcpb` (tên cũ, tải từ trước) cũng là bản cũ: xoá đi.
 
 2. Mở tệp vừa tải (nhấn đúp tệp trong thư mục Tải về, hoặc bấm vào tệp trong danh sách tải về của trình duyệt). Claude Desktop hiện hộp cài đặt → bấm **Install**. (Kéo thả tệp vào cửa sổ Claude Desktop cũng được.)
 3. **Thoát hẳn Claude Desktop rồi mở lại:** chuột phải biểu tượng Claude ở khay hệ thống (góc phải thanh tác vụ) → **Quit**. Đóng cửa sổ là chưa đủ. Máy Mac: bấm `Cmd Q`. Cài mới hay cập nhật tiện ích đều phải làm bước này.
@@ -245,7 +245,7 @@ Việc không giao về bộ phận nào thì không có khối **Điều hành*
 
 1. Mở việc → khối **Điều hành** → **Xin gia hạn** (1).
 2. Chọn hạn mới (hoặc bấm +3 / +7 / +14 ngày), ghi lý do → **Gửi đề nghị**.
-3. **Ban Tổng Giám đốc phụ trách của việc** quyết định. Trong lúc chờ, việc ghi "chờ Ban Tổng Giám đốc quyết định".
+3. **Ban Tổng Giám đốc** quyết định: thành viên phụ trách việc đó; việc chưa có ai phụ trách thì thành viên Ban Tổng Giám đốc nào cũng quyết được. Trong lúc chờ, việc ghi "chờ Ban Tổng Giám đốc quyết định".
 
 ![Nút Xin gia hạn](anh/04-xin-gia-han-nut.png)
 
@@ -296,7 +296,7 @@ Bạn tạo việc và chọn người khác làm **Chủ trì** (mở dự án 
 - **duyệt và chấm mức** khi người chủ trì gửi duyệt;
 - cho ý kiến các **kiến nghị** người chủ trì ghi trong báo cáo tiến độ.
 
-Đề nghị gia hạn của việc bạn giao do Ban Tổng Giám đốc phụ trách của việc quyết định; bạn thấy ở tab **Đề nghị gia hạn** để nắm, không có nút duyệt.
+Đề nghị gia hạn của việc bạn giao do Ban Tổng Giám đốc quyết định; bạn thấy ở tab **Đề nghị gia hạn** để nắm (dòng ghi "Ban Tổng Giám đốc quyết định — bạn theo dõi"), không có nút duyệt.
 
 **Duyệt một việc**
 
@@ -600,7 +600,7 @@ Quy chế quản lý dự án (RACI) **sắp ban hành**. Khi có, tài liệu v
 | Thấy | Nghĩa là | Làm gì |
 |---|---|---|
 | Claude không có công cụ Kepler Hub, không biết Kepler Hub là gì | Chưa cài hoặc chưa bật tiện ích | Làm lại mục 3.2 (nhớ thoát hẳn Claude Desktop rồi mở lại); kiểm tra **Settings → Customize → Connectors → Kepler Hub** đang **Enabled** |
-| Vừa cài tiện ích bản mới mà Claude vẫn chạy như bản cũ | Mở nhầm tệp cũ (tệp mới có tên `kepper-claude (1).mcpb`), hoặc chưa thoát hẳn Claude Desktop | Mở tệp mới nhất rồi **Install** lại; **Quit** Claude Desktop ở khay hệ thống rồi mở lại (mục 3.2) |
+| Vừa cài tiện ích bản mới mà Claude vẫn chạy như bản cũ | Mở nhầm tệp cũ (tệp mới có tên `kepler-claude (1).mcpb`; tệp tên cũ `kepper-claude.mcpb` là bản cũ), hoặc chưa thoát hẳn Claude Desktop | Mở tệp mới nhất rồi **Install** lại; **Quit** Claude Desktop ở khay hệ thống rồi mở lại (mục 3.2) |
 | Gõ `/kep` không thấy skill, hoặc thấy hai `kepler-hub` | Skill chưa được cấp, hoặc có thêm bản tự tải lên trùng tên | Báo IT (mục 3.4) |
 | "Chưa kết nối Kepler Hub… bấm Cho phép (mã …)" | Lần đầu dùng, hoặc kết nối cũ đã hết hạn / bị thu hồi | Bấm **Cho phép** đúng mã trên trang vừa mở, rồi hỏi lại Claude |
 | "Chưa xác thực: …" | Token hết hạn, bị thu hồi, hoặc bạn vừa đổi mật khẩu | Hỏi lại Claude để mở trang Cho phép (mục 3.3) |
