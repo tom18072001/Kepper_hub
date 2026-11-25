@@ -168,8 +168,9 @@ Mỗi dòng là một thao tác thiết lập, kèm chỗ làm và người làm
 | Chọn, đổi, bỏ người làm Văn thư | **Tài liệu** → tab **Văn thư** → **Thiết lập** → ô **Văn thư** (giữ Ctrl / Cmd) → **Lưu** | Ban Tổng Giám đốc |
 | Chọn, đổi, bỏ người làm Pháp chế | **Thiết lập** → ô **Pháp chế** → **Lưu** | Ban Tổng Giám đốc |
 | Chọn, đổi Người phê duyệt quy chế, quy định | **Thiết lập** → ô **Người phê duyệt tài liệu nội bộ** → **Lưu** | Ban Tổng Giám đốc |
-| Dùng "Toàn công ty" làm người duyệt | **Thiết lập** → bỏ chọn hết tên ở ô **Người phê duyệt tài liệu nội bộ** → **Lưu** | Ban Tổng Giám đốc |
-| Gỡ kẹt khi không ai duyệt được dự thảo | **Thiết lập** → F5 → chọn lại Người phê duyệt → **Lưu** | Ban Tổng Giám đốc |
+| Dùng "Toàn công ty" làm người duyệt | **Thiết lập** → bỏ chọn hết tên ở ô **Người phê duyệt tài liệu nội bộ** (và bỏ tick tên bị gạch bên dưới, nếu có) → **Lưu** | Ban Tổng Giám đốc |
+| Xem ai đang thực sự phê duyệt, vì sao | **Thiết lập** → F5 → dòng **Đang áp dụng** dưới ô **Người phê duyệt tài liệu nội bộ** | Ban Tổng Giám đốc |
+| Bỏ hẳn người đã nghỉ, đổi vai khỏi danh sách Người phê duyệt | **Thiết lập** → F5 → bỏ tick "giữ tên trong danh sách" cạnh tên bị gạch → **Lưu** | Ban Tổng Giám đốc |
 | Đặt, bỏ phạm vi "Toàn công ty" cho một thành viên Ban Tổng Giám đốc | Quản trị → **Tài khoản** → **Quyền & phụ trách** → **Toàn công ty** → **Lưu phạm vi phụ trách** | Quản trị hệ thống |
 | Thêm pháp nhân, sửa tên pháp nhân | **Thiết lập** → ô **Pháp nhân** → **Lưu** | Ban Tổng Giám đốc |
 | Chọn công ty mẹ (ký hiệu "TGĐ" ở dãy D6) | **Thiết lập** → đặt dòng công ty mẹ lên đầu ô **Pháp nhân** → **Lưu** (đặt một lần từ đầu; không đổi giữa năm) | Ban Tổng Giám đốc |
@@ -1752,7 +1753,7 @@ Nút **Thiết lập** nằm ở đầu trang tab **Văn thư** và tab **Quy ch
 1. **Pháp nhân**: những công ty có sổ và dãy số riêng. Mã pháp nhân nằm trong số văn bản, ví dụ `0001/2026/Đ-HLD`. Pháp nhân ở dòng đầu được coi là công ty mẹ.
 2. **Văn thư**: những người được vào sổ và cấp số văn bản đến, đi; sửa, giao xử lý, hủy số; tạo dự thảo quy chế. Văn thư nhận báo "đã xử lý xong — lập hồ sơ" và nhắc văn bản đến chưa giao ai.
 3. **Pháp chế**: những người nhận văn bản đến "có thời hạn pháp lý" và được xem văn bản "Hạn chế" đã chuyển cho Pháp chế.
-4. **Người phê duyệt tài liệu nội bộ**: những thành viên Ban Tổng Giám đốc được bấm **Phê duyệt** / **Trả lại** dự thảo quy chế, quy định. Để trống thì quyền này thuộc thành viên Ban Tổng Giám đốc có phạm vi phụ trách "Toàn công ty".
+4. **Người phê duyệt tài liệu nội bộ**: những thành viên Ban Tổng Giám đốc được bấm **Phê duyệt** / **Trả lại** dự thảo quy chế, quy định. Để trống, hoặc trong danh sách không còn ai hợp lệ (đã nghỉ, đổi vai), thì quyền này thuộc thành viên Ban Tổng Giám đốc có phạm vi phụ trách "Toàn công ty"; không ai phụ trách "Toàn công ty" thì thuộc mọi thành viên Ban Tổng Giám đốc.
 
 Bấm **Lưu** là máy chủ áp dụng ngay. Thiết lập này không chỉnh gì ở tab **Tài liệu dự án**. Chi tiết ở mục 4.6.
 
@@ -1774,7 +1775,7 @@ Quan hệ với từng văn bản cũng mở quyền, không cần vai:
 
 - **Người vào sổ** và **người xử lý** luôn xem được văn bản đó, kể cả mức "Bảo mật cao", và tải tệp lên được.
 - **Người soạn** luôn xem được tài liệu nội bộ mình soạn, kể cả khi sau đó cấp xem bị nâng cao hơn vai của mình.
-- Ô **Người phê duyệt** để trống: thành viên Ban Tổng Giám đốc có phạm vi "Toàn công ty" chính là Người phê duyệt.
+- Ô **Người phê duyệt** để trống hoặc không còn ai hợp lệ: thành viên Ban Tổng Giám đốc có phạm vi "Toàn công ty" chính là Người phê duyệt (không ai có phạm vi này: mọi thành viên Ban Tổng Giám đốc). Ai đang thực sự duyệt: xem dòng **Đang áp dụng** ở **Thiết lập** (mục 4.6.8).
 
 Kiêm nhiệm Văn thư, Pháp chế hiện ở trang Thông tin cá nhân (dòng **Kiêm nhiệm**) và cột **Kiêm nhiệm** ở Quản trị → **Tài khoản**. Người phê duyệt không hiện ở hai chỗ này.
 
@@ -2251,19 +2252,19 @@ Luật chung:
 | Nút | Làm gì | Có hỏi lại không | Quay lại được không |
 |---|---|---|---|
 | **Sửa / giao xử lý** | Mở hộp **Sửa *số*** (mục 4.3.4). Chỉ Ban Tổng Giám đốc, Văn thư; văn bản chưa hủy | Không | Có |
-| **Hủy số** (đỏ) | Hủy văn bản. Số giữ nguyên trong sổ, không cấp lại. Thông báo "Đã hủy số". Chỉ Ban Tổng Giám đốc, Văn thư | Có: "Hủy số *số*? Số vẫn giữ trong sổ và không cấp lại cho văn bản khác." kèm ô **Lý do hủy**; nút **Hủy số** (đỏ) và **Huỷ** | **Không**, không có bỏ hủy |
-| **Đã trình**, **Đã giao**, **Bắt đầu xử lý**, **Lập hồ sơ** | Chuyển tới bước đó. Thông báo "Đã cập nhật" | **Không hỏi** | **Không** |
-| **Báo xong** | Chuyển "Đã hoàn thành". Nếu người bấm không phải Văn thư, Ban Tổng Giám đốc: mọi Văn thư nhận "Văn bản *số* đã xử lý xong — lập hồ sơ" | Có: "Báo đã xử lý xong *số*?" kèm ô **Kết quả xử lý (không bắt buộc)**; nút **Báo xong** | **Không** |
-| **Đã gửi**, **Bên nhận đã xác nhận**, **Đã có phản hồi** (sổ đi) | Chuyển tới bước đó | **Không hỏi** | **Không** |
+| **Hủy số** (đỏ) | Hủy văn bản. Số giữ nguyên trong sổ, không cấp lại. Thông báo "Đã hủy số". Chỉ Ban Tổng Giám đốc, Văn thư | Có: "Hủy số *số*? Số vẫn giữ trong sổ và không cấp lại cho văn bản khác." kèm ô **Lý do hủy (bắt buộc)**; nút **Hủy số** (đỏ) và **Huỷ**. Ô trống thì hộp không đóng, hiện dòng đỏ "Nhập lý do" | **Không**, không có bỏ hủy |
+| **Đã trình**, **Đã giao**, **Bắt đầu xử lý**, **Lập hồ sơ** | Chuyển tới bước đó. Thông báo "Đã cập nhật" | Có: "*tên nút*: chuyển *số* sang "*trạng thái mới*"? Không quay lại được bước trước." **Lập hồ sơ** thêm "Văn bản được tính là đã xong, hết nhắc hạn." Nút đồng ý mang đúng tên bước; **Huỷ** là đóng hộp, không đổi gì | **Không** |
+| **Báo xong** | Chuyển "Đã hoàn thành". Nếu người bấm không phải Văn thư, Ban Tổng Giám đốc: mọi Văn thư nhận "Văn bản *số* đã xử lý xong — lập hồ sơ" | Có, cùng cách viết: "Báo xong: chuyển *số* sang "Đã hoàn thành"? Không quay lại được bước trước. Văn bản được tính là đã xong, hết nhắc hạn." kèm ô **Kết quả xử lý (không bắt buộc)**; nút **Báo xong** | **Không** |
+| **Đã gửi**, **Bên nhận đã xác nhận**, **Đã có phản hồi** (sổ đi) | Chuyển tới bước đó | Có, cùng cách viết, ví dụ: "Đã gửi: chuyển *số* sang "Đã gửi"? Không quay lại được bước trước." | **Không** |
 | **Tải** | Tải tệp về máy. Mọi người xem được văn bản | Không | Có |
-| **Gỡ** (đỏ) | Gỡ tệp khỏi văn bản. Thông báo "Đã gỡ tệp". Chỉ Ban Tổng Giám đốc, Văn thư | Có. Tệp trên NAS: "Gỡ tệp khỏi văn bản? Bản trên NAS được chuyển vào thư mục _LuuTru của sổ, không xoá hẳn." Tệp trong Hub: "Gỡ tệp khỏi văn bản?". Nút **Gỡ tệp** (đỏ) | Tệp NAS: bản gốc còn trong thư mục `_LuuTru` của sổ, IT lấy lại bằng tay. Tệp trong Hub: **mất hẳn** |
+| **Gỡ** (đỏ) | Gỡ tệp khỏi văn bản. Thông báo "Đã gỡ tệp". Chỉ Ban Tổng Giám đốc, Văn thư | Có. Tệp trên NAS: "Gỡ tệp khỏi văn bản? Bản trên NAS được chuyển vào thư mục _LuuTru của sổ, không xoá hẳn." Tệp trong Hub: "Gỡ tệp khỏi văn bản? Tệp lưu trong Hub sẽ bị xoá hẳn, không khôi phục được." Nút **Gỡ tệp** (đỏ) | Tệp NAS: bản gốc còn trong thư mục `_LuuTru` của sổ, IT lấy lại bằng tay. Tệp trong Hub: **mất hẳn** |
 | **Tải tệp lên** | Chọn một hoặc nhiều tệp: tối đa 5 tệp một lần, 25 MB mỗi tệp, đuôi như mục 4.2.6. Thông báo "Đã tải tệp lên". Ai: Ban Tổng Giám đốc, Văn thư, người vào sổ, người xử lý, Lãnh đạo bộ phận của văn bản; văn bản chưa hủy | Không | Gỡ lại được (Ban Tổng Giám đốc, Văn thư) |
 
-⚠️ Các nút bước **Đã trình**, **Đã giao**, **Bắt đầu xử lý**, **Lập hồ sơ**, **Đã gửi**, **Bên nhận đã xác nhận**, **Đã có phản hồi**: bấm là **xong ngay, không hỏi, không quay lại được**. Bấm nhầm **Lập hồ sơ** thì văn bản coi như đã xong, hết nhắc hạn.
+⚠️ Các nút bước **Đã trình**, **Đã giao**, **Bắt đầu xử lý**, **Báo xong**, **Lập hồ sơ**, **Đã gửi**, **Bên nhận đã xác nhận**, **Đã có phản hồi**: hệ thống hỏi lại, nhưng đã bấm nút đồng ý là **không quay lại được**. Đọc kỹ tên bước và trạng thái mới trong câu hỏi. Đồng ý nhầm **Lập hồ sơ** thì văn bản coi như đã xong, hết nhắc hạn.
 
-⚠️ Bỏ trống ô **Lý do hủy** rồi bấm **Hủy số**: hộp đóng lại và **không có gì xảy ra, không báo lỗi**. Muốn hủy phải gõ lý do (tối đa 300 ký tự).
+Ô **Lý do hủy (bắt buộc)**: để trống (hoặc chỉ gõ khoảng trắng) rồi bấm **Hủy số** thì hộp vẫn mở, hiện dòng đỏ "Nhập lý do", văn bản chưa bị hủy. Gõ lý do (tối đa 300 ký tự) rồi bấm lại.
 
-⚠️ **Chữ trên màn hình ghi** "Gỡ tệp khỏi văn bản?" **nhưng thực tế** với tệp không có nhãn **NAS**, bấm **Gỡ tệp** là **xoá hẳn** khỏi kho của Hub, không khôi phục được. Chỉ tệp có nhãn **NAS** mới được chuyển vào thư mục `_LuuTru`.
+⚠️ Tệp không có nhãn **NAS** (lưu trong Hub): bấm **Gỡ tệp** là **xoá hẳn** khỏi kho của Hub, không khôi phục được; hộp hỏi nói rõ điều này. Chỉ tệp có nhãn **NAS** mới được chuyển vào thư mục `_LuuTru`.
 
 **Tệp lưu ở đâu.** Bản gốc lưu vào thư mục văn thư của **bộ phận của văn bản** trên NAS: thư mục bộ phận → thư mục sổ (dạng `NN.VanBanDen`, `NN.VanBanDi`, `NN.VanBanNoiBo`) → thư mục năm → tệp. Tên tệp gồm số văn bản viết không dấu (dấu "/" thay bằng "-"), tên tệp gốc không dấu, phiên bản và ngày tải. Ví dụ: văn bản đến `0012/2026/Đ-HLD`, bộ phận HCNS, tệp "Công văn Sở Xây dựng.pdf" tải lên ngày 25/11/2026 nằm trong thư mục sổ văn bản đến của HCNS, thư mục con `2026`, tên `0012-2026-D-HLD_CongVanSoXayDung_v01_20261125.pdf`. Không ghi đè: tải lại tệp cùng tên thành `_v02_`.
 
@@ -2610,22 +2611,22 @@ Các cột của bảng:
 | Nút | Làm gì | Có hỏi lại không | Quay lại được không |
 |---|---|---|---|
 | **Phê duyệt** | Cấp số ngay, khoá nội dung và tệp. Thông báo "Đã phê duyệt và cấp số". Chỉ Người phê duyệt, dự thảo đang "Chưa phê duyệt". Chưa có PDF thì nút mờ, rê chuột thấy "Chưa có tệp PDF" | Có: "Phê duyệt "*tên*"? Hệ thống cấp số ngay và khoá nội dung, tệp của tài liệu." kèm ô **Ý kiến (không bắt buộc)**; nút **Phê duyệt** | **Không.** Chỉ còn **Hủy số**, số vẫn nằm trong sổ |
-| **Trả lại** | Chuyển "Đã trả lại", báo người soạn. Thông báo "Đã trả lại". Chỉ Người phê duyệt, dự thảo đang "Chưa phê duyệt" | Có: "Trả lại "*tên*" cho người soạn?" kèm ô **Lý do trả lại (bắt buộc)**; nút **Trả lại** (đỏ) | Có: người soạn sửa rồi **Gửi lại** |
+| **Trả lại** | Chuyển "Đã trả lại", báo người soạn. Thông báo "Đã trả lại". Chỉ Người phê duyệt, dự thảo đang "Chưa phê duyệt" | Có: "Trả lại "*tên*" cho người soạn?" kèm ô **Lý do trả lại (bắt buộc)**; nút **Trả lại** (đỏ). Ô trống thì hộp không đóng, hiện dòng đỏ "Nhập lý do" | Có: người soạn sửa rồi **Gửi lại** |
 | **Gửi lại** | Đưa dự thảo bị trả lại về "Chưa phê duyệt". Thông báo "Đã gửi lại chờ phê duyệt". Người soạn; Văn thư (trong cấp xem của mình) | **Không hỏi** | Có |
 | **Sửa** | Mở hộp sửa (mục 4.4.4). Dự thảo: người soạn, Văn thư. Đã phê duyệt: Ban Tổng Giám đốc, Văn thư | Không | Có |
-| **Huỷ dự thảo** | Hủy dự thảo. Không có số nên không ảnh hưởng sổ. Thông báo "Đã huỷ dự thảo". Người soạn; Văn thư | Có: "Huỷ dự thảo này? Dự thảo chưa có số nên không ảnh hưởng sổ." kèm ô **Lý do huỷ**; nút **Huỷ dự thảo** | **Không** |
-| **Hủy số** | Hủy tài liệu đã có số; số giữ trong sổ. Thông báo "Đã hủy số". Ban Tổng Giám đốc, Văn thư; tài liệu đã phê duyệt, chưa hủy | Có: "Hủy số *số*? Số vẫn giữ trong sổ và không cấp lại cho văn bản khác." kèm ô **Lý do hủy**; nút **Hủy số** (đỏ) | **Không** |
-| **Có hiệu lực** | "Đã phê duyệt" sang "Hiệu lực". Thông báo "Đã cập nhật". Ban Tổng Giám đốc, Văn thư | **Không hỏi** | **Không** |
-| **Hết hiệu lực** | "Đã phê duyệt" hoặc "Hiệu lực" sang "Hết hiệu lực / thay thế". Ban Tổng Giám đốc, Văn thư | **Không hỏi** | **Không** |
+| **Huỷ dự thảo** | Hủy dự thảo. Không có số nên không ảnh hưởng sổ. Thông báo "Đã huỷ dự thảo". Người soạn; Văn thư | Có: "Huỷ dự thảo này? Dự thảo chưa có số nên không ảnh hưởng sổ." kèm ô **Lý do huỷ (bắt buộc)**; nút **Huỷ dự thảo**. Ô trống thì hộp không đóng, hiện dòng đỏ "Nhập lý do" | **Không** |
+| **Hủy số** | Hủy tài liệu đã có số; số giữ trong sổ. Thông báo "Đã hủy số". Ban Tổng Giám đốc, Văn thư; tài liệu đã phê duyệt, chưa hủy | Có: "Hủy số *số*? Số vẫn giữ trong sổ và không cấp lại cho văn bản khác." kèm ô **Lý do hủy (bắt buộc)**; nút **Hủy số** (đỏ). Ô trống: như trên | **Không** |
+| **Có hiệu lực** | "Đã phê duyệt" sang "Hiệu lực". Thông báo "Đã cập nhật". Ban Tổng Giám đốc, Văn thư | Có: "Có hiệu lực: chuyển *số* sang "Hiệu lực"? Không quay lại được bước trước."; nút **Có hiệu lực** | **Không** |
+| **Hết hiệu lực** | "Đã phê duyệt" hoặc "Hiệu lực" sang "Hết hiệu lực / thay thế". Thông báo "Đã cập nhật". Ban Tổng Giám đốc, Văn thư | Có: "Hết hiệu lực: chuyển *số* sang "Hết hiệu lực / thay thế"? Không quay lại được bước trước. Muốn áp dụng lại phải tạo dự thảo thay thế và phê duyệt lại."; nút **Hết hiệu lực** | **Không** |
 | **Tải tệp lên** | Thêm tệp (tối đa 5 tệp một lần, 25 MB mỗi tệp). Thông báo "Đã tải tệp lên". **Chỉ dự thảo**: người soạn, Văn thư | Không | Có, gỡ được |
 | **Gỡ** | Gỡ tệp khỏi dự thảo. Thông báo "Đã gỡ tệp". **Chỉ dự thảo**: người soạn, Văn thư | Có: như sổ đến, đi (mục 4.3.3); nút **Gỡ tệp** (đỏ) | Tệp NAS còn trong `_LuuTru`; tệp trong Hub **mất hẳn** |
 | **Tải** | Tải tệp về máy. Đây là cách duy nhất để xem PDF | Không | Có |
 
-⚠️ **Có hiệu lực**, **Hết hiệu lực** không hỏi lại và không quay lại được. Bấm nhầm **Hết hiệu lực** cho một quy chế đang áp dụng thì phải tạo dự thảo mới, chọn **Thay thế văn bản**, đi lại luồng phê duyệt.
+⚠️ **Có hiệu lực**, **Hết hiệu lực** có hỏi lại, nhưng đã đồng ý là không quay lại được. Đồng ý nhầm **Hết hiệu lực** cho một quy chế đang áp dụng thì phải tạo dự thảo mới, chọn **Thay thế văn bản**, đi lại luồng phê duyệt.
 
-⚠️ Bỏ trống lý do rồi bấm **Trả lại**, **Huỷ dự thảo** hoặc **Hủy số**: hộp đóng lại và **không có gì xảy ra, không báo lỗi**. Phải gõ lý do.
+Ô lý do của **Trả lại**, **Huỷ dự thảo**, **Hủy số** là bắt buộc: để trống (hoặc chỉ gõ khoảng trắng) rồi bấm nút thì hộp vẫn mở, hiện dòng đỏ "Nhập lý do", tài liệu không đổi gì.
 
-⚠️ **Chữ trên màn hình ghi** "Gỡ tệp khỏi văn bản?" **nhưng thực tế** tệp không có nhãn **NAS** bị xoá hẳn, không khôi phục được.
+⚠️ Tệp không có nhãn **NAS** bị xoá hẳn khi **Gỡ**, không khôi phục được; hộp hỏi nói rõ điều này.
 
 **⚠️ Dễ nhầm**
 
@@ -2635,7 +2636,7 @@ Các cột của bảng:
 - Đã phê duyệt thì khoá tệp: không thêm, không gỡ. Cố tải lên thì nhận "Tài liệu đã phê duyệt: không thêm tệp — tạo bản mới thay thế".
 - **Hủy số** bản mới không khôi phục bản cũ đã bị nó thay thế. Bản cũ vẫn "Hết hiệu lực / thay thế".
 - Lỗi khi bấm nút hiện ở góc dưới bên phải, cùng màu tối như thông báo thường, không đỏ, và tắt sau khoảng 3,5 giây.
-- Lỗi có thể gặp: "Chỉ Người phê duyệt (Thiết lập văn thư) phê duyệt tài liệu"; "Chỉ tài liệu sổ nội bộ đi qua phê duyệt"; "Dự thảo đã huỷ"; "Dự thảo đã trả lại — chờ người soạn sửa và gửi lại"; "Tài liệu đã phê duyệt"; "Tài liệu chưa có tệp PDF — Người phê duyệt phải xem đúng bản được duyệt"; "Tài liệu vừa được xử lý ở nơi khác — tải lại trang"; "Thiếu Lý do trả lại"; "Chỉ người soạn hoặc Văn thư gửi lại dự thảo đã bị trả lại"; "Chỉ người soạn hoặc Văn thư huỷ dự thảo"; "Chỉ người soạn hoặc Văn thư thêm tệp cho dự thảo"; "Chỉ gỡ tệp của dự thảo (người soạn hoặc Văn thư); tài liệu đã phê duyệt khoá tệp"; "Dự thảo chỉ đổi trạng thái qua Phê duyệt / Trả lại"; "Trạng thái chỉ đi tiếp, không quay lại".
+- Lỗi có thể gặp: "Chỉ Người phê duyệt (Thiết lập văn thư) phê duyệt tài liệu"; "Chỉ tài liệu sổ nội bộ đi qua phê duyệt"; "Dự thảo đã huỷ"; "Dự thảo đã trả lại — chờ người soạn sửa và gửi lại"; "Tài liệu đã phê duyệt"; "Tài liệu chưa có tệp PDF — Người phê duyệt phải xem đúng bản được duyệt"; "Tài liệu vừa được xử lý ở nơi khác — tải lại trang"; "Chỉ người soạn hoặc Văn thư gửi lại dự thảo đã bị trả lại"; "Chỉ người soạn hoặc Văn thư huỷ dự thảo"; "Chỉ người soạn hoặc Văn thư thêm tệp cho dự thảo"; "Chỉ gỡ tệp của dự thảo (người soạn hoặc Văn thư); tài liệu đã phê duyệt khoá tệp"; "Dự thảo chỉ đổi trạng thái qua Phê duyệt / Trả lại"; "Trạng thái chỉ đi tiếp, không quay lại".
 
 **Claude:** Không phê duyệt, trả lại, gửi lại, sửa, hủy, đổi trạng thái, không tải tệp.
 
@@ -2738,7 +2739,7 @@ Thêm: **người soạn** luôn xem tài liệu mình soạn. **Dự thảo** (
 
 ![Người phê duyệt xem PDF rồi bấm Phê duyệt hoặc Trả lại](anh/30-quy-che-phe-duyet.png)
 
-**Ai thấy, ai sửa:** Chỉ người có tên trong ô **Người phê duyệt tài liệu nội bộ** ở Thiết lập. Ô đó chỉ chọn được người vai Ban Tổng Giám đốc. Ô trống thì Người phê duyệt là các thành viên Ban Tổng Giám đốc có phạm vi "Toàn công ty". Thành viên Ban Tổng Giám đốc khác không thấy nút và không thấy dự thảo.
+**Ai thấy, ai sửa:** Người có tên trong ô **Người phê duyệt tài liệu nội bộ** ở Thiết lập, còn hoạt động và còn vai Ban Tổng Giám đốc. Ô đó chỉ chọn được người vai Ban Tổng Giám đốc. Ô trống, hoặc không còn ai hợp lệ (đã nghỉ, đổi vai), thì Người phê duyệt là các thành viên Ban Tổng Giám đốc có phạm vi "Toàn công ty"; không ai có phạm vi này thì là mọi thành viên Ban Tổng Giám đốc (mục 4.6.8). Thành viên Ban Tổng Giám đốc khác không thấy nút và không thấy dự thảo.
 
 **Dùng để làm gì:** Duyệt đúng bản PDF và cấp số cho quy chế, quy định; hoặc trả lại kèm lý do.
 
@@ -2769,11 +2770,11 @@ Thêm: **người soạn** luôn xem tài liệu mình soạn. **Dự thảo** (
 
 - Phải **Tải** PDF về máy mới xem được. Trang Văn thư không có nút **Xem**.
 - **Phê duyệt** không quay lại được. Sau đó chỉ còn **Hủy số** (số vẫn nằm trong sổ) hoặc tạo bản thay thế.
-- Bỏ trống lý do rồi bấm **Trả lại**: **không có gì xảy ra, không báo**.
+- Bỏ trống lý do rồi bấm **Trả lại**: hộp không đóng, hiện dòng đỏ "Nhập lý do"; dự thảo chưa bị trả lại cho tới khi bạn gõ lý do và bấm lại.
 - Người phê duyệt duyệt được cả dự thảo **do chính mình soạn**. Hệ thống không chặn.
 - Hai Người phê duyệt cùng mở một dự thảo: người bấm sau nhận "Tài liệu đã phê duyệt" (hoặc "Dự thảo đã trả lại — chờ người soạn sửa và gửi lại"); nếu hai người bấm gần như cùng lúc thì người chậm hơn nhận "Tài liệu vừa được xử lý ở nơi khác — tải lại trang". Không có chuyện cấp hai số.
 - Dự thảo **không** vào trang **Chờ tôi duyệt**.
-- Không ai nhận "Tài liệu chờ phê duyệt" dù đã có dự thảo: xem mục 4.6.9 (danh sách Người phê duyệt bị kẹt).
+- Ai đang nhận "Tài liệu chờ phê duyệt": xem dòng **Đang áp dụng** ở Thiết lập (mục 4.6.8). Người trong danh sách đã nghỉ hoặc đổi vai thì không nhận; người dự phòng nhận thay (mục 4.6.9).
 - Bấm **Phê duyệt** mà báo lỗi bắt đầu bằng "Dữ liệu bị trùng": số sắp cấp trùng một số đã có. Xem mục 4.5.
 
 **Claude:** Không phê duyệt, không trả lại. Máy chủ trả "Phê duyệt làm trên giao diện Kepler Hub, không qua Claude".
@@ -2853,14 +2854,14 @@ Màn có tiêu đề **Thiết lập văn thư**, dòng mô tả "Pháp nhân c�
 - khi có người mới làm văn thư, pháp chế; khi người cũ nghỉ việc, chuyển việc;
 - khi thêm công ty con, đổi tên công ty;
 - khi đổi người duyệt quy chế, quy định;
-- khi dự thảo quy chế không ai duyệt được (mục 4.6.9).
+- khi Người phê duyệt nghỉ việc, đổi vai (mục 4.6.9).
 
 **Các bước thường làm**
 
 1. Mở màn **Thiết lập**, **bấm F5** để chắc thấy thiết lập mới nhất (lý do ở cảnh báo dưới bảng nút).
 2. Sửa ô **Pháp nhân** nếu cần.
 3. Chọn người ở ba ô **Văn thư**, **Pháp chế**, **Người phê duyệt tài liệu nội bộ**. Giữ **Ctrl** (Windows) hoặc **Cmd** (Mac) khi bấm để chọn nhiều người (mục 4.6.6).
-4. Kéo thanh cuộn trong từng ô, kiểm đủ những tên đang tô màu.
+4. Kéo thanh cuộn trong từng ô, kiểm đủ những tên đang tô màu. Dưới ô **Người phê duyệt tài liệu nội bộ**: đọc dòng **Đang áp dụng**; người đã nghỉ, đổi vai (nếu có) hiện gạch tên, muốn xoá hẳn thì bỏ tick "giữ tên trong danh sách".
 5. Bấm **Lưu**. Thông báo "Đã lưu thiết lập" hiện ra, trang chuyển về sổ **Văn bản đến**.
 6. Báo những người vừa được chọn bấm F5 (mục 4.6.7).
 
@@ -2871,7 +2872,7 @@ Màn có tiêu đề **Thiết lập văn thư**, dòng mô tả "Pháp nhân c�
 | **Pháp nhân**, gợi ý "(mỗi dòng: MÃ · Tên — pháp nhân đầu tiên là công ty mẹ, dãy D6 ký hiệu TGĐ)". Ô gõ nhiều dòng | Danh sách công ty có sổ, có dãy số riêng | Mỗi dòng một pháp nhân: mã, dấu tách, tên. Chưa thiết lập lần nào thì có sẵn một dòng "HLD · Công ty mẹ". Mã: 2–6 chữ cái A–Z, không số, không chữ Đ, không dấu; gõ chữ thường cũng được, hệ thống đổi sang in hoa. Dấu tách: "·", "-", "–", "\|" hoặc ":". Phải có tên. Ít nhất một dòng. Dòng trống bị bỏ qua. Tên dài quá 120 ký tự bị cắt bớt, không báo | (1) Mã vào số văn bản, ví dụ `Đ-HLD`, `QĐ-DXA`. (2) Mỗi pháp nhân một bộ đếm số riêng. (3) Danh sách **Pháp nhân** trong hộp **Vào sổ văn bản** và **Tạo dự thảo**; dòng đầu được chọn sẵn. (4) **Dòng đầu là công ty mẹ**: dãy D6 của nó ký hiệu "TGĐ", pháp nhân khác ký hiệu "GĐ.*MÃ*" (mục 4.6.5). (5) Từ 2 pháp nhân trở lên: danh sách sổ có thêm ô lọc **Mọi pháp nhân**. (6) Tên pháp nhân điền sẵn vào "Nơi ban hành" khi gắn văn bản đi, quy chế vào việc. (7) Claude tạo dự thảo chỉ dùng được mã có ở đây. Lỗi: "Pháp nhân: mã 2–6 chữ in hoa (vd. HLD, DXA) và tên"; "Mã pháp nhân bị trùng" |
 | **Văn thư**. Ô chọn nhiều, cao 6 dòng | Người kiêm văn thư | Mọi tài khoản đang hoạt động trừ Quản trị hệ thống, dạng "Họ tên · Bộ phận". Mặc định: không ai. Tối đa 30 người; chọn quá thì hệ thống chỉ giữ 30 người đầu theo thứ tự trong ô, không báo | Mở thêm quyền và thông báo như bảng ở mục 4.6.2. Lỗi: "Văn thư có tài khoản không hợp lệ" |
 | **Pháp chế**. Ô chọn nhiều, cao 6 dòng | Người kiêm pháp chế | Như ô **Văn thư**. Mặc định: không ai. Tối đa 30 người, quá thì cắt bớt không báo | Như bảng ở mục 4.6.2. Lỗi: "Pháp chế có tài khoản không hợp lệ" |
-| **Người phê duyệt tài liệu nội bộ**, gợi ý "(chỉ vai Ban TGĐ; để trống = thành viên Ban TGĐ phụ trách "Toàn công ty")". Ô chọn nhiều, cao 4 dòng | Ai được **Phê duyệt** / **Trả lại** dự thảo quy chế, quy định | Chỉ liệt kê tài khoản vai Ban Tổng Giám đốc đang hoạt động, dạng "Họ tên", hoặc "Họ tên · Toàn công ty" với người có phạm vi phụ trách "Toàn công ty". Mặc định: trống. Tối đa 10 người, quá thì cắt bớt không báo | Như mục 4.6.2 và 4.6.8. Để trống: thành viên Ban Tổng Giám đốc có phạm vi "Toàn công ty" là Người phê duyệt. Lỗi: "Người phê duyệt phải là tài khoản vai Ban Tổng Giám đốc đang hoạt động" |
+| **Người phê duyệt tài liệu nội bộ**, gợi ý "(chỉ vai Ban TGĐ; để trống hoặc không còn ai hợp lệ = thành viên Ban TGĐ phụ trách "Toàn công ty"; không ai phụ trách "Toàn công ty" = mọi thành viên Ban TGĐ)". Ô chọn nhiều, cao 4 dòng; dưới ô có danh sách người đã lưu nhưng không còn hợp lệ (nếu có) và dòng **Đang áp dụng** | Ai được **Phê duyệt** / **Trả lại** dự thảo quy chế, quy định | Ô chỉ liệt kê tài khoản vai Ban Tổng Giám đốc đang hoạt động, dạng "Họ tên", hoặc "Họ tên · Toàn công ty" với người có phạm vi phụ trách "Toàn công ty". Mặc định: trống. Tối đa 10 người, quá thì cắt bớt không báo. Người đã lưu mà nay đã nghỉ hoặc đổi vai không có trong ô: hiện bên dưới, tên gạch ngang kèm "(đã khoá)" / "(không còn vai Ban Tổng Giám đốc)" và ô tick "giữ tên trong danh sách" (đang tick) | Như mục 4.6.2, 4.6.8 và 4.6.9. Để trống hoặc không còn ai hợp lệ: thành viên Ban Tổng Giám đốc có phạm vi "Toàn công ty" là Người phê duyệt (không ai có: mọi thành viên Ban Tổng Giám đốc). Lưu mà vẫn tick "giữ": người đó ở lại danh sách nhưng không được tính tới khi hợp lệ lại; bỏ tick: xoá khỏi danh sách. Người vừa thành Người phê duyệt nhận "Tài liệu chờ phê duyệt" của từng dự thảo đang chờ. Lỗi: "Người phê duyệt phải là tài khoản vai Ban Tổng Giám đốc đang hoạt động" |
 
 Các lỗi khi bấm **Lưu** (hiện thành dòng đỏ ngay trên nút) và cách xử lý:
 
@@ -2880,7 +2881,7 @@ Các lỗi khi bấm **Lưu** (hiện thành dòng đỏ ngay trên nút) và c�
 | "Pháp nhân: mã 2–6 chữ in hoa (vd. HLD, DXA) và tên" | Một dòng pháp nhân sai: thiếu dấu tách, thiếu tên, mã có số, có chữ Đ, dài quá 6 chữ; hoặc ô trống hết | Sửa dòng đó theo mẫu "HLD · Tên công ty" |
 | "Mã pháp nhân bị trùng" | Hai dòng cùng mã | Xoá hoặc đổi một dòng |
 | "Văn thư có tài khoản không hợp lệ" / "Pháp chế có tài khoản không hợp lệ" | Một người đang chọn vừa bị khoá tài khoản hoặc vừa chuyển sang Quản trị hệ thống, sau lúc bạn mở trang | Bấm F5, chọn lại, **Lưu** |
-| "Người phê duyệt phải là tài khoản vai Ban Tổng Giám đốc đang hoạt động" | Người đang chọn vừa bị khoá hoặc vừa đổi vai khỏi Ban Tổng Giám đốc | Bấm F5, chọn lại, **Lưu** |
+| "Người phê duyệt phải là tài khoản vai Ban Tổng Giám đốc đang hoạt động" | Người bạn vừa chọn thêm vào ô bị khoá hoặc đổi vai khỏi Ban Tổng Giám đốc sau lúc bạn mở trang. Người đã có trong danh sách đã lưu thì không gây lỗi này: họ được giữ và hiện gạch tên | Bấm F5, chọn lại, **Lưu** |
 | "Chỉ Ban TGĐ thiết lập văn thư" | Tài khoản của bạn không còn vai Ban Tổng Giám đốc | Nhờ thành viên Ban Tổng Giám đốc khác |
 
 **Các nút**
@@ -2891,7 +2892,7 @@ Các lỗi khi bấm **Lưu** (hiện thành dòng đỏ ngay trên nút) và c�
 
 Màn này **không có nút Huỷ**. Muốn bỏ thay đổi chưa lưu: rời trang (bấm "Văn thư" trên thanh vị trí, hoặc bấm F5) mà không bấm **Lưu**.
 
-⚠️ **Lưu** không hỏi lại và áp dụng ngay cho mọi người: Văn thư bị bỏ mất quyền vào sổ ngay; Người phê duyệt bị bỏ mất nút **Phê duyệt** ngay. Không gửi thông báo cho người được thêm hay bị bỏ: Ban Tổng Giám đốc tự báo họ.
+⚠️ **Lưu** không hỏi lại và áp dụng ngay cho mọi người: Văn thư bị bỏ mất quyền vào sổ ngay; Người phê duyệt bị bỏ mất nút **Phê duyệt** ngay. Văn thư, Pháp chế được thêm hay bị bỏ, và Người phê duyệt bị bỏ, không nhận thông báo nào: Ban Tổng Giám đốc tự báo họ. Riêng người vừa thành Người phê duyệt (vừa có tên ở dòng **Đang áp dụng**) nhận "Tài liệu chờ phê duyệt" của từng dự thảo đang chờ, kể cả dự thảo tạo từ năm trước.
 
 ⚠️ **Trang Thiết lập hiện số liệu trình duyệt đã nạp từ lần đầu bạn mở mục Văn thư trong phiên làm việc**, không tự lấy mới. Thành viên Ban Tổng Giám đốc khác vừa sửa mà bạn không bấm F5, bạn sẽ thấy danh sách cũ; bấm **Lưu** là ghi đè toàn bộ thay đổi của họ. Hai người cùng sửa thì ai lưu sau thắng, cho cả 4 ô. Luôn bấm F5 trước khi sửa.
 
@@ -2904,7 +2905,7 @@ Màn này **không có nút Huỷ**. Muốn bỏ thay đổi chưa lưu: rời t
 | Thêm một Văn thư | Ngay: vào sổ, sửa, hủy số, xem "Hạn chế", nhận nhắc | Cần F5 mới thấy nút **Vào sổ**, **Tạo dự thảo**. Nút trên trang chi tiết văn bản hiện ngay |
 | Bỏ một Văn thư | Ngay: mất mọi quyền văn thư | Vẫn thấy nút **Vào sổ** tới khi F5; bấm thì nhận "Chỉ văn thư (do Ban TGĐ chỉ định) hoặc Ban TGĐ vào sổ văn bản" |
 | Thêm, bỏ Pháp chế | Ngay | Không cần F5 |
-| Thêm, đổi Người phê duyệt | Ngay | Không cần F5: mở dự thảo là thấy nút **Phê duyệt** |
+| Thêm, đổi Người phê duyệt | Ngay. Người vừa thành Người phê duyệt nhận "Tài liệu chờ phê duyệt" của từng dự thảo đang chờ | Không cần F5: mở dự thảo là thấy nút **Phê duyệt** |
 | Thêm, sửa pháp nhân | Ngay | Người khác cần F5 mới thấy trong ô **Pháp nhân** và ô lọc |
 
 #### 4.6.2 Mỗi danh sách mở thêm quyền gì
@@ -2915,7 +2916,7 @@ Chỉ tính tài khoản không phải Quản trị hệ thống. Quyền dướ
 |---|---|---|---|
 | **Văn thư** | Vào sổ (cấp số) văn bản đến D10, văn bản đi D9. Sửa, giao và đổi người xử lý, hủy số văn bản đến, đi. Bấm mọi bước trạng thái ("Đã trình", "Đã giao", "Bắt đầu xử lý", "Báo xong", "Lập hồ sơ", "Đã gửi", "Bên nhận đã xác nhận", "Đã có phản hồi"). Tải lên và gỡ tệp văn bản đến, đi. Xem văn bản "Hạn chế" của **mọi** bộ phận. Sổ nội bộ: tạo dự thảo D5, D6, D7 cho mọi bộ phận; xem, sửa, gửi lại, hủy dự thảo của người khác, thêm và gỡ tệp dự thảo, **trong cấp xem theo vai của chính mình**. Sổ nội bộ sau phê duyệt: sửa ghi chú, cấp xem, ngày hiệu lực; bấm **Có hiệu lực**, **Hết hiệu lực**, **Hủy số**. Hiện "Kiêm nhiệm: Văn thư" ở trang cá nhân và ở Quản trị → Tài khoản | "Văn bản *số* đã xử lý xong — lập hồ sơ" (khi người xử lý hoặc lãnh đạo bộ phận bấm **Báo xong**). Nhắc hằng ngày văn bản đến **chưa giao người xử lý** khi tới hạn, quá hạn (tiêu đề có đuôi " — chưa giao người xử lý") | Không phê duyệt, không trả lại. Không xem "Bảo mật cao" do người khác vào sổ. Không thấy nút **Thiết lập** (trừ khi có vai Ban Tổng Giám đốc). Không cần vai lãnh đạo: Nhân viên làm Văn thư được |
 | **Pháp chế** | Xem văn bản "Hạn chế" đã đánh dấu chuyển Pháp chế. Hiện "Kiêm nhiệm: Pháp chế" | "Văn bản *số* có thời hạn pháp lý — chuyển Pháp chế" (khi văn thư tick ô lúc vào sổ, hoặc bật ô khi sửa) | Không có tab hay bộ lọc riêng "văn bản chuyển Pháp chế": tìm qua thông báo hoặc sổ đến. Không có tác dụng ở sổ nội bộ |
-| **Người phê duyệt** | Bấm **Phê duyệt**, **Trả lại** dự thảo quy chế, quy định. Xem mọi dự thảo | "Tài liệu chờ phê duyệt: *tên*" (dự thảo mới); "Tài liệu gửi lại chờ phê duyệt: *tên*" | Không hiện ở "Kiêm nhiệm" |
+| **Người phê duyệt** | Bấm **Phê duyệt**, **Trả lại** dự thảo quy chế, quy định. Xem mọi dự thảo. Chỉ tính người còn hoạt động, còn vai Ban Tổng Giám đốc (mục 4.6.8) | "Tài liệu chờ phê duyệt: *tên*" (dự thảo mới; và khi vừa thành Người phê duyệt: một thông báo cho mỗi dự thảo đang chờ); "Tài liệu gửi lại chờ phê duyệt: *tên*" | Không hiện ở "Kiêm nhiệm" |
 
 Thêm:
 
@@ -2946,9 +2947,9 @@ Bảng này trả lời "Thiết lập để làm gì" theo từng màn: đổi 
 | **Pháp chế** | Chuông thông báo: "Văn bản *số* có thời hạn pháp lý — chuyển Pháp chế" | Người được chọn | |
 | **Pháp chế** | Dòng, cột **Kiêm nhiệm** | Người đó; Quản trị hệ thống | |
 | **Pháp chế** | Ô tick chuyển Pháp chế ở hộp **Vào sổ văn bản** và **Sửa** | Văn thư, Ban Tổng Giám đốc | Trong hộp **Vào sổ văn bản** ô tick chỉ hiện khi chọn dãy D10 (văn bản đến); trong hộp **Sửa** hiện với cả văn bản đến và đi. Ô hiện kể cả khi danh sách Pháp chế trống: tick lúc đó không đến ai |
-| **Người phê duyệt** | Trang chi tiết dự thảo: nút **Phê duyệt**, **Trả lại** | Người được chọn | |
-| **Người phê duyệt** | Danh sách Quy chế: thấy mọi dự thảo | Người được chọn | |
-| **Người phê duyệt** | Chuông thông báo: "Tài liệu chờ phê duyệt", "Tài liệu gửi lại chờ phê duyệt" | Người được chọn | |
+| **Người phê duyệt** | Trang chi tiết dự thảo: nút **Phê duyệt**, **Trả lại** | Người đang áp dụng (dòng **Đang áp dụng**, mục 4.6.8) | Người được chọn đã nghỉ: thành viên Ban Tổng Giám đốc phụ trách "Toàn công ty" thấy nút thay |
+| **Người phê duyệt** | Danh sách Quy chế: thấy mọi dự thảo | Người đang áp dụng | |
+| **Người phê duyệt** | Chuông thông báo: "Tài liệu chờ phê duyệt", "Tài liệu gửi lại chờ phê duyệt" | Người đang áp dụng | Thêm một Phó Tổng Giám đốc vào ô: người đó nhận "Tài liệu chờ phê duyệt" của các dự thảo đang chờ |
 | **Người phê duyệt** | Trang **Chờ tôi duyệt**, dòng **Kiêm nhiệm** | Không đổi | Dự thảo không vào **Chờ tôi duyệt** |
 
 Thiết lập **không** tác động tới: tab **Tài liệu dự án**, quyền xem việc, dự án, báo cáo tuần, nhân sự.
@@ -3046,41 +3047,52 @@ Câu mẫu để báo người được chọn: "Bạn vừa được giao kiêm
 
 #### 4.6.8 Để trống "Người phê duyệt" thì ai duyệt
 
-- Ô trống: Người phê duyệt là **mọi thành viên Ban Tổng Giám đốc đang hoạt động có phạm vi phụ trách "Toàn công ty"**. Trong ô chọn, họ có đuôi "· Toàn công ty".
-- Ô có ít nhất một người: **chỉ** những người đó duyệt được. Thành viên Ban Tổng Giám đốc có "Toàn công ty" mà không có tên trong ô thì không duyệt được.
+Hệ thống tính **một** nhóm "Người phê duyệt đang áp dụng", theo thứ tự dưới đây, và dùng nhóm đó ở mọi chỗ: nút **Phê duyệt** / **Trả lại**, quyền xem dự thảo, người nhận "Tài liệu chờ phê duyệt".
+
+1. Những người trong ô **Người phê duyệt tài liệu nội bộ** còn hoạt động **và** còn vai Ban Tổng Giám đốc.
+2. Không còn ai như vậy (ô trống, hoặc mọi người trong ô đã nghỉ, đổi vai): **mọi thành viên Ban Tổng Giám đốc đang hoạt động có phạm vi phụ trách "Toàn công ty"**. Trong ô chọn, họ có đuôi "· Toàn công ty".
+3. Cũng không có ai phụ trách "Toàn công ty": **mọi thành viên Ban Tổng Giám đốc đang hoạt động**.
+4. Không có thành viên Ban Tổng Giám đốc nào đang hoạt động: không ai duyệt được. Màn Thiết lập hiện băng đỏ "Hiện không có Người phê duyệt hợp lệ — dự thảo sẽ không ai duyệt."
+
+Quản trị hệ thống không bao giờ là Người phê duyệt.
+
+- Ai đang áp dụng, vì sao: đọc dòng ngay dưới ô, ví dụ "Đang áp dụng: *họ tên* — theo danh sách đã lưu.", "Đang áp dụng: *họ tên* — theo "Toàn công ty" vì danh sách trống.", "Đang áp dụng: *họ tên* — theo "Toàn công ty" vì danh sách không còn ai hợp lệ.", "Đang áp dụng: *họ tên, họ tên* — mọi thành viên Ban TGĐ, vì danh sách trống và không ai phụ trách "Toàn công ty"." Dòng này tính theo thiết lập **đã lưu** lúc trang được nạp: đổi ô chọn mà chưa **Lưu** thì dòng chưa đổi.
+- Ô có ít nhất một người hợp lệ: **chỉ** những người đó duyệt được. Thành viên Ban Tổng Giám đốc có "Toàn công ty" mà không có tên trong ô thì không duyệt được.
 - Phạm vi "Toàn công ty" do **Quản trị hệ thống** đặt, không phải Ban Tổng Giám đốc: Quản trị → **Tài khoản** → nút **Quyền & phụ trách** ở dòng tài khoản Ban Tổng Giám đốc → tick **Toàn công ty** → **Lưu phạm vi phụ trách**.
-- Ô trống mà không ai có "Toàn công ty": **không ai phê duyệt được**, không ai nhận "Tài liệu chờ phê duyệt". Ví dụ: Quản trị bỏ "Toàn công ty" của Tổng Giám đốc thì dự thảo quy chế không còn người duyệt.
-- Mới cài thì ô trống; hệ thống không tự chọn sẵn ai. Mở màn Thiết lập để biết hiện đã chọn ai.
-- Khuyến nghị: chọn đích danh người duyệt (thường là Tổng Giám đốc), không dựa vào "Toàn công ty".
+- Ví dụ: ô trống, Quản trị bỏ "Toàn công ty" của Tổng Giám đốc → quyền duyệt chuyển sang **mọi** thành viên Ban Tổng Giám đốc đang hoạt động.
+- Mới cài thì ô trống; hệ thống không tự chọn sẵn ai. Mở màn Thiết lập để biết ai đang áp dụng.
+- Khuyến nghị: chọn đích danh người duyệt (thường là Tổng Giám đốc), không dựa vào người dự phòng.
 
 | Ô Người phê duyệt | Ai duyệt được | Ai nhận "Tài liệu chờ phê duyệt" |
 |---|---|---|
-| Trống | Ban Tổng Giám đốc có "Toàn công ty" | Những người đó, trừ người tạo dự thảo |
+| Trống | Ban Tổng Giám đốc có "Toàn công ty"; không ai có thì mọi thành viên Ban Tổng Giám đốc | Những người đó, trừ người tạo dự thảo |
 | Có người, tất cả còn hợp lệ | Chỉ những người trong ô | Những người đó, trừ người tạo dự thảo |
-| Có người, một số đã nghỉ hoặc đổi vai | Những người còn hợp lệ | Những người còn hợp lệ |
-| Có người, **tất cả** đã nghỉ hoặc đổi vai | **Không ai** | **Không ai** |
+| Có người, một số đã nghỉ hoặc đổi vai | Những người còn hợp lệ | Những người còn hợp lệ, trừ người tạo dự thảo |
+| Có người, **tất cả** đã nghỉ hoặc đổi vai | Như ô trống | Như ô trống |
+| Không có thành viên Ban Tổng Giám đốc nào đang hoạt động | **Không ai** (băng đỏ ở Thiết lập) | **Không ai** |
 
-#### 4.6.9 Danh sách có người đã nghỉ hoặc đổi vai: bị kẹt, làm gì
+#### 4.6.9 Danh sách có người đã nghỉ hoặc đổi vai: hệ thống làm gì, bạn làm gì
 
 "Đã nghỉ" là tài khoản bị khoá (cột **Trạng thái** ghi "Đã khoá" ở Quản trị → Tài khoản). "Đổi vai" là Quản trị hệ thống đổi vai của tài khoản.
 
-**Người phê duyệt: dễ kẹt nhất.**
+**Người phê duyệt.**
 
-- Một người trong ô chỉ duyệt được khi tài khoản **còn hoạt động** và **còn vai Ban Tổng Giám đốc**.
-- Danh sách đã lưu vẫn giữ tên người đã nghỉ hoặc đổi vai, nhưng họ mất quyền duyệt.
-- Nếu **mọi** người trong danh sách đều đã nghỉ hoặc đổi vai: không ai duyệt được, không ai nhận báo. Hệ thống **không** tự quay về "Toàn công ty", vì danh sách đã lưu không trống.
-- Dấu hiệu: dự thảo nằm "Chưa phê duyệt" mãi; Văn thư thấy dự thảo nhưng không ai có nút **Phê duyệt**; thành viên Ban Tổng Giám đốc mở liên kết dự thảo thì thấy "Không tìm thấy văn bản".
+- Một người trong ô chỉ được tính khi tài khoản **còn hoạt động** và **còn vai Ban Tổng Giám đốc**. Người đã nghỉ, đổi vai không duyệt được, không nhận báo.
+- Nếu **mọi** người trong danh sách đều đã nghỉ hoặc đổi vai: hệ thống tự dùng người dự phòng như khi ô trống (mục 4.6.8), dự thảo vẫn có người duyệt.
+- Màn Thiết lập hiện người không còn hợp lệ ngay dưới ô chọn, sau dòng "Đã lưu nhưng không còn hợp lệ — hệ thống không tính những người này:": tên gạch ngang, kèm "(đã khoá)", "(không còn vai Ban Tổng Giám đốc)" hoặc cả hai, và ô tick "giữ tên trong danh sách" đang tick sẵn.
+- Bấm **Lưu** mà để nguyên ô tick: người đó vẫn ở danh sách, không bị xoá âm thầm, và tự được tính lại khi Quản trị mở khoá tài khoản hoặc trả vai Ban Tổng Giám đốc. Ví dụ: Quản trị khoá nhầm tài khoản Tổng Giám đốc rồi mở lại: Tổng Giám đốc duyệt tiếp như cũ, không cần sửa Thiết lập.
+- Bỏ tick rồi **Lưu**: người đó bị xoá khỏi danh sách. Muốn thêm lại sau này thì người đó phải đang hoạt động, đúng vai.
 
-⚠️ **Chữ trên màn hình ghi** "để trống = thành viên Ban TGĐ phụ trách "Toàn công ty"" **nhưng thực tế** lúc bị kẹt, mở Thiết lập sẽ thấy ô **Người phê duyệt** như đang trống (người đã nghỉ, đổi vai không còn trong danh sách để hiện), mà hệ thống vẫn chưa dùng "Toàn công ty". Phải bấm **Lưu** một lần thì danh sách mới thật sự trống.
+⚠️ Khi Quản trị khoá tài khoản hoặc đổi vai Người phê duyệt, quyền duyệt chuyển ngay sang người dự phòng, nhưng người dự phòng **không** được báo các dự thảo đã chờ từ trước. Chỉ dự thảo tạo mới hoặc gửi lại sau đó mới báo họ.
 
-**Cách gỡ** (thành viên Ban Tổng Giám đốc làm):
+**Nên làm** (thành viên Ban Tổng Giám đốc):
 
-1. Mở **Thiết lập**, bấm F5.
-2. Ở ô **Người phê duyệt tài liệu nội bộ**, chọn người duyệt mới (giữ Ctrl / Cmd nếu chọn nhiều). Hoặc để không tên nào tô màu, nếu chắc có thành viên Ban Tổng Giám đốc mang đuôi "· Toàn công ty".
-3. Bấm **Lưu**. Người đã nghỉ, đổi vai tự rơi khỏi danh sách.
-4. Báo Người phê duyệt mới vào tab **Quy chế, quy định nội bộ**, tìm các dự thảo "Chưa phê duyệt" (kiểm cả năm trước). Thông báo của các dự thảo tạo trong lúc bị kẹt **không được gửi lại**.
+1. Mở **Thiết lập**, bấm F5. Đọc dòng **Đang áp dụng**.
+2. Ở ô **Người phê duyệt tài liệu nội bộ**, chọn người duyệt mới (giữ Ctrl / Cmd nếu chọn nhiều); hoặc giữ nguyên nếu người dự phòng đang áp dụng là đúng ý.
+3. Người đã nghỉ hẳn: bỏ tick "giữ tên trong danh sách".
+4. Bấm **Lưu**. Người vừa thành Người phê duyệt nhận "Tài liệu chờ phê duyệt" cho từng dự thảo đang chờ, kể cả dự thảo tạo từ năm trước. Nếu không đổi ai mà dựa vào người dự phòng, báo họ vào tab **Quy chế, quy định nội bộ** tìm các dự thảo "Chưa phê duyệt" (kiểm cả năm trước).
 
-**Phòng trước:** mỗi khi Quản trị khoá tài khoản hoặc đổi vai một thành viên Ban Tổng Giám đốc, mở Thiết lập kiểm ô **Người phê duyệt** ngay.
+**Phòng trước:** mỗi khi Quản trị khoá tài khoản hoặc đổi vai một thành viên Ban Tổng Giám đốc, mở Thiết lập xem dòng **Đang áp dụng** ngay.
 
 **Văn thư, Pháp chế.**
 
@@ -3155,7 +3167,7 @@ Câu mẫu để báo người được chọn: "Bạn vừa được giao kiêm
 
 1. Ô **Người phê duyệt tài liệu nội bộ**: giữ **Ctrl** / **Cmd**, bấm thêm tên một Phó Tổng Giám đốc (vai Ban Tổng Giám đốc). **Lưu**.
 2. Từ đó cả hai nhận "Tài liệu chờ phê duyệt". Ai bấm trước thì duyệt; người bấm sau nhận "Tài liệu đã phê duyệt" (bấm gần như cùng lúc thì nhận "Tài liệu vừa được xử lý ở nơi khác — tải lại trang").
-3. Dự thảo tạo **trước** lúc thêm người: người mới không nhận thông báo cũ. Nhắc họ vào tab **Quy chế, quy định nội bộ** tìm dòng "Chưa phê duyệt".
+3. Dự thảo tạo **trước** lúc thêm người: người mới nhận "Tài liệu chờ phê duyệt" cho từng dự thảo đang chờ ngay khi bạn **Lưu**, kèm dòng "Bạn vừa thành Người phê duyệt (Thiết lập văn thư)".
 4. Tổng Giám đốc về: giữ **Ctrl** / **Cmd**, bấm tên Phó Tổng Giám đốc để bỏ, **Lưu**.
 
 **5. Thêm công ty con mới.**
@@ -3176,11 +3188,11 @@ Câu mẫu để báo người được chọn: "Bạn vừa được giao kiêm
 
 | Ai muốn xem | Xem ở đâu | Thấy được |
 |---|---|---|
-| Ban Tổng Giám đốc | **Thiết lập** (bấm F5, kéo thanh cuộn từng ô) | Cả 3 danh sách. Người đã nghỉ, đổi vai không hiện |
+| Ban Tổng Giám đốc | **Thiết lập** (bấm F5, kéo thanh cuộn từng ô) | Cả 3 danh sách. Văn thư, Pháp chế đã nghỉ thì không hiện. Người phê duyệt đã nghỉ, đổi vai hiện gạch tên dưới ô; dòng **Đang áp dụng** cho biết ai đang thực sự duyệt |
 | Quản trị hệ thống | Quản trị → **Tài khoản**, cột **Kiêm nhiệm** | Văn thư, Pháp chế. Có thể còn ghi tên tài khoản đã khoá tới lần lưu kế tiếp. Không có Người phê duyệt |
 | Từng người | Trang **Thông tin cá nhân**, dòng **Kiêm nhiệm** | Văn thư, Pháp chế của chính mình. Không có Người phê duyệt |
 
-**9. Quản trị vừa khoá tài khoản hoặc đổi vai một thành viên Ban Tổng Giám đốc.** Mở **Thiết lập** kiểm ô **Người phê duyệt** ngay (mục 4.6.9). Nếu người đó là Người phê duyệt duy nhất, chọn người khác và **Lưu**.
+**9. Quản trị vừa khoá tài khoản hoặc đổi vai một thành viên Ban Tổng Giám đốc.** Mở **Thiết lập**, xem dòng **Đang áp dụng** ngay (mục 4.6.9). Nếu người đó là Người phê duyệt duy nhất, hệ thống đã tự chuyển sang người dự phòng nhưng họ không được báo các dự thảo đang chờ: chọn người duyệt mới và **Lưu** (người mới nhận đủ thông báo), hoặc báo người dự phòng vào tab Quy chế tìm dòng "Chưa phê duyệt".
 
 **10. Một Văn thư chuyển sang bộ phận khác.** Vẫn là Văn thư: danh sách theo người, không theo bộ phận. Không còn làm văn thư thì bỏ tên họ ở ô **Văn thư**.
 
@@ -3193,7 +3205,8 @@ Câu mẫu để báo người được chọn: "Bạn vừa được giao kiêm
 - [ ] Dòng đầu ô **Pháp nhân** là công ty mẹ. Không đổi mã, không đổi dòng đầu giữa năm.
 - [ ] Mỗi dòng pháp nhân có dấu tách "·" và có tên.
 - [ ] Đã kéo thanh cuộn ở từng ô: đủ người cần chọn, không thừa ai.
-- [ ] Ô **Người phê duyệt** có ít nhất một người; hoặc chắc chắn có thành viên Ban Tổng Giám đốc mang đuôi "· Toàn công ty".
+- [ ] Ô **Người phê duyệt** có ít nhất một người còn hợp lệ; hoặc bạn chấp nhận người dự phòng (thành viên Ban Tổng Giám đốc mang đuôi "· Toàn công ty"; không có ai thì mọi thành viên Ban Tổng Giám đốc).
+- [ ] Tên bị gạch dưới ô **Người phê duyệt** (nếu có): giữ tick nếu người đó sẽ trở lại, bỏ tick nếu đã nghỉ hẳn.
 - [ ] Ô **Văn thư** có ít nhất một người. Trống thì chỉ Ban Tổng Giám đốc vào sổ được và không ai nhận nhắc văn bản chưa giao.
 - [ ] Ô **Pháp chế** có người, nếu văn thư sẽ tick chuyển Pháp chế.
 
@@ -3206,6 +3219,7 @@ Câu mẫu để báo người được chọn: "Bạn vừa được giao kiêm
 | Kiêm nhiệm đúng | Trang Thông tin cá nhân của người đó; hoặc nhờ IT xem Quản trị → Tài khoản | Ghi "Văn thư" hoặc "Pháp chế" |
 | Pháp nhân đúng | Mở hộp **Vào sổ** rồi bấm **Huỷ** (không lưu) | Đủ pháp nhân; dòng chọn sẵn là công ty mẹ |
 | Ô lọc pháp nhân | Danh sách sổ | Có **Mọi pháp nhân** khi có từ 2 pháp nhân |
+| Người phê duyệt đúng | Mở lại **Thiết lập** | Dòng **Đang áp dụng** ghi đúng người bạn muốn, không có băng đỏ |
 | Người phê duyệt nhận báo | Tạo một dự thảo thử rồi **Huỷ dự thảo** (mục 4.6.13) | Người duyệt nhận "Tài liệu chờ phê duyệt" và thấy nút **Phê duyệt** |
 | Có nhật ký | Nhờ IT xem Quản trị → **Nhật ký hệ thống** | Có dòng "Cập nhật", "Danh mục" (`vanthu.config`) đúng giờ bạn lưu |
 
@@ -3805,7 +3819,7 @@ Quản trị hệ thống **không** gán kiêm nhiệm; chỉ nhìn thấy kế
 | **Phụ trách nhân sự** | 2. Nhân sự | Menu **Nghiệp vụ** → **Nhân sự** → tab **Thiết lập** → ô **Người phụ trách nhân sự (Ban Tổng Giám đốc chỉ định — xem / sửa hồ sơ, hợp đồng, số định danh)** | Từng người, tối đa 5, không tự chọn mình | Chỉ khi bật phân hệ Nhân sự (đang tắt). Mục 6.2 |
 | **Văn thư** | 3. Văn thư | Menu **Nghiệp vụ** → **Tài liệu** → tab **Văn thư** hoặc **Quy chế, quy định nội bộ** → nút **Thiết lập** (trang `#/vanthu/thiet-lap`, chỉ Ban Tổng Giám đốc thấy nút) → ô **Văn thư** | Từng người, tối đa 30 (quá thì máy bỏ bớt, không báo) | Ô **Pháp nhân** cùng màn: xem phần Văn thư của tài liệu |
 | **Pháp chế** | 3. Văn thư | Cùng màn → ô **Pháp chế** | Từng người, tối đa 30 | Nhận văn bản có thời hạn pháp lý được chuyển |
-| **Người phê duyệt tài liệu nội bộ** | 3. Văn thư | Cùng màn → ô **Người phê duyệt tài liệu nội bộ (chỉ vai Ban TGĐ; để trống = thành viên Ban TGĐ phụ trách "Toàn công ty")** | Thành viên vai Ban Tổng Giám đốc, tối đa 10 | **Không** hiện ở cột "Kiêm nhiệm". Để trống thì người phê duyệt = thành viên Ban Tổng Giám đốc có phạm vi **Toàn công ty** (mục 7.6) |
+| **Người phê duyệt tài liệu nội bộ** | 3. Văn thư | Cùng màn → ô **Người phê duyệt tài liệu nội bộ (chỉ vai Ban TGĐ; để trống hoặc không còn ai hợp lệ = thành viên Ban TGĐ phụ trách "Toàn công ty"; không ai phụ trách "Toàn công ty" = mọi thành viên Ban TGĐ)** | Thành viên vai Ban Tổng Giám đốc, tối đa 10 | **Không** hiện ở cột "Kiêm nhiệm". Để trống, hoặc mọi người trong ô đã khoá / đổi vai, thì người phê duyệt = thành viên Ban Tổng Giám đốc có phạm vi **Toàn công ty** (mục 7.6); không ai có phạm vi này thì mọi thành viên Ban Tổng Giám đốc |
 
 **Phạm vi phụ trách** (chỉ vai Ban Tổng Giám đốc, Quản trị hệ thống đặt ở mục 7.6): mọi thành viên Ban Tổng Giám đốc xem toàn công ty, nhưng chỉ người có phạm vi mới là **BTGĐ phụ trách** của một việc. **Toàn công ty** = BTGĐ phụ trách của mọi việc. **Các bộ phận** (hiện là "Phó TGĐ phụ trách") = BTGĐ phụ trách của việc do bộ phận đó chủ trì.
 
@@ -4074,7 +4088,7 @@ Lỗi khi lưu: "Chỉ tài khoản vai Ban Tổng Giám đốc có phạm vi ph
 - Tick bộ phận đang ghi "(đang: X)" là lấy bộ phận khỏi X mà không hỏi. Ví dụ: tick "Phòng Thiết kế (đang: Phó TGĐ A)" cho Phó TGĐ B → Phó TGĐ A thôi phụ trách Phòng Thiết kế; từ đó đề nghị gia hạn việc của Phòng Thiết kế gửi Phó TGĐ B.
 - Bộ phận con **không** thừa hưởng Phó TGĐ phụ trách của bộ phận cha. Ví dụ: Phó TGĐ A phụ trách "Ban Kỹ thuật"; "Phòng Thiết kế" trực thuộc Ban Kỹ thuật mà chưa có Phó TGĐ riêng → cây tổ chức của nhân viên Phòng Thiết kế vẫn hiện Phó TGĐ A, nhưng Phó TGĐ A **không** duyệt được gia hạn việc do Phòng Thiết kế chủ trì. Muốn vậy phải tick thêm Phòng Thiết kế cho Phó TGĐ A.
 - Không ai có **Toàn công ty** và bộ phận chủ trì chưa có Phó TGĐ phụ trách → đề nghị gia hạn của việc bộ phận đó không có ai nhận, không ai duyệt được. Luôn để ít nhất một thành viên Ban Tổng Giám đốc có **Toàn công ty**.
-- Để trống ô Người phê duyệt tài liệu nội bộ (Văn thư) mà bỏ **Toàn công ty** của mọi người → dự thảo quy chế không có ai phê duyệt.
+- Ô Người phê duyệt tài liệu nội bộ (Văn thư) trống, hoặc chỉ còn người đã khoá / đổi vai, mà bỏ **Toàn công ty** của mọi người → **mọi** thành viên Ban Tổng Giám đốc đang hoạt động thành Người phê duyệt quy chế (dòng **Đang áp dụng** ở Thiết lập văn thư ghi rõ). Muốn đích danh người duyệt, Ban Tổng Giám đốc chọn ở ô đó.
 - Rời vai Ban Tổng Giám đốc (mục 7.5) là mất hết phạm vi; khoá tài khoản kèm bàn giao chỉ bỏ các bộ phận, không bỏ dấu Toàn công ty (mục 7.7).
 
 **Claude:** Không. Chỉ làm trên giao diện.
@@ -4093,7 +4107,7 @@ Lỗi khi lưu: "Chỉ tài khoản vai Ban Tổng Giám đốc có phạm vi ph
 5. **Lưu** → "Đã lưu tài khoản — bàn giao: gỡ khỏi {n} việc, {m} việc chờ phân công lại".
 6. Người nghỉ từng là **Phó TGĐ phụ trách** bộ phận: Ban Tổng Giám đốc nhận "Cần chỉ định Phó Tổng Giám đốc phụ trách: {các bộ phận}". Khi Ban Tổng Giám đốc chọn người thay, mở **Quyền & phụ trách** của người thay và tick các bộ phận đó (mục 7.6).
 7. Người nghỉ có **Toàn công ty**: đặt **Toàn công ty** cho thành viên Ban Tổng Giám đốc khác. Hệ thống **không** tự báo việc này.
-8. Người nghỉ có kiêm nhiệm (xem cột **Kiêm nhiệm** trước khi khoá) hoặc là Người phê duyệt tài liệu nội bộ: báo Ban Tổng Giám đốc chọn người thay ở đúng nơi (mục 7.1). Khoá tài khoản **không** tự gỡ kiêm nhiệm.
+8. Người nghỉ có kiêm nhiệm (xem cột **Kiêm nhiệm** trước khi khoá) hoặc là Người phê duyệt tài liệu nội bộ: báo Ban Tổng Giám đốc chọn người thay ở đúng nơi (mục 7.1). Khoá tài khoản **không** tự gỡ kiêm nhiệm. Người phê duyệt bị khoá thì quyền duyệt tự chuyển sang người dự phòng (mục 4.6.8), nhưng người dự phòng không được báo các dự thảo đang chờ: vẫn báo Ban Tổng Giám đốc.
 9. Báo người quản lý các dự án liên quan: đổi người duyệt ở các bước "Người đứng tên dự án" / "Người được chỉ định" đang trỏ tới người nghỉ, đổi người đứng tên dự án / Chủ dự án nếu là người nghỉ.
 
 **Hộp "Khoá tài khoản (nghỉ việc)"**
@@ -5072,15 +5086,15 @@ Dữ liệu trình duyệt **không tách theo người** (máy dùng chung thì
 | Tôi vừa được giao làm Văn thư nhưng không thấy nút **Vào sổ**. | Bấm F5. Trình duyệt giữ thông tin cũ suốt phiên. Vẫn không thấy: nhờ Ban Tổng Giám đốc mở Thiết lập kiểm tên bạn trong ô **Văn thư**. |
 | Tôi là Lãnh đạo bộ phận, sao tab **Tài liệu dự án** không có dự án của bộ phận mình? | Tab này chỉ hiện dự án bạn là thành viên hoặc đứng tên. Nhờ người quản lý dự án thêm bạn ở **Cài đặt dự án** → **Thành viên**, vai **Người xem**. |
 | Vào sổ nhầm, sửa số được không? | Không. Bấm **Hủy số** (gõ lý do), rồi vào sổ lại. Số đã hủy vẫn nằm trong sổ, không cấp lại. |
-| Bấm **Hủy số** (hoặc **Trả lại**, **Huỷ dự thảo**) mà không có gì xảy ra. | Bạn để trống ô lý do. Hệ thống im lặng bỏ qua. Bấm lại và gõ lý do. |
-| Bấm nhầm **Lập hồ sơ** / **Đã gửi** / **Hết hiệu lực**, quay lại được không? | Không. Trạng thái chỉ đi tiếp. Ghi giải thích vào **Ghi chú** của văn bản (nút **Sửa / giao xử lý**; với quy chế là nút **Sửa**). Quy chế lỡ "Hết hiệu lực" thì tạo dự thảo mới, chọn **Thay thế văn bản**, đi lại luồng phê duyệt. |
+| Bấm **Hủy số** (hoặc **Trả lại**, **Huỷ dự thảo**) mà hộp không đóng, hiện dòng đỏ "Nhập lý do". | Ô lý do là bắt buộc; bạn để trống hoặc chỉ gõ khoảng trắng. Gõ lý do rồi bấm lại. Chưa có gì bị hủy hay trả lại. |
+| Bấm nhầm **Lập hồ sơ** / **Đã gửi** / **Hết hiệu lực**, quay lại được không? | Hệ thống hỏi lại trước ("… Không quay lại được bước trước."): bấm **Huỷ** ở hộp hỏi thì không đổi gì. Đã bấm nút đồng ý thì không quay lại được: trạng thái chỉ đi tiếp. Ghi giải thích vào **Ghi chú** của văn bản (nút **Sửa / giao xử lý**; với quy chế là nút **Sửa**). Quy chế lỡ "Hết hiệu lực" thì tạo dự thảo mới, chọn **Thay thế văn bản**, đi lại luồng phê duyệt. |
 | Văn bản "Hạn chế" ai xem được? | Ban Tổng Giám đốc, mọi Văn thư, người vào sổ, người xử lý, **mọi người thuộc bộ phận của văn bản** (kể cả Nhân viên), và Pháp chế nếu văn bản được đánh dấu chuyển Pháp chế. |
 | Sao hạn tự tính của văn bản đến rơi vào ngày lễ? | Ngày lễ chỉ được trừ khi đã khai trong **Nhân sự → Thiết lập** (mục 6.2). Chưa ai khai thì hạn tự tính không trừ ngày lễ: khai ngày lễ, hoặc gần kỳ nghỉ thì văn thư gõ hạn tay ở ô **Hạn**. |
 | Quy chế năm ngoái đâu rồi? | Danh sách lọc theo năm, mặc định năm nay. Chọn năm đó ở ô **Năm**. Năm là năm phê duyệt trên Hub. |
-| Ô **Người phê duyệt** để trống thì ai duyệt? | Thành viên Ban Tổng Giám đốc có phạm vi "Toàn công ty" (Quản trị hệ thống đặt ở Quản trị → Tài khoản → **Quyền & phụ trách**). Không ai có thì không ai duyệt được. |
-| Có dự thảo mà không ai nhận "Tài liệu chờ phê duyệt", không ai có nút **Phê duyệt**. | Danh sách Người phê duyệt bị kẹt: người trong đó đã nghỉ hoặc đổi vai. Ban Tổng Giám đốc mở Thiết lập, F5, chọn lại Người phê duyệt, **Lưu**. Xem mục 4.6.9. |
+| Ô **Người phê duyệt** để trống thì ai duyệt? | Thành viên Ban Tổng Giám đốc có phạm vi "Toàn công ty" (Quản trị hệ thống đặt ở Quản trị → Tài khoản → **Quyền & phụ trách**). Không ai có thì mọi thành viên Ban Tổng Giám đốc. Ô chỉ còn người đã nghỉ, đổi vai cũng vậy. Xem dòng **Đang áp dụng** ở Thiết lập (mục 4.6.8). |
+| Người phê duyệt vừa nghỉ việc; ai duyệt các dự thảo đang chờ? | Người dự phòng ở dòng **Đang áp dụng** (thường là thành viên Ban Tổng Giám đốc phụ trách "Toàn công ty"). Họ không được báo các dự thảo đã chờ từ trước: Ban Tổng Giám đốc chọn Người phê duyệt mới rồi **Lưu** (người mới nhận "Tài liệu chờ phê duyệt" của từng dự thảo đang chờ), hoặc báo người dự phòng vào tab Quy chế. Xem mục 4.6.9. |
 | Người phê duyệt xem PDF ở đâu? | Ở khối **Tệp văn bản** của dự thảo, bấm **Tải** rồi mở trên máy. Trang Văn thư không có nút **Xem**. |
-| Bấm **Gỡ** tệp có mất không? | Tệp có nhãn **NAS**: chuyển vào thư mục `_LuuTru` của sổ, IT lấy lại được. Tệp không có nhãn **NAS**: **mất hẳn**, dù hộp hỏi chỉ ghi "Gỡ tệp khỏi văn bản?". |
+| Bấm **Gỡ** tệp có mất không? | Tệp có nhãn **NAS**: chuyển vào thư mục `_LuuTru` của sổ, IT lấy lại được. Tệp không có nhãn **NAS**: **mất hẳn**; hộp hỏi ghi rõ "Tệp lưu trong Hub sẽ bị xoá hẳn, không khôi phục được." |
 | Bấm **Phê duyệt** báo lỗi bắt đầu bằng "Dữ liệu bị trùng". | Số sắp cấp trùng một số đã có: thường do một bộ phận ra văn bản D7 cho hai pháp nhân, hoặc do đổi pháp nhân dòng đầu giữa năm. Hủy dự thảo, tạo lại với đúng pháp nhân đã dùng; báo IT. Xem mục 4.5, 4.6.5. |
 | Lưu Thiết lập báo "Văn thư có tài khoản không hợp lệ". | Một người trong ô vừa bị khoá tài khoản hoặc chuyển sang Quản trị sau lúc bạn mở trang. Bấm F5, chọn lại, **Lưu**. |
 | Tôi bấm một tên trong ô **Văn thư**, mọi tên khác mất tô màu. | Bấm thường là chỉ chọn một người. Chưa bấm **Lưu** thì F5 để bỏ thay đổi, rồi giữ **Ctrl** (Mac: **Cmd**) khi bấm từng tên. |
