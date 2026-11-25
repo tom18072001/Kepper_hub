@@ -203,15 +203,24 @@ export function closeModal(value) {
   if (had && back?.isConnected) setTimeout(() => { if (root.classList.contains('hidden') && (document.activeElement === document.body || !document.activeElement)) back.focus?.({ preventScroll: true }); }, 0);
 }
 // cancelText: đặt chữ khác "Huỷ" khi nút đồng ý cũng nói "Huỷ …" (vd. "Giữ đơn" / "Huỷ đơn") để khỏi bấm nhầm.
-export function confirmDialog(message, { okText = 'Đồng ý', cancelText = 'Huỷ', danger = false, input = null } = {}) {
+// required (chỉ có tác dụng khi có input; true hoặc chữ báo lỗi): ô nhập bắt buộc. Bấm nút đồng ý khi ô trống / chỉ có khoảng trắng thì hộp GIỮ MỞ,
+// hiện dòng đỏ "Nhập lý do" (hoặc chữ truyền vào), viền ô đỏ, con trỏ về ô. Chọn cách này thay vì khoá nút: nút mờ không nói vì sao, người
+// dùng bấm vẫn "không thấy gì", trình đọc màn hình không biết lý do; dòng đỏ role="alert" được đọc lên. Không truyền required: như cũ.
+export function confirmDialog(message, { okText = 'Đồng ý', cancelText = 'Huỷ', danger = false, input = null, required = false } = {}) {
   return new Promise(resolve => {
-    const modal = openModal(`<h2>Xác nhận</h2><p>${esc(message)}</p>${input ? `<label class="field">${esc(input)}<textarea id="confirmInput" autofocus data-testid="confirm-input"></textarea></label>` : ''}
+    const must = !!input && !!required;
+    const modal = openModal(`<h2>Xác nhận</h2><p>${esc(message)}</p>${input ? `<label class="field">${esc(input)}<textarea id="confirmInput" autofocus data-testid="confirm-input"${must ? ' aria-required="true" aria-describedby="confirmError"' : ''}></textarea></label>` : ''}${must ? '<p class="field-error" id="confirmError" role="alert" data-testid="confirm-error"></p>' : ''}
       <div class="modal-actions"><button class="btn btn-ghost" data-act="cancel" data-testid="confirm-cancel">${esc(cancelText)}</button><button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-act="ok" data-testid="confirm-ok">${esc(okText)}</button></div>`);
     modalResolve = resolve;
+    const box = modal.querySelector('#confirmInput'), err = modal.querySelector('#confirmError');
+    if (must) box.addEventListener('input', () => { if (box.value.trim()) { err.textContent = ''; box.removeAttribute('aria-invalid'); } });
     modal.addEventListener('click', e => {
       const act = e.target.closest('[data-act]')?.dataset.act;
       if (act === 'cancel') closeModal(null);
-      if (act === 'ok') closeModal(input ? (modal.querySelector('#confirmInput').value.trim() || '') : true);
+      if (act !== 'ok') return;
+      const value = input ? box.value.trim() : true;
+      if (must && !value) { err.textContent = typeof required === 'string' ? required : 'Nhập lý do'; box.setAttribute('aria-invalid', 'true'); box.focus(); return; }
+      closeModal(input ? value || '' : true);
     });
   });
 }

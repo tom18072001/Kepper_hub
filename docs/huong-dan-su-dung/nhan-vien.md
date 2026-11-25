@@ -389,7 +389,7 @@ Với nhân viên:
 
 ![Văn thư — Tôi xử lý](anh/07-van-thu-toi-xu-ly.png)
 
-- Mở văn bản để xem số, nơi gửi, độ khẩn, hạn xử lý, lịch sử. Bấm **Bắt đầu xử lý** khi nhận việc, **Báo xong** khi xử lý xong. Bước chỉ đi tiếp, không quay lại. **Báo xong** hỏi lại, cho ghi "Kết quả xử lý"; xong thì Văn thư nhận thông báo để lập hồ sơ.
+- Mở văn bản để xem số, nơi gửi, độ khẩn, hạn xử lý, lịch sử. Bấm **Bắt đầu xử lý** khi nhận việc, **Báo xong** khi xử lý xong. Bước chỉ đi tiếp, không quay lại: nút bước nào cũng hỏi lại trước khi đổi (bấm **Huỷ** ở hộp hỏi thì không đổi gì). **Báo xong** cho ghi thêm "Kết quả xử lý"; xong thì Văn thư nhận thông báo để lập hồ sơ.
 - Bấm **Tải tệp lên** để thêm bản scan / văn bản trả lời. Trên bản chạy thật, tệp được lưu vào NAS và có nhãn **NAS** kèm phiên bản (ảnh dưới chụp trên bản thử nên không có nhãn này).
 
 ![Chi tiết văn bản](anh/07-van-thu-chi-tiet.png)

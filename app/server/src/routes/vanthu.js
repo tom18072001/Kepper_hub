@@ -5,7 +5,7 @@
 // Sổ nội bộ (quy chế, quy định — docs/de-xuat-quy-che-phe-duyet.md): tạo là DỰ THẢO chưa có số; Người phê duyệt (vai Ban TGĐ, danh sách
 // trong Thiết lập văn thư) bấm Phê duyệt trên giao diện thì mới cấp số; cấp xem theo vai (Mọi người / Lãnh đạo / Ban TGĐ) thay mức mật.
 // Claude (token) chỉ TẠO DỰ THẢO kèm PDF (POST /api/vanthu/drafts) — không phê duyệt, không trả lại, không cấp số.
-const { NOT_IT_WHERE, BOARD_WHERE, isBoard, roleRank } = require('../lib/permissions');
+const { NOT_IT_WHERE, BOARD_WHERE, roleRank } = require('../lib/permissions');
 const { Prisma } = require('@prisma/client');
 const { fail, intParam, optionalInt, text, oneOf } = require('../lib/http');
 const V = require('../services/vanthu');
@@ -40,14 +40,18 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
   if (!(config.modules || []).includes('vanthu')) return;
 
   const workCfg = async () => { try { const c = await H.hrmConfig(prisma); return { workDays: c.workDays, holidays: c.holidays }; } catch { return { workDays: [1, 2, 3, 4, 5], holidays: [] }; } };
+  // s.appr: Người phê duyệt HIỆU LỰC (V.approversOf — một nơi tính) — dùng cho quyền phê duyệt / trả lại, xem dự thảo và người nhận
+  // "Tài liệu chờ phê duyệt"; không đọc danh sách thô cfg.approverUserIds ở chỗ nào khác.
   async function subject(req) {
-    const [s, cfg] = await Promise.all([WD.rolesOf(prisma, req.user), V.vanthuConfig(prisma)]);
-    return { ...s, clerk: !s.it && cfg.clerkUserIds.includes(req.user.id), legal: !s.it && cfg.legalUserIds.includes(req.user.id), ai: req.via === 'mcp', cfg,
-      rank: roleRank(req.user), approver: !s.it && V.isApprover(req.user, cfg, isBoard(req.user)) };
+    const cfg = await V.vanthuConfig(prisma);
+    const [s, appr] = await Promise.all([WD.rolesOf(prisma, req.user), V.approversOf(prisma, cfg)]);
+    return { ...s, clerk: !s.it && cfg.clerkUserIds.includes(req.user.id), legal: !s.it && cfg.legalUserIds.includes(req.user.id), ai: req.via === 'mcp', cfg, appr,
+      rank: roleRank(req.user), approver: !s.it && V.isApprover(req.user, appr) };
   }
   const visible = (doc, s) => V.canView(doc, s) && !V.aiHidden(doc, s);
-  // Người nhận thông báo "có tài liệu chờ phê duyệt": danh sách Người phê duyệt; trống → Ban TGĐ phụ trách "Toàn công ty".
-  const approverIds = async cfg => (await prisma.user.findMany({ where: { isActive: true, ...BOARD_WHERE, ...(cfg.approverUserIds.length ? { id: { in: cfg.approverUserIds } } : { boardAll: true }) }, select: { id: true } })).map(u => u.id);
+  // "Tài liệu chờ phê duyệt: …" cho các Người phê duyệt hiệu lực (trừ người soạn / người bấm).
+  const approvalNotice = (d, extra = '') => ({ type: 'DOC_APPROVAL', title: `Tài liệu chờ phê duyệt: ${d.title.slice(0, 120)}`,
+    body: `${V.NOIBO_TYPES[d.docType] || ''} · ${V.VIEW_LEVELS[d.viewLevel || 'ALL']}${d.viaAi ? ' · tạo qua Claude' : ''}${extra}`, link: `#/vanthu/${d.id}` });
   const label = d => d.number || `dự thảo "${d.title.slice(0, 60)}"`;
   const userOk = async (id, label) => {
     if (id == null) return null;
@@ -117,8 +121,10 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
       canRegister: Object.fromEntries(Object.keys(V.SERIES).map(k => [k, !s.ai && V.canRegister(s, k, s.departmentId)])),
       viewLevels: V.VIEW_LEVELS, myViewLevels: V.levelsFor(s), noiboTypes: V.NOIBO_TYPES,
       approver: s.approver,
-      config: s.director ? { clerkUserIds: s.cfg.clerkUserIds, legalUserIds: s.cfg.legalUserIds, approverUserIds: s.cfg.approverUserIds,
-        boardUsers: await prisma.user.findMany({ where: { isActive: true, ...BOARD_WHERE }, select: { id: true, fullName: true, boardAll: true }, orderBy: { fullName: 'asc' } }) } : undefined,
+      // Màn Thiết lập: approverUserIds = danh sách đã lưu (thô); approvers = ai đang thực sự duyệt (source: LIST / BOARD_ALL / BOARD / NONE)
+      // và người đã lưu nhưng không còn hợp lệ (stored[].problems) — cùng một hàm tính với quyền phê duyệt.
+      config: s.director ? { clerkUserIds: s.cfg.clerkUserIds, legalUserIds: s.cfg.legalUserIds, approverUserIds: s.cfg.approverUserIds, boardUsers: s.appr.board,
+        approvers: { source: s.appr.source, effective: s.appr.board.filter(u => s.appr.ids.includes(u.id)), stored: s.appr.stored }, approverProblems: V.APPROVER_PROBLEMS } : undefined,
     });
   });
 
@@ -222,8 +228,7 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
       try { await attachFiles(req, doc, [file]); }
       catch (error) { await prisma.docRecord.delete({ where: { id: doc.id } }).catch(() => {}); throw error; } // dự thảo chưa có số: xoá được, không để dự thảo thiếu tệp
     }
-    const to = (await approverIds(s.cfg)).filter(id => id !== req.user.id);
-    if (to.length) await notify(prisma, to, { type: 'DOC_APPROVAL', title: `Tài liệu chờ phê duyệt: ${doc.title.slice(0, 120)}`, body: `${V.NOIBO_TYPES[doc.docType] || ''} · ${V.VIEW_LEVELS[doc.viewLevel]}${s.ai ? ' · tạo qua Claude' : ''}`, link: `#/vanthu/${doc.id}` }, req.user.id);
+    await notify(prisma, s.appr.ids, approvalNotice(doc), req.user.id);
     return doc;
   }
 
@@ -429,8 +434,7 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
       await audit(req, 'RESUBMIT', 'DocRecord', d.id, null, null, tx);
       return tx.docRecord.findUnique({ where: { id: d.id } });
     });
-    const to = (await approverIds(s.cfg)).filter(id => id !== req.user.id);
-    if (to.length) await notify(prisma, to, { type: 'DOC_APPROVAL', title: `Tài liệu gửi lại chờ phê duyệt: ${d.title.slice(0, 120)}`, body: note || '', link: `#/vanthu/${d.id}` }, req.user.id);
+    await notify(prisma, s.appr.ids, { type: 'DOC_APPROVAL', title: `Tài liệu gửi lại chờ phê duyệt: ${d.title.slice(0, 120)}`, body: note || '', link: `#/vanthu/${d.id}` }, req.user.id);
     res.json(await docOut(u, s));
   });
 
@@ -569,15 +573,26 @@ module.exports = function mountVanthu(app, { prisma, auth, audit, config }) {
       if (!entities.length || entities.some(e => !/^[A-Z]{2,6}$/.test(e.code) || !e.name)) fail(422, 'Pháp nhân: mã 2–6 chữ in hoa (vd. HLD, DXA) và tên', 'INVALID_VALUE');
       if (new Set(entities.map(e => e.code)).size !== entities.length) fail(422, 'Mã pháp nhân bị trùng', 'INVALID_VALUE');
     }
-    // Người phê duyệt tài liệu nội bộ: chỉ chọn được tài khoản vai Ban TGĐ (đề xuất 9.1).
+    // Người phê duyệt tài liệu nội bộ: chỉ THÊM được tài khoản vai Ban TGĐ đang hoạt động (đề xuất 9.1). Người đã có trong danh sách đã lưu
+    // mà nay đã khoá / đổi vai được GIỮ nếu giao diện gửi lại (ô "giữ" đang tick) — không âm thầm xoá ai; bỏ tick thì mới xoá. Người giữ lại
+    // không được tính (V.effectiveApprovers) cho tới khi hợp lệ lại.
     let approverUserIds = cur.approverUserIds;
     if (b.approverUserIds !== undefined) {
       approverUserIds = [...new Set((Array.isArray(b.approverUserIds) ? b.approverUserIds : []).map(Number).filter(Number.isInteger))].slice(0, 10);
-      if ((await prisma.user.count({ where: { id: { in: approverUserIds }, isActive: true, ...BOARD_WHERE } })) !== approverUserIds.length) fail(422, 'Người phê duyệt phải là tài khoản vai Ban Tổng Giám đốc đang hoạt động', 'INVALID_USER');
+      const added = approverUserIds.filter(id => !cur.approverUserIds.includes(id));
+      if ((await prisma.user.count({ where: { id: { in: added }, isActive: true, ...BOARD_WHERE } })) !== added.length) fail(422, 'Người phê duyệt phải là tài khoản vai Ban Tổng Giám đốc đang hoạt động', 'INVALID_USER');
     }
     const value = { entities: entities ?? cur.entities, clerkUserIds: (await ids(b.clerkUserIds, 'Văn thư')) ?? cur.clerkUserIds, legalUserIds: (await ids(b.legalUserIds, 'Pháp chế')) ?? cur.legalUserIds, approverUserIds };
-    await prisma.appSetting.upsert({ where: { key: V.CONFIG_KEY }, update: { value, updatedById: req.user.id }, create: { key: V.CONFIG_KEY, value, updatedById: req.user.id } });
-    await audit(req, 'UPDATE', 'AppSetting', V.CONFIG_KEY, null, value);
+    await prisma.$transaction(async tx => {
+      await tx.appSetting.upsert({ where: { key: V.CONFIG_KEY }, update: { value, updatedById: req.user.id }, create: { key: V.CONFIG_KEY, value, updatedById: req.user.id } });
+      await audit(req, 'UPDATE', 'AppSetting', V.CONFIG_KEY, null, value, tx);
+      // Người MỚI vào tập Người phê duyệt hiệu lực (do đổi danh sách): nhận "Tài liệu chờ phê duyệt" của từng dự thảo đang chờ (mọi năm),
+      // như lúc dự thảo được tạo — trừ dự thảo do chính họ soạn và trừ người bấm Lưu. Cùng giao dịch với lưu: không có chuyện lưu xong mà báo lỗi.
+      const fresh = (await V.approversOf(tx, value)).ids.filter(id => !s.appr.ids.includes(id));
+      if (!fresh.length) return;
+      for (const d of await tx.docRecord.findMany({ where: { book: 'NOIBO', status: 'DRAFT', cancelledAt: null }, orderBy: { id: 'asc' } }))
+        await notify(tx, fresh.filter(id => id !== d.createdById), approvalNotice(d, ' · Bạn vừa thành Người phê duyệt (Thiết lập văn thư)'), req.user.id);
+    });
     res.json(value);
   });
 };

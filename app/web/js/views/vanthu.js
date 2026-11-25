@@ -254,11 +254,16 @@ async function renderDoc(root, id, setCrumbs, m) {
     </section>
     <section class="card pg-section"><h3 style="margin-top:0">Lịch sử</h3><ol class="vt-log">
       ${d.events.map(e => `<li><span class="muted xs">${fmtDateTime(e.createdAt)}</span> <b>${esc(e.user || '')}</b> · ${esc(ACT[e.action] || e.action)}${e.action === 'STATUS' ? `: ${esc(st[e.fromValue] || e.fromValue || '')} → ${esc(st[e.toValue] || e.toValue)}` : ''}${e.note ? ` — <span style="white-space:pre-line">${esc(e.note)}</span>` : ''}</li>`).join('')}</ol></section>`;
+  // Nút bước: trạng thái chỉ đi tiếp (máy chủ chặn quay lại, không có thao tác mở lại) → MỌI nút đều hỏi lại, cùng một cách viết:
+  // "<tên nút>: chuyển <số> sang "<trạng thái>"? Không quay lại được bước trước." kèm hệ quả riêng của bước nếu có. "Báo xong" thêm ô kết quả.
+  const STEP_MORE = { DONE: 'Văn bản được tính là đã xong, hết nhắc hạn.', FILED: 'Văn bản được tính là đã xong, hết nhắc hạn.',
+    EXPIRED: 'Muốn áp dụng lại phải tạo dự thảo thay thế và phê duyệt lại.' };
   root.querySelectorAll('[data-to]').forEach(b => b.onclick = async () => {
-    const to = b.dataset.to;
-    let note = null;
-    if (to === 'DONE') { note = await confirmDialog(`Báo đã xử lý xong ${d.number}?`, { okText: 'Báo xong', input: 'Kết quả xử lý (không bắt buộc)' }); if (note === null) return; }
-    try { await api(`/api/vanthu/docs/${d.id}/status`, { method: 'POST', body: { to, note: typeof note === 'string' ? note : null } }); toast('Đã cập nhật', 'ok'); renderDoc(root, id, setCrumbs, m); }
+    const to = b.dataset.to, step = STEP_LABEL[to] || st[to];
+    const ok = await confirmDialog(`${step}: chuyển ${d.number || 'văn bản'} sang "${st[to]}"? Không quay lại được bước trước.${STEP_MORE[to] ? ' ' + STEP_MORE[to] : ''}`,
+      { okText: step, ...(to === 'DONE' ? { input: 'Kết quả xử lý (không bắt buộc)' } : {}) });
+    if (ok === null) return;
+    try { await api(`/api/vanthu/docs/${d.id}/status`, { method: 'POST', body: { to, note: typeof ok === 'string' && ok ? ok : null } }); toast('Đã cập nhật', 'ok'); renderDoc(root, id, setCrumbs, m); }
     catch (error) { toast(errorMessage(error), 'error'); }
   });
   root.querySelector('#vtFiles')?.addEventListener('change', async e => {
@@ -269,17 +274,18 @@ async function renderDoc(root, id, setCrumbs, m) {
     catch (error) { toast(errorMessage(error), 'error'); e.target.value = ''; }
   });
   root.querySelectorAll('[data-dl]').forEach(b => b.onclick = () => download(`/api/vanthu/files/${b.dataset.dl}/download`).catch(err => toast(errorMessage(err), 'error')));
+  // Máy chủ (storage.remove): tệp trên NAS chuyển vào _LuuTru của thư mục sổ; tệp lưu trong Hub (không nhãn NAS) bị xoá thật — hộp hỏi nói rõ.
   root.querySelectorAll('[data-rm]').forEach(b => b.onclick = async () => {
-    const msg = b.dataset.nas ? 'Gỡ tệp khỏi văn bản? Bản trên NAS được chuyển vào thư mục _LuuTru của sổ, không xoá hẳn.' : 'Gỡ tệp khỏi văn bản?';
+    const msg = b.dataset.nas ? 'Gỡ tệp khỏi văn bản? Bản trên NAS được chuyển vào thư mục _LuuTru của sổ, không xoá hẳn.' : 'Gỡ tệp khỏi văn bản? Tệp lưu trong Hub sẽ bị xoá hẳn, không khôi phục được.';
     if (!(await confirmDialog(msg, { okText: 'Gỡ tệp', danger: true }))) return;
     try { await api(`/api/vanthu/files/${b.dataset.rm}`, { method: 'DELETE' }); toast('Đã gỡ tệp', 'ok'); renderDoc(root, id, setCrumbs, m); }
     catch (error) { toast(errorMessage(error), 'error'); }
   });
   root.querySelector('#vtCancel')?.addEventListener('click', async () => {
     const reason = d.number
-      ? await confirmDialog(`Hủy số ${d.number}? Số vẫn giữ trong sổ và không cấp lại cho văn bản khác.`, { okText: 'Hủy số', danger: true, input: 'Lý do hủy' })
-      : await confirmDialog('Huỷ dự thảo này? Dự thảo chưa có số nên không ảnh hưởng sổ.', { okText: 'Huỷ dự thảo', danger: true, input: 'Lý do huỷ' });
-    if (!reason) return;
+      ? await confirmDialog(`Hủy số ${d.number}? Số vẫn giữ trong sổ và không cấp lại cho văn bản khác.`, { okText: 'Hủy số', danger: true, input: 'Lý do hủy (bắt buộc)', required: true })
+      : await confirmDialog('Huỷ dự thảo này? Dự thảo chưa có số nên không ảnh hưởng sổ.', { okText: 'Huỷ dự thảo', danger: true, input: 'Lý do huỷ (bắt buộc)', required: true });
+    if (!reason) return; // chỉ khi bấm Huỷ / đóng hộp: ô trống thì hộp giữ mở và báo "Nhập lý do"
     try { await api(`/api/vanthu/docs/${d.id}/cancel`, { method: 'POST', body: { reason } }); toast(d.number ? 'Đã hủy số' : 'Đã huỷ dự thảo', 'ok'); renderDoc(root, id, setCrumbs, m); }
     catch (error) { toast(errorMessage(error), 'error'); }
   });
@@ -293,8 +299,8 @@ async function renderDoc(root, id, setCrumbs, m) {
     act('approve', { note: typeof note === 'string' ? note : null }, 'Đã phê duyệt và cấp số');
   });
   root.querySelector('#vtReturn')?.addEventListener('click', async () => {
-    const reason = await confirmDialog(`Trả lại "${d.title}" cho người soạn?`, { okText: 'Trả lại', danger: true, input: 'Lý do trả lại (bắt buộc)' });
-    if (!reason) return;
+    const reason = await confirmDialog(`Trả lại "${d.title}" cho người soạn?`, { okText: 'Trả lại', danger: true, input: 'Lý do trả lại (bắt buộc)', required: true });
+    if (!reason) return; // chỉ khi bấm Huỷ / đóng hộp
     act('return', { reason }, 'Đã trả lại');
   });
   root.querySelector('#vtResubmit')?.addEventListener('click', () => act('resubmit', {}, 'Đã gửi lại chờ phê duyệt'));
@@ -354,6 +360,25 @@ async function openNoiboEdit(d, m, done) {
   };
 }
 
+// Người phê duyệt (sửa C1 / T14): máy chủ tính MỘT tập "hiệu lực" (m.config.approvers — cùng hàm với quyền phê duyệt). Màn này hiện ai đang
+// thực sự duyệt và vì sao; người đã lưu nhưng không còn hợp lệ (đã khoá / đổi vai) hiện gạch tên kèm lý do, có ô "giữ" đang tick: Lưu mà không
+// đụng tới thì danh sách đã lưu giữ nguyên (không âm thầm xoá ai), bỏ tick thì xoá. Không tự tính lại ở trình duyệt khi đổi ô chọn.
+function approverBox(m) {
+  const { approvers: a, approverProblems: why, boardUsers } = m.config;
+  const valid = new Set(a.stored.filter(x => !x.problems.length).map(x => x.id));
+  const stale = a.stored.filter(x => x.problems.length);
+  const names = list => list.map(u => esc(u.fullName)).join(', ');
+  const empty = a.stored.length ? 'danh sách không còn ai hợp lệ' : 'danh sách trống';
+  const reason = { LIST: 'theo danh sách đã lưu', BOARD_ALL: `theo "Toàn công ty" vì ${empty}`, BOARD: `mọi thành viên Ban TGĐ, vì ${empty} và không ai phụ trách "Toàn công ty"` }[a.source];
+  return `<div class="field span2" data-testid="vt-c-approver-box"><label for="vtApprovers">Người phê duyệt tài liệu nội bộ <span class="muted xs">(chỉ vai Ban TGĐ; để trống hoặc không còn ai hợp lệ = thành viên Ban TGĐ phụ trách "Toàn công ty"; không ai phụ trách "Toàn công ty" = mọi thành viên Ban TGĐ)</span></label>
+      <select id="vtApprovers" name="approverUserIds" multiple size="4" data-testid="vt-c-approvers">${boardUsers.map(u => `<option value="${u.id}"${valid.has(u.id) ? ' selected' : ''}>${esc(u.fullName)}${u.boardAll ? ' · Toàn công ty' : ''}</option>`).join('')}</select>
+      ${stale.length ? `<div data-testid="vt-c-stale"><p class="muted xs">Đã lưu nhưng không còn hợp lệ — hệ thống không tính những người này:</p>
+        ${stale.map(x => `<label class="check"><input type="checkbox" name="keepApprover" value="${x.id}" checked data-testid="vt-c-keep-${x.id}"><span><s>${esc(x.fullName || `Tài khoản #${x.id}`)}</s> (${esc(x.problems.map(p => why[p] || p).join(', '))}) — giữ tên trong danh sách</span></label>`).join('')}
+        <p class="muted xs">Giữ: người đó tự được phê duyệt lại khi tài khoản mở khoá / có lại vai Ban Tổng Giám đốc. Bỏ tick rồi Lưu: xoá khỏi danh sách.</p></div>` : ''}
+      ${a.source === 'NONE' ? '<p class="returned-banner" role="alert" data-testid="vt-c-no-approver"><b>Hiện không có Người phê duyệt hợp lệ — dự thảo sẽ không ai duyệt.</b></p>'
+        : `<p class="sm" data-testid="vt-c-effective">Đang áp dụng: <b>${names(a.effective)}</b> — ${reason}.</p>`}</div>`;
+}
+
 async function renderSettings(root, setCrumbs, m) {
   setCrumbs('<a href="#/vanthu">Văn thư</a> / Thiết lập');
   if (!m.me.director) { root.innerHTML = '<div class="empty">Chỉ Ban Tổng Giám đốc thiết lập văn thư.</div>'; return; }
@@ -364,8 +389,7 @@ async function renderSettings(root, setCrumbs, m) {
         <textarea name="entities" rows="3" data-testid="vt-c-entities">${esc(m.entities.map(e => `${e.code} · ${e.name}`).join('\n'))}</textarea></label>
       <label class="field">Văn thư<br>${people(m.config.clerkUserIds, 'clerkUserIds')}</label>
       <label class="field">Pháp chế<br>${people(m.config.legalUserIds, 'legalUserIds')}</label>
-      <label class="field span2">Người phê duyệt tài liệu nội bộ <span class="muted xs">(chỉ vai Ban TGĐ; để trống = thành viên Ban TGĐ phụ trách "Toàn công ty")</span><br>
-        <select name="approverUserIds" multiple size="4" data-testid="vt-c-approvers">${m.config.boardUsers.map(u => `<option value="${u.id}"${m.config.approverUserIds.includes(u.id) ? ' selected' : ''}>${esc(u.fullName)}${u.boardAll ? ' · Toàn công ty' : ''}</option>`).join('')}</select></label>
+      ${approverBox(m)}
       <p class="error span2" id="vcErr"></p>
       <div class="modal-actions span2"><button class="btn btn-primary" data-testid="vt-c-save">Lưu</button></div></form>`;
   root.querySelector('#vtCfg').onsubmit = async e => {
@@ -373,7 +397,9 @@ async function renderSettings(root, setCrumbs, m) {
     const f = e.target;
     const entities = f.entities.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [code, ...rest] = l.split(/\s*[·\-–|:]\s*/); return { code: (code || '').toUpperCase(), name: rest.join(' - ') }; });
     const sel = n => [...f[n].selectedOptions].map(o => Number(o.value));
-    try { await api('/api/vanthu/config', { method: 'PUT', body: { entities, clerkUserIds: sel('clerkUserIds'), legalUserIds: sel('legalUserIds'), approverUserIds: sel('approverUserIds') } }); await getMeta(true); toast('Đã lưu thiết lập', 'ok'); location.hash = '#/vanthu'; }
+    // Người phê duyệt = người chọn trong ô + người không còn hợp lệ mà Ban TGĐ vẫn để tick "giữ".
+    const kept = [...f.querySelectorAll('input[name="keepApprover"]:checked')].map(i => Number(i.value));
+    try { await api('/api/vanthu/config', { method: 'PUT', body: { entities, clerkUserIds: sel('clerkUserIds'), legalUserIds: sel('legalUserIds'), approverUserIds: [...sel('approverUserIds'), ...kept] } }); await getMeta(true); toast('Đã lưu thiết lập', 'ok'); location.hash = '#/vanthu'; }
     catch (error) { root.querySelector('#vcErr').textContent = errorMessage(error); }
   };
 }
