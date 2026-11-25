@@ -278,9 +278,9 @@ async function renderDoc(root, id, setCrumbs, m) {
   });
   root.querySelector('#vtCancel')?.addEventListener('click', async () => {
     const reason = d.number
-      ? await confirmDialog(`Hủy số ${d.number}? Số vẫn giữ trong sổ và không cấp lại cho văn bản khác.`, { okText: 'Hủy số', danger: true, input: 'Lý do hủy' })
-      : await confirmDialog('Huỷ dự thảo này? Dự thảo chưa có số nên không ảnh hưởng sổ.', { okText: 'Huỷ dự thảo', danger: true, input: 'Lý do huỷ' });
-    if (!reason) return;
+      ? await confirmDialog(`Hủy số ${d.number}? Số vẫn giữ trong sổ và không cấp lại cho văn bản khác.`, { okText: 'Hủy số', danger: true, input: 'Lý do hủy (bắt buộc)', required: true })
+      : await confirmDialog('Huỷ dự thảo này? Dự thảo chưa có số nên không ảnh hưởng sổ.', { okText: 'Huỷ dự thảo', danger: true, input: 'Lý do huỷ (bắt buộc)', required: true });
+    if (!reason) return; // chỉ khi bấm Huỷ / đóng hộp: ô trống thì hộp giữ mở và báo "Nhập lý do"
     try { await api(`/api/vanthu/docs/${d.id}/cancel`, { method: 'POST', body: { reason } }); toast(d.number ? 'Đã hủy số' : 'Đã huỷ dự thảo', 'ok'); renderDoc(root, id, setCrumbs, m); }
     catch (error) { toast(errorMessage(error), 'error'); }
   });
@@ -294,8 +294,8 @@ async function renderDoc(root, id, setCrumbs, m) {
     act('approve', { note: typeof note === 'string' ? note : null }, 'Đã phê duyệt và cấp số');
   });
   root.querySelector('#vtReturn')?.addEventListener('click', async () => {
-    const reason = await confirmDialog(`Trả lại "${d.title}" cho người soạn?`, { okText: 'Trả lại', danger: true, input: 'Lý do trả lại (bắt buộc)' });
-    if (!reason) return;
+    const reason = await confirmDialog(`Trả lại "${d.title}" cho người soạn?`, { okText: 'Trả lại', danger: true, input: 'Lý do trả lại (bắt buộc)', required: true });
+    if (!reason) return; // chỉ khi bấm Huỷ / đóng hộp
     act('return', { reason }, 'Đã trả lại');
   });
   root.querySelector('#vtResubmit')?.addEventListener('click', () => act('resubmit', {}, 'Đã gửi lại chờ phê duyệt'));
