@@ -1,8 +1,7 @@
 // Review UX đợt A1 — điều hướng, tên gọi, đăng nhập, trang "chưa bật" (dữ liệu mẫu GIẢ):
 // mỗi trang một tên (menu = tiêu đề tab = tiêu đề trang = bảng lệnh); menu trái theo nhóm Công việc · Dự án · Giao ban · Nghiệp vụ · Thống kê;
 // nút "Ứng dụng" chỉ hiện khi thu gọn menu; menu tài khoản không còn Phím tắt / Thùng rác; HR, CRM chưa bật thì hiện trang giải thích.
-const { test, expect } = require('@playwright/test');
-const { login } = require('./helpers');
+const { test, expect, login } = require('./helpers');
 
 // Trang có tiêu đề (h1) đúng bằng tên ở menu. Các trang còn lại do gói khác sửa phần tiêu đề; ở đây chỉ kiểm tiêu đề tab.
 const H1_SAME_AS_MENU = new Set(['#/home', '#/approvals', '#/sprint', '#/trash', '#/crm', '#/hrm', '#/tai-lieu']);

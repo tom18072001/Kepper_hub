@@ -4,8 +4,7 @@
 // - Luồng: tạo là DỰ THẢO chưa có số; chỉ Người phê duyệt phê duyệt / trả lại (403 người khác, 403 qua token, 422 thiếu PDF);
 //   số cấp lúc phê duyệt, liên tục khi có dự thảo bị trả lại / huỷ; phê duyệt đồng thời không trùng số.
 // - Claude (token): tạo dự thảo kèm PDF qua /api/vanthu/drafts; không vào sổ, không phê duyệt; không đọc dự thảo người khác / cấp Ban TGĐ.
-const { test, expect } = require('@playwright/test');
-const { login, apiAs, toast, vnDate } = require('./helpers');
+const { test, expect, login, apiAs, toast, vnDate, sharedPage, closeSharedPages } = require('./helpers');
 
 test.describe.configure({ mode: 'serial' });
 
@@ -16,9 +15,10 @@ const pages = {};
 let cfgBefore = null, btgd2 = null;
 const go = (page, hash) => page.evaluate(h => { location.hash = h; }, hash);
 
+// Trang đăng nhập từng người dùng lại ở các test sau (spec nối tiếp): sharedPage — đóng ở afterAll.
 async function as(browser, username) {
   if (pages[username]) return pages[username];
-  const page = await (await browser.newContext()).newPage();
+  const page = await sharedPage(browser);
   await login(page, username);
   return (pages[username] = page);
 }
@@ -47,7 +47,9 @@ test.beforeAll(async ({ browser }) => {
   btgd2 = await as(browser, 'btgd2.gia');
 });
 test.afterAll(async () => {
-  if (cfgBefore && pages.giamdoc) await apiAs(pages.giamdoc, '/api/vanthu/config', { method: 'PUT', data: { clerkUserIds: cfgBefore.clerkUserIds, approverUserIds: cfgBefore.approverUserIds } });
+  try {
+    if (cfgBefore && pages.giamdoc) await apiAs(pages.giamdoc, '/api/vanthu/config', { method: 'PUT', data: { clerkUserIds: cfgBefore.clerkUserIds, approverUserIds: cfgBefore.approverUserIds } });
+  } finally { await closeSharedPages(); }
 });
 
 test('Q1. Ma trận cấp xem × vai: danh sách, chi tiết, tệp, tìm, gắn vào việc (tài liệu đã phê duyệt)', async ({ browser }) => {

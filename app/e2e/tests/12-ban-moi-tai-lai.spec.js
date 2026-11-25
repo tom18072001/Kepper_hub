@@ -1,7 +1,6 @@
 // N10 — Có bản mới sau khi nâng cấp máy chủ: tab đang mở biết mình chạy giao diện cũ và mời tải lại.
 // "Nâng cấp" được giả lập bằng cách chặn phản hồi trong trình duyệt: trang chính và API trả mã bản MỚI (máy chủ test giữ nguyên).
-const { test, expect } = require('@playwright/test');
-const { login } = require('./helpers');
+const { test, expect, login } = require('./helpers');
 
 const NEW_BUILD = 'ban-moi-e2e';
 // Service worker (PWA) tự fetch trang chính, page.route không thấy yêu cầu đó: tắt trong các kịch bản này.

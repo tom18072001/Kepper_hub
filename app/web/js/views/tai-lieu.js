@@ -26,6 +26,7 @@ export async function renderDocuments(root, params, setCrumbs) {
   setCrumbs('Tài liệu');
   const st = { p: Number(params.get('p')) || null, src: ['hub', 'nas'].includes(params.get('src')) ? params.get('src') : '', path: params.get('path') || '', q: params.get('q') || '' };
   const { projects, nasEnabled, nasError } = await api('/api/documents/projects');
+  if (!root.isConnected) return; // đã sang trang khác trong lúc tải: không chuyển hướng / vẽ đè trang mới
   // Mở từ menu (không tham số) mà không thuộc dự án nào — vd. văn thư HCNS: vào thẳng tab Văn thư.
   if (!projects.length && !params.toString() && mods().includes('vanthu')) { location.replace('#/vanthu?book=DEN'); return; }
   const project = projects.find(x => x.id === st.p) || null;
@@ -41,7 +42,8 @@ export async function renderDocuments(root, params, setCrumbs) {
     <div id="docBody" aria-live="polite"><div class="empty">Đang tải…</div></div>`;
   const form = root.querySelector('#docFilter'), body = root.querySelector('#docBody'), crumbsEl = root.querySelector('#docCrumbs');
   form.p.addEventListener('change', () => { location.hash = link({ p: form.p.value }); });
-  const search = () => { if (form.isConnected && form.q.value.trim() !== st.q) location.hash = link({ p: st.p, src: st.src, path: st.path, q: form.q.value.trim() }); };
+  // root: đã sang trang khác trong lúc chờ gõ thì không kéo người dùng quay lại Tài liệu (form cũ còn gắn tới khi trang mới vẽ xong).
+  const search = () => { if (root.isConnected && form.isConnected && form.q.value.trim() !== st.q) location.hash = link({ p: st.p, src: st.src, path: st.path, q: form.q.value.trim() }); };
   const typed = debounce(search, 400);
   if (st.q) { form.q.focus(); form.q.setSelectionRange(st.q.length, st.q.length); } // vẽ lại sau khi gõ: giữ con trỏ trong ô tìm
   form.q.addEventListener('input', typed);

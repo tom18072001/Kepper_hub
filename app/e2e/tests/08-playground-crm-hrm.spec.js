@@ -1,7 +1,6 @@
 // Playground CRM / HRM (MODULES=crm,hrm, dữ liệu mẫu GIẢ): quyền theo bộ phận phụ trách / người phụ trách nhân sự; đơn nghỉ → lãnh đạo duyệt;
 // chấm công trên giao diện; số CCCD chỉ hiện khi bấm (ghi nhật ký), không qua token Claude.
-const { test, expect } = require('@playwright/test');
-const { login, apiAs, toast, vnDate, NEW_PASSWORD } = require('./helpers');
+const { test, expect, login, apiAs, toast, vnDate, NEW_PASSWORD } = require('./helpers');
 
 const weekdayAhead = n => { for (let i = n; ; i++) { const d = vnDate(i); const w = new Date(d + 'T00:00:00Z').getUTCDay(); if (w >= 1 && w <= 5) return d; } };
 

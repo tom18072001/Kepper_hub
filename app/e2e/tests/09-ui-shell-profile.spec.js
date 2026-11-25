@@ -1,7 +1,6 @@
 // Giao diện mới: Trang chủ, menu tài khoản, Thông tin cá nhân (ảnh đại diện, cây tổ chức), Danh mục không còn ở menu người dùng.
-const { test, expect } = require('@playwright/test');
 const zlib = require('node:zlib');
-const { login } = require('./helpers');
+const { test, expect, login } = require('./helpers');
 
 // Ảnh PNG 64×64 một màu (tạo tại chỗ — không dùng ảnh người thật).
 function pngSquare(size = 64) {

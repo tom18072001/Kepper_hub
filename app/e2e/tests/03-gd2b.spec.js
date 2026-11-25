@@ -1,8 +1,7 @@
 // GĐ2b (phản hồi 16/10/2026): duyệt linh hoạt (chọn tay + quy tắc tự động, chặn tự duyệt), lặp lại & chu kỳ ngay từ panel,
 // nhãn gõ để tạo, ghi chú cá nhân riêng tư, admin IT không xem công việc, KPI cho giám đốc.
 // Chạy sau 01-core trên cùng CSDL test. Dự án mẫu KD có quy trình 2 cấp: Trưởng phòng → Giám đốc.
-const { test, expect } = require('@playwright/test');
-const { login, apiAs, openProject, column, card, toast } = require('./helpers');
+const { test, expect, login, apiAs, openProject, column, card, toast } = require('./helpers');
 
 test.describe.configure({ mode: 'serial' });
 

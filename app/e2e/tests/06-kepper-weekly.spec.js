@@ -2,8 +2,7 @@
 // trang chủ "Báo cáo tuần" điền sẵn từ MTL, tự lưu nháp, kiểm tra Chậm / Vướng / Quá hạn, gửi → % ghi ngược vào MTL;
 // báo nộp muộn / vắng; Tổng hợp giao ban (điểm danh, kết luận TGĐ, Action Log → báo cáo tuần sau), sao chép không có họ tên;
 // chấm điểm tuân thủ; thư ký nhập thay theo giờ email; phân quyền.
-const { test, expect } = require('@playwright/test');
-const { login, apiAs, toast, vnDate } = require('./helpers');
+const { test, expect, login, apiAs, toast, vnDate } = require('./helpers');
 
 test.describe.configure({ mode: 'serial' });
 

@@ -1,8 +1,7 @@
 // Trang dự án không tải trùng API: mỗi lần mở trang, bộ dữ liệu dự án (dự án, việc, chu kỳ, bộ lọc đã lưu, kế hoạch,
 // phạm vi tạo việc, giai đoạn) chỉ tải một lần; đổi tab / bấm lại dự án đang xem dùng lại bộ đã tải; mở việc không gọi lại dự án và chu kỳ.
 // Số liệu MTL (Tổng quan, Kế hoạch & Gantt) vẫn tải mới mỗi lần vẽ; realtime vẫn cập nhật bảng. Dữ liệu GIẢ của seed (dự án DA).
-const { test, expect } = require('@playwright/test');
-const { login, apiAs } = require('./helpers');
+const { test, expect, login, apiAs } = require('./helpers');
 
 const SET = ['', '/items', '/cycles', '/views', '/plans', '/create-scope', '/mtl-sprints']; // bộ dữ liệu trang dự án MTL
 

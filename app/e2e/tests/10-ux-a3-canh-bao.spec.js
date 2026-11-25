@@ -5,9 +5,8 @@
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
-const { test, expect } = require('@playwright/test');
 const ExcelJS = require(path.join(__dirname, '../../server/node_modules/exceljs'));
-const { login, apiAs, toast } = require('./helpers');
+const { test, expect, login, apiAs, toast } = require('./helpers');
 
 const HEAD = ['Bước', 'Hạng mục công việc', 'Đầu mối', 'Bắt đầu (T)', 'Kết thúc (T)', 'Thời lượng (tháng)', 'Đường găng', 'Mốc'];
 // T0 = tháng hiện tại − 3 → bước 1 (T0–T1) đã trễ hạn; bước 2 (T2–T4) đã tới ngày bắt đầu từ tháng trước mà chưa khởi động.
@@ -68,10 +67,13 @@ test('A3. Cảnh báo theo số liệu hiện tại, thông báo gộp, tooltip 
   await expect(box.getByTestId('mtl-alert').filter({ hasText: `CB-${late.number}` })).toHaveCount(0);
   await expect(box.locator('a', { hasText: `CB-${late.number}` })).toHaveCount(1);
 
-  // 4) Chạy lại: không gửi lại "Chậm khởi động" cho việc đã cập nhật.
+  // 4) Chạy lại: không gửi lại "Chậm khởi động" cho việc đã cập nhật — vẫn đúng một thông báo "Chậm khởi động", chính là thông báo ở bước 1.
+  //    Chỉ đếm "Chậm khởi động": việc 50% vẫn có thể nhận ĐÚNG cảnh báo khác theo số liệu hiện tại, tuỳ ngày chạy. Bước 2 kéo dài từ đầu
+  //    tháng trước tới hết tháng sau, nên khoảng tuần cuối tháng kế hoạch ≥ 60% → lệch ≤ −10 điểm → "Chậm tiến độ" (vd. 25/11/2026:
+  //    kế hoạch 60,9%, thực tế 50% — CI hỏng đúng chỗ này khi còn đếm mọi cảnh báo của việc).
   await apiAs(pmo, `/api/projects/${project.id}/mtl-alerts/run`, { method: 'POST' });
-  const notes2 = (await (await apiAs(pmo, '/api/notifications')).json()).items.filter(n => n.type === 'MTL_ALERT' && n.title.includes(`CB-${late.number} `));
-  expect(notes2).toHaveLength(1);
+  const notes2 = (await (await apiAs(pmo, '/api/notifications')).json()).items.filter(n => n.type === 'MTL_ALERT' && n.title.includes(`CB-${late.number} `) && n.title.includes('Chậm khởi động'));
+  expect(notes2.map(n => n.id)).toEqual([forLate[0].id]);
 
   // 5) Tooltip chỉ số, đơn vị trục.
   await expect(pmo.getByTestId('mtl-tile-spi')).toContainText('SPI dự án');

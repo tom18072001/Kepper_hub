@@ -61,7 +61,14 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
-          npx playwright test --reporter=line
+          npx playwright test
+      # Reporter đặt trong playwright.config.js (CI: line). Không ghi đè bằng --reporter: báo cáo HTML (kèm trace) và lan-hong/
+      # (TOM-TAT.md + test-results/) chỉ có khi giữ reporter của cấu hình — trước đây tệp tải lên khi hỏng rỗng.
       - uses: actions/upload-artifact@v4
         if: failure()
-        with: { name: playwright-report, path: app/e2e/playwright-report, retention-days: 7 }
+        with:
+          name: playwright-report
+          retention-days: 7
+          path: |
+            app/e2e/playwright-report
+            app/e2e/lan-hong

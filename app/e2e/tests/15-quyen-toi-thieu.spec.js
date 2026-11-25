@@ -3,8 +3,7 @@
 // Vai: BTGĐ phụ trách toàn công ty = giamdoc (seed giả đánh dấu riêng, không theo phòng); Phó TGĐ phụ trách Phòng Kinh doanh = tài khoản giả tạo trong kịch bản;
 // người chủ trì = tài khoản giả vai director (PMO); người phối hợp = nv.kinhdoanh2; lãnh đạo bộ phận chủ trì = tp.kinhdoanh;
 // thành viên dự án không liên quan = nv.kythuat.
-const { test, expect } = require('@playwright/test');
-const { login, apiAs } = require('./helpers');
+const { test, expect, login, apiAs } = require('./helpers');
 
 test.describe.configure({ mode: 'serial' });
 
