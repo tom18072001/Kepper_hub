@@ -583,7 +583,7 @@ function setupHtml(s) {
           <label class="wk-f">Ngày giao ban của tuần ${W} (nghỉ lễ thứ Hai → ngày làm việc kế tiếp)<input type="date" id="setMeeting" value="${esc(md.meetingDay || '')}" data-testid="wk-set-meeting"></label>
         </div>
       </div>
-      <div class="wk-actions"><button class="btn btn-primary" type="button" id="setSave" data-testid="wk-set-save">Lưu thiết lập</button><span class="wk-note" data-testid="wk-set-note">Đổi lịch tuần (tuần nghỉ, hạn nộp, ngày giao ban): Kepler Hub tự báo lãnh đạo các bộ phận phải nộp và người lập báo cáo; tuần đã họp xong thì không báo. Quy chế (Điều 3): báo trước ít nhất 02 ngày làm việc — đổi lịch sớm.</span></div>
+      <div class="wk-actions"><button class="btn btn-primary" type="button" id="setSave" data-testid="wk-set-save">Lưu thiết lập</button><span class="wk-note" data-testid="wk-set-note">Đổi lịch tuần (tuần nghỉ, hạn nộp, ngày giao ban): Kepler Hub tự báo lãnh đạo các bộ phận phải nộp, người lập báo cáo, Ban Tổng Giám đốc và thư ký giao ban; tuần đã họp xong thì không báo. Quy chế (Điều 3): báo trước ít nhất 02 ngày làm việc — đổi lịch sớm.</span></div>
     </div></details>`;
 }
 // Lịch HIỆU LỰC của tuần có đổi không (ô trống = mặc định: hạn nộp thứ Sáu, giao ban thứ Hai kế tiếp; đổi hạn của tuần vẫn nghỉ

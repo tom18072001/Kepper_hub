@@ -87,16 +87,17 @@ async function activeIds(prisma, ids) {
 const leadersOf = async (prisma, deptIds) => (await Promise.all(deptIds.map(id => approval.deptLeaderIds(prisma, id)))).flat();
 const leaderIdsOf = async (prisma, deptIds) => activeIds(prisma, await leadersOf(prisma, deptIds));
 
-// ---------- Đổi lịch một tuần: báo các bộ phận (QC-TH-01 Điều 3) ----------
+// ---------- Đổi lịch một tuần: báo các bộ phận (QC-TH-01 Điều 3), Ban TGĐ và thư ký giao ban ----------
 // Người nhận: lãnh đạo các bộ phận phải nộp tuần đó (danh sách đã chụp của tuần; chưa chụp thì theo thiết lập), người lập báo cáo
-// tuần trước và người đang lập báo cáo tuần đó của các bộ phận ấy (như nhắc 15:00). Chỉ tài khoản đang hoạt động, không Quản trị hệ thống.
+// tuần trước và người đang lập báo cáo tuần đó của các bộ phận ấy (như nhắc 15:00); thêm mọi thành viên Ban TGĐ đang hoạt động và thư ký
+// giao ban (chủ dự án chốt 25/11/2026: báo thêm cả hai). Chỉ tài khoản đang hoạt động, không Quản trị hệ thống; bỏ trùng.
 async function scheduleRecipients(prisma, week, meeting = null) {
   const rd = await requiredDepartments(prisma, await weeklyConfig(prisma));
   const snap = Array.isArray(meeting?.data?.required) ? meeting.data.required : null;
   const ids = (snap ? rd.all.filter(d => snap.includes(d.id)) : rd.list).map(d => d.id);
-  if (!ids.length) return [];
-  const reps = await prisma.weeklyReport.findMany({ where: { departmentId: { in: ids }, week: { in: [WK.addDays(week, -7), week] } }, select: { preparerId: true } });
-  return activeIds(prisma, [...await leadersOf(prisma, ids), ...reps.map(r => r.preparerId)]);
+  const reps = ids.length ? await prisma.weeklyReport.findMany({ where: { departmentId: { in: ids }, week: { in: [WK.addDays(week, -7), week] } }, select: { preparerId: true } }) : [];
+  const [board, secretaries, leaders] = await Promise.all([boardIds(prisma), secretaryIds(prisma), leadersOf(prisma, ids)]);
+  return activeIds(prisma, [...board, ...secretaries, ...leaders, ...reps.map(r => r.preparerId)]);
 }
 // Lịch hiệu lực của tuần đổi thật (WK.scheduleChange) → một thông báo cho mỗi người nhận, trừ người vừa đổi. Trả số người được báo
 // (0: không đổi gì, tuần đã họp, hoặc không có ai để báo). Liên kết mở thẳng tab Nộp báo cáo của đúng tuần đó.

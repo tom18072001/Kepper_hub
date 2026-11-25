@@ -114,9 +114,12 @@ function seed() {
     ],
   };
 }
-// Người nhận đúng: lãnh đạo bộ phận 1, 2, 3 (11, 12, 24) + người được uỷ quyền đang hoạt động (16) + người lập (14, 19, 21).
-// Không: đã khoá (13, 15, 17), Quản trị hệ thống (18), bộ phận không phải nộp (30, 31), báo cáo hai tuần trước (32), người vừa đổi.
-const SCHEDULE_TO = [11, 12, 14, 16, 19, 21, 24];
+// Người nhận đúng: lãnh đạo bộ phận 1, 2, 3 (11, 12, 24) + người được uỷ quyền đang hoạt động (16) + người lập (14, 19, 21)
+// + mọi thành viên Ban TGĐ đang hoạt động (1, 2, 23) + thư ký giao ban (21; 25 — CHỈ là thư ký, không lập báo cáo nào: withSecretary).
+// Không: đã khoá (3, 13, 15, 17, 22), Quản trị hệ thống (4, 5, 18), bộ phận không phải nộp (30, 31), báo cáo hai tuần trước (32), người vừa đổi.
+const SCHEDULE_TO = [1, 2, 11, 12, 14, 16, 19, 21, 23, 24, 25];
+const scheduleTo = actor => SCHEDULE_TO.filter(id => id !== actor);
+const withSecretary = db => { db.T.user.push(u(25, 'member', SEC_DEPT)); return db; };
 
 async function server(db) {
   const audits = [];
@@ -137,15 +140,15 @@ const sentTo = (db, type, from = 0) => db.T.notification.slice(from).filter(n =>
 const ids = list => [...list].sort((a, b) => a - b);
 
 // ---------- Lỗi 11: PUT /api/weekly/meeting đổi lịch → báo các bộ phận ----------
-test('Lỗi 11 — đổi hạn nộp tuần sau: báo lãnh đạo bộ phận phải nộp + người lập báo cáo; bỏ người đã khoá, Quản trị hệ thống, người vừa đổi', async () => {
-  const db = fakeDb(seed());
+test('Lỗi 11 — đổi hạn nộp tuần sau: báo lãnh đạo bộ phận phải nộp + người lập báo cáo + Ban TGĐ + thư ký giao ban; bỏ người đã khoá, Quản trị hệ thống, người vừa đổi', async () => {
+  const db = withSecretary(fakeDb(seed()));
   const s = await server(db);
   try {
     const dl = WK.addDays(NEXT, -1); // thứ Năm
     const r = await s.call('PUT', '/api/weekly/meeting', 1, { week: NEXT, deadlineDay: dl, meetingDay: null, skip: false });
     assert.equal(r.status, 200, JSON.stringify(r.body));
-    assert.equal(r.body.notified, SCHEDULE_TO.length);
-    assert.deepEqual(sentTo(db, 'WEEKLY_SCHEDULE'), SCHEDULE_TO);
+    assert.equal(r.body.notified, scheduleTo(1).length);
+    assert.deepEqual(sentTo(db, 'WEEKLY_SCHEDULE'), scheduleTo(1));
     const n = db.T.notification[0], S = WK.scheduleOf(NEXT, { deadlineDay: dl });
     assert.equal(n.title, `Lịch giao ban tuần ${WK.fmtD(S.from)} – ${WK.fmtDY(S.to)}: hạn nộp ${WK.fmtTime(S.deadline)}, giao ban ${WK.fmtTime(S.meetingAt)}`);
     assert.match(n.title, /hạn nộp 17:30 T5 /);
@@ -165,32 +168,34 @@ test('Lỗi 11 — đổi hạn nộp tuần sau: báo lãnh đạo bộ phận 
     assert.equal(same.body.notified, 0, 'hạn nộp điền đúng thứ Sáu = lịch không đổi');
     assert.equal(db.T.notification.length, mark);
 
-    // Thư ký đổi: chính thư ký (người lập báo cáo bộ phận 2) không nhận thông báo của mình.
+    // Thư ký đổi: chính thư ký (người lập báo cáo bộ phận 2) không nhận thông báo của mình; Ban TGĐ (cả người 1) và thư ký 25 nhận.
     const sec = await s.call('PUT', '/api/weekly/meeting', 21, { week: NEXT, meetingDay: WK.addDays(NEXT, 4) });
     assert.equal(sec.status, 200, JSON.stringify(sec.body));
-    assert.deepEqual(sentTo(db, 'WEEKLY_SCHEDULE', mark), SCHEDULE_TO.filter(id => id !== 21));
+    assert.deepEqual(sentTo(db, 'WEEKLY_SCHEDULE', mark), scheduleTo(21));
     assert.match(db.T.notification.at(-1).title, /giao ban 08:30 T3 /);
   } finally { await s.close(); }
 });
 
 test('Lỗi 11 — tuần nghỉ / bỏ nghỉ có báo; danh sách đã chụp của tuần thắng thiết lập; tuần đã họp xong không báo', async () => {
-  const db = fakeDb(seed());
+  const db = withSecretary(fakeDb(seed()));
   const s = await server(db);
   try {
     let r = await s.call('PUT', '/api/weekly/meeting', 2, { week: NEXT, skip: true });
-    assert.equal(r.body.notified, SCHEDULE_TO.length);
+    assert.equal(r.body.notified, scheduleTo(2).length);
+    assert.deepEqual(sentTo(db, 'WEEKLY_SCHEDULE'), scheduleTo(2));
     assert.match(db.T.notification.at(-1).title, /^Tuần \d\d\/\d\d – \d\d\/\d\d\/\d{4} nghỉ giao ban$/);
     const mark = db.T.notification.length;
     r = await s.call('PUT', '/api/weekly/meeting', 2, { week: NEXT, skip: false });
-    assert.equal(r.body.notified, SCHEDULE_TO.length);
+    assert.equal(r.body.notified, scheduleTo(2).length);
     assert.equal(db.T.notification.at(-1).body, 'Tuần này không còn là tuần nghỉ — nộp báo cáo tuần như thường lệ.');
-    assert.equal(db.T.notification.length, mark + SCHEDULE_TO.length);
+    assert.equal(db.T.notification.length, mark + scheduleTo(2).length);
 
-    // Danh sách phải nộp đã CHỤP cho tuần (chỉ bộ phận 2): chỉ báo bộ phận đó (lãnh đạo 12, người được uỷ quyền 16, người lập 21).
+    // Danh sách phải nộp đã CHỤP cho tuần (chỉ bộ phận 2): chỉ báo bộ phận đó (lãnh đạo 12, người được uỷ quyền 16, người lập 21),
+    // cùng Ban TGĐ (1, 23 — người 2 vừa đổi) và thư ký giao ban (21, 25).
     db.T.weeklyMeeting.find(m => m.week === NEXT).data.required = [2];
     const snap = db.T.notification.length;
     r = await s.call('PUT', '/api/weekly/meeting', 2, { week: NEXT, deadlineDay: WK.addDays(NEXT, -2) });
-    assert.deepEqual(sentTo(db, 'WEEKLY_SCHEDULE', snap), [12, 16, 21]);
+    assert.deepEqual(sentTo(db, 'WEEKLY_SCHEDULE', snap), [1, 12, 16, 21, 23, 25]);
 
     // Tuần hai tuần trước: buổi giao ban đã diễn ra — Ban TGĐ vẫn đổi được lịch, nhưng không gửi thông báo nào.
     const past = db.T.notification.length;
