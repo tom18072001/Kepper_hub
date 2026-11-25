@@ -16,8 +16,14 @@ const APPROVER_TYPES = {
   ASSIGNER: 'Người giao việc',
   BOARD: 'BTGĐ phụ trách (mốc / đường găng)',
 };
-const { RATINGS, ASSIGNER_STEP } = rules;
+const { RATINGS, ASSIGNER_STEP, defaultLevels } = rules;
 const assigneeIdsOf = item => (item?.assignees || []).map(a => a.userId ?? a.user?.id ?? a.id).filter(id => id != null);
+// Phiếu của dự án / việc đang ở Thùng rác: phiếu giữ nguyên PENDING (xoá không huỷ phiếu) nhưng không ai duyệt, trả lại, rút được — kể cả
+// gọi thẳng API. Khôi phục dự án / việc thì phiếu hiện lại ở "Chờ tôi duyệt". item: { archivedAt, project: { deletedAt } }.
+function assertNotInTrash(item) {
+  if (item?.project?.deletedAt) fail(409, 'Dự án đang ở Thùng rác — khôi phục dự án trước', 'PROJECT_IN_TRASH');
+  if (item?.archivedAt) fail(409, 'Việc đang ở Thùng rác — khôi phục việc trước', 'ITEM_IN_TRASH');
+}
 // Người làm của một phiếu: người chủ trì; việc chưa giao ai thì người gửi duyệt được coi là người làm (không tự duyệt).
 const withDoers = (item, requestedById) => (assigneeIdsOf(item).length || requestedById == null ? item : { ...item, assignees: [{ userId: requestedById }] });
 
@@ -36,19 +42,23 @@ async function deptLeaderIds(client, departmentId) {
 // Ngữ cảnh duyệt nạp một lần (người có quyền duyệt, Phó TGĐ phụ trách từng phòng, uỷ quyền đang hiệu lực, các bước duyệt):
 // tính người duyệt cho nhiều phiếu trong bộ nhớ thay vì vài truy vấn cho mỗi phiếu (hàng chờ, số đếm huy hiệu).
 async function approvalContext(client, projectIds = [], now = new Date()) {
-  const [users, depts, delegations, steps, active] = await Promise.all([
+  const [users, depts, delegations, steps, active, owners] = await Promise.all([
     client.user.findMany({ where: { ...DEPT_APPROVER_WHERE, isActive: true } }),
     client.department.findMany({ select: { id: true, supervisorId: true } }),
     client.delegation.findMany({ where: { revokedAt: null, startsAt: { lte: now }, endsAt: { gte: now } }, select: { fromUserId: true, toUserId: true } }),
     projectIds.length ? client.approvalStep.findMany({ where: { projectId: { in: projectIds } }, orderBy: { level: 'asc' } }) : [],
     client.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE }, select: { id: true, departmentId: true, boardAll: true, role: true, isRootAdmin: true } }),
+    // Chủ dự án: người duyệt thay cấp "Người đứng tên dự án" khi Người đứng tên không hợp lệ (projectLeadApprovers).
+    projectIds.length ? client.projectMember.findMany({ where: { projectId: { in: projectIds }, role: 'OWNER' }, select: { projectId: true, userId: true } }) : [],
   ]);
   const scope = new Map(users.map(u => [u.id, isDeptApprover(u)])); // người duyệt cấp bộ phận (lib/permissions.js isDeptApprover)
   const steps_ = new Map(projectIds.map(id => [id, []]));
   for (const st of steps) steps_.get(st.projectId)?.push(st);
+  const owners_ = new Map(projectIds.map(id => [id, []]));
+  for (const m of owners) owners_.get(m.projectId)?.push(m.userId);
   // sys = thành viên Ban Tổng Giám đốc (vai). Phạm vi phụ trách (Toàn công ty / bộ phận) chỉ tính với vai BTGĐ.
   const sys = new Set(active.filter(isBoard).map(u => u.id));
-  return { users, scope, sys, supervisor: new Map(depts.filter(d => sys.has(d.supervisorId)).map(d => [d.id, d.supervisorId])), delegations, steps: steps_,
+  return { users, scope, sys, supervisor: new Map(depts.filter(d => sys.has(d.supervisorId)).map(d => [d.id, d.supervisorId])), delegations, steps: steps_, owners: owners_,
     active: new Map(active.map(u => [u.id, { departmentId: u.departmentId }])), top: active.filter(u => u.boardAll && sys.has(u.id)).map(u => u.id) };
 }
 const withDelegatesSync = (ctx, ids) => (ids.length ? [...new Set([...ids, ...ctx.delegations.filter(d => ids.includes(d.fromUserId)).map(d => d.toUserId)])] : ids);
@@ -73,6 +83,24 @@ function boardApproversSync(ctx, project, item) {
     supervisorOf: dept => ctx.supervisor.get(dept) ?? null, directors: [...ctx.sys],
   });
 }
+// BTGĐ phụ trách: phụ trách Toàn công ty + Phó TGĐ phụ trách bộ phận chủ trì; chưa ai phụ trách → mọi thành viên BTGĐ.
+function directorApproversSync(ctx, project, item) {
+  const deptId = item?.leadDepartmentId ?? project.departmentId;
+  const sup = deptId != null ? ctx.supervisor.get(deptId) : null;
+  const ids = [...new Set([...(ctx.top || []), sup].filter(id => id != null && ctx.sys.has(id)))];
+  return ids.length ? ids : [...ctx.sys];
+}
+// Cấp "Người đứng tên dự án": Người đứng tên — chỉ khi là tài khoản nghiệp vụ đang hoạt động (ctx.active không có tài khoản Quản trị hệ thống,
+// tài khoản đã khoá). Ô để trống, người đó đã khoá, hoặc dữ liệu cũ lỡ đặt tài khoản Quản trị hệ thống: phiếu KHÔNG kẹt và không gửi cho
+// Quản trị — các Chủ dự án còn hoạt động (trừ người chủ trì) duyệt thay; không còn ai thì BTGĐ phụ trách duyệt (như cấp "BTGĐ phụ trách").
+// ctx.owners: Chủ dự án theo dự án — approvalContext(client, [project.id]).
+function projectLeadApproversSync(ctx, project, item) {
+  const active = ctx.active || new Map();
+  if (project.leadId != null && active.has(project.leadId)) return [project.leadId];
+  const doers = new Set(assigneeIdsOf(item));
+  const owners = [...new Set((ctx.owners?.get(project.id) || []).filter(id => active.has(id) && !doers.has(id)))];
+  return owners.length ? owners : directorApproversSync(ctx, project, item);
+}
 function approverIdsSync(ctx, project, step, item = null, { delegates = true } = {}) {
   if (!step) return [];
   let ids = [];
@@ -82,27 +110,24 @@ function approverIdsSync(ctx, project, step, item = null, { delegates = true } =
     const mine = new Set(assigneeIdsOf(item));
     return withDelegatesSync(ctx, ids).filter(id => !mine.has(id));
   }
-  if (step.approverType === 'PROJECT_LEAD') ids = project.leadId ? [project.leadId] : [];
+  if (step.approverType === 'PROJECT_LEAD') ids = projectLeadApproversSync(ctx, project, item);
   else if (step.approverType === 'USER') ids = step.approverUserId ? [step.approverUserId] : [];
   else if (step.approverType === 'DEPARTMENT_MANAGER') {
     const dept = item?.leadDepartmentId ?? project.departmentId;
     ids = ctx.users.filter(u => Number(u.departmentId) === Number(dept) && ctx.scope.get(u.id)).map(u => u.id);
   } else if (step.approverType === 'DIRECTOR' || step.approverType === 'SUPERVISOR') { // SUPERVISOR: loại cũ, đã gộp (migration)
-    // BTGĐ phụ trách: phụ trách Toàn công ty + Phó TGĐ phụ trách bộ phận chủ trì; chưa ai phụ trách → mọi thành viên BTGĐ.
-    const deptId = item?.leadDepartmentId ?? project.departmentId;
-    const sup = deptId != null ? ctx.supervisor.get(deptId) : null;
-    ids = [...new Set([...(ctx.top || []), sup].filter(id => id != null && ctx.sys.has(id)))];
-    if (!ids.length) ids = [...ctx.sys];
+    ids = directorApproversSync(ctx, project, item);
   }
   return delegates ? withDelegatesSync(ctx, ids) : ids;
 }
 async function approverIds(client, project, step, item = null, opts = {}) {
   if (!step) return [];
-  if (step.approverType === 'PROJECT_LEAD' || step.approverType === 'USER') {
+  if (step.approverType === 'USER') {
     const ids = approverIdsSync({ users: [], scope: new Map(), sys: new Set(), supervisor: new Map(), delegations: [], top: [] }, project, step, item, { delegates: false });
     return opts.delegates === false ? ids : withDelegates(client, ids);
   }
-  return approverIdsSync(await approvalContext(client), project, step, item, opts);
+  // Người đứng tên dự án cần ngữ cảnh đủ (tài khoản còn hoạt động, Chủ dự án, BTGĐ phụ trách) như các loại còn lại.
+  return approverIdsSync(await approvalContext(client, step.approverType === 'PROJECT_LEAD' ? [project.id] : []), project, step, item, opts);
 }
 // Người duyệt đang hành động thay cho ai (uỷ quyền) — null nếu là người duyệt chính chủ.
 function actingForSync(ctx, user, project, step, item) {
@@ -111,7 +136,7 @@ function actingForSync(ctx, user, project, step, item) {
   return ctx.delegations.find(d => d.toUserId === user.id && base.includes(d.fromUserId))?.fromUserId ?? null;
 }
 async function actingFor(client, user, project, step, item) {
-  return actingForSync(await approvalContext(client), user, project, step, item);
+  return actingForSync(await approvalContext(client, [project.id]), user, project, step, item);
 }
 
 async function stepsOf(client, projectId) {
@@ -141,7 +166,7 @@ async function levelsForItem(client, project, steps, item = {}) {
     const hit = rules.filter(r => (r.labelId == null || (labelIds || []).includes(r.labelId)) && (r.priority == null || r.priority === (priority || 'NONE')));
     if (hit.length) { const best = hit.reduce((a, b) => (b.levels > a.levels ? b : a)); return { levels: clamp(best.levels), source: 'RULE', ruleId: best.id }; }
   }
-  return { levels: clamp(project.defaultApprovalLevels ?? steps.length), source: 'DEFAULT' };
+  return { levels: defaultLevels(project, steps.length), source: 'DEFAULT' };
 }
 // Chuỗi duyệt khi gửi duyệt một việc: cấp 1 = người giao (việc mốc / đường găng: BTGĐ phụ trách của việc), sau đó các cấp dự án.
 async function stepsForItem(client, project, item) {
@@ -216,6 +241,7 @@ async function decide(prisma, user, requestId, decision, comment, { rating } = {
     const request = await tx.approvalRequest.findUnique({ where: { id: requestId }, include: { workItem: { include: { project: true, assignees: true } }, actions: true } });
     if (!request) fail(404, 'Không tìm thấy yêu cầu duyệt', 'NOT_FOUND');
     if (request.status !== 'PENDING') fail(409, 'Yêu cầu đã được xử lý', 'APPROVAL_CLOSED');
+    assertNotInTrash(request.workItem);
     const item = withDoers(request.workItem, request.requestedById), project = item.project;
     const steps = await chainFor(tx, project, request);
     const step = rules.stepAt(steps, request.currentLevel);
@@ -312,4 +338,4 @@ async function queueFor(prisma, user, { withContext = false } = {}) {
   return withContext ? { items: out, ctx } : out;
 }
 
-module.exports = { APPROVER_TYPES, RATINGS, ASSIGNER_STEP, chainFor, assigneeIdsOf, withDoers, withDelegates, deptLeaderIds, approvalContext, approverIdsSync, approverIds, actingFor, actingForSync, canAct, stepsOf, stepsForItem, levelsForItem, levelsLabel, openRequest, cancelPending, hasApproval, decide, queueFor, endPosition };
+module.exports = { APPROVER_TYPES, RATINGS, ASSIGNER_STEP, chainFor, assigneeIdsOf, withDoers, assertNotInTrash, withDelegates, deptLeaderIds, approvalContext, approverIdsSync, approverIds, actingFor, actingForSync, canAct, stepsOf, stepsForItem, levelsForItem, levelsLabel, openRequest, cancelPending, hasApproval, decide, queueFor, endPosition };

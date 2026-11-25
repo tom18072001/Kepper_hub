@@ -106,6 +106,11 @@ test('thông báo gộp một việc: nêu mọi loại cảnh báo, số liệu
   assert.match(lines[2], /^Gửi ngày 15\/02\/2027/);
 });
 
+// Bảng tài khoản giả lọc đúng theo điều kiện Prisma đơn giản: bằng, { not }, { in } (isActive, NOT_IT_WHERE, DEPT_APPROVER_WHERE…).
+const fakeUsers = list => ({ findMany: async ({ where = {} } = {}) => list.filter(u => Object.entries(where).every(([k, c]) =>
+  c && typeof c === 'object' ? ('not' in c ? u[k] !== c.not : true) && ('in' in c ? c.in.includes(u[k]) : true) : u[k] === c)) });
+const account = (id, role, extra = {}) => ({ id, role, isRootAdmin: false, isActive: true, departmentId: null, boardAll: false, ...extra });
+
 test('chạy cảnh báo: nhiều loại của cùng một việc → một thông báo; thông báo cũ chưa đọc của việc được đánh dấu đã đọc', async () => {
   const project = { id: 1, key: 'DEMO', kind: 'MTL', t0Date: new Date('2026-12-31T17:00:00Z'), leadId: 50 };
   const rows = [{ id: 1, number: 1, title: 'Việc A', parentId: null, leadDepartmentId: null, critical: false, milestone: false, weight: null, progress: 10,
@@ -116,7 +121,7 @@ test('chạy cảnh báo: nhiều loại của cùng một việc → một thô
     workItem: { findMany: async () => rows },
     progressAlert: { groupBy: async () => [], createMany: async ({ data }) => { created.push(...data); return { count: 1 }; } },
     projectMember: { findMany: async () => [] },
-    user: { findMany: async () => [] },
+    user: fakeUsers([account(11, 'member'), account(50, 'manager')]), // người nhận phải là tài khoản nghiệp vụ đang hoạt động
     notification: { createMany: async ({ data }) => { notes.push(...data); return { count: data.length }; }, updateMany: async a => { marked.push(a.where); return { count: 0 }; } },
     progressSnapshot: { upsert: async () => ({}) },
   };
@@ -128,6 +133,31 @@ test('chạy cảnh báo: nhiều loại của cùng một việc → một thô
   assert.equal(new Set(notes.map(n => n.userId)).size, 2);
   assert.equal(marked.length, 1);
   assert.equal(marked[0].link, '#/projects/1?item=1');
+});
+
+test('cảnh báo MTL: "PMO" (Người đứng tên + Chủ dự án) và mọi nhóm người nhận bỏ tài khoản Quản trị hệ thống và tài khoản đã khoá', async () => {
+  // Dữ liệu cũ: Người đứng tên là quản trị gốc (90); Chủ dự án gồm một tài khoản Quản trị (91), một tài khoản đã khoá (92) và một người
+  // còn làm việc (93); người chủ trì gồm 11 và một tài khoản Quản trị nhập từ Excel (94). Việc đường găng chậm tiến độ → báo cả BTGĐ (20; 21 đã khoá).
+  const project = { id: 7, key: 'GA', kind: 'MTL', t0Date: new Date('2026-12-31T17:00:00Z'), leadId: 90 };
+  const rows = [{ id: 3, number: 3, title: 'Hạng mục găng', parentId: null, leadDepartmentId: null, critical: true, milestone: false, weight: null, progress: 10,
+    progressAt: new Date('2027-02-14T03:00:00Z'), startedAt: new Date('2027-01-02'), completedAt: null,
+    baselineStart: new Date('2026-12-31T17:00:00Z'), baselineEnd: new Date('2027-02-20T16:59:59Z'), state: { category: 'STARTED' }, assignees: [{ userId: 11 }, { userId: 94 }] }];
+  const users = [account(11, 'member'), account(20, 'director', { boardAll: true }), account(21, 'director', { isActive: false }),
+    account(90, 'admin', { isRootAdmin: true }), account(91, 'admin'), account(92, 'manager', { isActive: false }), account(93, 'member'), account(94, 'admin')];
+  const created = [], notes = [];
+  const prisma = {
+    workItem: { findMany: async () => rows },
+    progressAlert: { groupBy: async () => [], createMany: async ({ data }) => { created.push(...data); return { count: 1 }; } },
+    projectMember: { findMany: async () => [91, 92, 93].map(userId => ({ userId })) },
+    user: fakeUsers(users),
+    notification: { createMany: async ({ data }) => { notes.push(...data); return { count: data.length }; }, updateMany: async () => ({ count: 0 }) },
+    progressSnapshot: { upsert: async () => ({}) },
+  };
+  await A.runProjectAlerts(prisma, project, day);
+  assert.deepEqual(created.map(c => c.kind).sort(), ['BEHIND', 'DUE_SOON']);
+  assert.deepEqual([...new Set(notes.map(n => n.userId))].sort((a, b) => a - b), [11, 20, 93], 'người chủ trì + Chủ dự án còn làm việc + BTGĐ');
+  for (const id of [90, 91, 92, 94, 21]) assert.ok(!notes.some(n => n.userId === id), `không gửi cho tài khoản ${id}`);
+  assert.equal(created.find(c => c.kind === 'BEHIND').recipients, 3, 'số người nhận ghi đúng sau khi lọc');
 });
 
 test('nhắc cập nhật tuần dùng chữ "kỳ này", không dùng "sprint"', async () => {

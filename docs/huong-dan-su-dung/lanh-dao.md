@@ -150,7 +150,7 @@ Menu **Công việc → Chờ tôi duyệt**. Các tab: **Phiếu trình** (vi�
 
 ### 4.3 Duyệt ở cấp của dự án (sau người giao)
 
-Nhiều dự án thường có quy trình duyệt nhiều cấp (lựa chọn mặc định khi tạo dự án: **1 cấp — Lãnh đạo bộ phận duyệt**). Các cấp này chạy **sau** bước người giao duyệt và chấm mức. Người duyệt mỗi cấp tuỳ cài đặt dự án: **Lãnh đạo bộ phận chủ trì**, **BTGĐ phụ trách**, **Người đứng tên dự án** hoặc **Người được chỉ định**.
+Nhiều dự án thường có quy trình duyệt nhiều cấp (lựa chọn mặc định khi tạo dự án: **Người giao → Lãnh đạo bộ phận**; trang dự án ghi "Duyệt 2 cấp", đếm cả bước người giao). Các cấp này chạy **sau** bước người giao duyệt và chấm mức. Người duyệt mỗi cấp tuỳ cài đặt dự án: **Lãnh đạo bộ phận chủ trì**, **BTGĐ phụ trách**, **Người đứng tên dự án** hoặc **Người được chỉ định**.
 
 1. **Chờ tôi duyệt → Phiếu trình**: cột **Bước** ghi "{cấp}/{tổng} · {tên bước}". Bấm việc → ô "Bạn đang duyệt bước …".
 2. Ghi ý kiến (bắt buộc khi không duyệt) → **Duyệt** hoặc **Không duyệt**. Ở bước cuối có thêm ô **Xếp loại khi nghiệm thu** (không bắt buộc).

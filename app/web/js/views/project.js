@@ -42,6 +42,18 @@ const I_SAVED = svg('<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/
 
 export const current = { project: null, items: [], cycles: [], views: [], plans: [], filters: EMPTY_FILTERS(), order: [], saved: null, restored: false, lanes: 'none', root: null, params: null, sort: { key: 'position', dir: 1 }, loadedAt: 0 };
 
+// ---------- Cách nói số cấp duyệt (bước người giao duyệt + chấm mức LUÔN có, trước các cấp của dự án) ----------
+// Chuỗi duyệt do máy chủ dựng bằng MỘT hàm (services/task-rules.js chainOf): nhãn "Duyệt N cấp" ở trang dự án (project.approvalFlow —
+// quy trình mặc định của việc mới) và "Quy trình duyệt N cấp" ở panel việc (approvalSteps của việc) cùng đếm bước người giao.
+export const flowText = chain => chain.map(s => (s.approverType === 'ASSIGNER' ? 'Người giao' : s.approverType === 'BOARD' ? 'Ban Tổng Giám đốc' : s.name)).join(' → ');
+// Mức duyệt của một việc: n = số cấp của dự án chạy SAU bước người giao. Cùng cách viết với ô "Mức duyệt của việc này" ở panel việc
+// (item-panel.js levelControl) — dùng ở hộp Tạo việc và ô "Việc mới mặc định cần" của Cài đặt dự án.
+export function levelLabel(n, steps) {
+  if (n === 0) return 'Chỉ người giao duyệt';
+  const names = steps.slice(0, n).map(s => s.name).join(' → ');
+  return n >= steps.length ? `Người giao → đủ ${steps.length} cấp (${names})` : `Người giao → ${n} cấp: ${names}`;
+}
+
 // Bộ dữ liệu của trang dự án: dự án, việc, chu kỳ, bộ lọc đã lưu, kế hoạch; MTL thêm phạm vi tạo việc và giai đoạn của hạng mục.
 // Mỗi lần mở trang tải một lần. Vẽ lại đúng dự án đang hiện trong vòng FRESH_MS (đổi tab, bấm lại dự án ở sidebar, liên kết trong trang)
 // thì dùng lại bộ đã tải — realtime vẫn cập nhật việc / chu kỳ / kế hoạch. Số liệu MTL (Tổng quan, Kế hoạch & Gantt, Giai đoạn) luôn tải mới.
@@ -127,7 +139,10 @@ export async function renderProject(root, id, params, setCrumbs, stillCurrent) {
   setCrumbs(`<span class="muted">${esc(project.department.name)} /</span> ${esc(project.name)} <span class="code">${esc(project.key)}</span>`);
   const r = project.rights;
   const canCreate = r.canEdit && (project.visibility !== 'ASSIGNED' || r.canManage || r.memberRole) && (!mtl || canCreateMtl());
-  const steps = project.approvalSteps.map(s => s.name).join(' → ');
+  // Quy trình duyệt mặc định của việc mới, đếm cả bước người giao (bảng không có duyệt — vd. Lịch tuần — thì máy chủ trả rỗng, không hiện nhãn).
+  const flow = project.approvalFlow || [];
+  const flowSteps = flow.length ? flowText(flow) + (mtl ? ' (mốc / đường găng: BTGĐ phụ trách)' : '') : '';
+  const flowMore = project.approvalSteps.slice(Math.max(0, flow.length - 1)).map(s => s.name).join(' → '); // cấp thêm theo quy tắc / chọn tay
   root.innerHTML = `<div class="proj">
     <div class="page-head">
       <div class="ph-title"><h1>${esc(project.name)}</h1><span class="live hidden" id="liveDot" title="Đang cập nhật trực tiếp">Trực tiếp</span></div>
@@ -141,7 +156,7 @@ export async function renderProject(root, id, params, setCrumbs, stillCurrent) {
     ${project.description ? `<div class="ph-desc-wrap"><p class="ph-desc clamp1" id="phDesc">${esc(project.description)}</p><button type="button" class="fx-link ph-more hidden" data-fx="desc" aria-expanded="false" aria-controls="phDesc">Xem thêm</button></div>` : ''}
     <div class="viewbar">
       <div class="tabs" role="tablist" aria-label="Kiểu xem">${shownTabs.map(([k, label]) => `<a href="${tabHref(k)}" class="${k === view ? 'active' : ''}" role="tab" aria-selected="${k === view}" data-view-tab="${k}" data-testid="view-${k}">${label}</a>`).join('')}</div>
-      ${steps ? `<span class="flow" title="Quy trình duyệt: ${esc(steps)}">${icon('approve')}<b>Duyệt ${project.approvalSteps.length} cấp</b> <span class="flow-steps">${esc(steps)}</span></span>` : ''}
+      ${flow.length ? `<span class="flow" data-testid="approval-flow" title="Quy trình duyệt của việc mới: ${esc(flowSteps)}${flowMore ? ` · theo quy tắc tự động / chọn tay có thể thêm: ${esc(flowMore)}` : ''}">${icon('approve')}<b>Duyệt ${flow.length} cấp</b> <span class="flow-steps">${esc(flowSteps)}</span></span>` : ''}
     </div>
     ${itemView ? filterBar(view) : ''}
     <div id="viewBody" data-view="${view}"></div>
@@ -1102,7 +1117,7 @@ export function openCreateItem(defaults = {}) {
       <label class="field">Nguồn giao việc<select name="source" data-testid="create-source">${sourceOptions('', { empty: '— Đột xuất, chưa ghi nguồn —' })}</select></label></div>
     ${dispatch.extra}
     <div class="field"><span id="cfLabelLbl">Nhãn</span>${multiSelect('labels', labelsFor(project.id).map(l => ({ id: l.id, label: l.name, chip: labelChip(l) })), [], 'Chọn hoặc gõ nhãn mới…', { create: true, label: 'Nhãn' })}</div>
-    ${project.rights.canManage && project.approvalSteps.length ? `<label class="field">Mức duyệt<select name="approvalLevels" data-testid="create-approval-levels"><option value="">Tự động (theo quy tắc / mặc định dự án)</option>${Array.from({ length: project.approvalSteps.length + 1 }, (_, n) => `<option value="${n}">${n === 0 ? 'Không cần duyệt' : n === project.approvalSteps.length ? `Đủ ${n} cấp` : `${n} cấp: ${project.approvalSteps.slice(0, n).map(x => esc(x.name)).join(' → ')}`}</option>`).join('')}</select></label>` : ''}
+    ${project.rights.canManage && project.approvalSteps.length ? `<label class="field">Mức duyệt<select name="approvalLevels" data-testid="create-approval-levels"><option value="">Tự động (theo quy tắc / mặc định dự án)</option>${Array.from({ length: project.approvalSteps.length + 1 }, (_, n) => `<option value="${n}">${esc(levelLabel(n, project.approvalSteps))}</option>`).join('')}</select></label>` : ''}
     ${project.rights.canManage && !defaults.parentId ? scheduleFields({}, { allowNone: true, prefix: 'create' }) : ''}
     </details>
     <p class="error" id="createItemError" role="alert"></p>

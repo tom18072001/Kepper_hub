@@ -19,9 +19,11 @@ export async function renderTrash(root, setCrumbs) {
       : '<div class="empty" data-testid="trash-empty">Thùng rác trống.</div>'}</div>`;
   root.onclick = async e => {
     const ri = e.target.closest('[data-restore-item]'), rp = e.target.closest('[data-restore-project]');
+    // Phiếu duyệt đang chờ không bị huỷ khi xoá nên tự hiện lại ở "Chờ tôi duyệt"; phiếu bản cũ đã huỷ lúc xoá thì máy chủ mở lại (reopenedApprovals).
+    const reopened = r => (r?.reopenedApprovals ? ` — mở lại ${r.reopenedApprovals} phiếu duyệt đang chờ` : '');
     try {
-      if (ri) { await api(`/api/items/${ri.dataset.restoreItem}/restore`, { method: 'POST' }); toast('Đã khôi phục công việc', 'ok'); }
-      if (rp) { await api(`/api/projects/${rp.dataset.restoreProject}/restore`, { method: 'POST' }); toast('Đã khôi phục dự án', 'ok'); await reloadProjects(); renderProjectNav(); }
+      if (ri) { const r = await api(`/api/items/${ri.dataset.restoreItem}/restore`, { method: 'POST' }); toast('Đã khôi phục công việc' + reopened(r), 'ok'); }
+      if (rp) { const r = await api(`/api/projects/${rp.dataset.restoreProject}/restore`, { method: 'POST' }); toast('Đã khôi phục dự án' + reopened(r), 'ok'); await reloadProjects(); renderProjectNav(); }
     } catch (error) { toast(errorMessage(error), 'err'); }
     if (ri || rp) renderTrash(root, setCrumbs);
   };

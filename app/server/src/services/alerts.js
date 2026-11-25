@@ -107,11 +107,15 @@ async function runProjectAlerts(prisma, project, day = new Date()) {
   const last = await prisma.progressAlert.groupBy({ by: ['workItemId', 'kind'], where: { projectId: project.id }, _max: { createdAt: true } });
   const lastAt = new Map(last.map(l => [`${l.workItemId}:${l.kind}`, l._max.createdAt]));
   // Người nhận: người chủ trì; lãnh đạo bộ phận chủ trì; PMO = trưởng dự án + chủ dự án; đường găng / mốc mức nặng: thêm Ban lãnh đạo.
+  // Mọi người nhận phải là tài khoản nghiệp vụ đang hoạt động: Quản trị hệ thống không xem nội dung nghiệp vụ (tiêu đề cảnh báo có mã, tên
+  // hạng mục, % kế hoạch / thực tế), tài khoản đã khoá không đọc được. Dữ liệu cũ lỡ đặt tài khoản Quản trị làm Người đứng tên / Chủ dự án
+  // (nay máy chủ chặn) hoặc người chủ trì nhập từ Excel thì bị bỏ ở đây.
+  const business = await prisma.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE }, select: { id: true, role: true, isRootAdmin: true, departmentId: true } });
+  const eligible = new Set(business.map(u => u.id));
   const owners = (await prisma.projectMember.findMany({ where: { projectId: project.id, role: 'OWNER' }, select: { userId: true } })).map(m => m.userId);
-  const pmo = [...new Set([project.leadId, ...owners].filter(Boolean))];
+  const pmo = [...new Set([project.leadId, ...owners].filter(id => eligible.has(id)))];
   // Ban lãnh đạo = vai có quyền duyệt toàn đơn vị (theo vai — lib/permissions.js, không đọc quyền lưu riêng từng người).
-  const directors = (await prisma.user.findMany({ where: { isActive: true, ...NOT_IT_WHERE }, select: { id: true, role: true, isRootAdmin: true, departmentId: true } }))
-    .filter(u => permissionScope(u, 'work.approve', 'OPERATE') === 'SYSTEM').map(u => u.id);
+  const directors = business.filter(u => permissionScope(u, 'work.approve', 'OPERATE') === 'SYSTEM').map(u => u.id);
   const leaderCache = new Map();
   const leadersOf = async id => { if (!leaderCache.has(id)) leaderCache.set(id, await approval.deptLeaderIds(prisma, id)); return leaderCache.get(id); };
   const dayDate = new Date(Date.UTC(...(d => [d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()])(new Date(day.getTime() + 7 * 3_600_000))));
@@ -124,7 +128,7 @@ async function runProjectAlerts(prisma, project, day = new Date()) {
     for (const kind of kindsFor(r, st, day, cfg)) {
       if (!shouldSend(kind, lastAt.get(`${r.id}:${kind}`), day)) continue;
       const leaders = await leadersOf(r.leadDepartmentId);
-      const to = recipientsFor(kind, r, { leaders, pmo, directors, hasKids: parents.has(r.id) });
+      const to = recipientsFor(kind, r, { leaders, pmo, directors, hasKids: parents.has(r.id) }).filter(id => eligible.has(id));
       const created = await prisma.progressAlert.createMany({ data: [{ projectId: project.id, workItemId: r.id, kind, level: LEVEL[kind], day: dayDate, variance: st.variance ?? null, lateDays: st.lateDays ?? null, recipients: to.length }], skipDuplicates: true });
       if (!created.count) continue;
       alerts++;

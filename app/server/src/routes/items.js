@@ -171,10 +171,13 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
     const pending = item.approvals.find(r => r.status === 'PENDING');
     // Đang chờ duyệt: hiện đúng số cấp đã chốt lúc gửi; ngược lại: số cấp hiệu lực hiện tại của việc.
     const effective = await approval.levelsForItem(prisma, project, allSteps, { id: item.id, parentId: item.parentId, approvalLevels: item.approvalLevels, priority: item.priority, labelIds: item.labels.map(l => l.labelId) });
-    // Chuỗi duyệt: cấp 1 = người giao (bắt buộc chấm mức hoàn thành), sau đó các cấp dự án. Phiếu cũ giữ chuỗi cũ.
-    const steps = pending ? await approval.chainFor(prisma, project, pending) : rules.chainOf(allSteps.slice(0, effective.levels), true, { board: rules.isBoardItem(item) });
+    // Chuỗi duyệt: cấp 1 = người giao (bắt buộc chấm mức hoàn thành), sau đó các cấp dự án. Phiếu cũ giữ chuỗi cũ. Bảng không có duyệt
+    // (không có cột Chờ duyệt / Hoàn thành, vd. Lịch tuần): không có chuỗi — cùng luật với nhãn "Duyệt N cấp" ở trang dự án (task-rules).
+    const flowOn = rules.hasApprovalFlow(await prisma.workflowState.findMany({ where: { projectId: project.id }, select: { category: true } }), allSteps.length);
+    const steps = pending ? await approval.chainFor(prisma, project, pending) : flowOn ? rules.chainOf(allSteps.slice(0, effective.levels), true, { board: rules.isBoardItem(item) }) : [];
     const currentStep = pending ? rules.stepAt(steps, pending.currentLevel) : null;
-    const canApprove = pending ? await approval.canAct(prisma, req.user, project, pending, item) : false;
+    // Việc đang ở Thùng rác: phiếu giữ nguyên nhưng không ai duyệt được (services/approval.js assertNotInTrash) — không hiện ô duyệt.
+    const canApprove = pending && !item.archivedAt ? await approval.canAct(prisma, req.user, project, pending, item) : false;
     const lastLevel = pending ? pending.currentLevel === pending.totalLevels : false;
     const roles = new Set(caps.roles);
     const isAssigner = roles.has('A'), isAssignee = roles.has('L'), isSupporter = roles.has('S');
@@ -241,7 +244,7 @@ module.exports = function mountItems(app, { prisma, auth, audit }) {
       ancestors, depth: chain.length, maxDepth: tree.MAX_DEPTH, descendantCount: descIds.length,
       // Người duyệt thực tế từng bước của RIÊNG việc này (việc giao về phòng: lãnh đạo phòng chủ trì, Phó TGĐ phụ trách…).
       stepApprovers: await (async () => {
-        const ctx = await approval.approvalContext(prisma);
+        const ctx = await approval.approvalContext(prisma, [project.id]);
         const who = pending ? approval.withDoers(item, pending.requestedById) : item;
         const ids = Object.fromEntries(steps.map(st => [st.level, approval.approverIdsSync(ctx, project, st, who)]));
         const extra = [...new Set(Object.values(ids).flat())].filter(id => !approverNames[id]);

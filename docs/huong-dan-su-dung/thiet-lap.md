@@ -380,7 +380,7 @@ Dự án thường:
 1. Bấm **+**.
 2. Gõ **Mã dự án**, **Tên dự án**; chọn **Bộ phận**, **Ai được xem**; gõ **Mô tả** nếu cần.
 3. Chọn **Kiểu dự án**: **Quy trình công việc** hoặc **Lịch tuần**.
-4. Với **Quy trình công việc**: chọn **Số cấp duyệt** và người duyệt. Đọc mục 3.8 trước khi chọn.
+4. Với **Quy trình công việc**: chọn **Cấp duyệt thêm sau người giao** và người duyệt. Đọc mục 3.8 trước khi chọn.
 5. Bấm **Tạo dự án**.
 
 **Từng ô**
@@ -394,18 +394,16 @@ Dự án thường:
 | **Mô tả** | Mô tả ngắn | Không bắt buộc; ô nhiều dòng; tối đa 2000 ký tự | Hiện một dòng dưới tên dự án, có nút **Xem thêm** / **Thu gọn**. Lỗi: "Mô tả vượt 2000 ký tự" |
 | **Kiểu dự án** | Loại dự án và bộ cột ban đầu | Ba lựa chọn, nguyên văn: "Theo Master Timeline — hạng mục theo tháng T, đường găng, mốc; dùng chung giữa các bộ phận" (chỉ Ban Tổng Giám đốc thấy; mặc định với Ban Tổng Giám đốc); "Quy trình công việc — Tồn đọng → Cần làm → Đang làm → Chờ duyệt → Hoàn thành" (mặc định với Lãnh đạo bộ phận); "Lịch tuần — cột Thứ 2 … Cuối tuần, không duyệt (vd. ai ở / không ở văn phòng)" | MTL: cột **Chưa bắt đầu**, **Đang thực hiện**, **Chờ duyệt**, **Hoàn thành**, **Tạm dừng** (nhóm Cột tự do), **Huỷ**; không có cấp duyệt của dự án; có tab Tổng quan dự án, Giai đoạn, Kế hoạch & Gantt; có cảnh báo tiến độ. Quy trình công việc: cột **Tồn đọng**, **Cần làm**, **Đang làm** (giới hạn WIP 5), **Chờ duyệt**, **Hoàn thành**, **Huỷ**. Lịch tuần: cột **Thứ 2**, **Thứ 3**, **Thứ 4**, **Thứ 5**, **Thứ 6**, **Cuối tuần**, đều là Cột tự do. Người không phải Ban Tổng Giám đốc gửi kiểu MTL bị từ chối: "Chỉ Ban Tổng Giám đốc tạo dự án theo Master Timeline; PMO được đưa vào làm Chủ dự án để điều phối" |
 | **Tháng T0 (bắt đầu Master Timeline)** | Tháng 0 của Master Timeline | Chỉ hiện và bắt buộc với kiểu MTL; ô chọn tháng. Hệ thống lưu là ngày 1 của tháng | Mốc quy đổi "tháng T" trong tệp MTL ra ngày: T0 = 10/2026 thì "T2" là tháng 12/2026. Đổi sau ở **Khác** → **T0 & ngưỡng cảnh báo** (mục 3.5.1). Lỗi: "Nhập ngày T0 (tháng bắt đầu của Master Timeline)"; "Ngày T0 không hợp lệ" |
-| Nhóm **Quy trình duyệt** › **Số cấp duyệt** | Số cấp duyệt **của dự án**, chạy SAU bước người giao duyệt (bước này luôn có) | "1 cấp — Lãnh đạo bộ phận duyệt" (mặc định), "2 cấp — Lãnh đạo bộ phận → BTGĐ phụ trách", "Không cần duyệt". Cả nhóm ẩn và tự đặt "Không cần duyệt" khi chọn kiểu MTL hoặc Lịch tuần | Tạo sẵn các cấp ở khối **Quy trình duyệt nhiều cấp** (mục 3.3.4). Xem các khối ⚠️ ngay dưới bảng |
-| **Người duyệt cấp 1** (hiện khi chọn 1 hoặc 2 cấp) | Ai duyệt cấp thứ nhất của dự án | "Lãnh đạo bộ phận chủ trì (tự động)" (mặc định); "Người đứng tên dự án"; nhóm "Chọn đích danh" gồm các tài khoản Ban Tổng Giám đốc và Lãnh đạo bộ phận | Tên cấp được lưu: "Lãnh đạo bộ phận duyệt" / "Người đứng tên dự án duyệt" / "Duyệt cấp 1". Người chọn đích danh đã bị khoá: "Người duyệt không tồn tại hoặc đã khoá" |
-| **Người duyệt cấp 2** (hiện khi chọn 2 cấp) | Ai duyệt cấp thứ hai | "BTGĐ phụ trách (toàn công ty / Phó TGĐ phụ trách bộ phận chủ trì)" (mặc định); nhóm "Chọn đích danh" | Tên cấp được lưu: "BTGĐ duyệt" / "Duyệt cấp 2" |
-| **Việc mới mặc định cần** (hiện khi chọn 2 cấp) | Số cấp của dự án áp cho việc không chọn tay, không khớp quy tắc | "Chỉ cấp 1" (mặc định), "Đủ 2 cấp" | "Chỉ cấp 1": việc chỉ qua người giao + cấp 1; việc cần thêm cấp 2 phải chọn tay hoặc đặt quy tắc tự động (mục 3.3.4). Lỗi: "Mức duyệt mặc định không hợp lệ" |
+| Nhóm **Quy trình duyệt** › **Cấp duyệt thêm sau người giao** | Các cấp duyệt **của dự án**, chạy SAU bước người giao duyệt và chấm mức (bước này luôn có; việc mốc / đường găng: BTGĐ phụ trách) | "Người giao → Lãnh đạo bộ phận" (mặc định; việc qua 2 bước), "Người giao → Lãnh đạo bộ phận → BTGĐ phụ trách" (3 bước), "Chỉ người giao duyệt" (không có cấp nào của dự án). Cả nhóm ẩn và tự đặt "Chỉ người giao duyệt" khi chọn kiểu MTL hoặc Lịch tuần | Tạo sẵn các cấp ở khối **Quy trình duyệt nhiều cấp** (mục 3.3.4). Chỉ bảng không có cột nhóm Chờ duyệt / Hoàn thành (kiểu **Lịch tuần**) mới thật sự không có duyệt. Chi tiết ở mục 3.8 |
+| **Người duyệt cấp 1** (hiện khi có cấp thêm sau người giao) | Ai duyệt cấp thứ nhất của dự án (chạy ngay sau người giao) | "Lãnh đạo bộ phận chủ trì (tự động)" (mặc định); "Người đứng tên dự án"; nhóm "Chọn đích danh" gồm các tài khoản Ban Tổng Giám đốc và Lãnh đạo bộ phận | Tên cấp được lưu: "Lãnh đạo bộ phận duyệt" / "Người đứng tên dự án duyệt" / "Duyệt cấp 1". Người chọn đích danh đã bị khoá: "Người duyệt không tồn tại hoặc đã khoá" |
+| **Người duyệt cấp 2** (hiện khi chọn "Người giao → Lãnh đạo bộ phận → BTGĐ phụ trách") | Ai duyệt cấp thứ hai của dự án | "BTGĐ phụ trách (toàn công ty / Phó TGĐ phụ trách bộ phận chủ trì)" (mặc định); nhóm "Chọn đích danh" | Tên cấp được lưu: "BTGĐ duyệt" / "Duyệt cấp 2" |
+| **Việc mới mặc định cần** (hiện khi chọn "Người giao → Lãnh đạo bộ phận → BTGĐ phụ trách") | Số cấp của dự án áp cho việc không chọn tay, không khớp quy tắc | "Chỉ cấp 1" (mặc định), "Đủ 2 cấp" | "Chỉ cấp 1": việc chỉ qua người giao + cấp 1; việc cần thêm cấp 2 phải chọn tay hoặc đặt quy tắc tự động (mục 3.3.4). Lỗi: "Mức duyệt mặc định không hợp lệ" |
 
 Chữ hướng dẫn trong hộp, nguyên văn:
 - Dưới nhóm Quy trình duyệt: "Mặc định "Chỉ cấp 1": việc quan trọng lãnh đạo bộ phận chọn thêm cấp 2, hoặc đặt quy tắc tự động. Có thể đổi người duyệt, thêm quy tắc tự động (theo nhãn / mức ưu tiên) trong Cài đặt dự án; lãnh đạo bộ phận chọn được mức duyệt cho từng việc."
 - Cuối hộp: "Dự án MTL: cột Chưa bắt đầu, Đang thực hiện, Chờ duyệt, Hoàn thành, Tạm dừng, Huỷ; sau khi tạo, vào "Khác → Nhập MTL từ Excel". Dự án quy trình: Tồn đọng, Cần làm, Đang làm (giới hạn 5), Chờ duyệt, Hoàn thành, Huỷ."
 
-> ⚠️ **Chữ trên màn hình ghi** "1 cấp — Lãnh đạo bộ phận duyệt" **nhưng thực tế** việc đi qua HAI bước: bước 1 luôn là người giao duyệt và chấm mức; bước 2 mới là Lãnh đạo bộ phận chủ trì. Ví dụ: dự án BM chọn "1 cấp", Nhân viên A chủ trì việc BM-12 do Nhân viên B giao. A gửi duyệt → B duyệt và chấm mức → Lãnh đạo bộ phận chủ trì duyệt → BM-12 thành Hoàn thành. Tương tự, "2 cấp" là ba bước. Chi tiết ở mục 3.8.
-
-> ⚠️ **Chữ trên màn hình ghi** "Không cần duyệt" **nhưng thực tế** với kiểu **Quy trình công việc**, việc vẫn phải qua người giao duyệt và chấm mức mới thành Hoàn thành; "Không cần duyệt" chỉ có nghĩa là không có cấp nào SAU người giao. Chỉ bảng không có cột nhóm Hoàn thành (kiểu **Lịch tuần**) mới thật sự không có duyệt.
+Ví dụ: dự án BM chọn "Người giao → Lãnh đạo bộ phận", Nhân viên A chủ trì việc BM-12 do Nhân viên B giao. A gửi duyệt → B duyệt và chấm mức → Lãnh đạo bộ phận chủ trì duyệt → BM-12 thành Hoàn thành. Trang dự án ghi "Duyệt 2 cấp", panel việc ghi "Quy trình duyệt 2 cấp" (cả hai đếm bước người giao). Chọn "Chỉ người giao duyệt" thì B duyệt và chấm mức là xong.
 
 > ⚠️ **Chữ trên màn hình ghi** "lãnh đạo bộ phận chọn được mức duyệt cho từng việc" **nhưng thực tế** chỉ người quản lý dự án đổi được mức duyệt của một việc. Lãnh đạo bộ phận chỉ làm được ở dự án mình quản lý.
 
@@ -421,7 +419,7 @@ Chữ hướng dẫn trong hộp, nguyên văn:
 - Chọn nhầm **Bộ phận** hoặc nhầm loại MTL / thường: không sửa được. Phải xoá dự án và tạo lại bằng mã khác (mã cũ còn bị giữ khoảng 7–8 ngày, tới khi hệ thống xoá hẳn).
 - Danh sách "Chọn đích danh" ở hộp này chỉ có Ban Tổng Giám đốc và Lãnh đạo bộ phận. Ở Cài đặt, loại "Người được chỉ định" chọn được mọi tài khoản trừ Quản trị hệ thống (kể cả Nhân viên).
 - Lãnh đạo bộ phận vẫn thấy gợi ý "chọn kiểu Theo Master Timeline" ở trang **Tiến độ dự án**, nhưng hộp tạo của Lãnh đạo bộ phận không có kiểu này. Cần dự án MTL: đề nghị Ban Tổng Giám đốc tạo.
-- Dự án MTL tạo ra không có cấp duyệt của dự án và mức mặc định là "Không cần duyệt": hạng mục do người giao duyệt; hạng mục mốc / đường găng do BTGĐ phụ trách duyệt.
+- Dự án MTL tạo ra không có cấp duyệt của dự án và mức mặc định là "Chỉ người giao duyệt": hạng mục do người giao duyệt; hạng mục mốc / đường găng do BTGĐ phụ trách duyệt. Trang dự án MTL ghi "Duyệt 1 cấp" "Người giao (mốc / đường găng: BTGĐ phụ trách)".
 - Tạo dự án không gửi thông báo cho ai. Hệ thống ghi nhật ký (chỉ Quản trị hệ thống xem).
 - Ô **Mô tả** ở đây nhiều dòng, nhưng ô Mô tả ở Cài đặt chỉ một dòng: lần đầu bấm **Lưu** ở Thông tin chung, các dòng bị nối lại thành một (mục 3.3.1).
 
@@ -476,7 +474,7 @@ Bảy khối, theo thứ tự từ trên xuống:
 |---|---|---|---|
 | **Tên** | Tên dự án | Bắt buộc; tối đa 160 ký tự (ô không chặn khi gõ, máy chủ chặn khi lưu) | Đổi tên ở menu trái, tiêu đề trang, các thông báo mới. Mã dự án và mã việc (BM-12) không đổi. Lỗi: "Thiếu Tên dự án"; "Tên dự án vượt 160 ký tự" |
 | **Ai được xem** | Phạm vi xem | **Cả bộ phận**, **Chỉ thành viên**, **Toàn công ty (dùng chung)**; mặc định là phạm vi đang có | Đổi ngay ai thấy dự án và ai làm việc được (bảng ở mục 3.1). Ví dụ đổi BM từ "Cả bộ phận" sang "Chỉ thành viên": nhân viên trong bộ phận không có tên ở khối Thành viên mất dự án khỏi menu trái từ lần tải trang sau, mở đường dẫn cũ thì thấy "Không tìm thấy dự án"; mọi thành viên Ban Tổng Giám đốc vẫn thấy và quản lý. Lỗi: "Phạm vi không hợp lệ" |
-| **Người đứng tên dự án** | Người đứng tên | "—" (để trống) hoặc một tài khoản đang hoạt động trong danh bạ. ⚠️ Danh sách có cả tài khoản Quản trị hệ thống và máy chủ không chặn: **đừng chọn**. Chọn nhầm thì tài khoản đó không được quyền quản lý, nhưng vẫn nhận thông báo "Cần duyệt …" (kèm tên việc) của cấp "Người đứng tên dự án" và, ở dự án MTL, cảnh báo tiến độ phần "PMO"; cấp duyệt đó kẹt vì Quản trị hệ thống không mở được việc. Chọn lại người đứng tên rồi **Lưu** ngay | (1) Là người duyệt của cấp "Người đứng tên dự án", nếu khối Quy trình duyệt có cấp này. (2) Xem đầy đủ, bình luận mọi việc của dự án. (3) Dự án MTL: được quản lý dự án (Cài đặt, nhập MTL, T0, xoá dự án…) và nhận cảnh báo phần "PMO". (4) Dự án thường: không tự có quyền quản lý nếu không là Chủ dự án. Lưu KHÔNG tự thêm người này vào khối Thành viên. Lỗi: "Người đứng tên dự án không hợp lệ" |
+| **Người đứng tên dự án** | Người đứng tên | "—" (để trống) hoặc một tài khoản nghiệp vụ đang hoạt động trong danh bạ; danh sách không có tài khoản Quản trị hệ thống. Người đứng tên hiện tại không hợp lệ (dữ liệu cũ là tài khoản Quản trị hệ thống, hoặc người đó đã khoá tài khoản): ô hiện "—" và dưới ô có chữ đỏ "Người đứng tên hiện tại là tài khoản Quản trị hệ thống — chọn người khác rồi bấm Lưu (để "—" thì cấp duyệt "Người đứng tên dự án" do Chủ dự án duyệt thay)." (hoặc "… đã khoá tài khoản — …"); bấm **Lưu** khi ô để "—" là bỏ người đứng tên đó | (1) Là người duyệt của cấp "Người đứng tên dự án", nếu khối Quy trình duyệt có cấp này; để trống thì Chủ dự án duyệt thay (mục 3.3.4). (2) Xem đầy đủ, bình luận mọi việc của dự án. (3) Dự án MTL: được quản lý dự án (Cài đặt, nhập MTL, T0, xoá dự án…) và nhận cảnh báo phần "PMO". (4) Dự án thường: không tự có quyền quản lý nếu không là Chủ dự án. Lưu KHÔNG tự thêm người này vào khối Thành viên. Lỗi: "Người đứng tên dự án không hợp lệ"; tài khoản Quản trị hệ thống, đã khoá hoặc không tồn tại: "Người đứng tên dự án phải là tài khoản nghiệp vụ đang hoạt động" |
 | **Mô tả** | Mô tả dự án | Ô một dòng; tối đa 2000 ký tự | Hiện dưới tên dự án. Lỗi: "Mô tả vượt 2000 ký tự" |
 | **Lưu trữ dự án (chỉ đọc)** | Lưu trữ / mở lại dự án | Ô đánh dấu; dự án đang lưu trữ thì ô đang được đánh dấu | Đánh dấu rồi **Lưu** = lưu trữ; bỏ đánh dấu rồi **Lưu** = mở lại. Hậu quả ở mục 3.12 |
 
@@ -491,7 +489,7 @@ Bảy khối, theo thứ tự từ trên xuống:
 - "Chỉ thành viên" không chặn Ban Tổng Giám đốc: mọi thành viên Ban Tổng Giám đốc vẫn xem và quản lý.
 - Dự án MTL đổi sang "Chỉ thành viên": cán bộ các bộ phận có hạng mục vẫn thấy, vì lần nhập MTL đã tự thêm họ vào Thành viên (mục 3.5.3).
 - Mô tả nhiều dòng (gõ lúc tạo dự án) bị nối thành một dòng khi bấm **Lưu** ở đây, vì ô Mô tả ở Cài đặt chỉ một dòng.
-- Để trống **Người đứng tên dự án** trong khi khối Quy trình duyệt có cấp "Người đứng tên dự án": cấp đó không có ai duyệt, khối hiện "Chưa có người duyệt", và việc gửi duyệt sẽ kẹt ở cấp đó.
+- Để trống **Người đứng tên dự án** (hoặc người đứng tên đã khoá tài khoản) trong khi khối Quy trình duyệt có cấp "Người đứng tên dự án": phiếu không kẹt — các Chủ dự án còn hoạt động (trừ người chủ trì của việc) duyệt thay cấp đó; dự án không còn Chủ dự án nào duyệt được thì BTGĐ phụ trách duyệt. Dòng "Người duyệt:" của cấp ở khối Quy trình duyệt cho biết ai đang duyệt thay.
 - Dự án MTL: chọn ai làm Người đứng tên là giao cho người đó toàn quyền quản lý dự án, kể cả xoá dự án — dù người đó là Nhân viên và không có tên trong Thành viên, với điều kiện người đó xem được dự án. Dự án đặt "Chỉ thành viên" (hoặc "Cả bộ phận" mà người đứng tên thuộc bộ phận khác) thì phải thêm người đó vào Thành viên, nếu không họ chỉ gặp "Không tìm thấy dự án". Màn hình không nhắc điều này.
 - Dự án kiểu "Sổ giao việc" cũ (không tạo được từ giao diện hiện nay): ô **Ai được xem** không có lựa chọn của loại này, nên bấm **Lưu** sẽ đổi phạm vi thành "Cả bộ phận" mà không báo. Gặp dự án như vậy, đừng bấm **Lưu** ở khối này; báo Quản trị hệ thống.
 
@@ -521,10 +519,10 @@ Bảy khối, theo thứ tự từ trên xuống:
 
 | Nút | Làm gì | Có hỏi lại không | Quay lại được không |
 |---|---|---|---|
-| **Xoá dự án** | Đánh dấu dự án đã xoá: dự án biến khỏi các danh sách với mọi người; huỷ MỌI phiếu duyệt đang chờ của dự án; chuyển bạn tới **Thùng rác** | Không có hộp hỏi lại — gõ đúng mã là bước xác nhận | Được trong 7 ngày: **Thùng rác** → **Khôi phục**. Quá 7 ngày, hệ thống xoá hẳn lúc 02:45 sáng, kể cả tệp đính kèm — không lấy lại được. Phiếu duyệt đã bị huỷ không tự mở lại khi khôi phục |
+| **Xoá dự án** | Đánh dấu dự án đã xoá: dự án biến khỏi các danh sách với mọi người; phiếu duyệt đang chờ KHÔNG bị huỷ mà tạm ẩn khỏi **Chờ tôi duyệt**; chuyển bạn tới **Thùng rác** | Không có hộp hỏi lại — gõ đúng mã là bước xác nhận | Được trong 7 ngày: **Thùng rác** → **Khôi phục**; phiếu duyệt đang chờ hiện lại ở **Chờ tôi duyệt**, duyệt tiếp như trước. Quá 7 ngày, hệ thống xoá hẳn lúc 02:45 sáng, kể cả tệp đính kèm — không lấy lại được |
 
 **⚠️ Dễ nhầm**
-- ⚠️ Xoá dự án huỷ ngay mọi phiếu duyệt đang chờ; khôi phục không mở lại các phiếu đó (mục 3.12).
+- Trong lúc dự án ở Thùng rác, không ai duyệt, trả lại, rút được phiếu của dự án; bấm trên trang mở từ trước lúc xoá (vd. **Chờ tôi duyệt** chưa tải lại) thì hệ thống báo "Dự án đang ở Thùng rác — khôi phục dự án trước" (mục 3.12).
 - Xoá không gửi thông báo cho thành viên.
 - ⚠️ Trong 7 ngày nằm ở Thùng rác, việc chưa xong có Hạn của dự án đã xoá vẫn sinh thông báo 08:00 "<mã việc> đến hạn trong 24 giờ" cho người chủ trì; bấm vào thì "Không tìm thấy công việc". Báo trước người chủ trì.
 - Mã dự án bị giữ tới khi hệ thống xoá hẳn: không tạo được dự án mới trùng mã trong thời gian đó.
@@ -546,6 +544,7 @@ Bảy khối, theo thứ tự từ trên xuống:
 - Đổi tên, màu hoặc WIP của một cột: sửa trên dòng → **Lưu cột**.
 - Thêm cột: **Thêm cột** → gõ tên, chọn nhóm → bấm nút mũi tên để đưa lên đúng vị trí → **Lưu cột**.
 - Bỏ cột: chuyển hết việc ra khỏi cột trên Bảng → **Xoá** trên dòng → **Lưu cột**.
+- Đổi nhóm của một cột: chuyển hết việc ra khỏi cột trên Bảng (việc trong Thùng rác cũng tính) → tải lại trang Cài đặt → chọn nhóm mới → **Lưu cột**.
 - Đổi cả bộ cột sang Lịch tuần hoặc Quy trình công việc: **Dùng mẫu:** → chọn mẫu → kiểm tra từng dòng → **Lưu cột**.
 
 **Từng ô** (mỗi dòng là một cột)
@@ -554,7 +553,7 @@ Bảy khối, theo thứ tự từ trên xuống:
 |---|---|---|---|
 | Nút mũi tên (chú thích "Lên trên") | Đưa dòng lên trên một bậc | — | Thứ tự dòng = thứ tự cột trên Bảng (từ trái sang phải), sau khi **Lưu cột** |
 | Ô **Tên cột** (gợi ý "Tên cột") | Tên cột | Bắt buộc; tối đa 40 ký tự | Tên cột trên Bảng, chữ trong ô Trạng thái của việc, tên trong bộ lọc. Đổi tên không đổi nghĩa của cột (nghĩa do nhóm quyết định). Lỗi: "Thiếu Tên cột"; "Tên cột vượt 40 ký tự" |
-| Ô chọn **Nhóm trạng thái** | Nhóm của cột | Bảy lựa chọn: **Tồn đọng**, **Chưa bắt đầu**, **Đang thực hiện**, **Chờ duyệt**, **Hoàn thành**, **Huỷ**, **Cột tự do**. Dòng mới: **Đang thực hiện** (hoặc **Cột tự do** nếu mọi dòng đang là Cột tự do) | Xem bảng "Hệ thống hiểu nhóm cột" ngay dưới. Lỗi: "Nhóm trạng thái không hợp lệ"; "Thiếu nhóm trạng thái" |
+| Ô chọn **Nhóm trạng thái** | Nhóm của cột | Bảy lựa chọn: **Tồn đọng**, **Chưa bắt đầu**, **Đang thực hiện**, **Chờ duyệt**, **Hoàn thành**, **Huỷ**, **Cột tự do**. Dòng mới: **Đang thực hiện** (hoặc **Cột tự do** nếu mọi dòng đang là Cột tự do). Cột còn việc (kể cả việc trong Thùng rác): ô bị khoá, dưới dòng ghi "Nhóm đã khoá: Cột còn <N> việc — chuyển việc sang cột khác rồi mới đổi nhóm." (có việc trong Thùng rác thì thêm "(<M> việc đang ở Thùng rác)") | Xem bảng "Hệ thống hiểu nhóm cột" ngay dưới. Đổi nhóm của cột còn việc bị máy chủ từ chối (khoá ô chỉ là bước đầu): "Cột "<tên>" còn <N> việc — chuyển việc sang cột khác rồi mới đổi nhóm", có việc trong Thùng rác thì thêm ". Trong đó <M> việc đang ở Thùng rác nên Bảng không hiện: khôi phục rồi chuyển đi, hoặc chờ hệ thống xoá hẳn sau 7 ngày". Lỗi khác: "Nhóm trạng thái không hợp lệ"; "Thiếu nhóm trạng thái" |
 | Ô màu (chú thích "Màu") | Màu chấm của cột | Chọn màu; dòng mới mặc định xám | Chỉ để nhìn |
 | Ô **Giới hạn WIP** (gợi ý "WIP") | Số việc tối đa trong cột | Số nguyên từ 1; để trống = không giới hạn. Máy chủ ép vào khoảng 1–999: gõ 0 thành 1; số lẻ bị bỏ phần thập phân | Đầu cột hiện "<số việc>/<giới hạn>"; cột đầy thì không chuyển thêm việc vào được (xem "Giới hạn WIP chạy thế nào") |
 | Nút **Xoá** trên dòng | Bỏ cột | — | Chỉ bỏ trên màn hình; bấm **Lưu cột** mới thật sự xoá. Cột còn việc: máy chủ không cho xoá, báo "Cột "<tên>" còn <N> việc, hãy chuyển việc trước khi xoá" |
@@ -575,9 +574,9 @@ Bảy khối, theo thứ tự từ trên xuống:
 
 | Nút | Làm gì | Có hỏi lại không | Quay lại được không |
 |---|---|---|---|
-| **Dùng mẫu:** → **Lịch tuần** | Điền 6 dòng đầu thành "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Cuối tuần", nhóm Cột tự do, bỏ WIP; thiếu dòng thì thêm. Mỗi dòng giữ nguyên cột cũ ở vị trí đó, nên việc trong cột không mất | Không; báo "Đã điền mẫu — bấm "Lưu cột" để áp dụng" | Chưa bấm **Lưu cột** thì tải lại trang là bỏ |
+| **Dùng mẫu:** → **Lịch tuần** | Điền 6 dòng đầu thành "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Cuối tuần", nhóm Cột tự do, bỏ WIP; thiếu dòng thì thêm. Mỗi dòng giữ nguyên cột cũ ở vị trí đó. Cột còn việc mà mẫu đổi nhóm thì giữ nguyên cả dòng (ô nhóm đang khoá) | Không; báo "Đã điền mẫu — bấm "Lưu cột" để áp dụng", hoặc "Đã điền mẫu, trừ cột còn việc (giữ nguyên nhóm): <tên các cột> — bấm "Lưu cột" để áp dụng" | Chưa bấm **Lưu cột** thì tải lại trang là bỏ |
 | **Dùng mẫu:** → **Quy trình công việc** | Điền 6 dòng đầu: "Tồn đọng" (nhóm Tồn đọng), "Cần làm" (Chưa bắt đầu), "Đang làm" (Đang thực hiện, WIP 5), "Chờ duyệt" (Chờ duyệt), "Hoàn thành" (Hoàn thành), "Huỷ" (Huỷ) | Như trên | Như trên |
-| **Dùng mẫu:** → **Đổi hết thành cột tự do** | Mọi dòng thành nhóm Cột tự do, xoá WIP; giữ tên | Như trên | Như trên |
+| **Dùng mẫu:** → **Đổi hết thành cột tự do** | Mọi dòng thành nhóm Cột tự do, xoá WIP; giữ tên. Cột còn việc không thuộc nhóm Cột tự do thì giữ nguyên | Như trên | Như trên |
 | **Thêm cột** | Thêm một dòng trống | Không | Bấm **Xoá** trên dòng |
 | **Lưu cột** | Thay toàn bộ danh sách cột theo màn hình; vẽ lại cả trang; báo "Đã lưu cột" | Không | Sửa rồi lưu lại. Cột đã xoá phải tạo lại (không mất việc vì chỉ xoá được cột trống) |
 
@@ -585,6 +584,7 @@ Mẫu có ít dòng hơn danh sách đang có: hệ thống nhắc "Còn <N> c�
 
 Ràng buộc khi **Lưu cột**, thông báo nguyên văn:
 - "Danh sách cột không hợp lệ"; "Dự án cần 1–15 cột"; "Cột không thuộc dự án".
+- Cột còn việc không đổi nhóm được: "Cột "<tên>" còn <N> việc — chuyển việc sang cột khác rồi mới đổi nhóm" (xem ô **Nhóm trạng thái** ở trên).
 - Dự án đang có cấp duyệt, HOẶC danh sách cột có ít nhất một cột nhóm Hoàn thành, thì phải có đủ ba nhóm Đang thực hiện, Chờ duyệt, Hoàn thành. Thiếu nhóm nào báo nhóm đó: "Dự án có cột Hoàn thành (việc xong phải qua người giao duyệt) cần ít nhất một cột thuộc nhóm "Đang thực hiện"" (tương tự với "Chờ duyệt", "Hoàn thành").
 - Dự án kiểu "Sổ giao việc" cũ còn bắt buộc nhóm Chưa bắt đầu: "Sổ giao việc cần ít nhất một cột thuộc nhóm "Chưa bắt đầu"" (tương tự với "Đang thực hiện", "Chờ duyệt", "Hoàn thành").
 
@@ -597,8 +597,9 @@ Ràng buộc khi **Lưu cột**, thông báo nguyên văn:
 - Ví dụ: cột **Đang làm** của BM có WIP 5 và đang có 5 việc. Nhân viên kéo việc thứ sáu vào → bị chặn. Lãnh đạo bộ phận (người quản lý dự án) kéo → được hỏi, bấm **Vẫn chuyển** → đầu cột hiện "6/5".
 
 **⚠️ Dễ nhầm**
-- ⚠️ Đổi NHÓM của một cột đang có việc: hệ thống không chặn, không hỏi. Việc trong cột đổi nghĩa ngay khi lưu. Ví dụ đổi cột "Đang làm" (5 việc) sang nhóm **Hoàn thành**: cả 5 việc thành "xong" mà không qua duyệt; đổi sang **Cột tự do**: 5 việc không còn được tính là đang làm.
-- Mẫu điền theo THỨ TỰ dòng: việc đang ở cột dòng 1 sẽ nằm trong cột mới ở dòng 1 (vd. thành "Thứ 2"). Kiểm tra lại từng dòng trước khi **Lưu cột**.
+- Nhóm của cột còn việc bị khoá: đổi nhóm là đổi nghĩa mọi việc trong cột (vd. cột "Cần làm" có 5 việc mà sang nhóm **Hoàn thành** thì cả 5 việc thành "xong" không qua duyệt; sang **Cột tự do** thì 5 việc rời khỏi tiến độ). Muốn đổi: chuyển việc sang cột khác trước. Đổi tên, màu, WIP, thứ tự của cột còn việc vẫn được.
+- Ô nhóm khoá theo số việc lúc mở trang; có người vừa chuyển việc vào cột thì máy chủ vẫn chặn khi **Lưu cột** (thông báo màu đỏ).
+- Mẫu điền theo THỨ TỰ dòng: việc đang ở cột dòng 1 sẽ nằm trong cột mới ở dòng 1 (vd. thành "Thứ 2") nếu nhóm không đổi; cột còn việc mà mẫu đổi nhóm thì giữ nguyên. Kiểm tra lại từng dòng trước khi **Lưu cột**.
 - Đổi dự án đang có cấp duyệt sang Lịch tuần: phải xoá hết cấp duyệt trước (khối Quy trình duyệt, bỏ hết dòng rồi **Lưu quy trình duyệt**), rồi mới **Lưu cột** được. Thông báo lỗi khi đó vẫn nói "Dự án có cột Hoàn thành…" dù bạn đã bỏ hết cột Hoàn thành.
 - Cột chỉ còn việc nằm trong Thùng rác vẫn bị coi là "còn việc": báo "Cột "<tên>" còn <N> việc…" dù trên Bảng không còn thẻ nào. Khôi phục các việc đó rồi chuyển đi, hoặc chờ hệ thống xoá hẳn sau 7 ngày.
 - Mọi cột là Cột tự do thì tab **Tiến độ kế hoạch** và **Chu kỳ** biến mất.
@@ -616,9 +617,7 @@ Ràng buộc khi **Lưu cột**, thông báo nguyên văn:
 
 **Dùng để làm gì:** Khai các cấp duyệt của dự án (chạy sau bước người giao duyệt), số cấp mặc định cho việc, và quy tắc tự tăng / giảm số cấp theo nhãn, mức ưu tiên. Đọc mục 3.8 để biết một việc thực sự đi qua những ai.
 
-Chữ trên khối, nguyên văn: "Khi việc được chuyển vào cột nhóm Chờ duyệt, hệ thống gửi lần lượt qua các cấp dưới đây. Duyệt hết các cấp → việc tự chuyển sang Hoàn thành; trả lại ở bất kỳ cấp nào → việc quay về cột trước đó. Để trống = không cần duyệt."
-
-> ⚠️ **Chữ trên màn hình ghi** "Để trống = không cần duyệt" **nhưng thực tế** người giao (hoặc BTGĐ phụ trách, với việc mốc / đường găng) luôn duyệt và chấm mức TRƯỚC các cấp khai ở đây. Để trống chỉ có nghĩa là không có cấp nào sau người giao.
+Chữ trên khối, nguyên văn: "Khi việc được chuyển vào cột nhóm Chờ duyệt, hệ thống gửi lần lượt qua các cấp dưới đây. Duyệt hết các cấp → việc tự chuyển sang Hoàn thành; trả lại ở bất kỳ cấp nào → việc quay về cột trước đó. Để trống = chỉ người giao duyệt (việc mốc / đường găng: BTGĐ phụ trách)." Các cấp khai ở đây chạy SAU bước người giao duyệt và chấm mức (bước này luôn có).
 
 > ⚠️ **Chữ trên màn hình ghi** "trả lại ở bất kỳ cấp nào → việc quay về cột trước đó" **nhưng thực tế** việc bị trả lại luôn về cột đầu tiên thuộc nhóm Đang thực hiện, bất kể trước khi gửi duyệt việc nằm ở cột nào.
 
@@ -645,13 +644,13 @@ Thêm quy tắc tự động:
 | Ô **Tên bước (tuỳ chọn)** | Tên cấp | Tối đa 60 ký tự; để trống thì hệ thống đặt bằng tên loại, vd. "Lãnh đạo bộ phận chủ trì" | Hiện trên phiếu duyệt, trong thông báo "Cần duyệt BM-12 · <tiêu đề> (<tên bước>)" gửi người duyệt cấp đó, và trên nhãn "Duyệt <N> cấp" ở trang dự án. Lỗi: "Tên bước vượt 60 ký tự" |
 | Chữ "Người duyệt: <họ tên, cách nhau dấu phẩy>" hoặc chữ đỏ "Chưa có người duyệt" (chú thích "Người sẽ duyệt ở cấp này") | Ai sẽ duyệt cấp này | Chỉ hiện với cấp đã lưu | Tính theo bộ phận chủ quản của dự án. Việc có bộ phận chủ trì khác (thường gặp ở dự án MTL) thì người duyệt thực tế khác dòng này. "Chưa có người duyệt" = phiếu sẽ kẹt ở cấp này |
 | Nút **Xoá** trên dòng | Bỏ cấp | — | Chỉ bỏ trên màn hình, tới khi **Lưu quy trình duyệt** |
-| **Việc mới mặc định cần** (chỉ hiện khi dự án đã có cấp lúc mở trang) | Số cấp của dự án áp cho việc không chọn tay và không khớp quy tắc | "Đủ <N> cấp" (mặc định), "Không cần duyệt", "<k> cấp đầu (<tên cấp 1> → … → <tên cấp k>)" với k từ 1 tới N−1 | Áp vào LÚC GỬI DUYỆT, cho mọi việc chưa chọn tay — cả việc tạo từ trước. Ví dụ: dự án 2 cấp, đặt "1 cấp đầu (Lãnh đạo bộ phận duyệt)": từ lúc lưu, mọi việc gửi duyệt (không chọn tay, không khớp quy tắc) chỉ qua người giao + Lãnh đạo bộ phận; phiếu đã mở trước đó giữ nguyên. "Không cần duyệt" ở đây vẫn còn người giao duyệt. Lỗi: "Mức duyệt mặc định không hợp lệ" |
+| **Việc mới mặc định cần** (chỉ hiện khi dự án đã có cấp lúc mở trang) | Số cấp của dự án áp cho việc không chọn tay và không khớp quy tắc | "Người giao → đủ <N> cấp (<tên các cấp>)" (mặc định), "Chỉ người giao duyệt", "Người giao → <k> cấp: <tên cấp 1> → … → <tên cấp k>" với k từ 1 tới N−1 | Áp vào LÚC GỬI DUYỆT, cho mọi việc chưa chọn tay — cả việc tạo từ trước. Ví dụ: dự án 2 cấp, đặt "Người giao → 1 cấp: Lãnh đạo bộ phận duyệt": từ lúc lưu, mọi việc gửi duyệt (không chọn tay, không khớp quy tắc) chỉ qua người giao + Lãnh đạo bộ phận; phiếu đã mở trước đó giữ nguyên. Nhãn "Duyệt <N> cấp" ở trang dự án theo mức này (mục 3.4). Lỗi: "Mức duyệt mặc định không hợp lệ" |
 
 **Ai duyệt theo từng loại**
 
 | Loại | Người duyệt | Khi không có ai |
 |---|---|---|
-| **Người đứng tên dự án** | Người đứng tên dự án (ô ở Thông tin chung), cộng người đang được người đó uỷ quyền | Ô Người đứng tên để trống → không ai duyệt, phiếu kẹt |
+| **Người đứng tên dự án** | Người đứng tên dự án (ô ở Thông tin chung), cộng người đang được người đó uỷ quyền | Ô Người đứng tên để trống, người đó đã khoá, hoặc (dữ liệu cũ) là tài khoản Quản trị hệ thống → các Chủ dự án còn hoạt động (trừ người chủ trì của việc) duyệt thay; không còn ai → BTGĐ phụ trách. Tài khoản Quản trị hệ thống không bao giờ là người duyệt |
 | **Lãnh đạo bộ phận chủ trì** | Lãnh đạo bộ phận của bộ phận chủ trì việc (việc không ghi bộ phận chủ trì thì lấy bộ phận chủ quản dự án). Với bộ phận Ban Tổng Giám đốc là các thành viên BTGĐ thuộc bộ phận đó. Cộng người đang được họ uỷ quyền | Bộ phận không có Lãnh đạo bộ phận → không ai duyệt, phiếu kẹt |
 | **BTGĐ phụ trách** | Thành viên BTGĐ phụ trách "Toàn công ty" + Phó Tổng Giám đốc phụ trách bộ phận chủ trì; cộng người đang được họ uỷ quyền | Chưa ai được đặt phụ trách → mọi thành viên Ban Tổng Giám đốc |
 | **Người được chỉ định** | Đúng người đã chọn; cộng người đang được người đó uỷ quyền | Tài khoản đó bị khoá về sau → phiếu kẹt |
@@ -664,12 +663,12 @@ Chữ nguyên văn: "Việc khớp quy tắc sẽ tự lấy số cấp duyệt 
 |---|---|---|---|
 | **Nếu nhãn** + ô chọn | Điều kiện về nhãn | "— bất kỳ —" (mặc định) hoặc một nhãn (nhãn chung và nhãn riêng của dự án) | Việc phải mang nhãn này mới khớp. Lỗi: "Nhãn không hợp lệ"; "Có nhãn không thuộc dự án" |
 | **và ưu tiên** + ô chọn | Điều kiện về ưu tiên | "— bất kỳ —" (mặc định), "Khẩn", "Cao", "Bình thường", "Thấp", "Không" | Ưu tiên của việc phải đúng bằng giá trị này; việc chưa đặt ưu tiên tính là "Không". Lỗi: "Ưu tiên không hợp lệ" |
-| **→ cần** + ô chọn | Số cấp của dự án | "không cần duyệt", "<k> cấp" (k từ 1 tới N−1), "đủ <N> cấp". Dòng mới: "đủ <N> cấp" | Thay mức mặc định cho việc khớp. "không cần duyệt" vẫn còn người giao duyệt. Lỗi: "Số cấp duyệt của quy tắc không hợp lệ" |
+| **→ cần** + ô chọn | Số cấp của dự án chạy sau người giao | "chỉ người giao duyệt", "người giao + <k> cấp" (k từ 1 tới N−1), "người giao + đủ <N> cấp". Dòng mới: "người giao + đủ <N> cấp" | Thay mức mặc định cho việc khớp. Lỗi: "Số cấp duyệt của quy tắc không hợp lệ" |
 | Nút **Xoá** trên dòng | Bỏ quy tắc | — | Chỉ bỏ trên màn hình, tới khi **Lưu quy tắc** |
 
 Mỗi quy tắc phải chọn ít nhất nhãn hoặc ưu tiên: "Mỗi quy tắc cần chọn nhãn hoặc mức ưu tiên". Tối đa: "Tối đa 20 quy tắc". Dữ liệu gửi lên sai: "Danh sách quy tắc không hợp lệ".
 
-Ví dụ: dự án BM có 2 cấp "Lãnh đạo bộ phận duyệt" → "BTGĐ duyệt", **Việc mới mặc định cần** = "1 cấp đầu (Lãnh đạo bộ phận duyệt)", quy tắc "Nếu nhãn Hợp đồng → cần đủ 2 cấp". Việc BM-20 gắn nhãn Hợp đồng: người giao → Lãnh đạo bộ phận → BTGĐ phụ trách. Việc BM-21 không gắn nhãn đó: người giao → Lãnh đạo bộ phận.
+Ví dụ: dự án BM có 2 cấp "Lãnh đạo bộ phận duyệt" → "BTGĐ duyệt", **Việc mới mặc định cần** = "Người giao → 1 cấp: Lãnh đạo bộ phận duyệt", quy tắc "Nếu nhãn Hợp đồng → cần người giao + đủ 2 cấp". Việc BM-20 gắn nhãn Hợp đồng: người giao → Lãnh đạo bộ phận → BTGĐ phụ trách. Việc BM-21 không gắn nhãn đó: người giao → Lãnh đạo bộ phận.
 
 **Các nút**
 
@@ -680,27 +679,27 @@ Ví dụ: dự án BM có 2 cấp "Lãnh đạo bộ phận duyệt" → "BTGĐ 
 | **+ Thêm quy tắc** | Thêm dòng quy tắc | Không | Bấm **Xoá** trên dòng |
 | **Lưu quy tắc** | Thay toàn bộ quy tắc; vẽ lại cả trang; báo "Đã lưu quy tắc duyệt" | Không | Sửa rồi lưu lại |
 
-Ràng buộc khi **Lưu quy trình duyệt**, thông báo nguyên văn: "Danh sách bước duyệt không hợp lệ"; "Tối đa 5 cấp duyệt"; "Cần có cột thuộc nhóm REVIEW (Chờ duyệt) để bật duyệt"; "Cần có cột thuộc nhóm "Đang thực hiện" để bật duyệt"; "Cần có cột thuộc nhóm "Hoàn thành" để bật duyệt". Còn phiếu đang chờ mà bạn thực sự đổi các cấp (thêm, bớt, đổi loại, đổi người, đổi tên bước): "Còn <N> yêu cầu đang chờ duyệt, hãy xử lý xong trước khi đổi các bước duyệt". Chỉ đổi **Việc mới mặc định cần** thì luôn lưu được.
+Ràng buộc khi **Lưu quy trình duyệt**, thông báo nguyên văn: "Danh sách bước duyệt không hợp lệ"; "Tối đa 5 cấp duyệt"; "Cần có cột thuộc nhóm REVIEW (Chờ duyệt) để bật duyệt"; "Cần có cột thuộc nhóm "Đang thực hiện" để bật duyệt"; "Cần có cột thuộc nhóm "Hoàn thành" để bật duyệt". Còn phiếu đang chờ mà bạn thực sự đổi các cấp (thêm, bớt, đổi loại, đổi người, đổi tên bước): "Còn <N> yêu cầu đang chờ duyệt, hãy xử lý xong trước khi đổi các bước duyệt"; phiếu của việc đang ở Thùng rác cũng tính, khi đó thêm ". Trong đó <M> yêu cầu của việc đang ở Thùng rác: khôi phục việc để xử lý, hoặc chờ hệ thống xoá hẳn sau 7 ngày". Chỉ đổi **Việc mới mặc định cần** thì luôn lưu được.
 
 **Mức duyệt của một việc** (ngoài màn Cài đặt)
 
 | Ô (nguyên văn) | Nghĩa là gì | Điền / chọn thế nào (mặc định) | Đổi thì hệ thống làm gì khác |
 |---|---|---|---|
 | **Mức duyệt của việc này** (panel chi tiết việc, mục Quy trình duyệt; chỉ hiện khi dự án có cấp duyệt) | Chọn tay số cấp của dự án cho riêng việc này | Lựa chọn đầu: "Tự động (theo quy tắc / mặc định dự án)" khi việc đang được chọn tay; nếu không thì "Tự động — chỉ người giao" / "Tự động — người giao + đủ <N> cấp" / "Tự động — người giao + <k> cấp". Các lựa chọn số: "Chỉ người giao duyệt"; "Người giao → <k> cấp: <tên các cấp>"; "Người giao → đủ <N> cấp (<tên các cấp>)". Việc mốc / đường găng thay "Người giao" bằng "Ban Tổng Giám đốc" trong các lựa chọn số (lựa chọn 0 hiện "Chỉ ban tổng giám đốc duyệt", chữ thường do lỗi hiển thị). Dòng phụ: "Hiện tại: <mức> · <nguồn>", nguồn là "chọn tay" / "theo quy tắc tự động" / "mặc định của dự án" / "việc nhánh — lãnh đạo phòng duyệt" (chỉ gặp ở sổ giao việc cũ; "lãnh đạo phòng" là tên cũ của Lãnh đạo bộ phận) | Ghi đè quy tắc và mặc định. Khoá khi việc đang chờ duyệt hoặc dự án đã lưu trữ; khi đó chỉ hiện "Mức duyệt: <mức> · <nguồn>". Đang chờ duyệt: "Việc đang chờ duyệt — không đổi được mức duyệt cho tới khi duyệt xong hoặc rút lại". Giá trị sai: "Mức duyệt không hợp lệ" |
-| **Mức duyệt** (hộp **Tạo việc** → **Thêm thông tin**; chỉ người quản lý dự án thấy, chỉ khi dự án có cấp duyệt) | Như trên, đặt ngay lúc tạo | "Tự động (theo quy tắc / mặc định dự án)" (mặc định), "Không cần duyệt", "<k> cấp: <tên các cấp>", "Đủ <N> cấp" | Như trên. "Không cần duyệt" ở đây vẫn còn người giao duyệt |
+| **Mức duyệt** (hộp **Tạo việc** → **Thêm thông tin**; chỉ người quản lý dự án thấy, chỉ khi dự án có cấp duyệt) | Như trên, đặt ngay lúc tạo | "Tự động (theo quy tắc / mặc định dự án)" (mặc định), "Chỉ người giao duyệt", "Người giao → <k> cấp: <tên các cấp>", "Người giao → đủ <N> cấp (<tên các cấp>)" — cùng cách viết với ô ở panel việc | Như trên |
 
 > ⚠️ **Chữ trên màn hình ghi** "Chỉ trưởng dự án / người quản lý dự án được đổi mức duyệt của việc" (thông báo khi không đủ quyền lúc tạo việc kèm mức duyệt; trong panel việc thông báo là "Chỉ Ban Tổng Giám đốc hoặc người quản lý dự án đổi mức duyệt của việc") **nhưng thực tế** "trưởng dự án" là tên cũ, nay là **Người đứng tên dự án** — và Người đứng tên dự án thường cũng không đổi được nếu không là người quản lý dự án. Chỉ người quản lý dự án đổi được mức duyệt.
 
 > ⚠️ **Chữ trên màn hình ghi** "Lãnh đạo bộ phận vẫn chọn tay được cho từng việc" **nhưng thực tế** chỉ người quản lý dự án chọn tay được. Lãnh đạo bộ phận chỉ chọn được ở dự án mình quản lý.
 
 **⚠️ Dễ nhầm**
-- "Không cần duyệt" (ở mọi ô) chỉ có nghĩa là không có cấp của DỰ ÁN; người giao (hoặc BTGĐ phụ trách với việc mốc / đường găng) vẫn luôn duyệt.
+- "Chỉ người giao duyệt" (ở mọi ô) nghĩa là không có cấp nào của dự án; việc mốc / đường găng thì bước đó do BTGĐ phụ trách duyệt và chấm mức thay người giao.
 - **Việc mới mặc định cần** áp cho mọi việc chưa chọn tay vào lúc gửi duyệt, không chỉ việc tạo sau khi đổi.
 - Dòng "Người duyệt:" tính theo bộ phận chủ quản dự án. Ở dự án MTL mỗi hạng mục có bộ phận chủ trì riêng, nên "Lãnh đạo bộ phận chủ trì" thực tế khác nhau theo hạng mục.
 - Ô **Việc mới mặc định cần** và phần **Quy tắc tự động** chỉ hiện khi dự án đã có cấp lúc mở trang: thêm cấp lần đầu thì lưu trước, trang vẽ lại mới thấy.
-- Thêm cấp cho dự án trước đó chưa có cấp (vd. dự án MTL — tạo ra với mức mặc định "Không cần duyệt"): sau khi lưu, mức mặc định thành "Đủ <N> cấp". Từ đó mọi hạng mục gửi duyệt phải qua thêm các cấp này.
+- Thêm cấp cho dự án trước đó chưa có cấp (vd. dự án MTL — tạo ra với mức mặc định "Chỉ người giao duyệt"): sau khi lưu, mức mặc định thành "Người giao → đủ <N> cấp (…)". Từ đó mọi hạng mục gửi duyệt phải qua thêm các cấp này.
 - ⚠️ Xoá một nhãn đang dùng trong quy tắc (khối Nhãn): quy tắc không bị xoá theo mà không bao giờ khớp nữa. Mở lại Cài đặt sẽ thấy ô nhãn của quy tắc hiện "— bất kỳ —". Bấm **Lưu quy tắc** khi đó: quy tắc có chọn ưu tiên đổi nghĩa thành "mọi việc có ưu tiên đó"; quy tắc không chọn ưu tiên bị báo "Mỗi quy tắc cần chọn nhãn hoặc mức ưu tiên". Xoá nhãn xong, vào đây sửa hoặc xoá quy tắc tương ứng.
-- Không đổi được các cấp khi còn phiếu đang chờ: nhờ người duyệt xử lý hết (duyệt hoặc trả lại), hoặc nhờ người gửi rút lại phiếu chưa ai xử lý, rồi mới đổi.
+- Không đổi được các cấp khi còn phiếu đang chờ: nhờ người duyệt xử lý hết (duyệt hoặc trả lại), hoặc nhờ người gửi rút lại phiếu chưa ai xử lý, rồi mới đổi. Phiếu của việc đang ở Thùng rác cũng tính (xoá việc không huỷ phiếu): khôi phục việc để xử lý, hoặc chờ hệ thống xoá hẳn.
 
 **Claude:** Không đọc, không sửa được quy trình duyệt; không duyệt thay bạn.
 
@@ -773,7 +772,7 @@ Ví dụ: tiêu đề "Báo cáo tuần BM", người nhận là một nhân vi�
 | Ô (nguyên văn) | Nghĩa là gì | Điền / chọn thế nào (mặc định) | Đổi thì hệ thống làm gì khác |
 |---|---|---|---|
 | **Tiêu đề việc** | Tiêu đề của mỗi việc được tạo | Bắt buộc; tối đa 300 ký tự | Lỗi: "Thiếu Tiêu đề"; "Tiêu đề vượt 300 ký tự" |
-| **Người nhận** (gợi ý "Chưa giao"; có ô "Tìm…" khi danh sách dài) | Người chủ trì của việc được tạo | Chọn nhiều người; mặc định không ai. Danh sách có cả tài khoản Quản trị hệ thống — đừng chọn | Mỗi việc tạo ra giao cho những người này; họ nhận "Bạn được giao chủ trì <mã việc>". Để trống: việc tạo ra chưa có người chủ trì. Chọn tài khoản Quản trị hoặc đã khoá: "Có người nhận không tồn tại hoặc đã khoá"; quá 50 người: "Người nhận không hợp lệ" |
+| **Người nhận** (gợi ý "Chưa giao"; có ô "Tìm…" khi danh sách dài) | Người chủ trì của việc được tạo | Chọn nhiều người; mặc định không ai. Danh sách chỉ có tài khoản nghiệp vụ đang hoạt động (không có tài khoản Quản trị hệ thống) | Mỗi việc tạo ra giao cho những người này; họ nhận "Bạn được giao chủ trì <mã việc>". Để trống: việc tạo ra chưa có người chủ trì. Người đã chọn bị khoá trước khi bấm thêm: "Có người nhận không tồn tại hoặc đã khoá"; quá 50 người: "Người nhận không hợp lệ" |
 | **Lặp lại** | Tần suất | "Mỗi ngày làm việc (T2–T6)", "Hằng ngày", "Hằng tuần" (mặc định), "Hằng tháng" | "Mỗi ngày làm việc" bỏ thứ Bảy, Chủ nhật (không trừ ngày lễ). Lỗi: "Thiếu tần suất"; "Tần suất không hợp lệ" |
 | **Vào** (chỉ với "Hằng tuần") | Thứ trong tuần | "Thứ 2" … "Thứ 7", "Chủ nhật"; mặc định thứ của hôm nay | Lỗi: "Thứ trong tuần không hợp lệ" |
 | **Ngày trong tháng** (chỉ với "Hằng tháng") | Ngày tạo việc | "Ngày 1" … "Ngày 28", "Ngày cuối tháng"; mặc định "Ngày 1" | Không có ngày 29–31 (tháng thiếu ngày); muốn cuối tháng thì chọn "Ngày cuối tháng". Lỗi: "Ngày trong tháng phải từ 1 đến 28 (hoặc ngày cuối tháng)" |
@@ -829,9 +828,9 @@ Hộp **Sửa lịch lặp lại**: chữ "Đổi lịch sẽ áp dụng từ l�
 
 | Ô (nguyên văn) | Nghĩa là gì | Điền / chọn thế nào (mặc định) | Đổi thì hệ thống làm gì khác |
 |---|---|---|---|
-| Dòng thành viên: họ tên + tên đăng nhập (tài khoản đã khoá hiện "#<số>") | Người đang có tên trong dự án | — | — |
+| Dòng thành viên: họ tên + tên đăng nhập (tài khoản đã khoá hiện "#<số>") | Người đang có tên trong dự án. Tài khoản Quản trị hệ thống có tên từ trước khi hệ thống chặn: dòng kèm chữ đỏ "Tài khoản Quản trị hệ thống — không làm thành viên dự án được, sẽ bị bỏ khi Lưu thành viên" | — | Bấm **Lưu thành viên** là dòng tài khoản Quản trị được bỏ |
 | Ô chọn vai trò trên dòng (trình đọc màn hình đọc là "Vai trò") | Quan hệ với dự án | "Chủ dự án", "Thành viên", "Người xem" | Chủ dự án: quản lý dự án, xem đầy đủ mọi việc, (dự án MTL) nhận cảnh báo phần "PMO". Thành viên: xem và làm việc trong dự án. Người xem: chỉ được THÊM quyền xem. Lỗi: "Vai trò không hợp lệ" |
-| Ô chọn người để thêm | Người sẽ thêm | "<Họ tên> (<tên đăng nhập>)" của mọi tài khoản đang hoạt động chưa có trong danh sách. ⚠️ Có cả tài khoản Quản trị hệ thống — **đừng thêm**. Với vai trò "Thành viên" / "Người xem" thì không có tác dụng, nhưng đặt làm "Chủ dự án" ở dự án MTL thì tài khoản đó nhận cảnh báo tiến độ phần "PMO" (mã, tên hạng mục, % kế hoạch / thực tế), tức lộ nội dung nghiệp vụ cho Quản trị hệ thống. Thấy tài khoản Quản trị trong khối Thành viên thì **Bỏ** rồi **Lưu thành viên** | — |
+| Ô chọn người để thêm | Người sẽ thêm | "<Họ tên> (<tên đăng nhập>)" của mọi tài khoản nghiệp vụ đang hoạt động chưa có trong danh sách; không có tài khoản Quản trị hệ thống (Quản trị hệ thống không xem nội dung nghiệp vụ, không làm thành viên dự án) | — |
 
 **Các nút**
 
@@ -839,9 +838,9 @@ Hộp **Sửa lịch lặp lại**: chữ "Đổi lịch sẽ áp dụng từ l�
 |---|---|---|---|
 | **Thêm** | Thêm người đang chọn vào danh sách với vai trò "Thành viên" (chỉ trên màn hình) | Không | Bấm **Bỏ** |
 | **Bỏ** | Bỏ dòng (chỉ trên màn hình) | Không | Thêm lại |
-| **Lưu thành viên** | Thay TOÀN BỘ danh sách bằng danh sách trên màn hình; vẽ lại cả trang; báo "Đã lưu thành viên" | Không | Thêm lại người đã bỏ rồi lưu |
+| **Lưu thành viên** | Thay TOÀN BỘ danh sách bằng danh sách trên màn hình (trừ dòng tài khoản Quản trị hệ thống, nếu có); vẽ lại cả trang; báo "Đã lưu thành viên" | Không | Thêm lại người đã bỏ rồi lưu |
 
-Ràng buộc khi lưu, nguyên văn: "Danh sách thành viên không hợp lệ"; "Thành viên không hợp lệ"; "Vai trò không hợp lệ"; "Dự án cần ít nhất một chủ dự án (OWNER)"; "Có thành viên không tồn tại hoặc đã khoá".
+Ràng buộc khi lưu, nguyên văn: "Danh sách thành viên không hợp lệ"; "Thành viên không hợp lệ"; "Vai trò không hợp lệ"; "Dự án cần ít nhất một chủ dự án (OWNER)"; "Có thành viên không tồn tại hoặc đã khoá"; "Tài khoản Quản trị hệ thống không làm thành viên dự án được" (gửi tài khoản Quản trị qua API).
 
 **⚠️ Dễ nhầm**
 - Người được thêm hay bị bỏ KHÔNG nhận thông báo nào. Hãy báo họ bằng cách khác.
@@ -872,9 +871,7 @@ Ràng buộc khi lưu, nguyên văn: "Danh sách thành viên không hợp lệ"
 | Mô tả + nút **Xem thêm** / **Thu gọn** | Mô tả dự án | Hiện một dòng | Bấm để mở rộng |
 | Tab kiểu xem — dự án thường | **Bảng**, **Danh sách**, **Lịch**, **Tiến độ kế hoạch**, **Chu kỳ** | **Bảng** | **Tiến độ kế hoạch** và **Chu kỳ** ẩn khi mọi cột là Cột tự do |
 | Tab kiểu xem — dự án MTL | **Tổng quan dự án**, **Giai đoạn**, **Kế hoạch & Gantt**, **Bảng**, **Danh sách**; thêm tab **Lịch** khi đang xem Lịch | **Tổng quan dự án** | — |
-| Nhãn **Duyệt <N> cấp** + tên các cấp nối bằng " → " (chú thích "Quy trình duyệt: <các cấp>") | Tóm tắt các cấp duyệt của dự án | Chỉ hiện khi dự án có cấp duyệt | Xem khối ⚠️ dưới |
-
-> ⚠️ **Chữ trên màn hình ghi** "Duyệt 1 cấp" (hoặc "Duyệt <N> cấp") **nhưng thực tế** con số chỉ đếm các cấp của dự án, không đếm bước người giao duyệt (luôn có). Dự án "Duyệt 1 cấp" thực tế duyệt 2 bước. Trong panel chi tiết một việc, mục **Quy trình duyệt <N> cấp** lại đếm cả bước người giao — nên cùng một dự án, trang dự án ghi "Duyệt 1 cấp" còn panel việc ghi "Quy trình duyệt 2 cấp".
+| Nhãn **Duyệt <N> cấp** + các bước nối bằng " → ", bắt đầu bằng "Người giao" (chú thích "Quy trình duyệt của việc mới: <các bước>", thêm "· theo quy tắc tự động / chọn tay có thể thêm: <các cấp còn lại>" khi mức mặc định chưa đủ mọi cấp) | Quy trình duyệt của một việc mới: bước người giao duyệt và chấm mức (luôn có) + các cấp của dự án theo **Việc mới mặc định cần**. N đếm cả bước người giao — cùng con số với mục **Quy trình duyệt <N> cấp** trong panel một việc không chọn tay, không khớp quy tắc | Hiện khi bảng có cột nhóm Chờ duyệt / Hoàn thành hoặc có cấp duyệt; bảng Lịch tuần (không có duyệt) không có nhãn | Ví dụ: dự án chọn "Người giao → Lãnh đạo bộ phận" ghi "Duyệt 2 cấp" "Người giao → Lãnh đạo bộ phận duyệt"; dự án chỉ người giao duyệt ghi "Duyệt 1 cấp" "Người giao". Dự án MTL thêm "(mốc / đường găng: BTGĐ phụ trách)". Màn hẹp chỉ còn "Duyệt <N> cấp", các bước ở chú thích |
 
 **Các mục trong menu Khác**
 
@@ -992,6 +989,7 @@ Ngưỡng còn ảnh hưởng: ô "Chậm tiến độ" (gồm cả chậm khở
 - **Lãnh đạo bộ phận chủ trì**: các tài khoản Lãnh đạo bộ phận của bộ phận chủ trì hạng mục (thành viên Ban Tổng Giám đốc thuộc bộ phận đó cũng tính), cộng người đang được họ uỷ quyền.
 - **"PMO"**: Người đứng tên dự án + mọi Chủ dự án của dự án. Không phải danh sách PMO ở Báo cáo tuần.
 - **Ban Tổng Giám đốc** (với găng / mốc): MỌI tài khoản Ban Tổng Giám đốc đang hoạt động, không xét phạm vi phụ trách.
+- Mọi nhóm người nhận chỉ gồm tài khoản nghiệp vụ đang hoạt động: tài khoản Quản trị hệ thống và tài khoản đã khoá không nhận cảnh báo, kể cả khi có tên ở Người đứng tên dự án / Chủ dự án từ trước khi hệ thống chặn (mục 3.3.1, 3.3.7).
 - Hạng mục có việc con: người chủ trì của hạng mục cha KHÔNG nhận các loại trên (trừ "Lâu chưa cập nhật"); chỉ Lãnh đạo bộ phận chủ trì (cộng "PMO", Ban Tổng Giám đốc theo loại) nhận. Các việc con có cảnh báo riêng.
 - Mỗi loại, trên mỗi hạng mục, tối đa một lần mỗi ngày.
 
@@ -1431,9 +1429,9 @@ Cột của tệp mẫu (đọc sheet đầu tiên, bỏ dòng tiêu đề và d
 |---|---|---|---|
 | **Tải tệp mẫu** | Tải "Mau_nhap_<mã dự án>.xlsx" | Không | — |
 | **Huỷ** | Đóng hộp | — | — |
-| **Nhập** | Tạo việc; báo "Đã nhập <N> việc"; lỗi hiện chữ đỏ trong hộp | ⚠️ Không hỏi lại | ⚠️ Không có hoàn tác hàng loạt; xem ⚠️ dưới về việc xoá |
+| **Nhập** | Tạo việc; báo "Đã nhập <N> việc"; lỗi hiện chữ đỏ trong hộp | ⚠️ Không hỏi lại | ⚠️ Không có hoàn tác hàng loạt; người nhập xoá từng việc được (người nhập là người giao) |
 
-> ⚠️ **Việc nhập bằng "Danh sách đơn giản (Excel)" KHÔNG có người giao.** Panel việc ghi Người giao là "—". Hệ thống vẫn coi người nhập là người duyệt bước đầu khi việc được gửi duyệt, nhưng không ai — kể cả người nhập và người quản lý dự án — sửa được kế hoạch (tên, hạn, ưu tiên, nhãn, chu kỳ), đổi người chủ trì, hay xoá các việc đó, TRỪ BTGĐ phụ trách của việc. Muốn sửa: nhờ BTGĐ phụ trách đặt một người làm Người giao trên panel việc. Nếu cần sửa nhiều về sau, nên tạo việc bằng **Tạo việc** thay vì nhập.
+Người nhập là **Người giao** của mọi việc vừa nhập (ngày giao = lúc nhập), như khi tạo việc bằng **Tạo việc**: người nhập và BTGĐ phụ trách của việc sửa được kế hoạch (tên, hạn, ưu tiên, nhãn, chu kỳ), đổi người chủ trì, xoá việc; người nhập duyệt và chấm mức khi việc được gửi duyệt. Việc nhập bằng bản trước (khi đó chưa ghi người giao, panel ghi Người giao "—") được đặt người giao = người nhập khi hệ thống cập nhật lên bản này; việc đã được BTGĐ phụ trách đặt người giao khác thì giữ nguyên.
 
 **⚠️ Dễ nhầm**
 - Nhập danh sách đơn giản không kiểm giới hạn WIP và không gửi thông báo giao việc cho người nhận. Báo họ bằng cách khác.
@@ -1504,15 +1502,13 @@ Hộp "Nhập Kế hoạch công tác năm", chữ nguyên văn: "Chọn văn b�
 - Người duyệt bước kế: "Cần duyệt <mã việc> · <tiêu đề> (<tên bước kế>)".
 - Người gửi, người nhập, người chủ trì: "<mã việc> · <tiêu đề>: đã qua bước "<bước>", chuyển "<bước kế>""; "<mã việc> · <tiêu đề> đã được duyệt hoàn thành — <mức>"; "<mã việc> · <tiêu đề> bị trả lại ở bước <tên bước>".
 
-> ⚠️ **Chữ trên màn hình ghi** "Không cần duyệt" (hộp Tạo dự án, ô Việc mới mặc định cần, quy tắc tự động, ô Mức duyệt khi tạo việc) và "Để trống = không cần duyệt" (khối Quy trình duyệt) **nhưng thực tế** người giao (hoặc BTGĐ phụ trách với việc mốc / đường găng) VẪN duyệt và chấm mức. "Không cần duyệt" chỉ nghĩa là không có cấp nào của dự án chạy sau bước đó. Chỉ bảng không có cột nhóm Hoàn thành mới không có duyệt.
-
-> ⚠️ **Chữ trên màn hình ghi** "1 cấp — Lãnh đạo bộ phận duyệt", "2 cấp — Lãnh đạo bộ phận → BTGĐ phụ trách" (hộp Tạo dự án) và nhãn "Duyệt <N> cấp" (trang dự án) **nhưng thực tế** con số không đếm bước người giao: "1 cấp" là 2 bước, "2 cấp" là 3 bước (trừ khi có cấp tự qua). Riêng panel việc ghi "Quy trình duyệt <N> cấp" có đếm bước người giao.
+Cách màn hình nói số cấp: "Chỉ người giao duyệt" (hộp Tạo dự án, ô Việc mới mặc định cần, quy tắc tự động, ô Mức duyệt) và "Để trống = chỉ người giao duyệt (việc mốc / đường găng: BTGĐ phụ trách)" nghĩa là không có cấp nào của dự án sau bước đầu. Hộp Tạo dự án ghi đủ chuỗi ("Người giao → Lãnh đạo bộ phận" là 2 bước). Nhãn "Duyệt <N> cấp" ở trang dự án và "Quy trình duyệt <N> cấp" ở panel việc cùng đếm cả bước đầu (trừ khi có cấp tự qua thì số lượt bấm duyệt ít hơn). Chỉ bảng không có cột nhóm Chờ duyệt / Hoàn thành mới không có duyệt.
 
 > ⚠️ **Chữ trên màn hình ghi** "trả lại ở bất kỳ cấp nào → việc quay về cột trước đó" **nhưng thực tế** việc bị trả lại luôn về cột đầu tiên thuộc nhóm Đang thực hiện.
 
 > ⚠️ **Chữ trên màn hình ghi** "lãnh đạo bộ phận chọn được mức duyệt cho từng việc" / "Lãnh đạo bộ phận vẫn chọn tay được cho từng việc" **nhưng thực tế** chỉ người quản lý dự án đổi được mức duyệt của một việc.
 
-**Ví dụ — dự án BM chọn "1 cấp — Lãnh đạo bộ phận duyệt"**
+**Ví dụ — dự án BM chọn "Người giao → Lãnh đạo bộ phận"**
 
 | Tình huống | Đi qua những ai | Số lượt bấm duyệt |
 |---|---|---|
@@ -1521,13 +1517,13 @@ Hộp "Nhập Kế hoạch công tác năm", chữ nguyên văn: "Chọn văn b�
 | Nhân viên A tự tạo BM-14 và tự làm chủ trì | Lãnh đạo bộ phận (thay người giao) duyệt + chấm mức → cấp "Lãnh đạo bộ phận duyệt" tự qua → Hoàn thành | 1 |
 | Ban Tổng Giám đốc giao BM-15 cho Nhân viên A | Thành viên BTGĐ đó duyệt + chấm mức → Lãnh đạo bộ phận chủ trì VẪN phải duyệt sau → Hoàn thành | 2 |
 | BM-16 là mốc, Lãnh đạo bộ phận giao cho Nhân viên A | BTGĐ phụ trách duyệt + chấm mức → Lãnh đạo bộ phận chủ trì duyệt → Hoàn thành | 2 |
-| Dự án BM đổi thành "Không cần duyệt"; Nhân viên B giao BM-17 cho A | B duyệt + chấm mức → Hoàn thành | 1 |
-| Dự án có 2 cấp, mặc định "1 cấp đầu", quy tắc "nhãn Hợp đồng → đủ 2 cấp"; Nhân viên B giao BM-18 (nhãn Hợp đồng) | B duyệt + chấm mức → Lãnh đạo bộ phận → BTGĐ phụ trách → Hoàn thành | 3 |
+| Dự án BM đổi thành "Chỉ người giao duyệt"; Nhân viên B giao BM-17 cho A | B duyệt + chấm mức → Hoàn thành | 1 |
+| Dự án có 2 cấp, mặc định "Người giao → 1 cấp: Lãnh đạo bộ phận duyệt", quy tắc "nhãn Hợp đồng → người giao + đủ 2 cấp"; Nhân viên B giao BM-18 (nhãn Hợp đồng) | B duyệt + chấm mức → Lãnh đạo bộ phận → BTGĐ phụ trách → Hoàn thành | 3 |
 
 **Khi phiếu kẹt — "Chưa có người duyệt"**
 - Dấu hiệu: khối Quy trình duyệt ở Cài đặt hiện chữ đỏ "Chưa có người duyệt"; trong panel việc, tên người duyệt của bước đang chờ là "Chưa có người duyệt"; việc nằm mãi ở Chờ duyệt.
-- Nguyên nhân thường gặp: cấp "Người đứng tên dự án" mà ô Người đứng tên trống; cấp "Người được chỉ định" mà người đó đã bị khoá; cấp "Lãnh đạo bộ phận chủ trì" mà bộ phận chủ trì không có Lãnh đạo bộ phận.
-- Cách gỡ: đặt Người đứng tên (mục 3.3.1), hoặc nhờ Quản trị hệ thống đặt vai Lãnh đạo bộ phận cho người phù hợp; người duyệt mới sẽ thấy phiếu trong **Chờ tôi duyệt**. Đổi các cấp của dự án thì phải chờ hết phiếu đang chờ (mục 3.3.4).
+- Nguyên nhân thường gặp: cấp "Người được chỉ định" mà người đó đã bị khoá; cấp "Lãnh đạo bộ phận chủ trì" mà bộ phận chủ trì không có Lãnh đạo bộ phận. Cấp "Người đứng tên dự án" không kẹt vì ô Người đứng tên: để trống, người đó đã khoá hoặc là tài khoản Quản trị hệ thống (dữ liệu cũ) thì Chủ dự án duyệt thay, không còn Chủ dự án nào thì BTGĐ phụ trách (mục 3.3.4).
+- Cách gỡ: nhờ Quản trị hệ thống đặt vai Lãnh đạo bộ phận cho người phù hợp; người duyệt mới sẽ thấy phiếu trong **Chờ tôi duyệt**. Đổi các cấp của dự án thì phải chờ hết phiếu đang chờ (mục 3.3.4).
 
 **Claude:** Không duyệt, không chấm mức, không trả lại thay bạn. Đặt 100% cho hạng mục MTL qua Claude là **gửi duyệt**, không phải duyệt.
 
@@ -1580,7 +1576,7 @@ Hộp "Nhập Kế hoạch công tác năm", chữ nguyên văn: "Chọn văn b�
 **⚠️ Dễ nhầm**
 - Danh sách thành viên tự thay đổi ở hai lúc: tạo dự án (người tạo và Người đứng tên thành "Chủ dự án"); nhập MTL (cán bộ các bộ phận có hạng mục thành "Thành viên"). Không ai nhận thông báo khi được thêm hay bị bỏ.
 - Kiêm nhiệm PMO, Thư ký giao ban không cộng quyền gì trong dự án.
-- Quản trị hệ thống có tên trong Thành viên cũng không thấy dự án.
+- Tài khoản Quản trị hệ thống không thêm được vào Thành viên, không làm Người đứng tên dự án được. Dữ liệu cũ còn tên tài khoản Quản trị: tài khoản đó vẫn không thấy dự án, không nhận cảnh báo, không duyệt; **Lưu thành viên** là bỏ tên đó (mục 3.3.7).
 
 **Claude:** Không sửa được thành viên. Claude cho biết vai của bạn trên một việc khi đọc chi tiết việc.
 
@@ -1655,7 +1651,7 @@ Hộp "Nhập Kế hoạch công tác năm", chữ nguyên văn: "Chọn văn b�
 |---|---|---|
 | Dữ liệu | Giữ nguyên, chỉ đọc, không tự xoá | Vào Thùng rác; sau 7 ngày hệ thống xoá hẳn lúc 02:45, kể cả tệp đính kèm |
 | Ai còn thấy | Biến khỏi mọi danh sách, nhưng ai xem được vẫn mở được bằng đường dẫn | Không ai thấy, đường dẫn báo "Không tìm thấy dự án" |
-| Phiếu duyệt đang chờ | KHÔNG bị huỷ; vẫn nằm trong **Chờ tôi duyệt** và hệ thống không chặn người duyệt duyệt tiếp | Bị huỷ hết ngay khi xoá |
+| Phiếu duyệt đang chờ | KHÔNG bị huỷ; vẫn nằm trong **Chờ tôi duyệt** và hệ thống không chặn người duyệt duyệt tiếp | KHÔNG bị huỷ nhưng ẩn khỏi **Chờ tôi duyệt**; không ai duyệt / trả lại / rút được ("Dự án đang ở Thùng rác — khôi phục dự án trước"). Khôi phục thì hiện lại |
 | Quay lại | Bỏ đánh dấu → **Lưu** | **Khôi phục** trong 7 ngày |
 | Hỏi lại | Không | Gõ mã dự án để xác nhận |
 
@@ -1681,8 +1677,7 @@ Xoá: mục 3.3.2.
 
 Khôi phục:
 1. Menu trái → **Công việc** → **Thùng rác**.
-2. Khối **Dự án đã xoá** → **Khôi phục** trên dòng dự án → "Đã khôi phục dự án". Dự án hiện lại với mọi người như trước.
-3. Rà các việc đang ở cột **Chờ duyệt** (xem ⚠️ dưới).
+2. Khối **Dự án đã xoá** → **Khôi phục** trên dòng dự án → "Đã khôi phục dự án". Dự án hiện lại với mọi người như trước; phiếu duyệt đang chờ lúc xoá hiện lại ở **Chờ tôi duyệt** của người duyệt.
 
 **Từng ô** (khối "Dự án đã xoá" ở Thùng rác; chữ đầu trang: "Khôi phục được trong 7 ngày kể từ lúc xoá; sau đó hệ thống xoá hẳn, kể cả tệp đính kèm.")
 
@@ -1701,9 +1696,9 @@ Khối "Công việc đã xoá" bên dưới có cột "Mã", "Công việc" (k�
 
 | Nút | Làm gì | Có hỏi lại không | Quay lại được không |
 |---|---|---|---|
-| **Khôi phục** (dòng dự án) | Bỏ đánh dấu xoá; dự án hiện lại với mọi người như trước; báo "Đã khôi phục dự án". Lỗi màu đỏ, vd. "Dự án không nằm trong thùng rác" | Không | Xoá lại |
+| **Khôi phục** (dòng dự án) | Bỏ đánh dấu xoá; dự án hiện lại với mọi người như trước; phiếu duyệt đang chờ hiện lại ở **Chờ tôi duyệt**; báo "Đã khôi phục dự án". Dự án xoá bằng bản trước (bản đó huỷ phiếu lúc xoá): hệ thống mở lại các phiếu bị huỷ do lần xoá đó, với việc còn ở cột Chờ duyệt, và báo "Đã khôi phục dự án — mở lại <N> phiếu duyệt đang chờ"; lịch sử việc ghi "mở lại yêu cầu duyệt khi khôi phục dự án từ thùng rác". Lỗi màu đỏ, vd. "Dự án không nằm trong thùng rác" | Không | Xoá lại |
 
-> ⚠️ **Xoá dự án huỷ mọi phiếu duyệt đang chờ; khôi phục KHÔNG mở lại các phiếu đó.** Việc đang ở cột **Chờ duyệt** lúc xoá sẽ không còn phiếu: người duyệt không thấy trong **Chờ tôi duyệt**, việc nằm mãi ở Chờ duyệt. Sau khi khôi phục, người giao (hoặc BTGĐ phụ trách) kéo từng việc đó về cột Đang thực hiện, rồi người chủ trì gửi duyệt lại.
+Phiếu duyệt trong lúc dự án ở Thùng rác: giữ nguyên ở bước đang chờ, không hiện trong **Chờ tôi duyệt**, **Tôi đã gửi**; duyệt, trả lại, rút lại đều bị chặn với thông báo "Dự án đang ở Thùng rác — khôi phục dự án trước". Một việc bị xoá (vào Thùng rác riêng) cũng vậy: "Việc đang ở Thùng rác — khôi phục việc trước".
 
 > ⚠️ **Lưu trữ làm dự án biến khỏi gần như mọi danh sách** (chỉ còn ở tab Tài liệu dự án, dòng "đã đóng") và không hỏi lại. Nhớ chép đường dẫn trước khi lưu trữ.
 
@@ -4990,13 +4985,13 @@ Lỗi chuyển thành việc: "Bạn chưa có dự án nào được tạo vi�
 
 | Nút | Làm gì | Có hỏi lại không | Quay lại được không |
 |---|---|---|---|
-| **Khôi phục** (việc) | Khôi phục việc cùng các việc con bị xoá cùng lúc. "Đã khôi phục công việc" | Không | Xoá lại được |
-| **Khôi phục** (dự án) | Khôi phục dự án. "Đã khôi phục dự án" | Không | Xoá lại được (phải nhập mã dự án) |
+| **Khôi phục** (việc) | Khôi phục việc cùng các việc con bị xoá cùng lúc. "Đã khôi phục công việc" (có phiếu bị bản trước huỷ lúc xoá được mở lại: thêm " — mở lại <N> phiếu duyệt đang chờ") | Không | Xoá lại được |
+| **Khôi phục** (dự án) | Khôi phục dự án. "Đã khôi phục dự án" (thêm " — mở lại <N> phiếu duyệt đang chờ" như trên) | Không | Xoá lại được (phải nhập mã dự án) |
 
 Lỗi: "Việc không nằm trong thùng rác", "Hãy khôi phục việc cha trước", "Dự án không nằm trong thùng rác". Không có nút "Xoá hẳn".
 
 **⚠️ Dễ nhầm**
-- Khi xoá, các yêu cầu duyệt đang chờ của việc / dự án bị huỷ; khôi phục **không** mở lại các yêu cầu duyệt đó. Người chủ trì phải gửi duyệt lại.
+- Khi xoá, yêu cầu duyệt đang chờ của việc / dự án KHÔNG bị huỷ: yêu cầu tạm ẩn khỏi **Chờ tôi duyệt**, không ai duyệt / trả lại / rút được ("Việc đang ở Thùng rác — khôi phục việc trước", "Dự án đang ở Thùng rác — khôi phục dự án trước"). Khôi phục là yêu cầu hiện lại, duyệt tiếp như trước (mục 3.12).
 - Việc con không khôi phục được khi việc cha còn trong thùng rác.
 - Quá 7 ngày là mất hẳn (xoá lúc 02:45 hằng ngày), kể cả tệp đính kèm.
 
@@ -5069,15 +5064,16 @@ Dữ liệu trình duyệt **không tách theo người** (máy dùng chung thì
 | Tôi là Nhân viên, sao không thấy nút + tạo dự án? | Chỉ Ban Tổng Giám đốc và Lãnh đạo bộ phận tạo dự án. Nhờ lãnh đạo bộ phận tạo rồi đưa bạn vào làm Chủ dự án (Cài đặt → Thành viên) |
 | Tôi là Lãnh đạo bộ phận, sao không có kiểu "Theo Master Timeline"? | Chỉ Ban Tổng Giám đốc tạo dự án MTL. Ban Tổng Giám đốc tạo xong có thể đưa bạn hoặc PMO vào làm Chủ dự án để quản lý |
 | Tạo dự án báo "Dữ liệu bị trùng: key" | Mã dự án đã có — kể cả mã của dự án đang nằm trong Thùng rác (bị giữ tới khi xoá hẳn sau 7 ngày). Dùng mã khác |
-| Dự án đặt "Không cần duyệt" mà việc vẫn vào "Chờ duyệt"? | Đúng cách hệ thống chạy: người giao luôn duyệt và chấm mức (việc mốc / găng: BTGĐ phụ trách). "Không cần duyệt" chỉ là không có cấp nào sau người giao. Muốn không có duyệt thì dùng bảng không có cột nhóm Hoàn thành (Lịch tuần) |
-| Dự án ghi "Duyệt 1 cấp" mà việc phải qua 2 người? | Con số không đếm bước người giao. "1 cấp" = người giao + Lãnh đạo bộ phận chủ trì. Nếu người giao cũng là Lãnh đạo bộ phận đó thì cấp sau tự qua |
-| Lưu quy trình duyệt báo "Còn N yêu cầu đang chờ duyệt…" | Không đổi được các cấp khi còn phiếu chờ. Nhờ người duyệt xử lý hết, hoặc người gửi rút lại phiếu chưa ai xử lý, rồi lưu lại. Chỉ đổi "Việc mới mặc định cần" thì vẫn lưu được |
-| Việc nằm mãi ở "Chờ duyệt", khối Quy trình duyệt hiện "Chưa có người duyệt" | Cấp đó không có ai duyệt: Người đứng tên dự án để trống, người được chỉ định đã khoá, hoặc bộ phận chủ trì không có Lãnh đạo bộ phận. Đặt lại người (Thông tin chung) hoặc nhờ Quản trị hệ thống đặt vai Lãnh đạo bộ phận |
+| Dự án đặt "Chỉ người giao duyệt" mà việc vẫn vào "Chờ duyệt"? | Đúng cách hệ thống chạy: người giao duyệt và chấm mức (việc mốc / găng: BTGĐ phụ trách) rồi việc mới thành Hoàn thành. Muốn không có duyệt thì dùng bảng không có cột nhóm Chờ duyệt / Hoàn thành (Lịch tuần) |
+| Dự án ghi "Duyệt 2 cấp" mà việc chỉ một người bấm duyệt? | Con số đếm cả bước người giao ("Người giao → Lãnh đạo bộ phận"). Nếu người giao cũng là Lãnh đạo bộ phận đó thì cấp sau tự qua |
+| Lưu quy trình duyệt báo "Còn N yêu cầu đang chờ duyệt…" | Không đổi được các cấp khi còn phiếu chờ. Nhờ người duyệt xử lý hết, hoặc người gửi rút lại phiếu chưa ai xử lý, rồi lưu lại. Thông báo có thêm "Trong đó … việc đang ở Thùng rác": khôi phục việc để xử lý, hoặc chờ hệ thống xoá hẳn. Chỉ đổi "Việc mới mặc định cần" thì vẫn lưu được |
+| Việc nằm mãi ở "Chờ duyệt", khối Quy trình duyệt hiện "Chưa có người duyệt" | Cấp đó không có ai duyệt: người được chỉ định đã khoá, hoặc bộ phận chủ trì không có Lãnh đạo bộ phận. Nhờ Quản trị hệ thống đặt vai Lãnh đạo bộ phận. (Cấp "Người đứng tên dự án" không kẹt: Người đứng tên trống / đã khoá thì Chủ dự án duyệt thay) |
+| Lưu cột báo "Cột … còn N việc — chuyển việc sang cột khác rồi mới đổi nhóm" | Cột còn việc không đổi nhóm được (đổi nhóm là đổi nghĩa mọi việc trong cột). Chuyển việc sang cột khác trước; việc trong Thùng rác cũng tính |
 | Không xoá được cột: "Cột … còn N việc" dù Bảng trống | Hệ thống đếm cả việc trong Thùng rác. Khôi phục các việc đó rồi chuyển sang cột khác, hoặc chờ hệ thống xoá hẳn sau 7 ngày |
 | Lưu cột báo "Dự án có cột Hoàn thành (việc xong phải qua người giao duyệt) cần ít nhất một cột thuộc nhóm …" | Dự án có cấp duyệt hoặc có cột Hoàn thành thì phải có đủ cột nhóm Đang thực hiện, Chờ duyệt, Hoàn thành. Muốn chuyển sang Lịch tuần: xoá hết cấp duyệt trước, rồi mới lưu cột |
 | Tôi đổi tên dự án, rồi lưu thành viên, tên quay về cũ? | Mỗi khối Cài đặt có nút lưu riêng; lưu thành viên (và cột, quy trình, quy tắc, nhãn) vẽ lại cả trang, làm mất phần sửa dở ở khối khác. Sửa xong khối nào lưu khối đó |
 | Dự án lưu trữ biến mất, làm sao mở lại? | Mở đường dẫn `#/projects/<số>/settings` đã chép, bỏ đánh dấu Lưu trữ → Lưu. Mất đường dẫn: báo Quản trị hệ thống tên bạn và lúc lưu trữ để tra số dự án ("Dự án / sổ #<số>") trong Nhật ký hệ thống |
-| Khôi phục dự án xong, việc ở "Chờ duyệt" không ai duyệt? | Xoá dự án đã huỷ các phiếu đó và khôi phục không mở lại. Người giao kéo việc về Đang thực hiện, người chủ trì gửi duyệt lại |
+| Dự án vừa xoá, phiếu chờ duyệt biến khỏi "Chờ tôi duyệt"? | Phiếu không bị huỷ, chỉ tạm ẩn khi dự án ở Thùng rác. Khôi phục dự án là phiếu hiện lại; dự án xoá bằng bản trước cũng được mở lại phiếu khi khôi phục |
 | Nhập lại MTL mà tên, ngày của hạng mục không đổi? | Nhập lại chỉ thêm bước mới, bước đã có giữ nguyên. Sửa tên / hạn trên panel hạng mục (người giao, BTGĐ phụ trách); sửa kế hoạch gốc bằng "Điều chỉnh kế hoạch gốc…" |
 | Nhập lại MTL mà xem trước báo "tạo mới" toàn bộ? | Tên kế hoạch khác lần trước (sheet đổi tên, hoặc gõ tên khác), dòng không có mã Bước, hoặc hạng mục đã bị xoá. Đừng bấm Nhập; sửa tên kế hoạch / tên sheet cho trùng lần trước |
 | Lãnh đạo bộ phận nhập MTL bộ phận bị báo "… dòng không thuộc bước MTL tổng nào do bộ phận chủ trì …" | Lãnh đạo bộ phận phải là người chủ trì của bước tổng, và mỗi dòng phải ghi "Thuộc bước". Bước tổng đã giao cho nhân viên thì nhờ người quản lý dự án nhập, hoặc tạm đặt mình làm người chủ trì bước tổng |
@@ -5085,7 +5081,7 @@ Dữ liệu trình duyệt **không tách theo người** (máy dùng chung thì
 | Lưu ngưỡng báo "Ngưỡng behindPct phải từ 1 đến 50" | Tên kỹ thuật của ô "Chậm tiến độ khi thấp hơn kế hoạch". Tương tự: aheadPct = Vượt tiến độ; startSoonDays = Nhắc sắp bắt đầu; dueSoonDays = Nhắc sắp đến hạn; staleDays = Nhắc khi chưa cập nhật |
 | Hạng mục đang "Tạm dừng" vẫn bị cảnh báo chậm? | Cột Tạm dừng là Cột tự do, hệ thống vẫn tính theo kế hoạch gốc. Người giao điều chỉnh kế hoạch gốc, hoặc chuyển hạng mục sang Huỷ nếu thật sự dừng |
 | Tôi là PMO / Chủ dự án mà không thấy "Điều chỉnh kế hoạch gốc…"? | Chỉ người giao của hạng mục (thường là người đã bấm nhập MTL) và BTGĐ phụ trách điều chỉnh được. Nhờ một trong hai người đó |
-| Việc nhập bằng "Danh sách đơn giản" không ai sửa được hạn, không xoá được? | Việc nhập kiểu này không có người giao, nên chỉ BTGĐ phụ trách sửa kế hoạch. Nhờ BTGĐ phụ trách đặt Người giao cho việc trên panel |
+| Ai sửa được hạn, xoá được việc nhập bằng "Danh sách đơn giản"? | Người nhập là người giao của các việc đó: người nhập và BTGĐ phụ trách sửa kế hoạch, giao người, xoá việc. Việc nhập bằng bản trước (Người giao "—") đã được đặt người giao = người nhập khi cập nhật |
 
 ### 9.2 Tài liệu: tài liệu dự án, văn thư, quy chế
 

@@ -121,12 +121,14 @@ module.exports = function mountExcel(app, { prisma, auth, audit, config }) {
       const created = await prisma.$transaction(async tx => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'project:' + project.id}))`;
         let count = 0;
+        const now = new Date();
         for (const r of parsed) {
           const { nextNumber } = await tx.project.update({ where: { id: project.id }, data: { nextNumber: { increment: 1 } }, select: { nextNumber: true } });
           const descriptionHtml = r.description ? '<p>' + r.description.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])) + '</p>' : '';
+          // Người nhập là người giao (như tạo việc thường — services/workitems.js): sửa kế hoạch, giao người, xoá được việc vừa nhập.
           const item = await tx.workItem.create({ data: {
             projectId: project.id, number: nextNumber - 1, title: r.title, descriptionHtml, descriptionText: r.description || '', stateId: r.state.id, priority: r.priority,
-            reporterId: req.user.id, startDate: r.startDate, dueDate: r.dueDate, startedAt: r.state.category === 'STARTED' ? new Date() : null,
+            reporterId: req.user.id, assignedById: req.user.id, assignedAt: now, startDate: r.startDate, dueDate: r.dueDate, startedAt: r.state.category === 'STARTED' ? new Date() : null,
             position: await endPosition(tx, r.state.id), assignees: { create: r.assigneeIds.map(userId => ({ userId })) },
           } });
           await activity(tx, item.id, req.user.id, 'CREATED', { title: r.title, state: r.state.name, source: 'EXCEL' });
