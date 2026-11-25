@@ -6,7 +6,9 @@ RUN npm install -g --no-audit --no-fund @anthropic-ai/mcpb@1.2.0
 WORKDIR /mcp
 COPY app/mcp/package.json app/mcp/package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund --fetch-retries=5
-COPY app/mcp/server.js app/mcp/manifest.json app/mcp/.mcpbignore ./
+# Liệt kê ĐỦ mọi tệp server.js nạp (import): thiếu một tệp là tiện ích chết ngay khi khởi động trên máy người dùng (0.6.0 thiếu
+# weekly-draft.cjs). CI giải nén gói trong image và khởi động thử (bước "Gói tiện ích Claude", app/mcp/test/pack-smoke.mjs).
+COPY app/mcp/server.js app/mcp/weekly-draft.cjs app/mcp/manifest.json app/mcp/.mcpbignore ./
 RUN mkdir -p /out && mcpb pack . /out/kepper-claude.mcpb
 
 FROM node:22-bookworm-slim

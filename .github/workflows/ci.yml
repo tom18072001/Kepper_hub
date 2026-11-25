@@ -56,6 +56,14 @@ jobs:
           docker build -t kepper-app:ci -f Dockerfile .
           docker build -t kepper-backup:ci -f Dockerfile.backup .
           sh -n deploy/backup.sh && sh -n deploy/restore.sh && sh -n app/server/docker-entrypoint.sh
+      - name: Gói tiện ích Claude trong image (giải nén, khởi động như Claude Desktop, đủ công cụ)
+        run: |
+          id=$(docker create kepper-app:ci)
+          docker cp "$id:/app/web/downloads/kepper-claude.mcpb" "$RUNNER_TEMP/kepper-claude.mcpb"
+          docker rm "$id" > /dev/null
+          rm -rf "$RUNNER_TEMP/mcpb" && mkdir -p "$RUNNER_TEMP/mcpb"
+          unzip -q "$RUNNER_TEMP/kepper-claude.mcpb" -d "$RUNNER_TEMP/mcpb"
+          node app/mcp/test/pack-smoke.mjs "$RUNNER_TEMP/mcpb"
       - name: E2E
         working-directory: app/e2e
         run: |

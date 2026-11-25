@@ -18,7 +18,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 
-const VERSION = '0.6.0';
+const VERSION = '0.6.1';
 const BASE = String(process.env.KEPPER_URL || 'https://hub.keplerholdings.vn').replace(/\/+$/, '');
 const TOKEN = String(process.env.KEPPER_TOKEN || '').trim();
 const TIMEOUT_MS = 20_000;
