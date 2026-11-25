@@ -121,11 +121,16 @@ function createApp({ prisma, config }) {
     caCache = { at: pem ? Date.now() : Date.now() - 3_540_000, pem }; // lỗi / chưa có Caddy: thử lại sau 1 phút
     return caCache.pem;
   }
-  app.get('/downloads/kepper-claude.mcpb', async (req, res, next) => {
+  // Tên tệp người dùng thấy: kepler-claude.mcpb (Dockerfile đóng gói đúng tên này). Đường cũ /downloads/kepper-claude.mcpb vẫn chạy, ra
+  // CÙNG gói và cùng tên tệp mới: người quản trị tổ chức Claude từng tải gói ở đường này để đưa lên thư mục tiện ích của tổ chức trên
+  // claude.ai; mã tiện ích nằm trong manifest ("name": "kepper-hub"), không theo tên tệp, nên đổi tên tệp không sinh tiện ích thứ hai.
+  const MCPB_FILE = 'kepler-claude.mcpb';
+  app.get(['/downloads/' + MCPB_FILE, '/downloads/kepper-claude.mcpb'], async (req, res, next) => {
     try {
-      const file = path.join(config.webDir, 'downloads', 'kepper-claude.mcpb');
+      const file = path.join(config.webDir, 'downloads', MCPB_FILE);
       const stat = await require('node:fs/promises').stat(file).catch(() => null);
-      if (!stat) return next();
+      // Chưa có gói (chạy cục bộ chưa đóng gói): 404 ngay — không để tệp tĩnh tên cũ còn sót (npm run pack bản trước) lọt ra ở đường cũ.
+      if (!stat) return res.status(404).type('text/plain; charset=utf-8').send('Máy chủ này chưa có gói tiện ích Claude — báo IT');
       // Địa chỉ điền sẵn: đúng địa chỉ người dùng đang mở (nếu nằm trong APP_ORIGIN), không thì địa chỉ đầu tiên.
       const here = `${req.protocol}://${req.get('host')}`;
       const origin = config.allowedOrigins.includes(here) ? here : (config.allowedOrigins[0] || '');
@@ -145,7 +150,7 @@ function createApp({ prisma, config }) {
         mcpbCache = { key, buf: await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }) };
       }
       res.setHeader('Content-Type', 'application/octet-stream');
-      res.setHeader('Content-Disposition', 'attachment; filename="kepper-claude.mcpb"');
+      res.setHeader('Content-Disposition', `attachment; filename="${MCPB_FILE}"`);
       res.setHeader('Cache-Control', 'no-cache');
       res.send(mcpbCache.buf);
     } catch (error) { next(error); }

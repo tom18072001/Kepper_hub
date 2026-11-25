@@ -183,6 +183,76 @@ test('BTGĐ phụ trách toàn công ty (đánh dấu riêng) — mọi việc; 
   assert.equal(capsOf(U.pgd, item(), { ...other, topIds: [1, 2] }).plan, true);
 });
 
+test('duyệt gia hạn: BTGĐ phụ trách của việc; việc chưa có BTGĐ phụ trách → mọi thành viên BTGĐ, không ai khác', () => {
+  // boardIds = mọi thành viên Ban Tổng Giám đốc đang hoạt động: 1 (TGĐ), 2 (Phó TGĐ), 7 (thành viên BTGĐ chưa có phạm vi phụ trách).
+  const board = { boardIds: [1, 2, 7] };
+  // Có người phụ trách (Toàn công ty 1, Phó TGĐ phụ trách bộ phận chủ trì 2): chỉ họ quyết.
+  assert.deepEqual(TA.extensionDeciderIds(ctx(board)), [1, 2]);
+  assert.deepEqual([U.tgd, U.pgd, U.pmo].map(u => capsOf(u, item(), board).decideExtension), [true, true, false]);
+  // Chưa ai phụ trách Toàn công ty, bộ phận chủ trì có Phó TGĐ: chỉ Phó TGĐ.
+  assert.deepEqual(TA.extensionDeciderIds(ctx({ ...board, topIds: [] })), [2]);
+  assert.deepEqual([U.tgd, U.pgd, U.pmo].map(u => capsOf(u, item(), { ...board, topIds: [] }).decideExtension), [false, true, false]);
+  // Không ai phụ trách (chưa ai Toàn công ty, bộ phận chủ trì chưa có Phó TGĐ phụ trách): mọi thành viên BTGĐ quyết — đề nghị không treo.
+  const none = { ...board, topIds: [], supervisorId: null };
+  assert.deepEqual(TA.extensionDeciderIds(ctx(none)), [1, 2, 7]);
+  for (const who of [U.tgd, U.pgd, U.pmo]) assert.equal(capsOf(who, item(), none).decideExtension, true, `người ${who.id}`);
+  // Lãnh đạo bộ phận, người giao, người chủ trì / phối hợp, nhân viên, chủ dự án, quản trị hệ thống: không.
+  for (const who of [U.deptLead, U.staffLead, U.supportLead, U.assigner, U.lead, U.support, U.other, U.owner, U.reporter, U.it])
+    assert.equal(capsOf(who, item(), none).decideExtension, false, `người ${who.id}`);
+  // Quản trị hệ thống không bao giờ quyết, kể cả khi lỡ có trong danh sách.
+  assert.equal(capsOf(U.it, item(), { ...none, boardIds: [12] }).decideExtension, false);
+  // Không có danh sách thành viên BTGĐ (ngữ cảnh tự dựng): không ai — dự phòng không tự mở cho vai.
+  assert.equal(capsOf(U.pmo, item(), { topIds: [], supervisorId: null }).decideExtension, false);
+  // Dự phòng CHỈ cho gia hạn: thành viên BTGĐ không phụ trách vẫn không có vai B, không sửa kế hoạch / giao người / xoá / lặp lại.
+  const c = capsOf(U.pmo, item(), none);
+  assert.ok(!c.roles.includes('B'));
+  for (const k of ['plan', 'assign', 'assigner', 'delete', 'recur', 'docsGive', 'children', 'completedAt', 'rebaseline']) assert.equal(c[k], false, k);
+  // Người được uỷ quyền (chỉ xem), dự án không sửa được: không quyết.
+  assert.equal(capsOf(U.pmo, item(), { ...none, rights: { ...RIGHTS, delegated: true } }).decideExtension, false);
+  assert.equal(capsOf(U.pmo, item(), { ...none, rights: { ...RIGHTS, canEdit: false } }).decideExtension, false);
+  // Câu từ chối nói đúng luật mới.
+  assert.match(TA.MESSAGES.decideExtension, /BTGĐ phụ trách/);
+  assert.match(TA.MESSAGES.decideExtension, /chưa có BTGĐ phụ trách thì thành viên Ban Tổng Giám đốc nào cũng duyệt được/);
+});
+
+// CSDL giả cho orgContext: lọc người dùng / bộ phận theo đúng các điều kiện Prisma orgContext dùng (isActive, vai, quản trị, bộ phận).
+const matchWhere = (row, where = {}) => Object.entries(where).every(([k, v]) => (v !== null && typeof v === 'object'
+  ? (!('in' in v) || v.in.includes(row[k])) && (!('not' in v) || row[k] !== v.not)
+  : row[k] === v));
+const fakeOrgDb = ({ users, depts, delegations = [] }) => ({
+  department: { findMany: async ({ where } = {}) => depts.filter(d => matchWhere(d, where)) },
+  delegation: { findMany: async () => delegations },
+  user: { findMany: async ({ where } = {}) => users.filter(u => matchWhere(u, where)) },
+});
+
+test('ngữ cảnh tổ chức: Phó TGĐ đã khoá / đã đổi vai không còn là BTGĐ phụ trách; quản trị hệ thống không bao giờ là BTGĐ', async () => {
+  const u = (id, role, extra = {}) => ({ id, role, isRootAdmin: false, isActive: true, departmentId: 1, boardAll: false, ...extra });
+  const users = [
+    u(1, 'director'), // TGĐ, chưa đánh dấu Toàn công ty
+    u(2, 'director', { isActive: false, boardAll: true }), // Phó TGĐ đã khoá (khoá không bàn giao), còn dấu Toàn công ty
+    u(3, 'manager', { departmentId: 60, boardAll: true }), // từng là Phó TGĐ, đã đổi sang Lãnh đạo bộ phận
+    u(4, 'director'), // Phó TGĐ phụ trách bộ phận 80
+    u(12, 'admin', { departmentId: null, boardAll: true }), // quản trị hệ thống
+    u(13, 'director', { isRootAdmin: true, departmentId: null, boardAll: true }), // quản trị gốc (dữ liệu lệch vai)
+    u(20, 'manager', { departmentId: 50 }), // lãnh đạo bộ phận 50
+  ];
+  const depts = [{ id: 50, supervisorId: 2 }, { id: 60, supervisorId: 3 }, { id: 70, supervisorId: 12 }, { id: 80, supervisorId: 4 }, { id: 90, supervisorId: null }];
+  const org = await TA.orgContext(fakeOrgDb({ users, depts }));
+  assert.deepEqual(org.topIds, []);
+  assert.deepEqual([...org.boardIds].sort((a, b) => a - b), [1, 4]);
+  assert.deepEqual([...org.supervisor.entries()], [[80, 4]]);
+  const deciders = dept => TA.extensionDeciderIds(TA.itemContext(org, { project: { kind: 'KANBAN', departmentId: null }, rights: RIGHTS, item: { leadDepartmentId: dept, assigneeIds: [] } })).sort((a, b) => a - b);
+  // Phó TGĐ đã khoá (50), đã đổi vai (60), "Phó TGĐ" là quản trị (70), chưa có Phó TGĐ (90): rơi về mọi thành viên BTGĐ đang hoạt động.
+  for (const dept of [50, 60, 70, 90, null]) assert.deepEqual(deciders(dept), [1, 4], `bộ phận ${dept}`);
+  assert.deepEqual(deciders(80), [4]);
+  // Có người Toàn công ty đang hoạt động: người đó + Phó TGĐ phụ trách; bộ phận có Phó TGĐ đã khoá → chỉ người Toàn công ty.
+  const org2 = await TA.orgContext(fakeOrgDb({ users: users.map(x => (x.id === 1 ? { ...x, boardAll: true } : x)), depts }));
+  assert.deepEqual(org2.topIds, [1]);
+  const d2 = dept => TA.extensionDeciderIds(TA.itemContext(org2, { project: { departmentId: null }, item: { leadDepartmentId: dept, assigneeIds: [] } })).sort((a, b) => a - b);
+  assert.deepEqual(d2(50), [1]);
+  assert.deepEqual(d2(80), [1, 4]);
+});
+
 test('quyền cho từng khoá PATCH', () => {
   assert.equal(TA.capForField('dueDate'), 'plan');
   assert.equal(TA.capForField('critical'), 'plan');

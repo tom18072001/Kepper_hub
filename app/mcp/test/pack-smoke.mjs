@@ -3,7 +3,7 @@
 // Đạt khi khởi động được, server.js báo đúng phiên bản manifest, và công cụ trả về khớp đúng danh sách khai báo trong manifest.
 // Bắt lỗi đóng gói thiếu tệp: gói 0.6.0 (24/11/2026) thiếu weekly-draft.cjs nên chết ngay khi khởi động trên máy người dùng,
 // trong khi test chạy trong app/mcp (đủ tệp) vẫn xanh.
-//   unzip -q kepper-claude.mcpb -d /tmp/mcpb && node app/mcp/test/pack-smoke.mjs /tmp/mcpb     (CI: bước "Gói tiện ích Claude")
+//   unzip -q kepler-claude.mcpb -d /tmp/mcpb && node app/mcp/test/pack-smoke.mjs /tmp/mcpb     (CI: bước "Gói tiện ích Claude")
 // Không cần Kepler Hub chạy: chỉ liệt kê công cụ (địa chỉ Hub thử là một cổng đóng).
 import fs from 'node:fs';
 import path from 'node:path';
