@@ -1162,7 +1162,11 @@ kho dự án (đã có từ trước) cần quyền ghi — giữ như hiện t�
   Khuyến nghị: đặt tài liệu Hạn chế ngoài thư mục `#10.DuAn/<dự án>` hoặc trong thư mục con mà Hub sẽ ẩn (có thể bổ sung danh sách thư mục loại trừ nếu chủ dự án cần).
 - Thành viên dự án ở vai "Người xem" (VIEWER) cũng xem được tài liệu (chủ dự án chọn "thành viên + Ban GĐ", không phân vai).
 - Nếu máy ảo bị chiếm quyền, phạm vi đọc = toàn bộ `#10.DuAn` (như trước, không đổi).
-- Dự án chưa có thư mục trên NAS (tên = KEY hoặc bắt đầu bằng "KEY-") thì tab NAS báo "Chưa có thư mục" — IT tạo thư mục, Hub không tự tạo.
+- Dự án chưa có thư mục trên NAS (tên = KEY hoặc bắt đầu bằng "KEY-", có thể có số thứ tự đứng trước như "01.KEY-…") thì tab NAS báo "Chưa có thư mục" — IT tạo thư mục, Hub không tự tạo.
+- **Cập nhật 28/11/2026 — kho NAS sắp xếp lại (26/11):** thư mục dự án nay nằm trong `III.DuAn` (production `/data/nas` = `III.DuAn`; các chỗ ghi `#10.DuAn` trong mục này hiểu là `III.DuAn`), tên có số thứ tự đứng trước (`01.NOXH-DuongXa`).
+  Hub nhận thêm dạng tên này (`nas.pickProjectFolder`, dùng chung cho lưu tệp và tab NAS), nên tab NAS của dự án hiện lại thư mục cho **đúng nhóm người như trước** (thành viên dự án + Ban GĐ); không mở rộng ai được xem.
+  Chống khớp nhầm: quy tắc tên giữ nguyên ("MÃ" hoặc "MÃ-…"), chỉ thêm số thứ tự "NN." đứng trước; "NOXH2…", "NOXH_…" không phải NOXH; nhiều thư mục cùng khớp → ưu tiên tên đúng mã, rồi tên không số, rồi theo tên (unit `lib/nas.test.js`, `lib/project-docs.test.js`).
+  Khuyến nghị về tài liệu Hạn chế ở trên áp dụng nguyên cho thư mục dự án mới.
 - **Junction / reparse point NTFS phía máy chủ SMB** do máy chủ file tự đi qua: máy ảo chỉ thấy một thư mục bình thường, nên `realpath` phía Hub
   không phát hiện được thư mục đó trỏ ra ngoài `#10.DuAn`. Đề nghị IT **không tạo junction / liên kết tượng trưng trong thư mục dự án `#10.DuAn`**.
 - NAS chậm / mất kết nối: mọi thao tác đọc là bất đồng bộ (không khoá Hub), mỗi thao tác chờ tối đa `NAS_OP_TIMEOUT_MS` (mặc định 8 s),

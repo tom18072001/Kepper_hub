@@ -1926,10 +1926,10 @@ Dự án đã đóng xếp cuối danh sách. Trang trống thì hiện một tr
 Khi không mở được thư mục NAS, dòng **Thư mục dự án trên NAS** mờ, không bấm được, kèm một trong ba câu tùy lý do (kho lỗi; dự án chưa có thư mục; Hub chưa nối với NAS):
 
 - "Kho file đang không truy cập được (*mã lỗi*) — thử lại sau hoặc báo IT";
-- "Chưa có thư mục cho dự án trên kho file (tên thư mục phải là "*MÃ*" hoặc bắt đầu bằng "*MÃ*-") — liên hệ IT tạo.";
+- "Chưa có thư mục cho dự án trên kho file (tên thư mục phải là "*MÃ*" hoặc bắt đầu bằng "*MÃ*-", có thể thêm số thứ tự phía trước, vd. "01.*MÃ*-…") — liên hệ IT tạo.";
 - "Kho file NAS chưa được kết nối với Hub."
 
-Thư mục dự án trên NAS do **IT tạo sẵn** ở gốc kho file. Hub không tự tạo. Tên thư mục phải **đúng bằng mã dự án** hoặc **bắt đầu bằng "MÃ-"**, không phân biệt hoa thường. Ví dụ dự án mã BM: thư mục `BM` hoặc `BM-BinhMinh` khớp; `BM_BinhMinh` và `BMX-BinhMinh` không khớp.
+Thư mục dự án trên NAS do **IT tạo sẵn** ở gốc kho file. Hub không tự tạo. Tên thư mục phải **đúng bằng mã dự án** hoặc **bắt đầu bằng "MÃ-"**, không phân biệt hoa thường; được thêm **số thứ tự "NN."** phía trước. Ví dụ dự án mã BM: thư mục `BM`, `BM-BinhMinh`, `01.BM-BinhMinh` hoặc `01. BM-BinhMinh` khớp; `BM_BinhMinh`, `BM (BinhMinh)` và `BMX-BinhMinh` không khớp. Có nhiều thư mục cùng khớp thì Hub dùng thư mục tên đúng bằng mã, rồi thư mục không có số thứ tự.
 
 Thanh đường dẫn: **Tất cả dự án** → "*MÃ* · *Tên*". Bấm từng đoạn để quay lên.
 
