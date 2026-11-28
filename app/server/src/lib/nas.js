@@ -2,7 +2,8 @@
 // Hub chỉ giữ đường dẫn + metadata. Quy ước (tài liệu "Đề xuất phương án liên thông Kepler Hub – NAS"):
 //   <NAS_ROOT>/<KEY>-<TênNgắn>/<NN.Mảng>/<KEY>-<số hạng mục>_<TênHạngMục>/<MãViệc>_<BộPhận>_<MôTả>_v<NN>_<YYYYMMDD>.<đuôi>
 //   (thư mục mảng chọn theo phòng chủ trì hạng mục, bảng ghép NAS_DEPT_FOLDERS; không có thì bỏ cấp này)
-// - Chỉ dự án ĐÃ có thư mục trong NAS_ROOT (tên = KEY hoặc bắt đầu bằng "KEY-") mới lưu vào kho; còn lại giữ cách lưu cũ.
+// - Chỉ dự án ĐÃ có thư mục trong NAS_ROOT (tên = KEY hoặc bắt đầu bằng "KEY-", có thể có số thứ tự đứng trước như
+//   "01.NOXH-DuongXa" — xem pickProjectFolder) mới lưu vào kho; còn lại giữ cách lưu cũ.
 // - Không bao giờ ghi đè: mỗi lần tải lên là một phiên bản _vNN mới.
 // - Xoá trên Hub không xoá trên kho: tệp được chuyển vào <thư mục dự án>/<NN.LuuTru có sẵn | _LuuTru>/.
 const fs = require('fs');
@@ -30,11 +31,35 @@ const isNasKey = key => String(key || '').startsWith(PREFIX);
 const absOf = key => inside(String(key).slice(PREFIX.length));
 const dirs = abs => { try { return fs.readdirSync(abs, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name); } catch { return []; } };
 
+// Thư mục của dự án KEY trong danh sách tên ở gốc kho — MỘT quy tắc cho cả lưu tệp (projectFolder) lẫn tab Tài liệu dự án
+// (project-docs.folderFor). Tên hợp lệ: "KEY" hoặc "KEY-…", không phân biệt hoa thường, được có số thứ tự "NN." đứng trước
+// (kho sắp xếp lại 26/11/2026): "NOXH", "NOXH-DuongXa", "01.NOXH-DuongXa", "03. GFRP-CotLieu". Không khớp: "NOXH2…",
+// "NOXH_…", "NOXH (…)", "01.NOXHA…".
+// Nhiều thư mục cùng khớp → tên đúng KEY trước, rồi tên không có số thứ tự, rồi theo thứ tự tên (không phụ thuộc thứ tự NAS trả về).
+function folderRank(name, key) {
+  const k = String(key || '').toUpperCase();
+  if (!k) return -1;
+  const n = String(name).toUpperCase();
+  const num = /^\d+\.\s*/.exec(n);
+  const rest = num ? n.slice(num[0].length) : n;
+  if (!rest.startsWith(k)) return -1;
+  const tail = rest.slice(k.length);
+  if (tail && !tail.startsWith('-')) return -1;
+  return (num ? 2 : 0) + (tail ? 1 : 0);
+}
+function pickProjectFolder(names, key) {
+  let best = null;
+  let bestRank = Infinity;
+  for (const n of [...(names || [])].sort()) {
+    const r = folderRank(n, key);
+    if (r >= 0 && r < bestRank) { best = n; bestRank = r; }
+  }
+  return best;
+}
 // Thư mục dự án có sẵn trong kho (do IT tạo) — không tự tạo thư mục dự án.
 function projectFolder(key) {
   if (!enabled()) return null;
-  const k = String(key || '').toUpperCase();
-  return dirs(ROOT).find(n => n.toUpperCase() === k || n.toUpperCase().startsWith(k + '-')) || null;
+  return pickProjectFolder(dirs(ROOT), key);
 }
 
 // Thư mục mảng trong thư mục dự án theo phòng chủ trì hạng mục: NAS_DEPT_FOLDERS="PC=01.PhapLy,TCKT=02.TaiChinh,…".
@@ -86,4 +111,4 @@ function archive(key) {
 // Huỷ tệp vừa ghi khi lưu bản ghi thất bại (chưa ai thấy tệp này).
 function discard(key) { const abs = absOf(key); if (fs.existsSync(abs)) fs.unlinkSync(abs); }
 
-module.exports = { PREFIX, enabled, isNasKey, absOf, slug, ymd, projectFolder, planPath, save, archive, discard, root: () => ROOT };
+module.exports = { PREFIX, enabled, isNasKey, absOf, slug, ymd, pickProjectFolder, projectFolder, planPath, save, archive, discard, root: () => ROOT };

@@ -45,3 +45,28 @@ test('gỡ tệp: chuyển vào _LuuTru của thư mục sổ, không xoá hẳn
   assert.equal(kept.length, 1);
   assert.match(kept[0], /005-2026-HLD-TH_A_v01_20261119\.pdf$/);
 });
+
+test('thư mục phòng nhiều tầng (kho sắp xếp lại 26/11/2026: BTGD=I.KeplerHLD/#1.BOD): lưu vào sổ, gỡ = _LuuTru của sổ', t => {
+  const saved = { VANTHU_DEPT_FOLDERS: process.env.VANTHU_DEPT_FOLDERS, VANTHU_DEFAULT_DEPT: process.env.VANTHU_DEFAULT_DEPT };
+  t.after(() => { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } });
+  process.env.VANTHU_DEPT_FOLDERS = 'BTGD=I.KeplerHLD/#1.BOD';
+  process.env.VANTHU_DEFAULT_DEPT = 'BTGD'; // như máy chủ thật: dự thảo chưa gắn bộ phận → BOD
+  const bod = path.join(ROOT, 'I.KeplerHLD', '#1.BOD');
+  for (const d of ['01.VanBanDen', '06.VanBanNoiBo/2026', '99.LuuTru']) fs.mkdirSync(path.join(bod, d), { recursive: true });
+  const p = vt.planPath({ doc: { book: 'NOIBO', year: 2026, number: 'DuThao-1' }, deptCode: null, fileName: 'Hướng dẫn sử dụng.pdf', date: day });
+  assert.equal(p.rel, 'I.KeplerHLD/#1.BOD/06.VanBanNoiBo/2026/DuThao-1_HuongDanSuDung_v01_20261119.pdf');
+  const key = vt.save(p.rel, Buffer.from('x'));
+  vt.archive(key);
+  assert.equal(fs.existsSync(vt.absOf(key)), false);
+  assert.deepEqual(fs.readdirSync(path.join(bod, '06.VanBanNoiBo', '_LuuTru')).map(n => n.replace(/^\d+_/, '')), ['DuThao-1_HuongDanSuDung_v01_20261119.pdf']);
+  assert.equal(fs.existsSync(path.join(bod, '_LuuTru')), false); // không rơi ra thư mục phòng
+  assert.equal(fs.existsSync(path.join(ROOT, 'I.KeplerHLD', '_LuuTru')), false);
+  assert.equal(vt.planPath({ doc: den, deptCode: 'BTGD', fileName: 'a.pdf', date: day }).rel, 'I.KeplerHLD/#1.BOD/01.VanBanDen/2026/0001-2026-D-HLD_A_v01_20261119.pdf');
+});
+
+test('gỡ dòng tệp đã mất trên NAS (thư mục cũ bị xoá) không lỗi; tệp nằm ngoài thư mục sổ → _LuuTru cạnh tệp', () => {
+  assert.doesNotThrow(() => vt.archive('vt:#2.HCNS/07.VanBanNoiBo/2026/DuThao-1_KhongCon_v01_20261125.pdf'));
+  const key = vt.save('Khac/2026/le.pdf', Buffer.from('y'));
+  vt.archive(key);
+  assert.deepEqual(fs.readdirSync(path.join(ROOT, 'Khac', '2026', '_LuuTru')).map(n => n.replace(/^\d+_/, '')), ['le.pdf']);
+});

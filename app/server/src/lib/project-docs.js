@@ -1,5 +1,6 @@
 // Tài liệu dự án — duyệt CHỈ ĐỌC thư mục dự án trên kho file (NAS_ROOT, xem lib/nas.js) và quyền xem tài liệu dự án.
-// Thư mục dự án = thư mục IT tạo sẵn trong NAS_ROOT, tên = KEY hoặc "KEY-…". Hub không tạo / sửa / xoá gì ở đây.
+// Thư mục dự án = thư mục IT tạo sẵn trong NAS_ROOT, tên = KEY hoặc "KEY-…", có thể có số thứ tự đứng trước ("01.KEY-…");
+// quy tắc đầy đủ ở nas.pickProjectFolder. Hub không tạo / sửa / xoá gì ở đây.
 // An toàn đường dẫn: chỉ nhận đường dẫn tương đối nằm TRONG thư mục dự án — chặn "..", ổ đĩa, ký tự NUL và
 // liên kết tượng trưng (symlink / junction phía máy ảo) trỏ ra ngoài (so realpath).
 // NAS là share CIFS (mount soft): MỌI thao tác đĩa ở đây là bất đồng bộ (fs.promises) — không khoá event loop khi máy chủ file chậm.
@@ -110,10 +111,9 @@ async function rootFolders() {
   try { return (await op(() => fsp.readdir(R, { withFileTypes: true }))).filter(d => d.isDirectory()).map(d => d.name); }
   catch (e) { if (NOT_FOUND.has(e.code)) return null; throw nasError(e); }
 }
-// Thư mục dự án trong danh sách tên ở gốc: tên = KEY hoặc bắt đầu bằng "KEY-" (như nas.projectFolder).
+// Thư mục dự án trong danh sách tên ở gốc — cùng quy tắc với nas.projectFolder (dùng chung nas.pickProjectFolder).
 function folderFor(names, key) {
-  const k = String(key || '').toUpperCase();
-  return (names || []).find(n => n.toUpperCase() === k || n.toUpperCase().startsWith(k + '-')) || null;
+  return nas.pickProjectFolder(names, key);
 }
 // Thư mục dự án (tuyệt đối, realpath) hoặc null khi chưa bật kho / dự án chưa có thư mục. NAS lỗi → 503.
 async function projectRoot(projectKey, names = undefined) {

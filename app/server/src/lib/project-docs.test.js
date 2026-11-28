@@ -216,3 +216,15 @@ test('tải tệp NAS qua cổng: nội dung + kích thước đúng; thư mục
     await waitFor(() => PD.gateStats().inflight === 0);
   } finally { fs.rmSync(big); }
 });
+
+test('kho sắp xếp lại (26/11/2026): thư mục dự án có số thứ tự đứng trước vẫn mở được — cùng quy tắc với lưu tệp', async () => {
+  assert.equal(PD.folderFor(['01.NOXH-DuongXa', '03. GFRP (CỐT LIỆU THUỶ TINH)'], 'noxh'), '01.NOXH-DuongXa');
+  assert.equal(PD.folderFor(['01.NOXH2-Khac', 'NOXHA', 'NOXH_Cu'], 'NOXH'), null);
+  assert.equal(PD.folderFor(null, 'NOXH'), null);
+  const gfrp = '03. GFRP-Cốt liệu (thuỷ tinh)';
+  fs.mkdirSync(path.join(ROOT, gfrp, '01.PhapLy'), { recursive: true });
+  const g = await PD.projectRoot('GFRP');
+  assert.equal(g.folder, gfrp);
+  assert.deepEqual((await PD.listDir(g.abs, '')).entries.map(e => e.name), ['01.PhapLy']);
+  assert.equal((await base()).folder, 'DXA-DuongXa'); // dự án cũ không đổi thư mục
+});

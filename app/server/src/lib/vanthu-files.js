@@ -1,7 +1,8 @@
 // Tệp văn bản (bản scan, phụ lục) của sổ văn thư — bản gốc lưu trên NAS, trong thư mục văn thư của từng phòng.
 // VANTHU_NAS_ROOT = share DATA đã mount vào container (vd. /data/vanthu). Quy ước:
 //   <ROOT>/<thư mục phòng>/<NN.VanBanDen | NN.VanBanDi | NN.VanBanNoiBo>/<Năm>/<Số văn bản>_<TênTệp>_v<NN>_<YYYYMMDD>.<đuôi>
-// - Thư mục phòng theo VANTHU_DEPT_FOLDERS (mã phòng Hub = tên thư mục trên NAS). Văn bản chưa gắn bộ phận → VANTHU_DEFAULT_DEPT.
+// - Thư mục phòng theo VANTHU_DEPT_FOLDERS (mã phòng Hub = đường dẫn thư mục phòng trên NAS, được nhiều tầng,
+//   vd. "BTGD=I.KeplerHLD/#1.BOD"). Văn bản chưa gắn bộ phận → VANTHU_DEFAULT_DEPT.
 // - Thư mục sổ tìm theo tên "<số>.VanBanDen" … (HCNS đánh số khác các phòng khác). Không có sẵn → không tự tạo, giữ tệp trong Hub.
 // - Không ghi đè. Xoá trên Hub → chuyển vào <thư mục sổ>/_LuuTru/, không xoá hẳn.
 const fs = require('fs');
@@ -61,12 +62,15 @@ function save(rel, buffer) {
   fs.writeFileSync(abs, buffer, { flag: 'wx' }); // không ghi đè
   return PREFIX + rel;
 }
-// Xoá trên Hub → <thư mục phòng>/<NN.VanBan…>/_LuuTru/ (bản gốc không mất).
+// Xoá trên Hub → <thư mục phòng>/<NN.VanBan…>/_LuuTru/ (bản gốc không mất). Thư mục phòng có thể nhiều tầng
+// ("I.KeplerHLD/#1.BOD"), nên tìm thư mục sổ theo TÊN, không theo vị trí; không thấy thư mục sổ → _LuuTru cạnh tệp.
+const BOOK_RE = new RegExp(`^\\d+\\.(?:${Object.values(BOOK_DIR).join('|')})$`, 'i');
 function archive(key) {
   const abs = absOf(key);
   if (!fs.existsSync(abs)) return;
-  const [dept, book] = path.relative(root(), abs).split(path.sep);
-  const dest = path.join(root(), dept, book, '_LuuTru', `${Date.now()}_${path.basename(abs)}`);
+  const folders = path.relative(root(), abs).split(path.sep).slice(0, -1);
+  const i = folders.findLastIndex(n => BOOK_RE.test(n));
+  const dest = path.join(root(), ...(i >= 0 ? folders.slice(0, i + 1) : folders), '_LuuTru', `${Date.now()}_${path.basename(abs)}`);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.renameSync(abs, dest);
 }

@@ -111,7 +111,7 @@ export async function renderDocuments(root, params, setCrumbs) {
       body.innerHTML = table([
         folderRow(hubRoot[0], hubRoot[1], `${project.hubFiles} tệp, xếp theo hạng mục → việc`, 'doc-src-hub'),
         project.nasFolder ? folderRow(nasRoot[0], nasRoot[1], 'Mọi tệp trong thư mục dự án, kể cả tệp không tải qua Hub (chỉ đọc)', 'doc-src-nas')
-          : `<tr data-testid="doc-src-nas-off"><td>${icon('folder')} <span class="muted">Thư mục dự án trên NAS</span></td><td class="muted sm" colspan="4">${nasError ? esc(nasError) : nasEnabled ? `Chưa có thư mục cho dự án trên kho file (tên thư mục phải là "${esc(project.key)}" hoặc bắt đầu bằng "${esc(project.key)}-") — liên hệ IT tạo.` : 'Kho file NAS chưa được kết nối với Hub.'}</td></tr>`,
+          : `<tr data-testid="doc-src-nas-off"><td>${icon('folder')} <span class="muted">Thư mục dự án trên NAS</span></td><td class="muted sm" colspan="4">${nasError ? esc(nasError) : nasEnabled ? `Chưa có thư mục cho dự án trên kho file (tên thư mục phải là "${esc(project.key)}" hoặc bắt đầu bằng "${esc(project.key)}-", có thể thêm số thứ tự phía trước, vd. "01.${esc(project.key)}-…") — liên hệ IT tạo.` : 'Kho file NAS chưa được kết nối với Hub.'}</td></tr>`,
       ], '');
       return bindRows();
     }
